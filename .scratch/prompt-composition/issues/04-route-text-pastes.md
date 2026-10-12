@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] In native Pi, decoded text below 5,000 UTF-16 units appears inline; text at or above 5,000 units becomes a readable text attachment.
 - [ ] Demonstrate the policy through actual terminal, clipboard-shortcut, right-click, and native extension paste routes; one route's handler test is insufficient.

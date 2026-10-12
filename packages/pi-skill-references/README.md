@@ -1,12 +1,22 @@
 # pi-skill-references
 
-An inline skill reference extension scaffold for the [pi coding agent](https://pi.dev).
+Invoke configured [Pi](https://pi.dev) skills with ordinary `/skill:name` references in prose.
 
-The package owns inline skill completion and canonical skill expansion. It is designed for Pi's native editor as well as `pi-composer`. Its entry point is ready to load; feature behavior is not implemented yet, and the package is unpublished.
+Type, paste, or insert a canonical reference through Pi's native text APIs:
+
+```text
+Please apply /skill:review to this change.
+```
+
+Submission adds the skill's instructions and native resource directory. References remain editable text in the editor and its history. Resolution follows Pi's effective catalog, including resource discovery, precedence, and reloads.
+
+Markdown code, escaped references, link destinations, URLs, paths, and shorthand stay literal. Unknown references keep their text. Read failures use Pi's error reporting and preserve the request for recovery. Leading native commands retain their dispatch and argument handling.
+
+Pi's native editor trims leading whitespace before the input event. Use fenced code for examples at the start of a prompt; first-line indentation alone does not survive that boundary.
 
 See the [specification](../../docs/specs/pi-skill-references.md), [ADRs](../../docs/specs/pi-skill-references.md#architecture-decisions), and [shared architecture](../../docs/architecture.md).
 
-## Load the scaffold
+## Install
 
 From the repository root:
 
