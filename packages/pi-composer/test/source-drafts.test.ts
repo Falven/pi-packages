@@ -4,6 +4,7 @@ import { openHost } from "../fixtures/host.ts"
 
 test("Pi loads the composer and submits the edited multiline source draft", async (t) => {
   const host = await openHost(t)
+  await host.key("\x1b[109;10u")
   assert.equal(typeof host.ui.getEditorComponent(), "function")
   await host.type("First paragraph.")
   await host.key("\x1b[13;2u")
@@ -128,6 +129,7 @@ test("Command Enter submits a multiline source draft through Pi", async (t) => {
 
 test("native text replacements and long typing stay in the same inline draft and history", async (t) => {
   const host = await openHost(t)
+  await host.key("\x1b[109;10u")
   host.ui.setEditorText("Before")
   const longSource = "x".repeat(5100) + "\n**Inline tail**"
   host.ui.setEditorText(longSource)
