@@ -126,6 +126,68 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
   assert.equal(host.requests.length, 0)
 })
 
+for (const selection of ["prose", "attachment"]) {
+  test(`Restore Inline across preserved Markdown delimiters from ${selection} removes original references in one edit`, async (t) => {
+    const host = await nativePi(t, [composerPath, pastePath, skillsPath])
+    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
+      expandPromptTemplates: true,
+    })
+    const chosen = host.ui.getEditorText().trim()
+    host.ui.setEditorText("")
+    await host.runtime.session.sendUserMessage(
+      "/attach-text Other captured text",
+      {
+        expandPromptTemplates: true,
+      },
+    )
+    const other = host.ui.getEditorText().trim()
+    const line =
+      selection === "prose" ? "**aa bb** cc" : `**aa ${chosen} bb** cc`
+    const before = `${line}\n${chosen}\nKeep /skill:review @current.md\n${other}\n${chosen}\nTail`
+    host.ui.setEditorText(before)
+    host.input("\x1b[1;9A")
+    const prefix = selection === "prose" ? "aa " : "aa Attachment: "
+    const selected = selection === "prose" ? "bb cc" : "text.txt bb cc"
+    for (let index = 0; index < prefix.length; index++) host.input("\x1b[C")
+    for (let index = 0; index < selected.length; index++)
+      host.input("\x1b[1;2C")
+    const { pending } = await startAction(host, "Restore Inline")
+    await pending
+    const after = `**aa CAPTURED**\n\nKeep /skill:review @current.md\n${other}\n\nTail`
+    assert.equal(host.ui.getEditorText(), after)
+    assert.doesNotMatch(host.render(), /Could not restore/)
+    assert.match(host.render(), /Attachments \(1\): text\.txt/)
+    host.input("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), before)
+    assert.match(host.render(), /Attachments \(2\): text\.txt, text\.txt/)
+    host.input("\x1b[122;10u")
+    assert.equal(host.ui.getEditorText(), after)
+    host.input("!")
+    assert.equal(
+      host.ui.getEditorText(),
+      after.replace("CAPTURED", "CAPTURED!"),
+    )
+    host.input("\x1b[122;9u")
+    host.input("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), before)
+    host.input("replaced")
+    assert.equal(
+      host.ui.getEditorText(),
+      before.replace(
+        line,
+        selection === "prose"
+          ? "**aa replaced**"
+          : `**aa ${chosen.replace("text.txt", "replaced")}**`,
+      ),
+    )
+    assert.equal(await readFile(snapshotPath(chosen), "utf8"), "CAPTURED")
+    assert.equal(
+      await readFile(snapshotPath(other), "utf8"),
+      "Other captured text",
+    )
+  })
+}
+
 test("Remove from draft removes repeated membership in one composer edit and retains other files", async (t) => {
   const host = await nativePi(t, [composerPath])
   await host.runtime.session.sendUserMessage(

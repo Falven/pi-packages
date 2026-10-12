@@ -536,6 +536,191 @@ test(
 )
 
 test(
+  "inline completion preserves prose when a provider inserts a heading before the completed line",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            if (args[3].value === "skill:review") {
+              result.lines.unshift("Provider heading")
+              result.cursorLine += 1
+            }
+            return result
+          },
+        }))
+      })
+    })
+    for (const [draft, suffix, expected] of [
+      ["Use $", "", "Provider heading\nUse /skill:review here"],
+      [
+        "Earlier /skill:review\nUse $ there.\nLater /skill:review",
+        " there.\nLater /skill:review",
+        "Provider heading\nEarlier /skill:review\nUse /skill:review here there.\nLater /skill:review",
+      ],
+    ] as const) {
+      host.ui.setEditorText(draft)
+      for (let index = 0; index < suffix.length; index += 1) {
+        host.terminal.input("\x1b[D")
+      }
+      host.terminal.output = ""
+      host.terminal.input("\t")
+      await t.waitFor(() =>
+        assert.match(
+          stripVTControlCharacters(host.terminal.output),
+          /skill:review/,
+        ),
+      )
+      host.terminal.input("\t")
+      host.terminal.input("here")
+      assert.equal(host.ui.getEditorText(), expected)
+    }
+  },
+)
+
+test(
+  "inline completion preserves prose when a provider adds a skill reference before the completed line",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            if (args[3].value === "skill:review") {
+              result.lines.unshift("Provider /skill:review heading")
+              result.cursorLine += 1
+            }
+            return result
+          },
+        }))
+      })
+    })
+    for (const [draft, suffix, expected] of [
+      ["Use ", "", "Provider /skill:review heading\nUse /skill:review here"],
+      [
+        "Earlier /skill:review\nUse  there.\nLater /skill:review",
+        " there.\nLater /skill:review",
+        "Provider /skill:review heading\nEarlier /skill:review\nUse /skill:review here there.\nLater /skill:review",
+      ],
+    ] as const) {
+      host.ui.setEditorText(draft)
+      for (let index = 0; index < suffix.length; index += 1) {
+        host.terminal.input("\x1b[D")
+      }
+      host.terminal.output = ""
+      host.terminal.input("$")
+      await t.waitFor(() =>
+        assert.match(
+          stripVTControlCharacters(host.terminal.output),
+          /skill:review/,
+        ),
+      )
+      host.terminal.input("\t")
+      host.terminal.input("here")
+      assert.equal(host.ui.getEditorText(), expected)
+    }
+  },
+)
+
+test(
+  "inline completion retains provider edits to earlier references and independent caret moves",
+  { timeout: 15000 },
+  async (t) => {
+    let changeEarlierReference = true
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            if (args[3].value === "skill:review") {
+              if (changeEarlierReference) result.lines[0] = "Earlier heading"
+              result.cursorLine = 0
+              result.cursorCol = result.lines[0]!.length
+            }
+            return result
+          },
+        }))
+      })
+    })
+    for (const expected of [
+      "Earlier headinghere\nUse /skill:review  there.\nLater /skill:review",
+      "Earlier /skill:reviewhere\nUse /skill:review  there.\nLater /skill:review",
+    ]) {
+      host.ui.setEditorText(
+        "Earlier /skill:review\nUse $ there.\nLater /skill:review",
+      )
+      for (
+        let index = 0;
+        index < " there.\nLater /skill:review".length;
+        index += 1
+      ) {
+        host.terminal.input("\x1b[D")
+      }
+      host.terminal.output = ""
+      host.terminal.input("\t")
+      await t.waitFor(() =>
+        assert.match(
+          stripVTControlCharacters(host.terminal.output),
+          /skill:review/,
+        ),
+      )
+      host.terminal.input("\t")
+      host.terminal.input("here")
+      assert.equal(host.ui.getEditorText(), expected)
+      changeEarlierReference = false
+    }
+  },
+)
+
+test(
+  "inline completion retains provider edits on the completed line",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            if (args[3].value === "skill:review") {
+              result.lines[result.cursorLine] =
+                `Provider ${result.lines[result.cursorLine]} after.`
+              result.cursorCol += "Provider ".length
+            }
+            return result
+          },
+        }))
+      })
+    })
+    host.ui.setEditorText("Use ")
+    host.terminal.output = ""
+    host.terminal.input("$")
+    await t.waitFor(() =>
+      assert.match(
+        stripVTControlCharacters(host.terminal.output),
+        /skill:review/,
+      ),
+    )
+    host.terminal.input("\t")
+    host.terminal.input("here")
+    assert.equal(
+      host.ui.getEditorText(),
+      "Provider Use /skill:review here after.",
+    )
+  },
+)
+
+test(
   "native provider wrappers before and after skills retain their edits and cursor results",
   { timeout: 15000 },
   async (t) => {
@@ -564,6 +749,8 @@ test(
               )
               result.cursorLine += 1
               result.cursorCol = "Before insertion: ".length
+              result.lines.unshift("Provider heading")
+              result.cursorLine += 1
             }
             return result
           },
@@ -606,7 +793,7 @@ test(
     host.terminal.input("here")
     assert.equal(
       host.ui.getEditorText(),
-      "Use /skill:review \nBefore insertion: After insertion: here",
+      "Provider heading\nUse /skill:review \nBefore insertion: After insertion: here",
     )
     const submitted = await host.submit()
     assert(submitted.includes("Review the actual behavior."), submitted)

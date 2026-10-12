@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
+import { constants } from "node:fs"
+import { mkdir, mkdtemp, open, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type {
   ExtensionAPI,
@@ -36,7 +37,17 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
     const reads = await Promise.allSettled(
       request.snapshots.map(async (snapshot) => {
         if ("path" in snapshot && snapshot.contents === undefined) {
-          snapshot.contents = await readFile(snapshot.path)
+          const source = await open(
+            snapshot.path,
+            constants.O_RDONLY | constants.O_NONBLOCK,
+          )
+          try {
+            if (!(await source.stat()).isFile())
+              throw new Error(`Not a regular file: ${snapshot.path}`)
+            snapshot.contents = await source.readFile()
+          } finally {
+            await source.close()
+          }
         }
       }),
     )

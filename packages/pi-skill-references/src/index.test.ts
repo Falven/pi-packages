@@ -442,6 +442,95 @@ test(
   },
 )
 
+for (const route of ["steer", "followUp"] as const) {
+  test(
+    `native ${route} dequeue and resubmission retain one skill block without invoking its body references`,
+    { timeout: 15000 },
+    async (t) => {
+      const host = await createHost(
+        t,
+        async (pi, directory) => {
+          const auditDir = join(directory, "skills", "audit")
+          await mkdir(auditDir)
+          await writeFile(
+            join(auditDir, "SKILL.md"),
+            "---\nname: audit\ndescription: Audit changes\n---\nUnrequested audit instructions.\n",
+          )
+          pi.on("resources_discover", () => ({ skillPaths: [auditDir] }))
+        },
+        true,
+      )
+      await writeFile(
+        host.skillPath,
+        "Review without invoking /skill:audit or /skill:review.\n",
+      )
+      host.ui.setEditorText("Hold the first response")
+      host.terminal.input("\r")
+      await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+      const draft = "/skill:review Apply /skill:review and keep this sentence."
+      host.ui.setEditorText(draft)
+      host.terminal.input(route === "steer" ? "\r" : "\x1b\r")
+      const queued = await t.waitFor(() => {
+        const messages =
+          route === "steer"
+            ? host.session.getSteeringMessages()
+            : host.session.getFollowUpMessages()
+        assert.equal(messages.length, 1)
+        return messages[0]!
+      })
+      assert.equal(queued.match(/<skill name="review"/g)?.length, 1)
+      assert.doesNotMatch(queued, /<skill name="audit"/)
+      host.terminal.input("\x1b[1;3A")
+      assert.deepEqual(host.session.getSteeringMessages(), [])
+      assert.deepEqual(host.session.getFollowUpMessages(), [])
+      assert.equal(host.ui.getEditorText(), queued)
+      host.reply()
+      await host.session.waitForIdle()
+      const submitted = host.submit()
+      await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+      host.reply()
+      assert.equal(await submitted, queued)
+    },
+  )
+}
+
+test(
+  "native dequeue merges queued references to one instruction block per skill",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, undefined, true)
+    host.ui.setEditorText("Hold the first response")
+    host.terminal.input("\r")
+    await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+    host.ui.setEditorText("First request /skill:review.")
+    host.terminal.input("\r")
+    await t.waitFor(() =>
+      assert.equal(host.session.getSteeringMessages().length, 1),
+    )
+    host.ui.setEditorText("Second request /skill:review.")
+    host.terminal.input("\x1b\r")
+    await t.waitFor(() =>
+      assert.equal(host.session.getFollowUpMessages().length, 1),
+    )
+    host.terminal.input("\x1b[1;3A")
+    assert.deepEqual(host.session.getSteeringMessages(), [])
+    assert.deepEqual(host.session.getFollowUpMessages(), [])
+    assert.equal(
+      host.ui.getEditorText().match(/<skill name="review"/g)?.length,
+      2,
+    )
+    host.reply()
+    await host.session.waitForIdle()
+    const pending = host.submit()
+    await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+    host.reply()
+    const submitted = await pending
+    assert.equal(submitted.match(/<skill name="review"/g)?.length, 1)
+    assert.match(submitted, /First request \/skill:review\./)
+    assert.match(submitted, /Second request \/skill:review\./)
+  },
+)
+
 test(
   "native extension and built-in commands receive their original arguments",
   { timeout: 15000 },

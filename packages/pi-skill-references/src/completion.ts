@@ -1,3 +1,4 @@
+import { diff } from "node:util"
 import { Marked, type AutocompleteProvider } from "@earendil-works/pi-tui"
 
 export function withInlineSkills(
@@ -122,8 +123,75 @@ export function withInlineSkills(
         item,
         completion.prefix,
       )
-      result.lines[cursorLine] = before + result.lines[cursorLine]
-      if (result.cursorLine === cursorLine) result.cursorCol += before.length
+      if (!before) return result
+      const reference = `/${item.value}`
+      const nativeLines = lines.with(
+        cursorLine,
+        `${reference} ${line.slice(cursorCol)}`,
+      )
+      // Align whole lines first so a reference inside added prose is not the target.
+      const changes = diff(result.lines, nativeLines)
+      let sourceLine = 0
+      let position = 0
+      for (let index = 0; index < changes.length;) {
+        const [operation, text] = changes[index]!
+        if (operation === 0) {
+          if (sourceLine === cursorLine) break
+          sourceLine += 1
+          position += text.length + 1
+          index += 1
+          continue
+        }
+        const removed: string[] = []
+        const added: string[] = []
+        while (index < changes.length && changes[index]![0] !== 0) {
+          const [change, value] = changes[index++]!
+          if (change === -1) removed.push(value)
+          else added.push(value)
+        }
+        if (sourceLine + removed.length > cursorLine) {
+          const target = removed
+            .slice(0, cursorLine - sourceLine)
+            .reduce((offset, content) => offset + content.length + 1, 0)
+          let offset = 0
+          for (const [change, value] of diff(
+            added.join("\n"),
+            removed.join("\n"),
+          )) {
+            if (change !== 1 && offset >= target) break
+            if (change !== 1) offset += value.length
+            if (change !== -1) position += value.length
+          }
+          break
+        }
+        sourceLine += removed.length
+        position += added.reduce(
+          (offset, content) => offset + content.length + 1,
+          0,
+        )
+      }
+      if (!changes.length) {
+        position = nativeLines
+          .slice(0, cursorLine)
+          .reduce((offset, text) => offset + text.length + 1, 0)
+      }
+      const text = result.lines.join("\n")
+      if (!text.startsWith(reference, position))
+        throw new Error("Could not locate completed skill reference")
+      const precedingLines = text.slice(0, position).split("\n")
+      const completedLine = precedingLines.length - 1
+      const completedCol = precedingLines.at(-1)!.length
+      const completed = result.lines[completedLine]!
+      result.lines[completedLine] =
+        completed.slice(0, completedCol) +
+        before +
+        completed.slice(completedCol)
+      if (
+        result.cursorLine === completedLine &&
+        result.cursorCol >= completedCol
+      ) {
+        result.cursorCol += before.length
+      }
       return result
     },
     shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {

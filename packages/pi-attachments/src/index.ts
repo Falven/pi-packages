@@ -77,17 +77,14 @@ export default function piAttachments(pi: ExtensionAPI): void {
               .slice(0, cursor.line)
               .reduce((offset, line) => offset + line.length + 1, 0) +
             cursor.col
-          const to = before.length - text.length + end
           const inline = contents.replace(/\r\n?/g, "\n")
           const inserted = [inline, inline.replaceAll("\t", "    ")].find(
             (candidate) => {
               const from = end - candidate.length
               return (
                 from >= 0 &&
-                to >= from &&
                 text.slice(from, end) === candidate &&
-                before.slice(0, from) === text.slice(0, from) &&
-                before.slice(to) === text.slice(end)
+                before.slice(0, from) === text.slice(0, from)
               )
             },
           )
@@ -96,16 +93,39 @@ export default function piAttachments(pi: ExtensionAPI): void {
               "Could not map the editor insertion; attachment retained",
             )
           const from = end - inserted.length
-          const delta = text.length - before.length
+          const retained = [{ from: 0, to: from, delta: 0 }]
+          let original = before.length
+          let remaining = text.length
+          // Formatted replacements can retain delimiters between deleted source ranges.
+          while (remaining > end && original > from) {
+            if (before[original - 1] !== text[remaining - 1]) {
+              original--
+              continue
+            }
+            const to = original
+            while (
+              original > from &&
+              remaining > end &&
+              before[original - 1] === text[remaining - 1]
+            ) {
+              original--
+              remaining--
+            }
+            retained.push({ from: original, to, delta: remaining - original })
+          }
+          if (remaining > end)
+            throw new Error(
+              "Could not map the editor insertion; attachment retained",
+            )
           const ranges = references
-            .flatMap((reference) => [
-              { from: reference.from, to: Math.min(reference.to, from) },
-              {
-                from: Math.max(reference.from, to) + delta,
-                to: reference.to + delta,
-              },
-            ])
+            .flatMap((reference) =>
+              retained.map((range) => ({
+                from: Math.max(reference.from, range.from) + range.delta,
+                to: Math.min(reference.to, range.to) + range.delta,
+              })),
+            )
             .filter((range) => range.from < range.to)
+            .toSorted((a, b) => a.from - b.from)
           let expanded = editor.getExpandedText?.() ?? text
           if (expanded !== text) {
             // Keep native paste contents when setText retires their display markers.

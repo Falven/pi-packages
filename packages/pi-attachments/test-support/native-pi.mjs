@@ -255,21 +255,37 @@ export function snapshotPath(text) {
 
 export function holdFileRead(t, source) {
   const read = fs.readFile
+  const open = fs.open
   const canonicalSource = realpathSync(source)
   const gate = Promise.withResolvers()
   let started = false
+  const hold = async (contents) => {
+    started = true
+    await gate.promise
+    return contents
+  }
   const mocked = t.mock.method(fs, "readFile", async (...args) => {
     const contents = await read(...args)
     if (args[0] === source || args[0] === canonicalSource) {
-      started = true
-      await gate.promise
+      return hold(contents)
     }
     return contents
+  })
+  const opened = t.mock.method(fs, "open", async (...args) => {
+    const file = await open(...args)
+    if (args[0] === source || args[0] === canonicalSource) {
+      const readHandle = file.readFile.bind(file)
+      t.mock.method(file, "readFile", async (...options) =>
+        hold(await readHandle(...options)),
+      )
+    }
+    return file
   })
   syncBuiltinESMExports()
   t.after(() => {
     gate.resolve()
     mocked.mock.restore()
+    opened.mock.restore()
     syncBuiltinESMExports()
   })
   return {
