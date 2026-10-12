@@ -4,7 +4,7 @@ Preserved text, file, and image attachments for the [pi coding agent](https://pi
 
 Use native commands or shortcuts to capture contents as a file and insert a readable Markdown attachment reference. A widget above the editor lists the draft's attachments. Removing a reference from the draft removes its membership while keeping the saved contents.
 
-See the [specification](../../docs/specs/pi-attachments.md), [ADRs](../../docs/specs/pi-attachments.md#architecture-decisions), and [shared architecture](../../docs/architecture.md).
+See the [specification](../../docs/specs/pi-attachments.md), its [architecture decisions](../../docs/specs/pi-attachments.md#architecture-decisions), and the [package overview](../../README.md#packages).
 
 ## Install
 

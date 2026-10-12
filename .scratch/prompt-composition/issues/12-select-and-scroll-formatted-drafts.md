@@ -10,8 +10,5 @@
 - [x] Replace selected text accurately across wrapped lines, combining characters, emoji, and wide characters.
 - [x] Keep caret and selection usable while scrolling or resizing the terminal.
 - [x] Use Pi's fullscreen mouse routing and scrolling facilities while preserving surrounding widgets, overlays, header/footer content, and native controls.
-- [ ] Test visible selection and resulting Markdown at the public host boundary; verify mouse behavior and fullscreen coexistence in real Ghostty/macOS.
-
-Integration evidence: `b8b9b03`; 13 selection/scrolling scenarios and all 387 combined tests pass on Pi 1.0.2, with formatting, lint, and root/composer typechecks. Mouse and keyboard source ranges, graphemes, wrapping, native capture/focus/scrolling, resizing, surrounding UI, completion priority, and theme invalidation are covered. Real Ghostty/macOS mouse acceptance remains pending.
-
-Final verification: [shared results](../verification.md).
+- [x] Test visible selection, resulting Markdown, native focus, capture, scrolling, resizing, and surrounding UI at the public host boundary.
+- [ ] Verify mouse behavior and fullscreen coexistence in real Ghostty/macOS.

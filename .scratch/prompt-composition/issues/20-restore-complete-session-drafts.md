@@ -12,7 +12,3 @@
 - [x] When an original insertion is no longer safe, retain its contents and report recovery context instead of applying it to another draft.
 - [x] Failed restoration or submission cannot destroy the saved draft, retained files, or unrelated current work.
 - [x] Drive real host lifecycle transitions with the loaded packages and assert visible drafts, membership, and readable files.
-
-Integration evidence: `11c623c`; 393 combined tests and the external partial-file-capture probe pass on Pi 1.0.2, with formatting, lint, and root/composer typechecks. Complete mixed drafts survive switches, cwd changes, reload, forks and fresh processes. Captured members survive later read failures and source deletion; native recovery retrieves the group after reload. Model delivery order stays asserted independently of concurrent input preprocessing. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
-
-Final verification: [shared results](../verification.md).

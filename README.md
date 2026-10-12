@@ -4,7 +4,7 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 ## Packages
 
-These packages are under development. Each has a loadable extension entry point, a specification, and tests through Pi's public host boundary. Real Ghostty/macOS acceptance remains pending; use the [isolated terminal checks](docs/terminal-checks.md).
+Each package has a loadable extension entry point, a specification, and tests through Pi's public host boundary. The [composition acceptance ticket](.scratch/prompt-composition/issues/22-compose-and-resume-mixed-requests.md) and [terminal acceptance ticket](.scratch/composer-keybinds/issues/03-verify-keybindings-in-ghostty.md) record automated checks, user-reported keyboard results, and remaining physical checks.
 
 | Package                                                       | Responsibility                                                             |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -13,7 +13,7 @@ These packages are under development. Each has a loadable extension entry point,
 | [pi-attachments](packages/pi-attachments/README.md)           | Attachment snapshots, previews, restoration, retention, and delivery.      |
 | [pi-skill-references](packages/pi-skill-references/README.md) | Inline skill completion and canonical skill expansion.                     |
 
-Paste, attachment, and skill-reference functionality is designed for Pi's native editor as well as `pi-composer`. See the [shared architecture](docs/architecture.md), [specifications](docs/specs/), [ADRs](docs/adr/), and [glossary](GLOSSARY.md).
+Paste, attachment, and skill-reference functionality works with Pi's native editor as well as `pi-composer`. The [specifications](docs/specs/) define package behavior, the root [ADR sequence](docs/adr/) records shared decisions, and the [glossary](GLOSSARY.md) defines domain terms. Work and acceptance status live in individual [composition](.scratch/prompt-composition/issues/), [native editing](.scratch/composer-keyboard/issues/), and [terminal setup](.scratch/composer-keybinds/issues/) tickets.
 
 ## Load local packages
 

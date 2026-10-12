@@ -11,8 +11,5 @@
 - [x] Cut and paste share grouped undo/redo; copied canonical references remain portable ordinary text.
 - [x] Paste enters the existing native paste route so independently installed paste policy can apply without a composer-specific interface.
 - [x] A delayed clipboard read stays associated with its original draft and range; preserve later unrelated edits and keep conflicting results recoverable.
-- [ ] Verify observable selection, clipboard text, history, and native shortcut priority through public-boundary tests and real Ghostty/macOS clipboard checks.
-
-Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Final combined and terminal acceptance remain pending.
-
-Final verification: [shared results](../verification.md).
+- [x] Public-boundary and combined-package checks verify selection, clipboard text, history, native priority, supplied handlers, and delayed-result recovery.
+- [ ] Verify real Ghostty/macOS clipboard copy/cut/paste, including content readback and conditional terminal selection.

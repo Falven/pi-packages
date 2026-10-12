@@ -18,7 +18,7 @@ Save failures report an error and preserve the current text and the last usable 
 
 ## Keys
 
-**Keyboard editing is implemented and verified through public Pi input.** Real Ghostty/macOS acceptance remains pending; physical delivery depends on the terminal's effective bindings. The [verification record](../../.scratch/composer-keybinds/verification.md) separates software results from physical checks.
+Keyboard editing follows Pi's effective bindings and native dispatch. Physical delivery depends on the terminal's bindings; the [terminal acceptance ticket](../../.scratch/composer-keybinds/issues/03-verify-keybindings-in-ghostty.md) records automated checks, successful user-reported keyboard tests, and remaining physical checks.
 
 | Native action               | Default or useful delivered input               | Behavior                                                                                                            |
 | --------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -50,7 +50,7 @@ Any explicit Pi override, including an empty binding list, suppresses the aliase
 
 Page selection adds Shift to the effective `tui.editor.pageUp` and `tui.editor.pageDown` bindings. With the defaults, use Shift+Fn+Up/Down on a Mac keyboard. Remapping or clearing a page action changes its selection gestures; an action explicitly bound to the full shifted chord keeps its ordinary behavior. Selection retains its anchor and preferred display column across wrapped rows, redraws, and view changes. After a resize or preview refresh, the next gesture uses the current visible composer height.
 
-Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. Terminal settings change only through explicit, confirmed setup.
+Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [testing contract](../../docs/specs/pi-composer.md#testing-decisions) distinguishes terminal delivery from editor behavior. Terminal settings change only through explicit, confirmed setup.
 
 Continuous typing and character deletion group until movement, another kind of edit, or a pause of more than 500 ms. Word/line deletion, yank, yank-pop, native replacement, and paste each form one undoable edit. A fresh edit after undo discards the old redo branch.
 
@@ -68,7 +68,7 @@ Reload Ghostty configuration after installation or removal through its **Reload 
 
 Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Application Support configuration (`config` or `config.ghostty`), no other default configuration files, no includes, and no extra Ghostty launch arguments. It requires `/usr/bin/python3` to verify that Pi and its same-user Ghostty ancestor use the same configuration context; macOS's root-owned `login` intermediary is supported. The macOS process query is an unstable platform interface; unavailable or mismatched verification leaves settings unchanged.
 
-Installation and repeat verification require the native U.S. keyboard input source and layout (`com.apple.keylayout.US`), no modifier remapping, and no higher-priority physical bindings for the three letter shortcuts. Other or unknown layouts require manual setup. Removal remains available after layout, remap, or physical-binding changes. Files with ACL permissions are refused; ordinary owner, group, mode, and surrounding contents are preserved. Physical forwarding still requires the separate terminal checks.
+Installation and repeat verification require the native U.S. keyboard input source and layout (`com.apple.keylayout.US`), no modifier remapping, and no higher-priority physical bindings for the three letter shortcuts. Other or unknown layouts require manual setup. Removal remains available after layout, remap, or physical-binding changes. Files with ACL permissions are refused; ordinary owner, group, mode, and surrounding contents are preserved. Configuration verification does not observe the GUI's loaded state or physical shortcut delivery.
 
 ## Load
 
@@ -78,4 +78,4 @@ From the repository root:
 pi install ./packages/pi-composer
 ```
 
-See the [specification](../../docs/specs/pi-composer.md), [ADRs](../../docs/specs/pi-composer.md#architecture-decisions), and [library integration notes](../../docs/pi-composer-library-integration.md). The [shared architecture](../../docs/architecture.md) defines cooperation with the other extensions.
+See the [specification](../../docs/specs/pi-composer.md), its [architecture decisions](../../docs/specs/pi-composer.md#architecture-decisions), and the [package overview](../../README.md#packages).

@@ -11,8 +11,5 @@
 - [x] Custom pickers insert ordinary editable reference text through native APIs and can be undone as a coherent action.
 - [x] An open picker accepts its selection before Enter can submit; leading commands, argument completion, and application actions retain native behavior.
 - [x] Native insertion, replacement, extension paste, and external-editor results reach the same draft and appropriate history. Replacement is distinct from paste policy.
-- [ ] Verify provider and external-editor actions through the public Pi host boundary and real Ghostty picker interaction.
-
-Automated acceptance: integration `70bff00`; formatting, lint, type checks, and 95 public-boundary tests pass. Real Ghostty checks remain pending.
-
-Final verification: [shared results](../verification.md).
+- [x] Verify provider and external-editor actions through the public Pi host boundary.
+- [ ] Verify real Ghostty picker interaction and external-editor return.

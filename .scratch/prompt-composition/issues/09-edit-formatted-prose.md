@@ -11,8 +11,5 @@
 - [x] Map caret movement, selections, and edits to the correct source positions across graphemes, terminal widths, and wrapping.
 - [x] Equivalent Markdown normalization may occur without changing meaning, code contents, reference text, or constructs displayed as source.
 - [x] Typing over formatted selections changes the intended Markdown range, and undo/redo works across view switches.
-- [ ] Verify visible formatted output and exported Markdown at the public host boundary; inspect editing in real Ghostty fullscreen mode.
-
-Automated acceptance: integration `70bff00`; formatting, lint, type checks, and 95 public-boundary tests pass. Real Ghostty checks remain pending.
-
-Final verification: [shared results](../verification.md).
+- [x] Verify visible formatted output and exported Markdown at the public host boundary.
+- [ ] Inspect formatted editing and view changes in real Ghostty fullscreen mode.

@@ -4,7 +4,7 @@ A clipboard classification and text paste policy extension for the [pi coding ag
 
 Text below 5,000 UTF-16 code units appears inline. Text at or above 5,000 units becomes a readable attachment through `pi-attachments`. The cutoff measures each decoded paste before editor formatting, independently of line count, draft length, or Markdown context.
 
-See the [specification](../../docs/specs/pi-paste.md), [ADRs](../../docs/specs/pi-paste.md#architecture-decisions), and [shared architecture](../../docs/architecture.md).
+See the [specification](../../docs/specs/pi-paste.md), its [architecture decisions](../../docs/specs/pi-paste.md#architecture-decisions), and the [package overview](../../README.md#packages).
 
 ## Install
 

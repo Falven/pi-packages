@@ -13,5 +13,3 @@
 - [x] Ordinary file references continue to identify current source files and remain distinct from snapshot references.
 - [x] Read/write failures preserve the draft and report recoverable errors; asynchronous results stay with their requesting draft and do not overwrite subsequent edits.
 - [x] Test addition, source changes, visible membership, native submission, and retained bytes through Pi's public editor/session boundary with temporary storage and controlled model responses.
-
-Final verification: [shared results](../verification.md).

@@ -12,7 +12,3 @@
 - [x] Track cleanup eligibility within attachment-owned storage without relying on another editor's history or a complete global session inventory. Preserve native-editor and restored composer references.
 - [x] Report cleanup failures without deleting required contents or concealing partial outcomes.
 - [x] Verify retained bytes and successful subsequent restore/undo/read operations at the public host boundary using temporary storage.
-
-Integration evidence: `89c6f21`; all 437 combined tests and all required checks pass. Native cleanup reclaims more than 132,768 proven-unused bytes while preserving snapshots, pending writes, recovery records and uncertain contents. Eleven additional public-command probes verify damaged/missing records and symlink handling. Restore Inline, native/composer undo, restart, recovery and saved/forked references stay usable. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
-
-Final verification: [shared results](../verification.md).

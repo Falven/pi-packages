@@ -12,7 +12,3 @@
 - [x] Keep saved draft text unchanged and preserve images, input source, other input transformations, commands, and normal/steer/follow-up delivery.
 - [x] Unknown or unreadable references retain native failure behavior alongside successfully resolved skills.
 - [x] Assert final submitted instruction blocks and images through the actual public Pi editor/session boundary, not just the extension handler in isolation.
-
-Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
-
-Final verification: [shared results](../verification.md).

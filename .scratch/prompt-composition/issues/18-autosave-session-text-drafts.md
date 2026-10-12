@@ -12,7 +12,3 @@
 - [x] Report persistence failures while keeping current text and the last usable saved draft recoverable.
 - [x] Delayed saves or editor operations cannot overwrite a different session or newer unrelated work.
 - [x] Test session switches, restarts, history isolation, and write failures through public session and editor interfaces with temporary state.
-
-Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
-
-Final verification: [shared results](../verification.md).

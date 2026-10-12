@@ -16,7 +16,7 @@ Markdown code, escaped references, link destinations, URLs, paths, and shorthand
 
 Pi's native editor trims leading whitespace before the input event. Use fenced code for examples at the start of a prompt; first-line indentation alone does not survive that boundary.
 
-See the [specification](../../docs/specs/pi-skill-references.md), [ADRs](../../docs/specs/pi-skill-references.md#architecture-decisions), and [shared architecture](../../docs/architecture.md).
+See the [specification](../../docs/specs/pi-skill-references.md), its [architecture decisions](../../docs/specs/pi-skill-references.md#architecture-decisions), and the [package overview](../../README.md#packages).
 
 ## Install
 

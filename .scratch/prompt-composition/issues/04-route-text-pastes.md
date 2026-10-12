@@ -13,9 +13,6 @@
 - [x] Paste Inline bypasses conversion; Attach Text attaches even short text. Both work in prose and code. Typing and ordinary native text replacement do not invoke paste policy.
 - [x] Successful insertion uses the active editor; unavailable attachment handling or write failures preserve the draft and recoverable payload without silent rerouting.
 - [x] Late clipboard/snapshot results stay with their requesting draft. Preserve native shortcut priority and input listeners that consume or transform events.
-- [x] Use only existing public Pi contracts. Record an exact unsupported route as a blocker rather than claiming complete coverage or introducing a new integration protocol.
-- [ ] Run public-boundary automated checks and real Ghostty/macOS clipboard, shortcut, and right-click checks.
-
-Integration evidence: `54000e0`; 56 paste tests and all 237 combined tests pass, along with formatting, lint, and root/composer typechecks. Public-host coverage includes route priority, deferred command guards, cutoff/overrides, and recovery across session/cwd/reload. Real terminal paste and clipboard checks remain pending.
-
-Final verification: [shared results](../verification.md).
+- [x] Use existing public Pi contracts for paste routing, native attachment-command handoff, and recovery.
+- [x] Public-boundary checks cover paste routes, native priority, deferred attachment commands, cutoff overrides, and recovery across session changes and reload.
+- [ ] Run real Ghostty/macOS clipboard, shortcut, and right-click checks.

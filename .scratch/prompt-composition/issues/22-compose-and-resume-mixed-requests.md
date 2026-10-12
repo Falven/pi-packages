@@ -13,8 +13,5 @@
 - [x] Switch sessions or restart during pending work, recover the intended draft, and safely clean up only proven-unused capture or staging data while retaining added snapshots.
 - [x] Keep effective providers, custom pickers, native input listeners, shortcuts, widgets, and overlays working in supported registration orders.
 - [x] Demonstrate paste, attachment, and skill behavior with the native editor when pi-composer is absent; disabling/replacing an extension preserves saved text and retained files.
-- [ ] Run public-boundary automated scenarios and real terminal checks; retain exact evidence for any unresolved public Pi contract instead of declaring full compatibility.
-
-Integration evidence: `2043da5`; all 459 tests pass on Node 24.13.1 and Node 26.8.1, including 22 combined scenarios. Formatting, lint, and root/composer typechecks pass. The scenarios cover both supported decorator orders, all five paste routes, completion and native overrides, text/image delivery, recovery across sessions and fresh processes, and actual filesystem/model failures. Real Ghostty/macOS acceptance remains pending under the [terminal procedure](../../../docs/terminal-checks.md).
-
-Final verification: [shared results](../verification.md).
+- [x] Combined public-boundary scenarios and required static checks pass. The [automated acceptance checkpoint](../../composer-keybinds/issues/03-verify-keybindings-in-ghostty.md) records the full suite and installed-Pi resource-loading result.
+- [ ] Complete the physical clipboard, image, picker, mouse, and lifecycle checks in the four package specifications. Keep these separate from the user's successful keyboard report.
