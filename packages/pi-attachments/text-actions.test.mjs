@@ -80,7 +80,7 @@ test("native attachment preview shows the captured text without changing the dra
   assert.equal(host.requests.length, 0)
 })
 
-test("Restore Inline replaces the composer selection and removes earlier membership in one undoable edit", async (t) => {
+test("Restore Inline replaces composer selection after cleanup and keeps membership undoable", async (t) => {
   const host = await nativePi(t, [composerPath, pastePath])
   const source = join(host.directory, "context.txt")
   const contents = `\t// ${"context ".repeat(720)}\r\nconst answer = 42;\r\n`
@@ -95,12 +95,18 @@ test("Restore Inline replaces the composer selection and removes earlier members
   host.input("\x1b[1;9D")
   host.input("\x1b[D")
   for (let i = 0; i < 3; i++) host.input("\x1b[1;2D")
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
   const { pending } = await startAction(host, "Restore Inline")
   await pending
 
   const after = `Lead\n\nKeep ${contents.replaceAll("\r\n", "\n")}\nTail`
   assert.equal(host.ui.getEditorText(), after)
   assert.doesNotMatch(host.render(), /Attachments \(|\[paste #/)
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
   host.input("!")
   assert.equal(host.ui.getEditorText(), after.replace("\nTail", "!\nTail"))
   host.input("\x1b[122;9u")

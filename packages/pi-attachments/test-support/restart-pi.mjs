@@ -14,6 +14,22 @@ test("restarted native Pi reads retained snapshots", async (t) => {
     await assert.rejects(readFile(expected.sessionFile), { code: "ENOENT" })
   }
   assert.equal(host.ui.getEditorText(), "")
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
+  if (expected.cleanup) {
+    assert.match(
+      host.render(),
+      new RegExp(
+        `removed ${expected.cleanup.paths.length} files \\(${expected.cleanup.bytes} bytes\\); 0 failures`,
+      ),
+    )
+    await Promise.all(
+      expected.cleanup.paths.map((path) =>
+        assert.rejects(readFile(path), { code: "ENOENT" }),
+      ),
+    )
+  }
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     expected.history,

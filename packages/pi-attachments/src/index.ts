@@ -19,6 +19,7 @@ import {
   snapshotFile,
 } from "./images.ts"
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
+import { registerCleanup } from "./cleanup.ts"
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
@@ -30,6 +31,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   let insertText: ((text: string) => void) | undefined
   const lifetime = new AbortController()
   registerImages(pi, storage, lifetime.signal)
+  registerCleanup(pi, storage)
 
   function withoutAttachment(text: string, path: string): string {
     for (const reference of attachmentReferences(text, storage).toReversed()) {
