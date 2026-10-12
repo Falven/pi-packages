@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts; 02: pi-attachments: attach text and file snapshots.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Normal, steer, and follow-up paths associate each submitted draft with its own text and attachments through native host delivery.
 - [ ] Preserve command dispatch, input transformations, input source, and existing native image content.

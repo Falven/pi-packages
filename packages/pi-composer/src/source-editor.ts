@@ -20,9 +20,11 @@ import { Projection } from "./projection.ts"
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 type Draft = { text: string; anchor: number; head: number }
+export type DraftHistory = { draft: Draft; past: Draft[]; future: Draft[] }
 type EditKind = "typing" | "backspace" | "delete"
 
 export class SourceEditor extends CustomEditor {
+  onDraftChange: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
@@ -65,6 +67,24 @@ export class SourceEditor extends CustomEditor {
 
   override getText(): string {
     return this.draft.text
+  }
+
+  getDraftHistory(): DraftHistory {
+    return { draft: this.draft, past: [...this.past], future: [...this.future] }
+  }
+
+  restoreDraft(text: string, history?: DraftHistory): void {
+    this.draft = history?.draft ?? {
+      text,
+      anchor: text.length,
+      head: text.length,
+    }
+    this.past = [...(history?.past ?? [])]
+    this.future = [...(history?.future ?? [])]
+    this.editGroup = undefined
+    this.promptIndex = -1
+    this.promptDraft = undefined
+    this.changed()
   }
 
   override getExpandedText(): string {
@@ -183,6 +203,7 @@ export class SourceEditor extends CustomEditor {
     this.preferredCell = undefined
     this.completions.update(autocomplete)
     this.onChange?.(this.getText())
+    this.onDraftChange?.(this.getText())
     this.tui.requestRender()
   }
 
