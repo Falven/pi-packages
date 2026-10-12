@@ -22,6 +22,7 @@ pi install ./packages/pi-attachments
 | Attach command text             | `/attach-text <text>` |              |
 | Choose a file path              | `/attach-file`        | `Ctrl+Alt+F` |
 | Attach files directly           | `/attach-file <path>` |              |
+| Manage draft attachments        | `/attachments`        | `Ctrl+Alt+A` |
 
 Use shortcuts while composing to keep the existing draft. The text dialog preserves leading whitespace and final newlines; native command submission trims its input. The file command accepts one path per line, so spaces within a path do not need quotes. Relative paths resolve against the session's working directory. For example:
 
@@ -33,6 +34,16 @@ Use shortcuts while composing to keep the existing draft. The text dialog preser
 Every file in the set is captured before its references enter the draft as one edit. Spaces and Unicode in names are preserved, and files with the same name are stored separately. With `pi-composer`, one undo restores the selection and removes the whole set's membership.
 
 Attachments are saved under `pi-attachments/` in Pi's agent directory before their references enter the draft. Editing or deleting the source file does not change the snapshot. Normal `@file` references continue to identify the working file. Text and file attachment references remain readable on demand. A draft containing only attachment references can be submitted normally.
+
+## Text actions
+
+Use `Ctrl+Alt+A` while composing to choose an attachment and an action. The attachment widget shows the shortcut; `/attachments` also appears in Pi's command list.
+
+- **Preview text** opens a read-only, scrollable view of the captured UTF-8 text. The preview uses Pi's navigation and cancel bindings and leaves the draft and its selection intact.
+- **Restore Inline** inserts the complete captured text at the caret or over the selection and removes that snapshot's references from the draft. It stays inline at any size, including inside code. The native editor expands tabs and normalizes line endings; pi-composer preserves tabs and normalizes line endings. Snapshot bytes stay unchanged.
+- **Remove from draft** removes every reference to the chosen snapshot from this draft. Other attachments remain included.
+
+With pi-composer, each restoration or removal is one undo/redo action, including membership and the original selection. Both actions retain the snapshot for history, other drafts, and submitted requests. Read and preview errors preserve the draft and retained contents. A pending action is cancelled if the requesting text, selection, editor, or session changes.
 
 ## Images
 

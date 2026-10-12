@@ -50,6 +50,7 @@ export class SourceEditor extends CustomEditor {
   private past: Draft[] = []
   private future: Draft[] = []
   private editGroup: { kind: EditKind; time: number } | undefined
+  private transaction: { draft: Draft; recorded: boolean } | undefined
   private pendingPaste: string | undefined
   private prompts: string[] = []
   private promptIndex = -1
@@ -198,9 +199,40 @@ export class SourceEditor extends CustomEditor {
 
   override setText(text: string): void {
     text = text.replace(/\r\n?/g, "\n")
-    if (text === this.getText()) return
-    if (!text) this.onDraftClear?.(this.getText())
-    this.commit({ text, anchor: text.length, head: text.length })
+    const current = this.getText()
+    if (text === current) return
+    if (!text) this.onDraftClear?.(current)
+    let anchor = text.length
+    let head = text.length
+    if (this.transaction) {
+      // A synchronous onChange replacement maps the active selection through its text edit.
+      let from = 0
+      while (
+        from < current.length &&
+        from < text.length &&
+        current[from] === text[from]
+      )
+        from++
+      let to = current.length
+      let nextTo = text.length
+      while (
+        to > from &&
+        nextTo > from &&
+        current[to - 1] === text[nextTo - 1]
+      ) {
+        to--
+        nextTo--
+      }
+      const map = (position: number) =>
+        position <= from
+          ? position
+          : position >= to
+            ? position + text.length - current.length
+            : nextTo
+      anchor = map(this.draft.anchor)
+      head = map(this.draft.head)
+    }
+    this.commit({ text, anchor, head })
   }
 
   override insertTextAtCursor(text: string): void {
@@ -238,23 +270,33 @@ export class SourceEditor extends CustomEditor {
   }
 
   private commit(next: Draft, kind?: EditKind): void {
+    const outer = this.transaction === undefined
+    const transaction = (this.transaction ??= {
+      draft: this.draft,
+      recorded: false,
+    })
     this.promptIndex = -1
     this.promptDraft = undefined
     const time = Date.now()
-    if (next.text !== this.getText()) {
+    if (next.text !== this.getText() && !transaction.recorded) {
       if (
         !kind ||
         this.editGroup?.kind !== kind ||
         time - this.editGroup.time > 500 ||
-        this.draft.anchor !== this.draft.head
+        transaction.draft.anchor !== transaction.draft.head
       ) {
-        this.past.push(this.draft)
+        this.past.push(transaction.draft)
       }
       this.future = []
+      transaction.recorded = true
     }
     this.editGroup = kind ? { kind, time } : undefined
     this.draft = next
-    this.changed(kind !== undefined)
+    try {
+      this.changed(kind !== undefined)
+    } finally {
+      if (outer) this.transaction = undefined
+    }
   }
 
   private restoreEdit(from: Draft[], to: Draft[]): void {
