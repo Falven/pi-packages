@@ -4,11 +4,13 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** in-progress
+**Status:** implemented; final acceptance pending
 
-- [ ] Keep snapshot storage and references stable across Pi restarts, resumed sessions, and forks with the native editor.
-- [ ] Associate retained references with the correct native session and submission without depending on pi-composer.
-- [ ] Retain submitted snapshots until explicit cleanup; elapsed time does not expire them.
-- [ ] Removing draft membership or changing/removing source files cannot invalidate other draft or submitted references.
-- [ ] A lifecycle transition or asynchronous failure preserves readable assets and their recoverable association with the requesting draft.
-- [ ] Verify actual retained bytes and references across native lifecycle actions through the public host boundary.
+- [x] Keep snapshot storage and references stable across Pi restarts, resumed sessions, and forks with the native editor.
+- [x] Associate retained references with the correct native session and submission without depending on pi-composer.
+- [x] Retain submitted snapshots until explicit cleanup; elapsed time does not expire them.
+- [x] Removing draft membership or changing/removing source files cannot invalidate other draft or submitted references.
+- [x] A lifecycle transition or asynchronous failure preserves readable assets and their recoverable association with the requesting draft.
+- [x] Verify actual retained bytes and references across native lifecycle actions through the public host boundary.
+
+Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Final combined and terminal acceptance remain pending.
