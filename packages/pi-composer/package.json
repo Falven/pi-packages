@@ -1,7 +1,7 @@
 {
   "name": "pi-composer",
   "version": "0.1.0",
-  "description": "Composer extension scaffold for Pi.",
+  "description": "Markdown composer extension scaffold for Pi.",
   "keywords": [
     "composer",
     "pi",

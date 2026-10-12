@@ -1,19 +1,15 @@
 # pi-composer
 
-A composer extension scaffold for the [pi coding agent](https://pi.dev).
+A Markdown composer extension scaffold for the [pi coding agent](https://pi.dev).
 
-The entry point is ready to load. Composer behavior is not implemented yet, and the package has not been published to npm.
+The package owns editing, selection, undo/redo, and session drafts. Its entry point is ready to load; feature behavior is not implemented yet, and the package is unpublished.
 
-## Install
+See the [specification](../../docs/specs/pi-composer.md), [ADRs](../../docs/specs/pi-composer.md#architecture-decisions), and [library integration notes](../../docs/pi-composer-library-integration.md). The [shared architecture](../../docs/architecture.md) defines cooperation with the other extensions.
+
+## Load the scaffold
 
 From the repository root:
 
 ```bash
 pi install ./packages/pi-composer
-```
-
-After publishing to npm:
-
-```bash
-pi install npm:pi-composer
 ```

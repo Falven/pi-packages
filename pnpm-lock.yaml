@@ -191,7 +191,25 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/pi-attachments:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: '*'
+        version: 0.87.1(ws@8.22.0)
+
   packages/pi-composer:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: '*'
+        version: 0.87.1(ws@8.22.0)
+
+  packages/pi-paste:
+    dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: '*'
+        version: 0.87.1(ws@8.22.0)
+
+  packages/pi-skill-references:
     dependencies:
       '@earendil-works/pi-coding-agent':
         specifier: '*'

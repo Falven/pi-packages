@@ -1,0 +1,32 @@
+{
+  "name": "pi-attachments",
+  "version": "0.1.0",
+  "description": "Attachment storage and preview extension scaffold for Pi.",
+  "keywords": [
+    "attachments",
+    "pi",
+    "pi-extension",
+    "pi-package"
+  ],
+  "files": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}

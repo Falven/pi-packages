@@ -1,0 +1,32 @@
+{
+  "name": "pi-paste",
+  "version": "0.1.0",
+  "description": "Paste policy extension scaffold for Pi.",
+  "keywords": [
+    "paste",
+    "pi",
+    "pi-extension",
+    "pi-package"
+  ],
+  "files": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
