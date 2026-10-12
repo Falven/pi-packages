@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Explicit image attachment preserves original bytes before making its reference usable.
 - [ ] Show a small image preview near the active native editor or composer through Pi's image/graphics facilities.
