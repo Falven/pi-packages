@@ -7,7 +7,7 @@
 **Status:** ready-for-agent
 
 - [ ] Preview preserved text through native UI with both the native editor and pi-composer.
-- [ ] Restore Inline inserts complete preserved text at the caret or over the selection, including code and content above the paste cutoff.
+- [ ] Restore Inline inserts complete preserved text at the caret or over the selection, including code and content above the paste cutoff. The native editor retains its tab expansion and LF normalization; pi-composer preserves tabs, and snapshot bytes remain unchanged.
 - [ ] Restoration bypasses automatic attachment conversion and removes the restored item's draft membership.
 - [ ] With pi-composer, restoration and removal each undo/redo as one coherent action including text and membership.
 - [ ] Removing an item or failing to render a preview does not delete contents needed by undo, another draft, or an earlier submission.
