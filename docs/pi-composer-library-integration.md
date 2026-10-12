@@ -36,6 +36,14 @@ Typing and deletion group into coherent undo events. Completion, native text rep
 
 Public editor callbacks remain connected to the host when factories are decorated or reinstalled. Session histories contain plain editor data and remain isolated across session switches and resource reloads. A process restart restores saved text with fresh history.
 
+## Terminal setup
+
+`/setup-keybinds ghostty` and `/setup-keybinds ghostty remove` use Pi's public command, confirmation, notification, and process-execution contracts. They preserve editor state at handler entry. Installation appends eight forwarding rules in one marked block; removal deletes only an intact block. The block stays installed across Pi lifecycle events until explicit removal and Ghostty configuration reload.
+
+Pre-write verification supports Ghostty 1.3.1 with a single regular, user-owned Application Support configuration, no XDG configuration files or includes, and no extra launch arguments. A read-only Python standard-library probe checks the same-user Ghostty ancestor and matching configuration context. Darwin's process-argument interface is unstable, so an unavailable probe or unsupported context prevents writes.
+
+Ghostty validates the staged candidate and reports the freshly loaded configuration and current bindings. The proven single-source loading order and documented last-binding-wins behavior establish the appended rules' precedence. The CLI does not expose arbitrary prospective binding inspection or the GUI's live loaded state. Setup rechecks the source files and process context before atomic replacement; removal validates the remaining configuration. The [README](../packages/pi-composer/README.md#ghostty-keybinding-setup) describes supported use and reload steps.
+
 ## Markdown projection
 
 Pi's Marked parser identifies Markdown structures. The composer maps visible graphemes, hidden delimiters, styles and terminal cells back to source offsets, allowing formatted selection and replacement to edit the same Markdown text. Pi supplies the theme, code highlighter and terminal utilities.
@@ -44,8 +52,8 @@ Equivalent Markdown normalization is allowed while preserving meaning, code cont
 
 ## Verification
 
-Public-host tests load the extensions and drive native editor/session routes. They check source and formatted editing, Unicode selection, grouped history, effective completion providers, clipboard behavior, attachment references and recovery. The revised contract also requires native action remapping and clearing, alias collisions, picker precedence, word/line deletion and yank, and logical-line versus visual-row navigation. Combined scenarios verify that independently loaded packages cooperate through those routes.
+Public-host tests load the extensions and drive native editor/session routes. They check source and formatted editing, Unicode selection, grouped history, effective completion providers, clipboard behavior, attachment references and recovery. Coverage includes native action remapping and clearing, alias collisions, picker precedence, word/line deletion and yank, logical-line versus visual-row navigation, and page selection. Setup checks invoke the registered command with temporary configuration files and controlled external-process responses. Native Ghostty checks establish the supported validation and precedence assumptions separately. Combined scenarios verify that independently loaded packages cooperate through those routes.
 
-Real Ghostty/macOS checks remain necessary for Command-key forwarding, clipboard formats, mouse behavior and image graphics. Record terminal interception, delivered-input editing, and native clipboard metadata as separate results. Synthetic input and captured terminal output establish automated behavior, without proving the physical terminal integration. The revised requirements await implementation and acceptance; the [terminal procedure](terminal-checks.md) defines the physical checks.
+Real Ghostty/macOS checks remain necessary for Command-key forwarding, clipboard formats, mouse behavior and image graphics. Record terminal interception, delivered-input editing, and native clipboard metadata as separate results. Synthetic input and captured terminal output establish automated behavior, without proving the physical terminal integration. Physical acceptance remains pending; the [terminal procedure](terminal-checks.md) defines those checks.
 
 Native source references: [TUI exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/index.ts), [coding-agent exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/index.ts), [editor contract](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/editor-component.ts), and [Markdown renderer](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/components/markdown.ts).

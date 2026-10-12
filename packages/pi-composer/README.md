@@ -49,7 +49,7 @@ Any explicit Pi override, including an empty binding list, suppresses the aliase
 
 Page selection adds Shift to the effective `tui.editor.pageUp` and `tui.editor.pageDown` bindings. With the defaults, use Shift+Fn+Up/Down on a Mac keyboard. Remapping or clearing a page action changes its selection gestures; an action explicitly bound to the full shifted chord keeps its ordinary behavior. Selection retains its anchor and preferred display column across wrapped rows, redraws, and view changes. After a resize or preview refresh, the next gesture uses the current visible composer height.
 
-Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. The package leaves terminal settings unchanged.
+Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. Terminal settings change only through explicit, confirmed setup.
 
 Continuous typing and character deletion group until movement, another kind of edit, or a pause of more than 500 ms. Word/line deletion, yank, yank-pop, native replacement, and paste each form one undoable edit. A fresh edit after undo discards the old redo branch.
 
@@ -58,6 +58,14 @@ Copy and cut use Pi's clipboard support. A cut deletes only after copying succee
 If a clipboard result reaches the composer after its draft or selection changes, the original session, cwd, draft, selection offsets, and delivered text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. This also covers delivery to a replacement composer after a session switch or reload. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory. Starting a session or running `/composer-recover` retries those writes without inserting into the current draft.
 
 Pi's default clipboard handler returns text-read failures as empty results and delivers copied-file paths or temporary image paths as text. The composer cannot report errors or retain bytes that this handler does not expose, or guard delivery to an unrelated replacement editor. `pi-paste` supplies metadata classification, read-error reporting, and captured-content recovery; `pi-attachments` supplies stable snapshots.
+
+## Ghostty keybinding setup
+
+Run `/setup-keybinds ghostty` from Pi inside Ghostty to review and install forwarding for Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down. The command shows the target file and asks for confirmation after verification. It appends one marked block, leaving other settings and Pi keybindings intact. The forwarding stays active in other programs and after Pi exits.
+
+Reload Ghostty configuration after installation or removal through its **Reload Configuration** action; the default shortcut is Cmd+Shift+Comma. `/setup-keybinds ghostty remove` reviews and removes the unmodified block while preserving unrelated later edits. Repeating either operation makes no write. An edited or incomplete block requires manual resolution. No backups are created.
+
+Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Application Support configuration (`config` or `config.ghostty`), no other default configuration files, no includes, and no extra Ghostty launch arguments. It requires `/usr/bin/python3` to verify that Pi and its Ghostty ancestor use the same configuration context. The macOS process query is an unstable platform interface; unavailable or mismatched verification leaves settings unchanged. Unsupported configurations require manual setup. Physical forwarding still requires the separate terminal checks.
 
 ## Load
 
