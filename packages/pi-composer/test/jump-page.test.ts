@@ -28,6 +28,29 @@ for (const sourceView of [false, true]) {
 
 for (const sourceView of [false, true]) {
   const view = sourceView ? "source" : "formatted"
+  test(`shifted page gestures replace the selected page and restore its range on undo in ${view} view`, async (t) => {
+    const host = await openHost(t)
+    if (sourceView) await host.key("\x1b[109;10u")
+    const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 3; i++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+    assert.equal(host.ui.getEditorText(), original)
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "rowX7\nrow8")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), original)
+    await host.type("Y")
+    assert.equal(host.ui.getEditorText(), "rowY7\nrow8")
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[5;2~")
+    await host.type("Z")
+    assert.equal(host.ui.getEditorText(), original.replace("row0", "rowZ0"))
+  })
+
   test(`delivered native page actions move one visible editor page in ${view} view`, async (t) => {
     const host = await openHost(t)
     if (sourceView) await host.key("\x1b[109;10u")
@@ -213,6 +236,86 @@ test("fullscreen viewport keys retain ownership before the composer", async (t) 
   }
 })
 
+for (const sourceView of [false, true]) {
+  const view = sourceView ? "source" : "formatted"
+  test(`page selection retains preferred columns through Unicode and short rows in ${view} view`, async (t) => {
+    const host = await openHost(t)
+    if (sourceView) await host.key("\x1b[109;10u")
+    host.terminal.resize(60, 10)
+    const original = "0123456789\none\ntwo\nx\nfour\nfive\n👩‍💻\t界e\u0301z"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 9; i++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+    await host.key("\x1b[6;2~")
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "012345678Xz")
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[5;2~")
+    await host.type("Y")
+    assert.equal(
+      host.ui.getEditorText(),
+      "012345678Y\nfour\nfive\n👩‍💻\t界e\u0301z",
+    )
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[5;2~")
+    await host.type("Z")
+    assert.equal(
+      host.ui.getEditorText(),
+      "0Z9\none\ntwo\nx\nfour\nfive\n👩‍💻\t界e\u0301z",
+    )
+  })
+
+  test(`page selection maps wrapped rows and clamps without selecting partial graphemes in ${view} view`, async (t) => {
+    const host = await openHost(t, { columns: 12 })
+    if (sourceView) await host.key("\x1b[109;10u")
+    host.terminal.resize(12, 10)
+    const original = "abcdefghijklmno👩‍💻pqrstuv\n0123456789ABCDEFGHIJKLMN"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 9; i++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "abcdefghiX9ABCDEFGHIJKLMN")
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[6;2~")
+    await host.key("\x1b[6;2~")
+    await host.type("Y")
+    assert.equal(host.ui.getEditorText(), "abcdefghiY")
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[5;2~")
+    await host.key("\x1b[5;2~")
+    await host.key("\x1b[5;2~")
+    await host.type("Z")
+    assert.equal(
+      host.ui.getEditorText(),
+      "abZjklmno👩‍💻pqrstuv\n0123456789ABCDEFGHIJKLMN",
+    )
+  })
+
+  test(`page selection accounts for hidden Markdown cells in ${view} view`, async (t) => {
+    const host = await openHost(t)
+    if (sourceView) await host.key("\x1b[109;10u")
+    host.terminal.resize(60, 10)
+    const original = "0123456789\none\ntwo\n**👩‍💻\t界e\u0301z**"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 9; i++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+    await host.type("X")
+    assert.equal(
+      host.ui.getEditorText(),
+      sourceView ? "012345678X界e\u0301z**" : "012345678X**z**",
+    )
+  })
+}
+
 test("jump misses and page boundaries leave an empty draft unchanged in either view", async (t) => {
   const host = await openHost(t)
   for (const sourceView of [false, true]) {
@@ -228,4 +331,102 @@ test("jump misses and page boundaries leave an empty draft unchanged in either v
     await host.type("Z")
     assert.equal(host.ui.getEditorText(), "Z")
   }
+})
+
+for (const [name, keybindings, input, selected] of [
+  ["remapped", { "tui.editor.pageDown": "ctrl+alt+n" }, "\x1b[110;8u", true],
+  ["old remapped", { "tui.editor.pageDown": "ctrl+alt+n" }, "\x1b[6;2~", false],
+  ["cleared", { "tui.editor.pageDown": [] }, "\x1b[6;2~", false],
+] as const) {
+  test(`${name} page binding controls its derived selection gesture`, async (t) => {
+    const host = await openHost(t, { keybindings })
+    const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 3; i++) await host.key("\x1b[C")
+    await host.key(input)
+    await host.type("X")
+    assert.equal(
+      host.ui.getEditorText(),
+      selected ? "rowX7\nrow8" : original.replace("row0", "rowX0"),
+    )
+  })
+}
+
+test("explicit native shifted bindings execute ordinary actions before derived page selection", async (t) => {
+  const host = await openHost(t, {
+    keybindings: {
+      "tui.editor.pageDown": "shift+pageDown",
+      "tui.editor.pageUp": "ctrl+alt+p",
+      "tui.editor.cursorLineEnd": "ctrl+alt+shift+p",
+    },
+  })
+  const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
+  host.ui.setEditorText(original)
+  await host.output()
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  for (let i = 0; i < 3; i++) await host.key("\x1b[C")
+  await host.key("\x1b[6;2~")
+  await host.type("X")
+  assert.equal(host.ui.getEditorText(), original.replace("row7", "rowX7"))
+  await host.key("\x1b[122;9u")
+  await host.key("\x1b[112;8u")
+  await host.type("Y")
+  assert.equal(host.ui.getEditorText(), original.replace("row7", "row7Y"))
+})
+
+test("an accepted extension shortcut retains its shifted page gesture", async (t) => {
+  let invoked = 0
+  const host = await openHost(t, {
+    extension: (pi) => {
+      pi.registerShortcut("shift+pageDown", {
+        handler: () => {
+          invoked++
+        },
+      })
+    },
+  })
+  const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
+  host.ui.setEditorText(original)
+  await host.output()
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  await host.key("\x1b[6;2~")
+  await host.type("X")
+  assert.equal(host.ui.getEditorText(), `X${original}`)
+  assert.equal(invoked, 1)
+})
+
+test("page selection survives redraw and view switches and uses the resized editor height", async (t) => {
+  const host = await openHost(t)
+  const original =
+    "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8\nrow9\nrow10\nrow11\nrow12\nrow13\nrow14\nrow15"
+  host.ui.setEditorText(original)
+  await host.output()
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  for (let i = 0; i < 3; i++) await host.key("\x1b[C")
+  await host.key("\x1b[6;2~")
+  host.terminal.resize(32, 10)
+  assert.equal(host.ui.setTheme("light").success, true)
+  await host.output()
+  await host.key("\x1b[109;10u")
+  await host.key("\x1b[6;2~")
+  await host.type("X")
+  assert.equal(
+    host.ui.getEditorText(),
+    "rowX10\nrow11\nrow12\nrow13\nrow14\nrow15",
+  )
+  await host.key("\x1b[122;9u")
+  await host.key("\x1b[5;2~")
+  await host.key("\x1b[109;10u")
+  await host.type("Y")
+  assert.equal(
+    host.ui.getEditorText(),
+    "rowY7\nrow8\nrow9\nrow10\nrow11\nrow12\nrow13\nrow14\nrow15",
+  )
+  assert.equal(host.requests.length, 0)
 })

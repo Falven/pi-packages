@@ -105,6 +105,8 @@ for (const view of ["formatted", "source"]) {
     await host.key("\x1b[A")
     await host.key("\x1b[13;9u")
     await host.type("Ignored by the picker")
+    await host.key("\x1b[6;2~")
+    await host.key("\x1b[5;2~")
     assert.equal(host.ui.getEditorText(), draft)
     assert.equal(host.requests.length, 0)
     await host.key("\x1b")
@@ -308,6 +310,58 @@ function highlighted(text) {
   return [...text.matchAll(/\x1b\[7m(.*?)\x1b\[27m/gs)]
     .map((match) => stripVTControlCharacters(match[1]))
     .join("")
+}
+
+for (const view of ["formatted", "source"]) {
+  test(`page selection survives native image preview refresh and restores attachment membership in ${view} view`, async (t) => {
+    const capabilities = getCapabilities()
+    setCapabilities({ ...capabilities, images: null })
+    t.after(() => setCapabilities(capabilities))
+    const host = await openHost(t, {
+      columns: 300,
+      extensionPaths: [attachments],
+    })
+    const source = join(host.directory, "selected.png")
+    const bytes = Buffer.from(PNG, "base64")
+    await writeFile(source, bytes)
+    await host.session.sendUserMessage(`/attach-file ${source}`, {
+      expandPromptTemplates: true,
+    })
+    const reference = host.ui.getEditorText().trim()
+    const path = snapshotPath(reference)
+    const held = holdFileRead(t, path)
+    const draft = `row0\nrow1\n${reference}\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8`
+    host.ui.setEditorText(draft)
+    if (view === "source") await host.key(toggleView)
+    await held.started()
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let i = 0; i < 3; i++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+    held.release()
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /\[Image: selected\.png.*2x1/),
+    )
+    await host.key(toggleView)
+    await host.key(toggleView)
+    host.terminal.output = ""
+    host.ui.pasteToEditor("X")
+    assert.equal(host.ui.getEditorText(), "rowX7\nrow8")
+    assert.doesNotMatch(await host.output(), /\[Image: selected\.png/)
+    host.terminal.output = ""
+    await host.key(undo)
+    assert.equal(host.ui.getEditorText(), draft)
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /\[Image: selected\.png.*2x1/),
+    )
+    host.ui.pasteToEditor("Y")
+    assert.equal(host.ui.getEditorText(), "rowY7\nrow8")
+    await host.key(undo)
+    assert.equal(host.ui.getEditorText(), draft)
+    assert.deepEqual(await readFile(path), bytes)
+    assert.equal(host.requests.length, 0)
+  })
 }
 
 for (const view of ["formatted", "source"]) {

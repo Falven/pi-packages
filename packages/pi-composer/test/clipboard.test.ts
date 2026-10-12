@@ -55,6 +55,32 @@ describe(
       assert.equal(host.ui.getEditorText(), "Keep\nReplacement")
     })
 
+    test("cutting a selected page exports its range and undo restores selection", async (t) => {
+      const clipboard = getNativeClipboard()
+      assertWritableClipboard(clipboard)
+      let copied = ""
+      t.mock.method(clipboard, "setText", async (text: string) => {
+        copied = text
+      })
+      const host = await openHost(t)
+      const draft = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
+      host.ui.setEditorText(draft)
+      await host.output()
+      await host.key("\x1b[97;9u")
+      await host.key("\x1b[D")
+      await host.key("\x1b[C")
+      await host.key("\x1b[C")
+      await host.key("\x1b[C")
+      await host.key("\x1b[6;2~")
+      await host.key("\x1b[120;9u")
+      assert.equal(copied, "0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow")
+      assert.equal(host.ui.getEditorText(), "row7\nrow8")
+      await host.key("\x1b[122;9u")
+      assert.equal(host.ui.getEditorText(), draft)
+      host.ui.pasteToEditor("X")
+      assert.equal(host.ui.getEditorText(), "rowX7\nrow8")
+    })
+
     test("formatted clipboard edits use the selected source range and share history across views", async (t) => {
       const clipboard = getNativeClipboard()
       assertWritableClipboard(clipboard)

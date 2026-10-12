@@ -779,14 +779,14 @@ export class SourceEditor extends CustomEditor {
       )
       return
     }
-    const pageUp = keys.matches(data, "tui.editor.pageUp")
-    if (pageUp || keys.matches(data, "tui.editor.pageDown")) {
+    const pageUp = movementMatches("tui.editor.pageUp")
+    if (pageUp || movementMatches("tui.editor.pageDown")) {
       const target = this.project().vertical(
         this.draft.head,
         (pageUp ? -1 : 1) * Math.max(1, this.viewport.viewportHeight),
         this.preferredCell,
       )
-      this.moveTo(target.position, false)
+      this.moveTo(target.position, select)
       this.preferredCell = target.column
       return
     }

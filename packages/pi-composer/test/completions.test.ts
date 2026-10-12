@@ -426,7 +426,10 @@ test("the native picker highlights the best matching value before keyboard navig
 
 test("effective picker keys retain terminal listener, extension shortcut, and application action priority", async (t) => {
   const host = await openHost(t, {
-    keybindings: { "tui.select.down": "alt+j", "app.clear": "super+enter" },
+    keybindings: {
+      "tui.select.down": ["alt+j", "shift+pageDown"],
+      "app.clear": "super+enter",
+    },
     extension: (pi) => {
       pi.registerShortcut("super+a", {
         handler: (ctx) => ctx.ui.setEditorText("Extension action"),
@@ -454,6 +457,10 @@ test("effective picker keys retain terminal listener, extension shortcut, and ap
   }
   await openPicker()
   await host.key("\x1bj")
+  await host.key("\r")
+  assert.equal(host.ui.getEditorText(), "Read @manual-b.md ")
+  await openPicker()
+  await host.key("\x1b[6;2~")
   await host.key("\r")
   assert.equal(host.ui.getEditorText(), "Read @manual-b.md ")
   await openPicker()
