@@ -47,6 +47,7 @@ export class SourceEditor extends CustomEditor {
       }
     | undefined
   private preferredCell: number | undefined
+  private jumpDirection: -1 | 1 | undefined
   private past: Draft[] = []
   private future: Draft[] = []
   private editGroup: { kind: EditKind; time: number } | undefined
@@ -312,6 +313,7 @@ export class SourceEditor extends CustomEditor {
 
   private changed(autocomplete = false): void {
     this.revision++
+    this.jumpDirection = undefined
     this.dragging = false
     this.revealCaret = true
     this.preferredCell = undefined
@@ -322,6 +324,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   private moveTo(position: number, select: boolean): void {
+    this.jumpDirection = undefined
     this.revealCaret = true
     this.preferredCell = undefined
     this.editGroup = undefined
@@ -360,6 +363,8 @@ export class SourceEditor extends CustomEditor {
 
   override handleInput(data: string): void {
     this.dragging = false
+    const jumpDirection = this.jumpDirection
+    this.jumpDirection = undefined
     if (this.onExtensionShortcut?.(data)) return
     const keys = this.nativeKeys
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
@@ -392,6 +397,21 @@ export class SourceEditor extends CustomEditor {
           handler()
           return
         }
+      }
+    }
+    if (jumpDirection !== undefined) {
+      if (
+        keys.matches(data, "tui.editor.jumpForward") ||
+        keys.matches(data, "tui.editor.jumpBackward")
+      )
+        return
+      const printable = decodeKittyPrintable(data) ?? data
+      if (printable && !/\p{Cc}/u.test(printable)) {
+        this.moveTo(
+          this.project().jump(this.draft.head, printable, jumpDirection),
+          false,
+        )
+        return
       }
     }
     if (
@@ -580,6 +600,25 @@ export class SourceEditor extends CustomEditor {
         !select && anchor !== head ? Math.max(anchor, head) : this.adjacent(1),
         select,
       )
+      return
+    }
+    const pageUp = keys.matches(data, "tui.editor.pageUp")
+    if (pageUp || keys.matches(data, "tui.editor.pageDown")) {
+      const target = this.project().vertical(
+        this.draft.head,
+        (pageUp ? -1 : 1) * Math.max(1, this.viewport.viewportHeight),
+        this.preferredCell,
+      )
+      this.moveTo(target.position, false)
+      this.preferredCell = target.column
+      return
+    }
+    if (keys.matches(data, "tui.editor.jumpForward")) {
+      this.jumpDirection = 1
+      return
+    }
+    if (keys.matches(data, "tui.editor.jumpBackward")) {
+      this.jumpDirection = -1
       return
     }
     const lineStart = keys.matches(data, "tui.editor.deleteToLineStart")

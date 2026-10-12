@@ -177,6 +177,18 @@ export class Projection {
       : (this.cells.at(-1)?.to ?? this.length)
   }
 
+  jump(position: number, target: string, direction: -1 | 1): number {
+    const current = this.cells.findIndex((cell) => cell.to > position)
+    const index = current < 0 ? this.cells.length : current
+    const match = (cell: Cell) => cell.text.includes(target)
+    return (
+      (direction < 0
+        ? this.cells.slice(0, index).findLast(match)
+        : this.cells.slice(index + 1).find(match)
+      )?.from ?? position
+    )
+  }
+
   lineBoundary(position: number, direction: -1 | 1): number {
     if (direction < 0) {
       const newline = this.cells.findLastIndex(
@@ -316,7 +328,7 @@ export class Projection {
 
   vertical(
     position: number,
-    direction: -1 | 1,
+    distance: number,
     preferred?: number,
   ): { position: number; column: number } {
     const currentIndex = this.rowAt(position)
@@ -328,7 +340,7 @@ export class Projection {
           .filter((cell) => cell.to <= position)
           .reduce((sum, cell) => sum + cell.width, 0)
     return {
-      position: this.positionAt(currentIndex + direction, column),
+      position: this.positionAt(currentIndex + distance, column),
       column,
     }
   }
