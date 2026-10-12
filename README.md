@@ -1,35 +1,39 @@
 # pi-packages
 
-A collection of [pi coding agent](https://pi.dev) extensions, skills, prompt templates, and themes.
+A collection of extensions for the [pi coding agent](https://pi.dev).
 
 ## Packages
 
-`pi-composer` is an unpublished scaffold. The `@scope` entries are samples showing the catalog format.
+These packages are unpublished scaffolds. Each has a loadable extension entry point and a specification; feature behavior is not implemented yet.
 
-| Package                                                        | Downloads                                                                           | Description                  |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------- |
-| [`pi-composer`](packages/pi-composer)                          | ![npm monthly downloads](https://img.shields.io/npm/dm/pi-composer)                 | Composer extension scaffold. |
-| [`@scope/pi-example-extension`](packages/pi-example-extension) | ![npm monthly downloads](https://img.shields.io/npm/dm/@scope/pi-example-extension) | Example extension.           |
-| [`@scope/pi-example-skills`](packages/pi-example-skills)       | ![npm monthly downloads](https://img.shields.io/npm/dm/@scope/pi-example-skills)    | Example skill collection.    |
-| [`@scope/pi-example-prompts`](packages/pi-example-prompts)     | ![npm monthly downloads](https://img.shields.io/npm/dm/@scope/pi-example-prompts)   | Example prompt templates.    |
-| [`@scope/pi-example-theme`](packages/pi-example-theme)         | ![npm monthly downloads](https://img.shields.io/npm/dm/@scope/pi-example-theme)     | Example theme.               |
+| Package                                                       | Responsibility                                                             |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| [pi-composer](packages/pi-composer/README.md)                 | Markdown editing, selection, undo/redo, and session drafts.                |
+| [pi-paste](packages/pi-paste/README.md)                       | Paste classification, inline/attachment decisions, and explicit overrides. |
+| [pi-attachments](packages/pi-attachments/README.md)           | Attachment snapshots, previews, restoration, retention, and delivery.      |
+| [pi-skill-references](packages/pi-skill-references/README.md) | Inline skill completion and canonical skill expansion.                     |
 
-## Deprecated
+Paste, attachment, and skill-reference functionality is designed for Pi's native editor as well as `pi-composer`. See the [shared architecture](docs/architecture.md), [specifications](docs/specs/), [ADRs](docs/adr/), and [glossary](GLOSSARY.md).
 
-| Package                                                  | Downloads                                                                        | Description                 |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------- | --------------------------- |
-| [`@scope/pi-example-legacy`](packages/pi-example-legacy) | ![npm monthly downloads](https://img.shields.io/npm/dm/@scope/pi-example-legacy) | Example deprecated package. |
+## Load local scaffolds
 
-## Install
-
-Install the local scaffold from this repository:
+From the repository root, install the packages you want to work on:
 
 ```bash
 pi install ./packages/pi-composer
+pi install ./packages/pi-paste
+pi install ./packages/pi-attachments
+pi install ./packages/pi-skill-references
 ```
 
-After publishing to npm:
+Each package README links to its specification and ADRs.
+
+## Development
 
 ```bash
-pi install npm:pi-composer
+pnpm install --frozen-lockfile --ignore-scripts
+pnpm run format:check
+pnpm run lint
+pnpm run typecheck
+pnpm test
 ```

@@ -1,0 +1,78 @@
+# Composition extensions
+
+The workspace separates prompt editing, paste policy, attachment handling, and skill references into four independently loadable Pi packages. Each package currently contains an extension scaffold; its specification defines the behavior to implement.
+
+The initial supported environment is Ghostty on local macOS, using Pi's fullscreen mode. Paste, attachment, and skill-reference functionality must remain useful with Pi's native editor as well as `pi-composer`.
+
+## Ownership
+
+| Package                                                          | Responsibility                                                            | Specification                                         |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [pi-composer](../packages/pi-composer/README.md)                 | Markdown editing, selection, undo/redo, and session drafts                | [Composer spec](specs/pi-composer.md)                 |
+| [pi-paste](../packages/pi-paste/README.md)                       | Paste classification, inline/attachment decisions, and explicit overrides | [Paste spec](specs/pi-paste.md)                       |
+| [pi-attachments](../packages/pi-attachments/README.md)           | Attachment snapshots, previews, restoration, retention, and delivery      | [Attachments spec](specs/pi-attachments.md)           |
+| [pi-skill-references](../packages/pi-skill-references/README.md) | Inline skill completion and canonical skill expansion                     | [Skill references spec](specs/pi-skill-references.md) |
+
+The active editor owns draft mutations. With `pi-composer`, text, selection, and draft attachment membership share one undo history. `pi-paste` chooses the paste outcome, while `pi-attachments` owns stored contents and their lifetime.
+
+A large paste replacing selected text illustrates the cooperation: paste policy selects attachment handling, attachment handling prepares the snapshot, and the editor commits the text replacement and attachment membership together. An asynchronous result must remain associated with the draft that requested it.
+
+`pi-paste` uses attachment handling for file/image outcomes. That collaboration must work with the native editor and with `pi-composer`; storage behavior belongs to `pi-attachments`. Native skill and path discovery remain Pi's responsibility.
+
+## Native integration
+
+Every package uses existing public Pi contracts and consumes the effective services Pi supplies, including other extensions' overrides.
+
+| Contract                                                               | Requirement                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `AutocompleteProvider` and `addAutocompleteProvider`                   | Preserve provider order, updates, cancellation, completion edits, and cursor results. |
+| `EditorComponent` and native text APIs                                 | Apply text changes through the active editor.                                         |
+| Terminal-input listeners, keybinding managers, commands, and shortcuts | Preserve Pi's dispatch priority.                                                      |
+| Widgets, overlays, status, header, and footer hooks                    | Coexist with registered extension UI.                                                 |
+| Clipboard, image, theme, and terminal utilities                        | Reuse the host-provided implementations.                                              |
+| Input transformations and host submission                              | Preserve native commands and steer/follow-up behavior.                                |
+| Session lifecycle and state APIs                                       | Keep drafts and attachment references associated with the correct session.            |
+
+Pi supports one active replacement editor. Independently loaded packages must cooperate through public interfaces and cannot assume they share a dependency instance. Sources: [editor contract](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/editor-component.ts), [extension interfaces](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/extensions/types.ts), and [package dependencies](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/docs/packages.md).
+
+## Integration requirements
+
+Pi exposes raw terminal listeners, text insertion/replacement, widgets, and input transformations. Its public editor contract does not expose an atomic operation combining selected text and attachment membership. Terminal listeners alone also do not cover clipboard and extension calls that enter the editor directly.
+
+The editor's `onSubmit` callback carries text, and the extension-level `sendUserMessage` returns `void`. Neither supplies a public submission acknowledgement. Native editor clears, queued input, asynchronous failures, and attachment recovery must therefore be verified through the existing lifecycle and input contracts.
+
+Implementations must demonstrate cross-package attachment handoff, capability availability, and combined undo through existing public Pi contracts. Those scenarios are integration acceptance checks. If a required scenario cannot be satisfied, record the exact host limitation and preserve recoverable content; package separation does not authorize a new integration protocol or Pi API change.
+
+Sources: [text and paste routes](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L2655), [clipboard routes](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L3138), and [submission API](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/extensions/types.ts#L1708).
+
+## Verification requirements
+
+- Paste, attachment, and skill-reference extensions provide useful behavior with native Pi while `pi-composer` is absent.
+- Each extension retains native provider overrides, commands, shortcuts, and UI registrations.
+- Paste routes apply the same policy, including extension insertion and direct clipboard handling.
+- With `pi-composer`, replacing selected text with an attachment is one undoable edit.
+- Session switches and late asynchronous results preserve the correct draft and attachment associations.
+- Submission, steer/follow-up, failures, and restoration preserve readable attachment contents.
+- Disabling or replacing an extension preserves saved text and retained attachment files.
+
+These are behavioral requirements for implementation. Runtime interoperability and terminal behavior remain unverified.
+
+## Testing boundary
+
+Use Pi's public editor/session boundary as the shared behavioral testing seam. Load the actual packages, drive native editing, paste, completion, input transformation, and lifecycle actions, and observe the visible draft, submitted content, retained snapshots, and recoverable errors.
+
+Exercise each package with its required capabilities, with Pi's native editor where applicable, and in the combined four-package setup. Include native overrides and provider updates. A package tested in isolation does not establish behavior through a host route that bypasses its handler.
+
+Use the workspace's existing Node test runner. The repository currently contains extension scaffolds and no feature-test suite. Pi's editor/virtual-terminal and extension input-event tests provide prior art for fixtures and behavioral assertions; use public interfaces when constructing the workspace's test setup. Package-specific acceptance scenarios live in the [specifications](specs/).
+
+Use temporary session and attachment data and controlled model responses for automated submission checks. Keep assertions on text, visible output, instruction/image content, and retained files. Real Ghostty/macOS checks establish Command-key forwarding, clipboard formats, mouse behavior, fullscreen layout, and image graphics.
+
+## Architecture decisions
+
+Shared decisions apply to every package:
+
+- [Preserve Pi extension contracts](adr/0001-preserve-pi-extension-contracts.md)
+- [One editor owns draft transactions](adr/0002-one-editor-owns-draft-transactions.md)
+- [Independent composition extensions](adr/0003-independent-composition-extensions.md)
+
+All ADRs use one sequence in [docs/adr/](adr/). Package-specific [specifications](specs/) link to their decisions, whose filenames identify the owning package. The [glossary](../GLOSSARY.md) defines the shared terminology.
