@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** implemented; integration documentation pending
+**Status:** complete
 
 **Specification:** Composer specification, “Page selection” and “Setup and page-selection acceptance,” stories 65–70; ADR 0009.
 
@@ -16,7 +16,7 @@
 - [x] Pi's fullscreen viewport, focused native UI, autocomplete, and accepted extension shortcuts retain their input. Unmodified native page movement continues to work, and each delivered chord causes at most one operation.
 - [x] Reproduce the specified nine-line regression through the public Pi editor/session boundary: from column three of row0 with a seven-row composer viewport, Shift+PageDown followed by X produces rowX7 followed by row8. Undo restores the original source and selection. Cover upward movement and both views.
 - [x] Extend existing public-host coverage for remapped and cleared page actions, explicit shifted-chord owners, visual mapping, boundaries, changing viewport sizes, and selection survival. Record delivered-input results separately from physical terminal acceptance.
-- [ ] Update delivered-feature documentation with page-selection behavior and its native binding ownership.
+- [x] Update delivered-feature documentation with page-selection behavior and its native binding ownership.
 
 Physical Ghostty forwarding is verified in ticket 03; this ticket can complete using delivered input through the approved native Pi boundary.
 
@@ -29,4 +29,4 @@ The nine-line regression failed in both views before the page handler was change
 
 Coverage includes selection replacement and contraction, wrapped rows, grapheme-safe Unicode/tab mapping, hidden Markdown, remapped/cleared bindings, explicitly owned shifted chords, extension and picker priority, updated page height after resize, selection across view changes, native image-preview refresh, attachment membership restoration, and clipboard cut/paste history. Native fullscreen viewport input and unmodified editor page movement continue to pass.
 
-The integration owner will add delivered-feature README documentation before closing this ticket. Physical Ghostty gestures were not checked here; ticket 03 retains that acceptance gate. No live terminal configuration was changed.
+The README and library integration notes document page selection, effective binding ownership, and the visible-page behavior. Physical Ghostty gestures were not checked here; ticket 03 retains that acceptance gate. No live terminal configuration was changed.
