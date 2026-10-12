@@ -1,10 +1,10 @@
 # Keybinding setup and page-selection verification
 
-Automated acceptance passes all 677 tests. Setup, page selection, and combined editing work through the public Pi host. Physical Ghostty acceptance remains pending in [ticket 03](issues/03-verify-keybindings-in-ghostty.md); installation, reload, forwarding, and removal in an actual Pi terminal have not been observed.
+Automated acceptance passes all 684 tests. Setup, page selection, draft-boundary navigation, and combined editing work through the public Pi host. Physical Ghostty acceptance remains pending in [ticket 03](issues/03-verify-keybindings-in-ghostty.md); installation, reload, forwarding, and removal in an actual Pi terminal have not been directly observed.
 
 ## Environment
 
-- Tested runtime revision: `ff58984d378fa4b2bc7c3c680f3dd5ea21d40073`. The full-suite tree includes the setup verification, ancestry, permissions, help, and fixture corrections recorded below.
+- Tested runtime revision: `d909ea17cbfd01306216c46f7be5b6a7cbf4f7df`. The full-suite tree includes setup verification, ancestry, permissions, help, fixture corrections, and draft-boundary navigation.
 - Automated host: Pi and pi-tui 1.0.2 from the workspace lockfile.
 - Full-suite runtime: Node 24.13.1. Package manager: pnpm 12.7.0.
 - Installed physical target: macOS 27.0.1 (26A434), Ghostty 1.3.1 stable (15212).
@@ -18,6 +18,7 @@ Tests load the actual extension factories through Pi and observe the public comm
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | All eight delivered identities, effective native bindings, alias suppression, extension priority, and one-operation dispatch                                                                                          | [Native keybindings](../../packages/pi-composer/test/native-keybindings.test.ts), [editor actions](../../packages/pi-composer/test/native-editor-actions.test.ts), [page selection](../../packages/pi-composer/test/jump-page.test.ts) |
 | Visible-page selection in both views, anchor retention and reversal, configured or cleared page actions, wrapping, Unicode, resizing, and history                                                                     | [Page selection](../../packages/pi-composer/test/jump-page.test.ts), [clipboard selection](../../packages/pi-composer/test/clipboard.test.ts)                                                                                          |
+| Cmd+Up/Down draft boundaries in both views, shifted anchors, repeated movement, undo/redo, native and extension ownership, and independent line aliases                                                               | [Navigation](../../packages/pi-composer/test/navigation.test.ts), [native keybindings](../../packages/pi-composer/test/native-keybindings.test.ts)                                                                                     |
 | Native setup review and cancellation, temporary installation and repeat, removal and repeat, preservation of unrelated bytes and permissions, unsupported configurations, verification failures, and concurrent edits | [Setup command](../../packages/pi-composer/test/setup-keybinds.test.ts)                                                                                                                                                                |
 | Setup confirmation while all four packages share a selected draft; native UI ownership, delayed preview refresh, view changes, paste replacement, undo/redo, and retained snapshot bytes                              | [Native UI selection](../../packages/pi-composer/test/native-ui-selection.test.mjs)                                                                                                                                                    |
 | Four-package submission, supported decorator orders, custom pickers, native and extension binding ownership, clipboard routes, skill instructions, input transformations, and stable attachment membership            | [Mixed composition](../../packages/pi-composer/test/mixed-composition.test.mjs)                                                                                                                                                        |
@@ -28,21 +29,24 @@ The first combined attempt mixed file-loaded companion extensions with a supplie
 
 ### Checks
 
-| Command                                                                                               | Result                                          | Retained local log                                    |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------- |
-| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test`                                             | 677 passed; 0 failed, skipped, or todo          | `/tmp/pi-composer-keybinds-review-node24-tests.log`   |
-| Focused setup command and fixture lifecycle checks                                                    | 52 passed; included in the full suite           | `/tmp/pi-composer-keybinds-review-focused.log`        |
-| The same focused checks with initial Linux `process.platform`                                         | 52 passed; fixture portability only             | `/tmp/pi-composer-keybinds-review-linux-fixture.log`  |
-| Native current-config inspection and temporary public-command probes                                  | 4 passed; no live writes                        | `/tmp/pi-composer-keybinds-native-review.log`         |
-| Focused combined setup-confirmation cases                                                             | 2 passed; included in the full suite            | `/tmp/pi-composer-keybinds-combined-focused.log`      |
-| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test packages/pi-composer/test/jump-page.test.ts` | 31 passed after the test-only typing correction | `/tmp/pi-composer-keybinds-page-after-types.log`      |
-| `pnpm run format:check`                                                                               | Passed                                          | `/tmp/pi-composer-keybinds-review-format-check.log`   |
-| `pnpm run lint`                                                                                       | Passed                                          | `/tmp/pi-composer-keybinds-review-lint.log`           |
-| `pnpm run typecheck`                                                                                  | Passed                                          | `/tmp/pi-composer-keybinds-review-root-types.log`     |
-| `pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json`                                        | Passed                                          | `/tmp/pi-composer-keybinds-review-composer-types.log` |
-| `git diff --check`                                                                                    | Passed                                          | `/tmp/pi-composer-keybinds-review-diff-check.log`     |
+| Command                                                                                               | Result                                          | Retained local log                                      |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------- |
+| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test`                                             | 684 passed; 0 failed, skipped, or todo          | `/tmp/pi-composer-buffer-navigation-node24-tests.log`   |
+| Focused navigation and native keybinding checks                                                       | 36 passed; included in the full suite           | `/tmp/pi-composer-buffer-navigation-focused.log`        |
+| Focused setup command and fixture lifecycle checks                                                    | 52 passed; included in the full suite           | `/tmp/pi-composer-keybinds-review-focused.log`          |
+| The same focused checks with initial Linux `process.platform`                                         | 52 passed; fixture portability only             | `/tmp/pi-composer-keybinds-review-linux-fixture.log`    |
+| Native current-config inspection and temporary public-command probes                                  | 4 passed; no live writes                        | `/tmp/pi-composer-keybinds-native-review.log`           |
+| Focused combined setup-confirmation cases                                                             | 2 passed; included in the full suite            | `/tmp/pi-composer-keybinds-combined-focused.log`        |
+| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test packages/pi-composer/test/jump-page.test.ts` | 31 passed after the test-only typing correction | `/tmp/pi-composer-keybinds-page-after-types.log`        |
+| `pnpm run format:check`                                                                               | Passed                                          | `/tmp/pi-composer-buffer-navigation-format-check.log`   |
+| `pnpm run lint`                                                                                       | Passed                                          | `/tmp/pi-composer-buffer-navigation-lint.log`           |
+| `pnpm run typecheck`                                                                                  | Passed                                          | `/tmp/pi-composer-buffer-navigation-root-types.log`     |
+| `pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json`                                        | Passed                                          | `/tmp/pi-composer-buffer-navigation-composer-types.log` |
+| `git diff --check`                                                                                    | Passed                                          | No output                                               |
 
 Focused regressions established failure before each correction: leaked fixture environment, unpreserved group ownership, accepted ACL permissions, higher-priority physical letter bindings, unknown layouts/modifier remaps, and ancestry traversal stopping at a root-owned login process. Red and green logs use `/tmp/pi-composer-keybinds-{fixture,acl,group,physical,layout,login-help}-{red,green}.log`. Setup fixtures now restore process overrides on initialization failure and close Pi before removing temporary files. The full run includes all corrections and the existing page-selection typing fix.
+
+Draft-boundary regressions reproduced Cmd+Up stopping on the middle line in both views before the correction. The new handlers use the existing document projection after native movement dispatch. Cmd+Left/Right retain their native line aliases; native full-chord bindings, derived Shift movement, and accepted extension shortcuts keep priority. Red and green logs are `/tmp/pi-composer-buffer-navigation-red.log` and `/tmp/pi-composer-buffer-navigation-green.log`.
 
 ## Configuration and loading evidence
 
