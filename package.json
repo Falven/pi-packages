@@ -1,0 +1,30 @@
+{
+  "name": "pi-packages",
+  "private": true,
+  "description": "Pi extensions, skills, prompt templates, and themes",
+  "type": "module",
+  "scripts": {
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test",
+    "changeset": "changeset",
+    "version": "changeset version && pnpm install --lockfile-only --ignore-scripts",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "3.0.3",
+    "@earendil-works/pi-coding-agent": "0.87.1",
+    "@tsconfig/node24": "24.0.5",
+    "@tsconfig/strictest": "2.0.8",
+    "@types/node": "24.19.1",
+    "oxfmt": "0.71.0",
+    "oxlint": "1.86.0",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@12.7.0"
+}
