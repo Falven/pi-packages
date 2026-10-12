@@ -1,0 +1,463 @@
+import {
+  CustomEditor,
+  type KeybindingsManager,
+} from "@earendil-works/pi-coding-agent"
+import {
+  CURSOR_MARKER,
+  decodeKittyPrintable,
+  matchesKey,
+  parseKey,
+  visibleWidth,
+  type EditorTheme,
+  type Keybinding,
+  type KeyId,
+  type TUI,
+} from "@earendil-works/pi-tui"
+
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
+const words = new Intl.Segmenter(undefined, { granularity: "word" })
+
+type Draft = { text: string; anchor: number; head: number }
+type SourceRow = { from: number; to: number }
+type EditKind = "typing" | "backspace" | "delete"
+
+export class SourceEditor extends CustomEditor {
+  private draft: Draft = { text: "", anchor: 0, head: 0 }
+  private readonly nativeKeys: KeybindingsManager
+  private sourceWidth = 60
+  private preferredCell: number | undefined
+  private past: Draft[] = []
+  private future: Draft[] = []
+  private editGroup: { kind: EditKind; time: number } | undefined
+  private pendingPaste: string | undefined
+  private prompts: string[] = []
+  private promptIndex = -1
+  private promptDraft: Draft | undefined
+
+  constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+    super(tui, theme, keybindings)
+    this.nativeKeys = keybindings
+  }
+
+  override getText(): string {
+    return this.draft.text
+  }
+
+  override getExpandedText(): string {
+    return this.getText()
+  }
+
+  override getLines(): string[] {
+    return this.getText().split("\n")
+  }
+
+  override getCursor(): { line: number; col: number } {
+    const before = this.getText().slice(0, this.draft.head).split("\n")
+    return { line: before.length - 1, col: before.at(-1)!.length }
+  }
+
+  override addToHistory(text: string): void {
+    text = text.trim()
+    if (!text || this.prompts[0] === text) return
+    this.prompts.unshift(text)
+    if (this.prompts.length > 100) this.prompts.pop()
+  }
+
+  private browsePrompt(direction: -1 | 1): void {
+    const index = this.promptIndex - direction
+    if (index < -1 || index >= this.prompts.length) return
+    if (this.promptIndex < 0) {
+      this.promptDraft = this.draft
+      this.past.push(this.draft)
+      this.future = []
+    }
+    if (index < 0) {
+      this.draft = this.promptDraft!
+      this.promptDraft = undefined
+    } else {
+      const text = this.prompts[index]!
+      const position = direction < 0 ? 0 : text.length
+      this.draft = { text, head: position, anchor: position }
+    }
+    this.promptIndex = index
+    this.editGroup = undefined
+    this.changed()
+  }
+
+  override setText(text: string): void {
+    text = text.replace(/\r\n?/g, "\n")
+    if (text === this.getText()) return
+    this.commit({ text, anchor: text.length, head: text.length })
+  }
+
+  override insertTextAtCursor(text: string): void {
+    const { anchor, head } = this.draft
+    this.replaceRange(Math.min(anchor, head), Math.max(anchor, head), text)
+  }
+
+  private replaceRange(
+    from: number,
+    to: number,
+    text: string,
+    kind?: EditKind,
+  ): void {
+    const current = this.getText()
+    text = text.replace(/\r\n?/g, "\n")
+    const nextText = current.slice(0, from) + text + current.slice(to)
+    let position = from + text.length
+    const joined = graphemes.segment(nextText).containing(position)
+    if (joined && joined.index < position) {
+      position = joined.index + joined.segment.length
+    }
+    this.commit(
+      {
+        text: nextText,
+        anchor: position,
+        head: position,
+      },
+      kind,
+    )
+  }
+
+  private commit(next: Draft, kind?: EditKind): void {
+    this.promptIndex = -1
+    this.promptDraft = undefined
+    const time = Date.now()
+    if (next.text !== this.getText()) {
+      if (
+        !kind ||
+        this.editGroup?.kind !== kind ||
+        time - this.editGroup.time > 500 ||
+        this.draft.anchor !== this.draft.head
+      ) {
+        this.past.push(this.draft)
+      }
+      this.future = []
+    }
+    this.editGroup = kind ? { kind, time } : undefined
+    this.draft = next
+    this.changed()
+  }
+
+  private restoreEdit(from: Draft[], to: Draft[]): void {
+    const previous = from.pop()
+    if (!previous) return
+    to.push(this.draft)
+    this.draft = previous
+    this.promptIndex = -1
+    this.promptDraft = undefined
+    this.editGroup = undefined
+    this.changed()
+  }
+
+  private changed(): void {
+    this.preferredCell = undefined
+    this.onChange?.(this.getText())
+    this.tui.requestRender()
+  }
+
+  private moveTo(position: number, select: boolean): void {
+    this.preferredCell = undefined
+    this.editGroup = undefined
+    this.draft = {
+      ...this.draft,
+      head: position,
+      anchor: select ? this.draft.anchor : position,
+    }
+    this.tui.requestRender()
+  }
+
+  private adjacent(direction: -1 | 1): number {
+    const { text, head } = this.draft
+    const segments = graphemes.segment(text)
+    if (direction < 0) return segments.containing(head - 1)?.index ?? 0
+    const next = segments.containing(head)
+    return next ? next.index + next.segment.length : text.length
+  }
+
+  private wordBoundary(direction: -1 | 1): number {
+    const { text, head } = this.draft
+    const segments = [...words.segment(text)]
+    if (direction < 0) {
+      return (
+        segments.findLast(
+          ({ index, segment }) => index < head && /\S/u.test(segment),
+        )?.index ?? 0
+      )
+    }
+    const next = segments.find(
+      ({ index, segment }) =>
+        index + segment.length > head && /\S/u.test(segment),
+    )
+    return next ? next.index + next.segment.length : text.length
+  }
+
+  private movementMatches(data: string, action: Keybinding): boolean {
+    return (
+      this.nativeKeys.matches(data, action) ||
+      this.nativeKeys
+        .getKeys(action)
+        .some((key) => matchesKey(data, `shift+${key}` as KeyId))
+    )
+  }
+
+  private moveVertically(direction: -1 | 1, select: boolean): void {
+    const rows = this.sourceRows()
+    const { text, head } = this.draft
+    const currentIndex = rows.findLastIndex((row) => row.from <= head)
+    const current = rows[currentIndex]!
+    const targetIndex = Math.max(
+      0,
+      Math.min(rows.length - 1, currentIndex + direction),
+    )
+    const target = rows[targetIndex]!
+    const preferred =
+      this.preferredCell ??
+      visibleWidth(this.displayGrapheme(text.slice(current.from, head)))
+    let position = target.from
+    let cells = 0
+    for (const { segment, index } of graphemes.segment(
+      text.slice(target.from, target.to),
+    )) {
+      const width = visibleWidth(this.displayGrapheme(segment))
+      if (cells + width > preferred) break
+      const next = target.from + index + segment.length
+      if (next === rows[targetIndex + 1]?.from) break
+      position = next
+      cells += width
+    }
+    this.moveTo(position, select)
+    this.preferredCell = preferred
+  }
+
+  override handleInput(data: string): void {
+    const keys = this.nativeKeys
+    const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
+    const nextPrompt = keys.matches(data, "tui.editor.historyNext")
+    const appAction =
+      !previousPrompt &&
+      !nextPrompt &&
+      [...this.actionHandlers.keys()].some(
+        (action) =>
+          action !== "app.interrupt" &&
+          action !== "app.exit" &&
+          keys.matches(data, action),
+      )
+    if (
+      keys.matches(data, "app.clipboard.pasteImage") ||
+      keys.matches(data, "app.interrupt") ||
+      (keys.matches(data, "app.exit") && !this.getText()) ||
+      appAction
+    ) {
+      super.handleInput(data)
+      return
+    }
+    if (this.onExtensionShortcut?.(data)) return
+    if (previousPrompt || nextPrompt) {
+      this.browsePrompt(previousPrompt ? -1 : 1)
+      return
+    }
+
+    if (this.pendingPaste !== undefined || data.startsWith("\x1b[200~")) {
+      this.pendingPaste =
+        (this.pendingPaste ?? "") +
+        (this.pendingPaste === undefined ? data.slice(6) : data)
+      const end = this.pendingPaste.indexOf("\x1b[201~")
+      if (end < 0) return
+      const text = this.pendingPaste.slice(0, end)
+      const rest = this.pendingPaste.slice(end + 6)
+      this.pendingPaste = undefined
+      this.insertTextAtCursor(text)
+      if (rest) this.handleInput(rest)
+      return
+    }
+    if (matchesKey(data, "super+z") || keys.matches(data, "tui.editor.undo")) {
+      this.restoreEdit(this.past, this.future)
+      return
+    }
+    if (matchesKey(data, "super+shift+z")) {
+      this.restoreEdit(this.future, this.past)
+      return
+    }
+    if (matchesKey(data, "super+a")) {
+      this.editGroup = undefined
+      this.preferredCell = undefined
+      this.draft = { ...this.draft, anchor: 0, head: this.getText().length }
+      this.tui.requestRender()
+      return
+    }
+    const select = parseKey(data)?.includes("shift+") ?? false
+    if (matchesKey(data, "super+up") || matchesKey(data, "super+shift+up")) {
+      this.moveTo(0, select)
+      return
+    }
+    if (
+      matchesKey(data, "super+down") ||
+      matchesKey(data, "super+shift+down")
+    ) {
+      this.moveTo(this.getText().length, select)
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorWordLeft")) {
+      this.moveTo(this.wordBoundary(-1), select)
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorWordRight")) {
+      this.moveTo(this.wordBoundary(1), select)
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorUp")) {
+      if (!select && this.draft.head === 0) {
+        this.browsePrompt(-1)
+        return
+      }
+      this.moveVertically(-1, select)
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorDown")) {
+      const lastRow = this.sourceRows().at(-1)!
+      if (!select && this.promptIndex >= 0 && this.draft.head >= lastRow.from) {
+        this.browsePrompt(1)
+        return
+      }
+      this.moveVertically(1, select)
+      return
+    }
+    if (
+      this.movementMatches(data, "tui.editor.cursorLineStart") ||
+      matchesKey(data, "super+left") ||
+      matchesKey(data, "super+shift+left")
+    ) {
+      const before = this.getText().slice(0, this.draft.head)
+      this.moveTo(before.lastIndexOf("\n") + 1, select)
+      return
+    }
+    if (
+      this.movementMatches(data, "tui.editor.cursorLineEnd") ||
+      matchesKey(data, "super+right") ||
+      matchesKey(data, "super+shift+right")
+    ) {
+      const end = this.getText().indexOf("\n", this.draft.head)
+      this.moveTo(end < 0 ? this.getText().length : end, select)
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorLeft")) {
+      const { anchor, head } = this.draft
+      this.moveTo(
+        !select && anchor !== head ? Math.min(anchor, head) : this.adjacent(-1),
+        select,
+      )
+      return
+    }
+    if (this.movementMatches(data, "tui.editor.cursorRight")) {
+      const { anchor, head } = this.draft
+      this.moveTo(
+        !select && anchor !== head ? Math.max(anchor, head) : this.adjacent(1),
+        select,
+      )
+      return
+    }
+    const backward = keys.matches(data, "tui.editor.deleteCharBackward")
+    if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
+      const { anchor, head } = this.draft
+      const end = anchor === head ? this.adjacent(backward ? -1 : 1) : anchor
+      this.replaceRange(
+        Math.min(head, end),
+        Math.max(head, end),
+        "",
+        backward ? "backspace" : "delete",
+      )
+      return
+    }
+    if (keys.matches(data, "tui.input.newLine")) {
+      this.insertTextAtCursor("\n")
+      return
+    }
+    if (
+      keys.matches(data, "tui.input.submit") ||
+      matchesKey(data, "super+enter")
+    ) {
+      if (this.disableSubmit || !this.getText().trim()) return
+      const text = this.getText()
+      this.setText("")
+      this.onSubmit?.(text)
+      return
+    }
+    const printable = decodeKittyPrintable(data) ?? data
+    if (!/\p{Cc}/u.test(printable)) {
+      const { anchor, head } = this.draft
+      this.replaceRange(
+        Math.min(anchor, head),
+        Math.max(anchor, head),
+        printable,
+        "typing",
+      )
+    }
+  }
+
+  private displayGrapheme(text: string): string {
+    return text.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�")
+  }
+
+  private sourceRows(): SourceRow[] {
+    const rows: SourceRow[] = []
+    let from = 0
+    let cells = 0
+    for (const { segment, index } of graphemes.segment(this.getText())) {
+      if (segment === "\n") {
+        rows.push({ from, to: index })
+        from = index + 1
+        cells = 0
+        continue
+      }
+      const width = visibleWidth(this.displayGrapheme(segment))
+      if (cells > 0 && cells + width > this.sourceWidth) {
+        rows.push({ from, to: index })
+        from = index
+        cells = 0
+      }
+      cells += width
+    }
+    rows.push({ from, to: this.getText().length })
+    return rows
+  }
+
+  override render(width: number): string[] {
+    const padding = this.getPaddingX()
+    this.sourceWidth = Math.max(1, width - padding * 2 - 1)
+    const rows = this.sourceRows()
+    const { text, anchor, head } = this.draft
+    const cursorRow = rows.findLastIndex((row) => row.from <= head)
+    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.3))
+    const top = Math.max(0, cursorRow - height + 1)
+    const visibleRows = rows.slice(top, top + height)
+    const lines = visibleRows.map((row, rowIndex) => {
+      let output = " ".repeat(padding)
+      for (const { segment, index } of graphemes.segment(
+        text.slice(row.from, row.to),
+      )) {
+        const offset = row.from + index
+        const display = this.displayGrapheme(segment)
+        const caret =
+          this.focused && offset === head && rowIndex + top === cursorRow
+        if (caret) {
+          output += CURSOR_MARKER
+        }
+        output +=
+          caret ||
+          (offset >= Math.min(anchor, head) && offset < Math.max(anchor, head))
+            ? `\x1b[7m${display}\x1b[27m`
+            : display
+      }
+      if (this.focused && head === row.to && rowIndex + top === cursorRow) {
+        output += `${CURSOR_MARKER}\x1b[7m \x1b[27m`
+      }
+      return output
+    })
+    return [
+      this.renderTopBorder(width, top),
+      ...lines,
+      this.renderBottomBorder(width, Math.max(0, rows.length - top - height)),
+    ]
+  }
+}
