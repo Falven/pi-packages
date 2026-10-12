@@ -15,6 +15,7 @@ import {
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui"
 import type { Clipboard } from "./clipboard.ts"
+import { codeNewline } from "./code.ts"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
 import { projectProse } from "./prose.ts"
@@ -451,6 +452,11 @@ export class SourceEditor extends CustomEditor {
     }
     if (matchesKey(data, "enter") && keys.matches(data, "tui.input.submit")) {
       const { anchor, head } = this.draft
+      const newline = codeNewline(this.getText(), head)
+      if (newline !== undefined) {
+        this.insertTextAtCursor(newline)
+        return
+      }
       let edit = continueList(this.getText(), head, projectProse)
       if (edit && anchor !== head) {
         const selection = this.project().replace(

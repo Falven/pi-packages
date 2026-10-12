@@ -1,9 +1,11 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent"
 import {
   CURSOR_MARKER,
+  sliceByColumn,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui"
+import { highlightCodeSpans } from "./code.ts"
 import { projectProse, type ProseMark, type ProseStyle } from "./prose.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
@@ -16,6 +18,7 @@ type Cell = {
   display: string
   width: number
   styles: ProseStyle[]
+  highlight: { line: string; column: number; width: number } | undefined
   ranges: { from: number; to: number }[]
 }
 
@@ -35,17 +38,21 @@ export class Projection {
     let column = 0
     let prefix: Cell[] = []
     let inPrefix = true
-    const { spans, marks } = formatted
+    const { spans, marks }: ReturnType<typeof projectProse> = formatted
       ? projectProse(source)
       : { spans: [{ from: 0, to: source.length, styles: [] }], marks: [] }
     this.marks = marks
+    const highlights = highlightCodeSpans(source, spans)
     const visible = spans
       .map((span) => span.text ?? source.slice(span.from, span.to))
       .join("")
     let spanIndex = 0
     let spanOffset = 0
+    let spanColumn = 0
     for (const { segment, index } of graphemes.segment(visible)) {
-      const styles = spans[spanIndex]!.styles
+      const currentSpan = spanIndex
+      const { styles } = spans[spanIndex]!
+      const color = highlights.get(spans[spanIndex]!)
       const ranges: { from: number; to: number }[] = []
       let offset = index
       while (offset < index + segment.length) {
@@ -67,17 +74,27 @@ export class Projection {
       }
       const from = ranges[0]!.from
       const to = ranges.at(-1)!.to
+      const plain =
+        segment === "\n"
+          ? segment
+          : segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�")
+      const fullWidth = visibleWidth(plain)
       const display =
         segment === "\n"
           ? segment
           : styles.includes("hr")
             ? "─".repeat(Math.min(80, Math.max(1, width - column)))
-            : truncateToWidth(
-                segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�"),
-                width,
-                "�",
-              )
+            : truncateToWidth(plain, width, "�")
       const cells = visibleWidth(display)
+      const highlight =
+        color !== undefined && segment !== "\n" && fullWidth > 0
+          ? {
+              line: color.line,
+              column: color.column + spanColumn,
+              width: fullWidth,
+            }
+          : undefined
+      spanColumn = spanIndex === currentSpan ? spanColumn + fullWidth : 0
       const cell = {
         from,
         to,
@@ -85,6 +102,7 @@ export class Projection {
         display,
         width: cells,
         styles,
+        highlight,
         ranges,
       }
       if (from < to) this.cells.push(cell)
@@ -311,10 +329,34 @@ export class Projection {
         return display
       })
       .join("")
+    let highlighted:
+      | { source: string; line: string; column: number }
+      | undefined
     for (const [i, cell] of row.cells.entries()) {
       let display = cell.styles.includes("quoteBorder")
         ? cell.display.replace(/>/g, "│")
         : cell.display
+      if (cell.highlight) {
+        const { line, column, width } = cell.highlight
+        if (highlighted?.source !== line) {
+          // Slice the row once so each cell does not rescan offscreen code.
+          const rowWidth = row.cells.reduce(
+            (sum, item) => sum + (item.highlight?.width ?? item.width),
+            0,
+          )
+          highlighted = {
+            source: line,
+            line: sliceByColumn(line, column, rowWidth),
+            column,
+          }
+        }
+        display =
+          truncateToWidth(
+            sliceByColumn(highlighted.line, column - highlighted.column, width),
+            cell.width,
+            "�",
+          ) + "\x1b[0m"
+      }
       for (const style of cell.styles) display = theme[style](display)
       if (caretRow && caret === i) output += CURSOR_MARKER
       output +=

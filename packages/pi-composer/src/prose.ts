@@ -1,4 +1,5 @@
 import { Marked, type Token } from "@earendil-works/pi-tui"
+import { projectCode } from "./code.ts"
 import { projectStructure } from "./structures.ts"
 
 const parser = new Marked()
@@ -10,6 +11,8 @@ export type ProseStyle =
   | "strikethrough"
   | "link"
   | "underline"
+  | "code"
+  | "codeBlockBorder"
   | "quote"
   | "quoteBorder"
   | "listBullet"
@@ -19,6 +22,7 @@ export type ProseSpan = {
   from: number
   to: number
   styles: ProseStyle[]
+  code?: { language: string | undefined }
   text?: string
 }
 
@@ -47,6 +51,13 @@ export function projectProse(
     let offset = from
     for (const token of tokens) {
       const end = offset + token.raw.length
+      const code = projectCode(token, offset, styles)
+      if (code) {
+        spans.push(...code.spans)
+        marks.push(...code.marks)
+        offset = end
+        continue
+      }
       const structure = projectStructure(token, projectProse)
       if (structure) {
         spans.push(

@@ -284,7 +284,7 @@ function projectContainer(
 }
 
 // Marked removes container prefixes; keep their positions in the original source.
-function containerSource(raw: string, text: string) {
+export function containerSource(raw: string, text: string) {
   const positions: number[] = []
   const prefixes: { from: number; to: number }[] = []
   const suffixes: { from: number; to: number }[] = []
