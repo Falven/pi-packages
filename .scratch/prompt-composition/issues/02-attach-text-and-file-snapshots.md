@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Explicit native actions attach text or an existing file with pi-composer and pi-paste absent.
 - [ ] Preserve contents before inserting a usable attachment reference; editing or removing the original source cannot change the snapshot.
