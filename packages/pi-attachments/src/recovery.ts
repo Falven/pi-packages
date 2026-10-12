@@ -112,18 +112,23 @@ export async function saveRequest(
   try {
     await mkdir(storage, { recursive: true, mode: 0o700 })
     const directory = await mkdtemp(join(storage, "request-"))
+    const images = (request.images ?? []).map((image, index) => {
+      const extension = /^image\/(png|jpeg|gif|webp|bmp)$/.exec(
+        image.mimeType,
+      )?.[1]
+      return {
+        name: `input-image-${index + 1}${extension ? `.${extension}` : ""}`,
+        data: image.data,
+      }
+    })
     unpublished = {
       directory,
-      files: (request.images ?? []).map((image, index) => ({
-        name: `input-image-${index + 1}`,
-        data: image.data,
-      })),
+      files: images,
     }
     const writes = await Promise.allSettled(
-      (request.images ?? []).map(async (image, index) => {
-        const name = `input-image-${index + 1}`
+      images.map(async ({ name, data }) => {
         const path = join(directory, name)
-        await writeFile(path, Buffer.from(image.data, "base64"), {
+        await writeFile(path, Buffer.from(data, "base64"), {
           flag: "wx",
           mode: 0o600,
           flush: true,

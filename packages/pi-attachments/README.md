@@ -52,6 +52,8 @@ With pi-composer, each restoration or removal is one undo/redo action, including
 
 Click an image's filename, thumbnail, or text fallback to open the retained full-resolution file in the system's associated application. This uses Pi's native hyperlinks when supported, without terminal configuration changes. In fullscreen Ghostty on macOS, **Shift+Cmd+click** also uses the terminal's native link handling; use that gesture for the attachment reference inside `pi-composer`, where ordinary clicks edit text. Saving changes from the external application can modify the retained attachment; save elsewhere to keep the captured contents intact.
 
+Generated clipboard and recovery image filenames include their format extension, such as `.png`, so the system can choose the image application. Copied files retain their names and existing snapshots keep their paths. Paste an older extensionless clipboard image again to create a snapshot with a format extension.
+
 Images are delivered as native image content on Enter, steering, and follow-up submissions. Delivery follows the submitted references and preserves images supplied by earlier input handlers. BMP conversion, preview thumbnails, and resizing for the current model leave the original snapshot unchanged. References stay in queued text so native dequeue and resubmission can regenerate the images.
 
 ## Recovery

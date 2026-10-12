@@ -1,5 +1,5 @@
 import { constants, unlinkSync } from "node:fs"
-import { link, mkdir, mkdtemp, open, writeFile } from "node:fs/promises"
+import { link, mkdir, mkdtemp, open, rename, writeFile } from "node:fs/promises"
 import { basename, dirname, join } from "node:path"
 import {
   CustomEditor,
@@ -182,6 +182,18 @@ export default function piPaste(pi: ExtensionAPI): void {
       )
       const failed = saves.find((save) => save.status === "rejected")
       if (failed) throw failed.reason
+      const imageChecks = await Promise.allSettled(
+        files.map(async (file, index) => {
+          if (!("image" in file)) return false
+          const path = paths[index]!
+          const mimeType = await detectSupportedImageMimeTypeFromFile(path)
+          if (!mimeType) return true
+          const imagePath = `${path}.${mimeType.slice("image/".length)}`
+          await rename(path, imagePath)
+          paths[index] = imagePath
+          return false
+        }),
+      )
       const details = [
         ...paths.map((path) => `Paste: ${path}`),
         ...files.flatMap((file) =>
@@ -193,13 +205,10 @@ export default function piPaste(pi: ExtensionAPI): void {
         `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\n${details}\n`,
         { flag: "wx", mode: 0o600 },
       )
-      const invalidImages = await Promise.all(
-        files.map(
-          async (file, index) =>
-            "image" in file &&
-            !(await detectSupportedImageMimeTypeFromFile(paths[index]!)),
-        ),
-      )
+      const invalidImages = imageChecks.map((result) => {
+        if (result.status === "rejected") throw result.reason
+        return result.value
+      })
       if (lifetime.signal.aborted) return
       if (invalidImages.some(Boolean)) {
         ctx.ui.notify(

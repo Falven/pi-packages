@@ -351,7 +351,7 @@ test("image preparation failure retains incoming images as readable snapshots wi
   assert.equal(host.requests.length, 0)
   const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(`Before attachments\n${draft}`))
-  const incoming = /\[Attachment: input-image-1\]\(<([^>]+)>\)/.exec(
+  const incoming = /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/.exec(
     recovery.text,
   )
   assert.ok(
@@ -650,7 +650,7 @@ test("failed image recovery and native append are durably retried in an already-
   assert.ok(recovery.text.includes(sessionFile))
   assert.ok(recovery.text.includes(`Before attachments\n${draft.trim()}`))
   const incoming = recovery.text.match(
-    /\[Attachment: input-image-1\]\(<([^>]+)>\)/,
+    /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/,
   )?.[1]
   assert.ok(incoming, "The retried request must expose its incoming image")
   assert.equal((await readFile(incoming)).toString("base64"), PNG)

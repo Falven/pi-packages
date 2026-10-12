@@ -37,14 +37,14 @@ async function failedPreparation(t, hold = false) {
     fs,
     "writeFile",
     async (path, contents, options) => {
-      if (failing && String(path).endsWith("/input-image-1")) {
+      if (failing && String(path).endsWith("/input-image-1.png")) {
         await write(path, contents, options)
         abandoned.push(path)
         first.resolve()
         await gate.promise
         return
       }
-      if (failing && String(path).endsWith("/input-image-2")) {
+      if (failing && String(path).endsWith("/input-image-2.png")) {
         await first.promise
         await write(path, contents.subarray(0, 32_768), options)
         abandoned.push(path)
@@ -136,7 +136,9 @@ test("native cleanup reclaims abandoned image preparation bytes only after recov
   })
   const recovery = await retainedRequest(host, "Delivery:")
   const incoming = [
-    ...recovery.text.matchAll(/\[Attachment: input-image-\d+\]\(<([^>]+)>\)/g),
+    ...recovery.text.matchAll(
+      /\[Attachment: input-image-\d+\.png\]\(<([^>]+)>\)/g,
+    ),
   ]
   assert.equal(incoming.length, 2)
   await Promise.all(
@@ -298,12 +300,12 @@ test("cleanup rechecks ownership when an eligible directory is replaced by a sym
     symlinkSync(outside, directory, "dir")
   }
   await cleanup(host)
-  assert.deepEqual(await readFile(join(outside, "input-image-1")), bytes)
+  assert.deepEqual(await readFile(join(outside, "input-image-1.png")), bytes)
   assert.deepEqual(
-    await readFile(join(outside, "input-image-2")),
+    await readFile(join(outside, "input-image-2.png")),
     bytes.subarray(0, 32_768),
   )
-  assert.deepEqual(await readFile(join(retained, "input-image-1")), bytes)
+  assert.deepEqual(await readFile(join(retained, "input-image-1.png")), bytes)
   assert.deepEqual(await readFile(snapshot), bytes)
 })
 
@@ -332,7 +334,7 @@ for (const changed of ["staging", "replacement"]) {
     })
     const recovery = await retainedRequest(host, "Delivery:")
     const saved = recovery.text.match(
-      /\[Attachment: input-image-1\]\(<([^>]+)>\)/,
+      /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/,
     )[1]
     const path = changed === "staging" ? abandoned[0] : saved
     const modified = Buffer.alloc(bytes.length, 0x7a)
@@ -423,7 +425,7 @@ test("an image recovery record remains readable after a late write failure, retr
   assert.match(host.render(), /Recovery metadata flush failed/)
   assert.ok(earlier)
   const incoming = earlier.text.match(
-    /\[Attachment: input-image-1\]\(<([^>]+)>\)/,
+    /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/,
   )[1]
   failing = false
   await host.runtime.session.sendUserMessage("/attachments-recover", {

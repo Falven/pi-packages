@@ -27,7 +27,7 @@ type UnusedFile = {
 
 const marker = ".unused.json"
 const requestName = /^request-[a-zA-Z0-9]+$/
-const imageName = /^input-image-[1-9]\d*$/
+const imageName = /^input-image-[1-9]\d*(?:\.(?:png|jpeg|gif|webp|bmp))?$/
 const checksumPattern = /^[a-f0-9]{64}$/
 const noFollow = constants.O_RDONLY | constants.O_NOFOLLOW
 

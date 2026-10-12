@@ -5,7 +5,7 @@ import { basename, join } from "node:path"
 import { beforeEach, test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
-import { CustomEditor } from "@earendil-works/pi-coding-agent"
+import { convertToPng, CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
 import piAttachments from "../../pi-attachments/src/index.ts"
 import piPaste from "../src/index.ts"
@@ -22,6 +22,8 @@ const composerPath = fileURLToPath(
 )
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
+const BMP =
+  "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA=="
 
 beforeEach((t) => {
   const clipboard = getNativeClipboard()
@@ -98,25 +100,38 @@ test("composer Command+V reads original file identity and replaces its selection
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
 })
 
-test("an image-only native paste has an attachment preview and delivers the captured image", async (t) => {
-  const clipboard = getNativeClipboard()
-  t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
-  t.mock.method(clipboard, "getText", async () => "Ignore accompanying text")
-  const host = await nativePi(t, [pastePath])
-  host.input("\x16")
-  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
-  assert.equal((await readFile(path)).toString("base64"), PNG)
-  await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
-  const draft = host.ui.getEditorText().trim()
-  host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  const user = host.requests[0].messages.find(({ role }) => role === "user")
-  assert.deepEqual(user.content, [
-    { type: "text", text: draft },
-    { type: "image_url", image_url: { url: `data:image/png;base64,${PNG}` } },
-  ])
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-})
+for (const [extension, contents] of [
+  ["png", PNG],
+  ["bmp", BMP],
+]) {
+  test(`an image-only ${extension} native paste retains its file type, previews, and delivers the captured image`, async (t) => {
+    const clipboard = getNativeClipboard()
+    t.mock.method(clipboard, "getImage", async () =>
+      Buffer.from(contents, "base64"),
+    )
+    t.mock.method(clipboard, "getText", async () => "Ignore accompanying text")
+    const host = await nativePi(t, [pastePath])
+    host.input("\x16")
+    const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+    assert.equal(basename(path), `clipboard-image.${extension}`)
+    assert.equal((await readFile(path)).toString("base64"), contents)
+    await waitFor(() => assert.match(host.render(), /\[Image:/))
+    const draft = host.ui.getEditorText().trim()
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    const user = host.requests[0].messages.find(({ role }) => role === "user")
+    const delivered = await convertToPng(contents, `image/${extension}`)
+    assert.ok(delivered)
+    assert.deepEqual(user.content, [
+      { type: "text", text: draft },
+      {
+        type: "image_url",
+        image_url: { url: `data:image/png;base64,${delivered.data}` },
+      },
+    ])
+    await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  })
+}
 
 test("a copied file set whose references exceed the text cutoff stays one image-bearing draft edit", async (t) => {
   const host = await nativePi(t, [composerPath, pastePath])
