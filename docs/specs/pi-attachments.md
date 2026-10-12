@@ -41,6 +41,10 @@ Users need to attach text, files, and images without losing the contents when an
 29. As a Pi user, I want navigation, acceptance, and cancellation to stay with the focused attachment UI, so that those keys do not also move or submit my draft.
 30. As a Pi user, I want cancelling preview or attachment management to return to the unchanged draft and selection, so that inspecting an attachment does not interrupt editing.
 31. As a Pi user, I want image and copied-file checks to use the effective native clipboard action, so that terminal text paste cannot falsely establish attachment support.
+32. As a Pi user, I want to click an image attachment's label or thumbnail to open it in my system's associated application, so that I can inspect it at full resolution.
+33. As a Pi user, I want image links to identify the retained file after the source changes or disappears, so that opening and submission refer to the same captured image.
+34. As a Pi user, I want image links to preserve draft text, selection, and focus, so that viewing an attachment does not become an editor action.
+35. As a Pi user, I want the filename fallback to remain clickable when image graphics are unavailable, so that I can still open the image.
 
 ## Implementation Decisions
 
@@ -48,6 +52,8 @@ Users need to attach text, files, and images without losing the contents when an
 - Snapshot text, files, and images when the attachment is added. A reference becomes usable only after its contents are successfully preserved. Later changes or removal of the original source do not alter that snapshot.
 - Ordinary file references continue to identify current source files. Attachment references identify captured contents. Preserve that distinction in the displayed draft and submitted request.
 - Use Pi's clipboard and image conversion/resizing helpers and standard Node filesystem facilities. Keep retained contents in stable package-owned storage using Pi's state-location conventions. Image previews and delivery conversions must preserve the original snapshot.
+- Link successfully loaded image filenames, thumbnail cells, and text fallbacks to their retained full-resolution file with Pi's native hyperlink helper and effective capability detection. Keep Pi's native Image component responsible for graphics. Use encoded local file URLs with an explicit localhost authority; native Pi or terminal activation opens the system's associated application without a package-specific launcher or terminal configuration change.
+- Publish a clickable preview only after the retained file passes the existing storage and image checks. Links belong only to rendered output, cover the preview's reserved cells, and end before surrounding UI. Resizing, refresh, removal, and session changes update the clickable regions alongside visible membership. Opening does not edit the draft or transform the retained file; an external application's subsequent save follows ordinary file semantics and can change that file.
 - Pasted attachment creation consumes the paste policy; explicit attachment actions use native Pi action/UI facilities. The native `attach-file` command accepts captured sources from paste handling and explicit file choices. Both routes share the same snapshot storage and lifetime rules.
 - Show attachment membership near the active editor through Pi's `setWidget` facility. Render small image previews with Pi's `Image` component and graphics capabilities, and use native overlays for attachment actions and text preview. Reuse the existing preview integration. Loading, refresh, resize, invalidation, and preview errors preserve the editor's text, selection anchor/range, history, and focus.
 - Focused attachment-management and preview components own their navigation, acceptance, and cancellation through native routing. Cancelling or closing a preview returns to the unchanged draft and selection. An accepted action changes the draft only through the active editor's public text interfaces; its key cannot also trigger background editing or submission.
@@ -69,28 +75,31 @@ Users need to attach text, files, and images without losing the contents when an
 - Use the existing Node test runner. Pi's clipboard/image tests, virtual-terminal tests, and extension input-event tests provide prior art for content fixtures, native rendering, and transformation chaining. Reuse the package's public-host fixtures and behavior tests.
 - Cover the following observable scenarios:
 
-| Scenario                                                                                             | Required result                                                                                            |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Attach text, a file, or an image; then change or remove its original source                          | The retained attachment still exposes the contents captured when added.                                    |
-| Reference a working file normally, then change it                                                    | The reference continues to identify the current source file.                                               |
-| Preview attached text or display a small image preview                                               | The preview identifies the selected attachment without altering stored contents.                           |
-| Restore text at a caret or over a selection, including code and text above the paste cutoff          | Complete preserved text appears inline and the attachment leaves draft membership.                         |
-| Undo and redo restoration, removal, or selection replacement in `pi-composer`                        | Text and membership return together; required snapshots remain available.                                  |
-| Remove an attachment used by another draft or retained submission                                    | The other reference remains readable.                                                                      |
-| Switch sessions, restart, resume, or fork                                                            | The correct draft references and submitted snapshots remain usable.                                        |
-| Request explicit cleanup while snapshots remain referenced                                           | Added snapshots and recoverable contents survive; only proven-unused capture or staging data is reclaimed. |
-| Submit text/files and images through normal, steer, and follow-up paths                              | Text/files remain readable on demand; image content and message association are preserved.                 |
-| Another input transformation has already supplied images or changed text                             | Attachment delivery composes with that result through native dispatch.                                     |
-| A source is unreadable, a write fails, or a preview cannot render                                    | The error is visible; existing draft content and retained assets remain recoverable.                       |
-| A session changes or the host clears the editor during pending work or failed submission             | No unrelated draft is overwritten and required contents remain recoverable.                                |
-| Select part or all of the draft, then load, refresh, resize, or fail an image preview                | Both views retain the source range and anchor; the next replacement edits that range and undoes once.      |
-| Navigate, accept, or cancel attachment management while text is selected                             | Only the focused native UI handles its keys; no background movement, submission, or duplicate edit occurs. |
-| Close a text preview or cancel management without choosing a draft action                            | The same draft, selection, attachment membership, and editor focus return.                                 |
-| Restore or remove while another native widget and a completion provider are installed                | The native UI remains usable; one editor transaction changes membership and text as specified.             |
-| Compare terminal text paste with a remapped native clipboard action using actual copied files/images | Only the native metadata route establishes image/file capture; previews identify the captured snapshots.   |
+| Scenario                                                                                             | Required result                                                                                                            |
+| ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Attach text, a file, or an image; then change or remove its original source                          | The retained attachment still exposes the contents captured when added.                                                    |
+| Reference a working file normally, then change it                                                    | The reference continues to identify the current source file.                                                               |
+| Preview attached text or display a small image preview                                               | The preview identifies the selected attachment without altering stored contents.                                           |
+| Click an image label, thumbnail, or graphics fallback after changing or deleting the source          | Pi's native link activation receives the retained full-resolution file URL; the draft and retained bytes remain unchanged. |
+| Resize, remove an image reference, disable hyperlinks, or fail a preview read                        | Clickable cells track the visible image; surrounding UI and failed previews have no stale image target.                    |
+| Restore text at a caret or over a selection, including code and text above the paste cutoff          | Complete preserved text appears inline and the attachment leaves draft membership.                                         |
+| Undo and redo restoration, removal, or selection replacement in `pi-composer`                        | Text and membership return together; required snapshots remain available.                                                  |
+| Remove an attachment used by another draft or retained submission                                    | The other reference remains readable.                                                                                      |
+| Switch sessions, restart, resume, or fork                                                            | The correct draft references and submitted snapshots remain usable.                                                        |
+| Request explicit cleanup while snapshots remain referenced                                           | Added snapshots and recoverable contents survive; only proven-unused capture or staging data is reclaimed.                 |
+| Submit text/files and images through normal, steer, and follow-up paths                              | Text/files remain readable on demand; image content and message association are preserved.                                 |
+| Another input transformation has already supplied images or changed text                             | Attachment delivery composes with that result through native dispatch.                                                     |
+| A source is unreadable, a write fails, or a preview cannot render                                    | The error is visible; existing draft content and retained assets remain recoverable.                                       |
+| A session changes or the host clears the editor during pending work or failed submission             | No unrelated draft is overwritten and required contents remain recoverable.                                                |
+| Select part or all of the draft, then load, refresh, resize, or fail an image preview                | Both views retain the source range and anchor; the next replacement edits that range and undoes once.                      |
+| Navigate, accept, or cancel attachment management while text is selected                             | Only the focused native UI handles its keys; no background movement, submission, or duplicate edit occurs.                 |
+| Close a text preview or cancel management without choosing a draft action                            | The same draft, selection, attachment membership, and editor focus return.                                                 |
+| Restore or remove while another native widget and a completion provider are installed                | The native UI remains usable; one editor transaction changes membership and text as specified.                             |
+| Compare terminal text paste with a remapped native clipboard action using actual copied files/images | Only the native metadata route establishes image/file capture; previews identify the captured snapshots.                   |
 
 - Run real Ghostty/macOS checks for image graphics, attachment placement, keyboard access to preview/restoration, clipboard images, and fullscreen coexistence with native widgets. Include keyboard select-all and partial selection through redraws, view changes, and image updates, then type and undo to verify the preserved range. Record clipboard routes separately from terminal text and keep unobserved physical routes pending.
 - Verify native command handoff, combined text/membership undo, and submission recovery through the public host. Assert the final message and retained bytes as well as successful storage.
+- Inspect native hyperlink cells and activate preview links through fullscreen Pi, substituting only the OS process-launch boundary. Check that full-resolution snapshot bytes and draft selection remain unchanged. Manually verify the physical thumbnail click, filename fallback, and composer reference opening in Ghostty with the system's associated application; automated checks do not establish pixel rendering or app launch success.
 
 ## Out of Scope
 
@@ -98,7 +107,7 @@ Paste classification belongs to the paste specification. Selection, editing bind
 
 ## Further Notes
 
-The [package README](../../packages/pi-attachments/README.md) documents attachment actions, previews, recovery, and cleanup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/) and [preview-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md).
+The [package README](../../packages/pi-attachments/README.md) documents attachment actions, previews, recovery, and cleanup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/), [preview-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md), and [image-opening tickets](../../.scratch/image-opening/issues/).
 
 See the [glossary](../../GLOSSARY.md), [paste specification](pi-paste.md), and [composer specification](pi-composer.md).
 
