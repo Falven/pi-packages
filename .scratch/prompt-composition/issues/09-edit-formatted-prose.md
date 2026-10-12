@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Render supported prose formatting inside the editable draft using Pi's parser, themes, and terminal layout services.
 - [ ] Formatted and source views share one document, selection, and history; changing views does not create a content edit.
