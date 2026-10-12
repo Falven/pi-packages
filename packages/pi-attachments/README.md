@@ -50,6 +50,8 @@ With pi-composer, each restoration or removal is one undo/redo action, including
 
 `/attach-file` recognizes PNG, JPEG, GIF, WebP, and BMP images from the captured bytes, including files with a different extension. Each image gets a small preview above the native editor or composer, using Pi's theme and image graphics. Terminals without image graphics show Pi's filename and dimensions fallback. Removing a reference removes its preview and draft membership while retaining the snapshot for undo and older requests.
 
+Click an image's filename, thumbnail, or text fallback to open the retained full-resolution file in the system's associated application. This uses Pi's native hyperlinks when supported, without terminal configuration changes. In fullscreen Ghostty on macOS, **Shift+Cmd+click** also uses the terminal's native link handling; use that gesture for the attachment reference inside `pi-composer`, where ordinary clicks edit text. Saving changes from the external application can modify the retained attachment; save elsewhere to keep the captured contents intact.
+
 Images are delivered as native image content on Enter, steering, and follow-up submissions. Delivery follows the submitted references and preserves images supplied by earlier input handlers. BMP conversion, preview thumbnails, and resizing for the current model leave the original snapshot unchanged. References stay in queued text so native dequeue and resubmission can regenerate the images.
 
 ## Recovery

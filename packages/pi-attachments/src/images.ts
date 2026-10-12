@@ -1,5 +1,6 @@
 import { readFile, realpath } from "node:fs/promises"
 import { basename, resolve, sep } from "node:path"
+import { pathToFileURL } from "node:url"
 import {
   type ExtensionAPI,
   convertToPng,
@@ -9,7 +10,7 @@ import {
   resizeImage,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
-import { Image } from "@earendil-works/pi-tui"
+import { getCapabilities, hyperlink, Image } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 
 export function attachmentReferences(text: string, storage: string) {
@@ -183,7 +184,20 @@ export function registerImages(
           if (signal.aborted) return []
           const paths = attachmentPaths(ctx.ui.getEditorText(), storage)
           if (paths.length === 0) return []
-          const names = paths.map((path) => basename(path)).join(", ")
+          const capabilities = getCapabilities()
+          const link = (text: string, path: string) =>
+            capabilities.hyperlinks && previews.get(path) instanceof Image
+              ? hyperlink(
+                  text,
+                  pathToFileURL(path).href.replace(
+                    /^file:\/\/\//,
+                    "file://localhost/",
+                  ),
+                )
+              : text
+          const names = paths
+            .map((path) => link(basename(path), path))
+            .join(", ")
           const lines = truncateToVisualLines(
             `${theme.fg("muted", `Attachments (${paths.length}): ${names}`)}\n${rawKeyHint("ctrl+alt+a", "/attachments")}`,
             5,
@@ -201,7 +215,15 @@ export function registerImages(
                   .visualLines,
               )
             } else if (preview) {
-              lines.push(...preview.render(width))
+              // Native hyperlinks need text cells beneath the image graphics.
+              const cells = capabilities.images
+                ? " ".repeat(Math.max(1, Math.min(width - 2, 24)))
+                : ""
+              lines.push(
+                ...preview
+                  .render(width)
+                  .map((line) => link(line + cells, path)),
+              )
             }
           }
           return lines

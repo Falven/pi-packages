@@ -1,4 +1,6 @@
+/* eslint-disable no-control-regex -- Inspect native terminal frames and mouse coordinates. */
 import assert from "node:assert/strict"
+import childProcess from "node:child_process"
 import {
   chmod,
   mkdir,
@@ -7,13 +9,17 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises"
+import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { test } from "node:test"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
+import { stripVTControlCharacters } from "node:util"
 import {
   getCapabilities,
   getImageDimensions,
+  getOsc8LinkAtColumn,
   setCapabilities,
+  visibleWidth,
 } from "@earendil-works/pi-tui"
 import {
   holdFileRead,
@@ -32,25 +38,103 @@ const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
 
-test("image previews identify current membership beside the native editor and other widgets", async (t) => {
+test("image previews link retained files through native click handling beside the editor and other widgets", async (t) => {
   const caps = getCapabilities()
-  setCapabilities({ ...caps, images: null })
+  setCapabilities({ ...caps, images: "kitty", hyperlinks: true })
   t.after(() => setCapabilities(caps))
   const host = await nativePi(t)
-  const source = join(host.directory, "preview.png")
+  setCapabilities({ ...caps, images: null, hyperlinks: true })
+  const name = "preview % # 界.png"
+  const source = join(host.directory, name)
   await writeFile(source, Buffer.from(PNG, "base64"))
   host.ui.setEditorText("Review this picture")
   await host.runtime.session.prompt(`/attach-file ${source}`)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
-  await waitFor(() => assert.match(host.render(), /\[Image: preview\.png.*2x1/))
-  assert.match(host.render(), /Attachments \(1\): preview\.png/)
+  const target = pathToFileURL(path).href.replace(
+    /^file:\/\/\//,
+    "file://localhost/",
+  )
+  await waitFor(() =>
+    assert.ok(host.render().includes(`[Image: ${name} [image/png] 2x1]`)),
+  )
+  assert.ok(host.render().includes(`Attachments (1): ${name}`))
   assert.match(host.render(), /Other extension widget/)
   assert.equal(host.ui.getEditorText(), draft)
   assert.equal((await readFile(path)).toString("base64"), PNG)
+  await rm(source)
+
+  const spawn = t.mock.method(
+    childProcess,
+    "spawn",
+    () => new childProcess.ChildProcess(),
+  )
+  syncBuiltinESMExports()
+  t.after(() => {
+    spawn.mock.restore()
+    syncBuiltinESMExports()
+  })
+  const rows = () => {
+    host.render()
+    return [
+      ...host.output.matchAll(
+        /\x1b\[(\d+);1H\x1b\[2K(.*?)(?=\x1b\[\d+;\d+H|$)/gs,
+      ),
+    ].map((match) => ({ row: Number(match[1]), line: match[2] }))
+  }
+  const click = (column, row) => {
+    const before = spawn.mock.callCount()
+    host.input(`\x1b[<0;${column + 1};${row}M`)
+    host.input(`\x1b[<0;${column + 1};${row}m`)
+    assert.equal(spawn.mock.callCount(), before + 1)
+    assert.equal(spawn.mock.calls.at(-1).arguments[1].at(-1), target)
+    assert.equal(host.ui.getEditorText(), draft)
+  }
+  const header = rows().find(({ line }) =>
+    stripVTControlCharacters(line).includes("Attachments (1):"),
+  )
+  assert.ok(header)
+  const labelColumn = visibleWidth("Attachments (1): ")
+  assert.equal(getOsc8LinkAtColumn(header.line, labelColumn), target)
+  assert.equal(getOsc8LinkAtColumn(header.line, labelColumn - 1), undefined)
+  click(labelColumn, header.row)
+  const fallback = rows().find(({ line }) =>
+    stripVTControlCharacters(line).includes("[Image:"),
+  )
+  assert.ok(fallback)
+  assert.equal(getOsc8LinkAtColumn(fallback.line, 0), target)
+  click(0, fallback.row)
+
+  setCapabilities({ ...caps, images: "kitty", hyperlinks: true })
+  host.resize(60, 40)
+  assert.ok(rows().some(({ line }) => line.includes("\x1b_G")))
+  host.resize(22, 40)
+  const thumbnails = rows().filter(
+    ({ line }) =>
+      line.includes("\x1b_G") ||
+      (!stripVTControlCharacters(line).trim() &&
+        getOsc8LinkAtColumn(line, 0) === target),
+  )
+  assert.ok(thumbnails.length > 0 && thumbnails.length <= 4)
+  for (const { line } of thumbnails) {
+    assert.equal(getOsc8LinkAtColumn(line, 0), target)
+    assert.equal(getOsc8LinkAtColumn(line, 19), target)
+    assert.equal(getOsc8LinkAtColumn(line, 20), undefined)
+  }
+  click(0, thumbnails.at(-1).row)
+  assert.equal((await readFile(path)).toString("base64"), PNG)
+
+  setCapabilities({ ...caps, images: "kitty", hyperlinks: false })
+  host.render()
+  assert.ok(!host.output.includes(target))
+  setCapabilities({ ...caps, images: "kitty", hyperlinks: true })
+  host.resize(100, 30)
+  host.input("!")
+  assert.equal(host.ui.getEditorText(), `${draft}!`)
 
   host.ui.setEditorText("Review this picture")
   assert.doesNotMatch(host.render(), /\[Image:/)
+  assert.ok(!host.output.includes(target))
   assert.match(host.render(), /Other extension widget/)
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })

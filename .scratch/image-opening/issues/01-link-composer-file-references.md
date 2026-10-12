@@ -15,4 +15,4 @@
 - [x] Document file-opening gestures and ordinary external-save semantics.
 - [ ] Manually open an image reference in both views in Ghostty and verify the associated application receives the retained image.
 
-**Automated validation:** On 2026-10-12, all 16 public-host selection and hyperlink tests passed on Node 24.13.1, including local path encoding in both views, existing file-URL escapes, remote authorities, capability changes, ordinary mouse editing, clipboard, undo, and unchanged submission. Typechecking passed. Physical link activation awaits user testing.
+**Automated validation:** On 2026-10-12, all 687 workspace tests passed on Node 24.13.1, together with formatting, lint, and typechecking. The public-host selection and hyperlink checks cover local path encoding in both views, existing file-URL escapes, remote authorities, capability changes, ordinary mouse editing, clipboard, undo, and unchanged submission. Physical link activation awaits user testing.

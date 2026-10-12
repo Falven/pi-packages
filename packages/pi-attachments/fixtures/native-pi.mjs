@@ -187,13 +187,15 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
       : SessionManager.create(directory, join(agentDir, "sessions")),
   })
   let input
+  let resize
   let output = ""
   const terminal = {
     columns: 100,
     rows: 30,
     kittyProtocolActive: true,
-    start(onInput) {
+    start(onInput, onResize) {
       input = onInput
+      resize = onResize
     },
     stop() {},
     async drainInput() {},
@@ -237,6 +239,11 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
       return output
     },
     input: (data) => input(data),
+    resize(columns, rows = terminal.rows) {
+      terminal.columns = columns
+      terminal.rows = rows
+      resize()
+    },
     submit(text) {
       if (text !== undefined) ui.setEditorText(text)
       input("\r")
