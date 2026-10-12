@@ -1,14 +1,12 @@
 # Attachments specification
 
-**Triage:** `acceptance-pending`
-
 ## Problem Statement
 
 Users need to attach text, files, and images without losing the contents when an original file changes or a session is resumed. They also need to inspect what is attached, restore attached text to the draft, remove an attachment from a request, and retain readable material for older submissions.
 
 ## Solution
 
-`pi-attachments` preserves attachment snapshots and exposes previews, Restore Inline, draft membership changes, retained storage, and native submission delivery. It works with Pi's native editor and `pi-composer`; pasted attachment creation follows `pi-paste` policy. The initial target is Ghostty on local macOS in Pi's fullscreen mode; physical input and graphics require separate acceptance evidence.
+`pi-attachments` preserves attachment snapshots and exposes previews, Restore Inline, draft membership changes, retained storage, and native submission delivery. It works with Pi's native editor and `pi-composer`; pasted attachment creation follows `pi-paste` policy. The supported environment is Ghostty on local macOS in Pi's fullscreen mode.
 
 ## User Stories
 
@@ -46,11 +44,11 @@ Users need to attach text, files, and images without losing the contents when an
 
 ## Implementation Decisions
 
-- The package owns stored attachment contents, metadata, preview, restoration, retention, and delivery. The active editor owns text and draft attachment membership. A draft's references and membership identify retained contents; they do not duplicate storage ownership.
+- The package owns stored attachment contents, metadata, preview, restoration, retention, and delivery. Membership follows ordinary Markdown attachment references in the active editor's text. Editing or undoing those references changes membership through the editor's existing text history while storage remains attachment-owned.
 - Snapshot text, files, and images when the attachment is added. A reference becomes usable only after its contents are successfully preserved. Later changes or removal of the original source do not alter that snapshot.
 - Ordinary file references continue to identify current source files. Attachment references identify captured contents. Preserve that distinction in the displayed draft and submitted request.
 - Use Pi's clipboard and image conversion/resizing helpers and standard Node filesystem facilities. Keep retained contents in stable package-owned storage using Pi's state-location conventions. Image previews and delivery conversions must preserve the original snapshot.
-- Pasted attachment creation consumes the paste policy; explicit attachment actions use native Pi action/UI facilities. Both routes share the same snapshot storage and lifetime rules.
+- Pasted attachment creation consumes the paste policy; explicit attachment actions use native Pi action/UI facilities. The native `attach-file` command accepts captured sources from paste handling and explicit file choices. Both routes share the same snapshot storage and lifetime rules.
 - Show attachment membership near the active editor through Pi's `setWidget` facility. Render small image previews with Pi's `Image` component and graphics capabilities, and use native overlays for attachment actions and text preview. Reuse the existing preview integration. Loading, refresh, resize, invalidation, and preview errors preserve the editor's text, selection anchor/range, history, and focus.
 - Focused attachment-management and preview components own their navigation, acceptance, and cancellation through native routing. Cancelling or closing a preview returns to the unchanged draft and selection. An accepted action changes the draft only through the active editor's public text interfaces; its key cannot also trigger background editing or submission.
 - Clipboard attachments arrive through the effective native clipboard handler and paste policy. Terminal text, including a path-shaped paste, supplies no image/file metadata. Verify native image and copied-file delivery independently of the physical shortcut used to trigger text paste.
@@ -92,7 +90,7 @@ Users need to attach text, files, and images without losing the contents when an
 | Compare terminal text paste with a remapped native clipboard action using actual copied files/images | Only the native metadata route establishes image/file capture; previews identify the captured snapshots.   |
 
 - Run real Ghostty/macOS checks for image graphics, attachment placement, keyboard access to preview/restoration, clipboard images, and fullscreen coexistence with native widgets. Include keyboard select-all and partial selection through redraws, view changes, and image updates, then type and undo to verify the preserved range. Record clipboard routes separately from terminal text and keep unobserved physical routes pending.
-- Require successful native handoff, atomic composer history, and submission-recovery checks before declaring integration complete. A stored file alone does not establish correct attachment delivery.
+- Verify native command handoff, combined text/membership undo, and submission recovery through the public host. Assert the final message and retained bytes as well as successful storage.
 
 ## Out of Scope
 
@@ -100,9 +98,9 @@ Paste classification belongs to the paste specification. Selection, editing bind
 
 ## Further Notes
 
-Public-host checks verify selection and focus through native widget and image-preview updates, attachment actions, and combined draft history. Actual image graphics and physical clipboard routes remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
+The [package README](../../packages/pi-attachments/README.md) documents attachment actions, previews, recovery, and cleanup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/) and [preview-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md).
 
-See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [paste specification](pi-paste.md), and [composer specification](pi-composer.md).
+See the [glossary](../../GLOSSARY.md), [paste specification](pi-paste.md), and [composer specification](pi-composer.md).
 
 Native evidence and testing prior art: [extension UI, input, and submission contracts](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/extensions/types.ts), [image and terminal exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/index.ts), [clipboard image tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/test/clipboard-image.test.ts), and [input transformation tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/test/extensions-input-event.test.ts).
 

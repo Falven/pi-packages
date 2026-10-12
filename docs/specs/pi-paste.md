@@ -1,14 +1,12 @@
 # Paste specification
 
-**Triage:** `acceptance-pending`
-
 ## Problem Statement
 
 A pasted block should be visible and editable when it is small, and readable on demand when it is large. Different paste routes must make the same decision for the same supplied content. Users also need to choose an inline paste or text attachment explicitly and retain their content when clipboard or attachment handling fails. Terminal text paste and native clipboard actions can deliver different content even when the physical gesture looks the same.
 
 ## Solution
 
-`pi-paste` classifies incoming clipboard content and applies one paste policy with Pi's native editor or `pi-composer`. Small text appears inline; large text uses an attachment; Paste Inline and Attach Text let the user choose either outcome. Attachment storage and presentation are supplied by `pi-attachments`. The initial target is Ghostty on local macOS in Pi's fullscreen mode; physical input and graphics require separate acceptance evidence.
+`pi-paste` classifies incoming clipboard content and applies one paste policy with Pi's native editor or `pi-composer`. Small text appears inline; large text uses an attachment; Paste Inline and Attach Text let the user choose either outcome. Attachment storage and presentation are supplied by `pi-attachments`. The supported environment is Ghostty on local macOS in Pi's fullscreen mode.
 
 ## User Stories
 
@@ -53,8 +51,9 @@ A pasted block should be visible and editable when it is small, and readable on 
 - File and image outcomes use attachment handling. Preserve native clipboard file identities and path validation. Text that merely resembles a resource reference keeps its text meaning unless the native clipboard identifies it as copied files or the user chooses an attachment action.
 - Apply a successful paste at the active editor's intended caret or selection. With `pi-composer`, related text and attachment membership changes are one undoable action. Snapshot preparation must succeed before the selected content is discarded.
 - Associate the clipboard read, snapshot preparation, and resulting edit with the requesting draft. Preserve later unrelated edits; late or failed operations must leave their content recoverable.
-- Use current public Pi contracts for cooperation. The package must remain useful with the native editor, and its policy must cooperate with `pi-composer` and installed native overrides. Attachment-producing outcomes require attachment handling to be available.
+- Use current public Pi contracts for cooperation. Attachment-producing pastes discover the effective extension-provided `attach-file` command and dispatch the captured sources through Pi's native command path. Preserve recoverable captured contents if the command is unavailable, deferred, or fails; a void command send is not completion acknowledgement. This handoff works with the native editor and `pi-composer` without a separate integration interface.
 - Resolve native clipboard input through the supplied manager's effective `app.clipboard.pasteImage` action, whose macOS default is Ctrl+V. Use its public user-binding information: any explicit override, including an empty list or a repeated default, suppresses the package's raw Cmd+V convenience alias. This applies with the native editor as well as `pi-composer`; neither package can restore an alias the configuration suppressed.
+- Supply a clipboard handler only when one is absent. Earlier handlers and later assignments retain their chosen insertion behavior, including direct insertion; a deliberate direct insertion is distinct from the public paste route governed by this policy.
 - Preserve native input dispatch and existing listeners that transform or consume input. Native actions, accepted extension shortcuts, and focused components keep their input before a raw Cmd+V fallback. A handled key must not also read the clipboard or edit the draft. Raw listeners, direct editor paste, and native clipboard insertion are different host routes; demonstrate each required route without adding a separate keybinding manager or configuration reader.
 - A physical Cmd+V, terminal menu action, or right-click may produce bracketed text rather than a raw key or native clipboard action. Disabling the raw alias does not disable a delivered text paste. Apply the cutoff to the decoded text actually supplied, and report the observed route when verifying behavior. Keep terminal settings unchanged.
 - If attachment handling cannot complete an action, report the failure and preserve the draft and recoverable paste contents. Automatic conversion must not silently substitute a different paste policy.
@@ -88,7 +87,7 @@ A pasted block should be visible and editable when it is small, and readable on 
 | Run the native clipboard action with file, image, and text clipboard data separately    | Native metadata precedence and the corresponding attachment or inline result are verified independently of terminal text paste. |
 
 - Run real Ghostty/macOS checks for clipboard formats, shortcut forwarding, right-click paste, and copied-file precedence with the native editor and composer. Record effective Pi and terminal bindings, the physical gesture, observed route, and result. Menu or Cmd+V text paste alone does not establish native image/file delivery; verify the effective native clipboard action separately. Keep unobserved routes pending.
-- Require route coverage and native attachment handoff as integration acceptance checks before completing the package. Record any unsupported host route with its exact public-contract limitation.
+- Verify native attachment-command handoff, unavailable handling, and deferred dispatch through the same public host boundary, including preservation of the requesting draft and captured contents.
 
 ## Out of Scope
 
@@ -96,9 +95,9 @@ Draft state and history belong to the active editor. Snapshot storage, previews,
 
 ## Further Notes
 
-The revised input routing is implemented and verified through public Pi input with the native editor and composer. Tests cover effective bindings, supplied clipboard handlers, terminal text, metadata precedence, and retained-content recovery. Physical clipboard formats and terminal delivery remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
+The [package README](../../packages/pi-paste/README.md) documents paste actions and recovery. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/) and [native clipboard ticket](../../.scratch/composer-keyboard/issues/06-preserve-configured-clipboard-routes.md).
 
-See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
+See the [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 
 Native evidence and testing prior art: [extension paste and UI contracts](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/extensions/types.ts), [interactive paste routes](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/modes/interactive/interactive-mode.ts), [clipboard file-precedence tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/test/clipboard-paste-file-paths.test.ts), and [editor paste tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/test/editor.test.ts).
 

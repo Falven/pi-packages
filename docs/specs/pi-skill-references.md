@@ -1,14 +1,12 @@
 # Skill references specification
 
-**Triage:** `acceptance-pending`
-
 ## Problem Statement
 
 Users need to invoke skills while composing ordinary prose and retain native or custom skill pickers. References must survive ordinary text editing and clipboard operations, contribute the intended instructions once, and preserve code examples and unrelated command behavior.
 
 ## Solution
 
-`pi-skill-references` extends native completion with `$` and inline `/` skill triggers and inserts ordinary `/skill:name` text. Canonical skill references carry their invocation meaning whether typed, pasted, or inserted by another extension. Submission includes each referenced skill's instructions once. The package works with native Pi and `pi-composer`, initially targeting Ghostty on local macOS with Pi's fullscreen mode. Physical input requires separate acceptance evidence.
+`pi-skill-references` extends native completion with `$` and inline `/` skill triggers and inserts ordinary `/skill:name` text. Canonical skill references carry their invocation meaning whether typed, pasted, or inserted by another extension. Submission includes each referenced skill's instructions once. The package works with native Pi and `pi-composer`. The supported environment is Ghostty on local macOS in Pi's fullscreen mode.
 
 ## User Stories
 
@@ -99,9 +97,9 @@ The active editor owns draft selection, history, and in-editor picker presentati
 
 ## Further Notes
 
-Public-host checks verify effective completion bindings, native undo priority, focused custom pickers, shared selection history, and deduplicated instruction delivery in mixed submissions. Physical picker input and clipboard round trips remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
+The [package README](../../packages/pi-skill-references/README.md) documents completion and invocation. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/) and [picker-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md).
 
-See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
+See the [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 
 Native evidence and testing prior art: [provider composition](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/modes/interactive/interactive-mode.ts), [native input and leading skill expansion](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/agent-session.ts), [skill slash-completion tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/test/autocomplete-skill-slash.test.ts), [skill-loading tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/test/skills.test.ts), and [input transformation tests](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/test/extensions-input-event.test.ts).
 
