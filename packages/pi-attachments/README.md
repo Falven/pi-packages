@@ -33,4 +33,4 @@ Read and write errors leave the main draft intact. Failed text saves reopen the 
 
 Text changes, terminal activity, another submission, or session replacement during preparation keep the result out of the newer draft. Text changes are observed through the effective editor's native callback, including changes that return to the original text. The saved snapshot gets an adjacent `.draft.md` recovery file containing the requesting session ID, original draft, and attachment reference. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
 
-If another extension replaces the editor factory after this package installs its observer, attachment actions save recovery files instead of inserting into an unverified draft. The replacement editor stays active.
+Later editor factory decorators remain compatible when they delegate to the observed editor and preserve callback assignments. A replacement that bypasses observation, or an editor installation or callback change during preparation, saves a recovery file instead of inserting into the current draft.

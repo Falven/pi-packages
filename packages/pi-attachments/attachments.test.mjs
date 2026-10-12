@@ -365,6 +365,19 @@ test("a programmatic clear to the original text cancels pending automatic attach
   )
 })
 
+test("a later transparent editor factory attaches to the unchanged native draft", async (t) => {
+  const host = await nativePi(t)
+  host.ui.setEditorText("Current draft")
+  const previous = host.ui.getEditorComponent()
+  host.ui.setEditorComponent((...args) => previous(...args))
+
+  await host.runtime.session.prompt("/attach-text Composed snapshot")
+  const path = snapshotPath(host.ui.getEditorText())
+  assert.match(host.ui.getEditorText(), /^Current draft\n\[Attachment:/)
+  assert.equal(await readFile(path, "utf8"), "Composed snapshot")
+  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+})
+
 for (const replacement of ["before", "during"]) {
   test(`an editor factory replaced ${replacement} attachment preparation preserves the request for recovery`, async (t) => {
     const host = await nativePi(t)
@@ -393,10 +406,45 @@ for (const replacement of ["before", "during"]) {
   })
 }
 
-test("an existing composer keeps selection replacement and undo when attaching a snapshot", async (t) => {
+for (const installation of ["recreated", "reused"]) {
+  test(`an observed editor ${installation} during attachment preparation retains the requesting snapshot`, async (t) => {
+    const host = await nativePi(t, [
+      fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    ])
+    const previous = host.ui.getEditorComponent()
+    let editor
+    const factory = (...args) => {
+      editor = previous(...args)
+      return editor
+    }
+    host.ui.setEditorComponent(factory)
+    const source = join(host.directory, "reinstalled-editor.txt")
+    await writeFile(source, "Captured before editor installation")
+    const held = holdFileRead(t, source)
+    const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+    await held.started()
+    host.ui.setEditorComponent(
+      installation === "reused" ? () => editor : factory,
+    )
+    held.release()
+    await pending
+
+    assert.equal(host.ui.getEditorText(), "")
+    const recovery = await retainedRequest(host)
+    assert.equal(
+      await readFile(snapshotPath(recovery.text), "utf8"),
+      "Captured before editor installation",
+    )
+    assert.match(host.render(), /Snapshot retained/)
+  })
+}
+
+test("a later factory keeps composer selection replacement and undo when attaching a snapshot", async (t) => {
   const host = await nativePi(t, [
     fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
   ])
+  const previous = host.ui.getEditorComponent()
+  host.ui.setEditorComponent((...args) => previous(...args))
   host.ui.setEditorText("Keep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
   await host.runtime.session.prompt("/attach-text Selected snapshot")
@@ -414,6 +462,8 @@ test("an existing composer keeps selection replacement and undo when attaching a
 
 test("native callbacks, ordinary text, and autocomplete updates survive attachment observation", async (t) => {
   const host = await nativePi(t)
+  const previous = host.ui.getEditorComponent()
+  host.ui.setEditorComponent((...args) => previous(...args))
   host.ui.setEditorText("!echo draft")
   host.input("\x1b")
   assert.equal(

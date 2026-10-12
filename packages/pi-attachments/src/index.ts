@@ -18,7 +18,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   let submissions = 0
   let terminalInputs = 0
   let revision = 0
-  let editorFactory: ReturnType<ExtensionContext["ui"]["getEditorComponent"]>
+  let readObserved = false
   const lifetime = new AbortController()
 
   pi.on("input", () => {
@@ -30,18 +30,28 @@ export default function piAttachments(pi: ExtensionAPI): void {
 
   pi.on("session_start", (_event, ctx) => {
     const previous = ctx.ui.getEditorComponent()
-    editorFactory = (tui, theme, keybindings) => {
+    ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const editor = previous
         ? previous(tui, theme, keybindings)
         : new CustomEditor(tui, theme, keybindings)
       return new Proxy(editor, {
         get(target, property) {
           const value = Reflect.get(target, property, target)
+          if (
+            (property === "getText" || property === "getExpandedText") &&
+            typeof value === "function"
+          ) {
+            return () => {
+              readObserved = true
+              return value.call(target)
+            }
+          }
           return typeof value === "function" ? value.bind(target) : value
         },
         set(target, property, value) {
           if (property === "onChange") {
-            // Pi assigns callbacks after the factory returns.
+            // Pi rewires callbacks on every installation, including reused editors.
+            revision++
             target.onChange = (text) => {
               revision++
               value?.(text)
@@ -51,8 +61,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
           return Reflect.set(target, property, value, target)
         },
       })
-    }
-    ctx.ui.setEditorComponent(editorFactory)
+    })
     ctx.ui.onTerminalInput(() => {
       terminalInputs++
       return undefined
@@ -82,7 +91,9 @@ export default function piAttachments(pi: ExtensionAPI): void {
     ctx: ExtensionContext,
     capture: () => Promise<AttachmentSource | undefined>,
   ): Promise<void> {
+    readObserved = false
     const draft = ctx.ui.getEditorText()
+    const observedDraft = readObserved
     const sessionId = ctx.sessionManager.getSessionId()
     const submission = submissions
     const draftRevision = revision
@@ -111,15 +122,16 @@ export default function piAttachments(pi: ExtensionAPI): void {
         await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         const reference = `[Attachment: ${snapshot.name}](<${path}>)`
         changedDuringOperation ||= terminalInputs !== inputs
+        readObserved = false
         if (
           !lifetime.signal.aborted &&
           !changedDuringOperation &&
-          editorFactory !== undefined &&
-          ctx.ui.getEditorComponent() === editorFactory &&
-          revision === draftRevision &&
+          observedDraft &&
           submissions === submission &&
           ctx.sessionManager.getSessionId() === sessionId &&
-          ctx.ui.getEditorText() === draft
+          ctx.ui.getEditorText() === draft &&
+          readObserved &&
+          revision === draftRevision
         ) {
           ctx.ui.pasteToEditor(`\n${reference}\n`)
         } else {
