@@ -95,6 +95,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const draft = ctx.ui.getEditorText()
     const observedDraft = readObserved
     const sessionId = ctx.sessionManager.getSessionId()
+    const sessionFile = ctx.sessionManager.getSessionFile()
     const submission = submissions
     const draftRevision = revision
     let inputs = terminalInputs
@@ -119,8 +120,15 @@ export default function piAttachments(pi: ExtensionAPI): void {
         await mkdir(storage, { recursive: true, mode: 0o700 })
         const directory = await mkdtemp(join(storage, "snapshot-"))
         const path = join(directory, snapshot.name)
-        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         const reference = `[Attachment: ${snapshot.name}](<${path}>)`
+        const recovery = `${path}.draft.md`
+        // New native sessions can remain memory-only until the first assistant reply.
+        await writeFile(
+          recovery,
+          `# Attachment request\n\nSession: ${sessionId}\n${sessionFile ? `\nSession file: ${sessionFile}\n` : ""}\n${draft}\n\n${reference}\n`,
+          { flag: "wx", mode: 0o600 },
+        )
+        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         changedDuringOperation ||= terminalInputs !== inputs
         readObserved = false
         if (
@@ -135,12 +143,6 @@ export default function piAttachments(pi: ExtensionAPI): void {
         ) {
           ctx.ui.pasteToEditor(`\n${reference}\n`)
         } else {
-          const recovery = `${path}.draft.md`
-          await writeFile(
-            recovery,
-            `# Attachment request\n\nSession: ${sessionId}\n\n${draft}\n\n${reference}\n`,
-            { flag: "wx", mode: 0o600 },
-          )
           if (!lifetime.signal.aborted) {
             ctx.ui.notify(
               `Could not confirm the requesting draft. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,

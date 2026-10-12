@@ -12,9 +12,13 @@ test(
   "composer opens dollar and inline slash skill completion automatically through the native provider contract",
   { timeout: 15000 },
   async (t) => {
-    const host = await createHost(t, undefined, false, [
-      fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
-    ])
+    const host = await createHost(t, undefined, false, {
+      additionalExtensionPaths: [
+        fileURLToPath(
+          new URL("../../pi-composer/src/index.ts", import.meta.url),
+        ),
+      ],
+    })
     for (const trigger of ["$", "/"]) {
       host.ui.setEditorText("Use ")
       host.terminal.output = ""

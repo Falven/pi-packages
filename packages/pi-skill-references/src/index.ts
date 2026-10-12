@@ -27,7 +27,7 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
       },
     ],
   })
-  pi.on("input", async (event) => {
+  pi.on("input", async (event, ctx) => {
     const commands = pi.getCommands()
     const leadingCommand = event.text.match(/^\/(\S+)/)?.[1]
     if (
@@ -47,6 +47,7 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
     markdown.walkTokens(markdown.lexer(event.text), (token) => {
       if (token.type === "skillReference") references.push(token.raw.slice(1))
     })
+    const expandedPaths = new Set<string>()
     const blocks = await Promise.all(
       references.map(async (reference) => {
         const name = reference.replace(/[.,:;!?]+$/, "")
@@ -60,8 +61,17 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
           )
         if (!skill) return undefined
         const path = skill.sourceInfo.path
-        const body = stripFrontmatter(await readFile(path, "utf8")).trim()
-        return `<skill name="${skill.name.slice(6)}" location="${path}">\nReferences are relative to ${dirname(path)}.\n\n${body}\n</skill>`
+        if (expandedPaths.has(path)) return undefined
+        expandedPaths.add(path)
+        try {
+          const body = stripFrontmatter(await readFile(path, "utf8")).trim()
+          return `<skill name="${skill.name.slice(6)}" location="${path}">\nReferences are relative to ${dirname(path)}.\n\n${body}\n</skill>`
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (ctx.hasUI) ctx.ui.notify(message, "error")
+          else console.error(message)
+          return undefined
+        }
       }),
     )
     const instructions = blocks.filter(Boolean).join("\n\n")

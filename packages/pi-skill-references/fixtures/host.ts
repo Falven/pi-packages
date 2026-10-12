@@ -15,6 +15,7 @@ import {
   SessionManager,
   SettingsManager,
   VERSION,
+  type CreateAgentSessionServicesOptions,
   type ExtensionAPI,
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent"
@@ -62,8 +63,13 @@ export async function createHost(
     directory: string,
   ) => void | Promise<void>,
   holdResponses = false,
-  extraExtensionPaths: string[] = [],
+  resourceOverrides: Pick<
+    NonNullable<CreateAgentSessionServicesOptions["resourceLoaderOptions"]>,
+    "skillsOverride" | "extensionsOverride" | "additionalExtensionPaths"
+  > = {},
+  interactive = true,
 ) {
+  const { additionalExtensionPaths = [], ...overrides } = resourceOverrides
   const root = await mkdtemp(join(tmpdir(), "pi-inline-skills-"))
   const agentDir = join(root, "agent")
   const skillDir = join(root, "skills", "review")
@@ -119,7 +125,7 @@ export async function createHost(
         id: "test",
         name: "Test",
         reasoning: false,
-        input: ["text"],
+        input: ["text", "image"],
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: 32000,
         maxTokens: 100,
@@ -151,7 +157,7 @@ export async function createHost(
           noContextFiles: true,
           additionalExtensionPaths: [
             fileURLToPath(new URL("../src/index.ts", import.meta.url)),
-            ...extraExtensionPaths,
+            ...additionalExtensionPaths,
           ],
           additionalSkillPaths: [skillDir],
           extensionsOverride: (result) => ({
@@ -170,6 +176,7 @@ export async function createHost(
               await setupExtension?.(pi, root)
             },
           ],
+          ...overrides,
         },
       })
       const result = await createAgentSessionFromServices({
@@ -186,12 +193,16 @@ export async function createHost(
   const terminal = new TestTerminal()
   const mode = new InteractiveMode(runtime, { terminal, tuiMode: "fullscreen" })
   stopHost = async () => {
-    mode.stop()
+    if (interactive) mode.stop()
     await runtime.dispose()
   }
-  await mode.init()
+  if (interactive) {
+    await mode.init()
+    void mode.run()
+  } else {
+    await runtime.session.bindExtensions({ mode: "print" })
+  }
   assert(ui)
-  void mode.run()
 
   return {
     ui,

@@ -8,6 +8,12 @@ import { stripVTControlCharacters } from "node:util"
 import type { InputEvent } from "@earendil-works/pi-coding-agent"
 import { createHost } from "../fixtures/host.ts"
 
+const image = {
+  type: "image",
+  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+  mimeType: "image/png",
+} as const
+
 test(
   "native typed canonical prose invokes the effective skill without rewriting draft history",
   { timeout: 15000 },
@@ -284,6 +290,159 @@ test(
 )
 
 test(
+  "native leading and inline references expand each resource once in first-reference order",
+  { timeout: 15000 },
+  async (t) => {
+    let planDir = ""
+    const host = await createHost(t, async (pi, directory) => {
+      planDir = join(directory, "skills", "plan")
+      await mkdir(planDir, { recursive: true })
+      await writeFile(
+        join(planDir, "SKILL.md"),
+        "---\nname: plan\ndescription: Plan changes\n---\nPlan the smallest change.\n",
+      )
+      pi.on("resources_discover", () => ({ skillPaths: [planDir] }))
+    })
+    const draft =
+      "/skill:plan Then /skill:review, /skill:plan and /skill:review."
+    host.ui.setEditorText(draft)
+    assert.equal(
+      await host.submit(),
+      `<skill name="plan" location="${join(planDir, "SKILL.md")}">\nReferences are relative to ${planDir}.\n\nPlan the smallest change.\n</skill>\n\n` +
+        `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n${draft}`,
+    )
+
+    host.terminal.input("\x1b[A")
+    assert.equal(host.ui.getEditorText(), draft)
+  },
+)
+
+test(
+  "unknown and unreadable references survive alongside successfully expanded skills",
+  { timeout: 15000 },
+  async (t) => {
+    let planDir = ""
+    const host = await createHost(t, async (pi, directory) => {
+      planDir = join(directory, "skills", "plan")
+      await mkdir(planDir, { recursive: true })
+      await writeFile(
+        join(planDir, "SKILL.md"),
+        "---\nname: plan\ndescription: Plan changes\n---\nPlan the smallest change.\n",
+      )
+      pi.on("resources_discover", () => ({ skillPaths: [planDir] }))
+    })
+    await rm(host.skillPath)
+    const draft =
+      "/skill:review Also /skill:missing, /skill:plan and /skill:review."
+    host.ui.setEditorText(draft)
+    assert.equal(
+      await host.submit(),
+      `<skill name="plan" location="${join(planDir, "SKILL.md")}">\nReferences are relative to ${planDir}.\n\nPlan the smallest change.\n</skill>\n\n${draft}`,
+    )
+    await t.waitFor(() =>
+      assert.match(stripVTControlCharacters(host.terminal.output), /ENOENT/),
+    )
+
+    host.terminal.input("\x1b[A")
+    assert.equal(host.ui.getEditorText(), draft)
+  },
+)
+
+test(
+  "headless native submission reports unreadable skills while retaining successful expansion",
+  { timeout: 15000 },
+  async (t) => {
+    let planPath = ""
+    const host = await createHost(
+      t,
+      async (pi, directory) => {
+        const planDir = join(directory, "skills", "plan")
+        planPath = join(planDir, "SKILL.md")
+        await mkdir(planDir, { recursive: true })
+        await writeFile(
+          planPath,
+          "---\nname: plan\ndescription: Plan changes\n---\nPlan the smallest change.\n",
+        )
+        pi.on("resources_discover", () => ({ skillPaths: [planDir] }))
+      },
+      false,
+      {},
+      false,
+    )
+    await rm(planPath)
+    const errors = t.mock.method(console, "error", () => {})
+    const prompt = "/skill:plan Then /skill:review and /skill:plan."
+    await host.session.prompt(prompt)
+    const message = host.session.messages.findLast(
+      (item) => item.role === "user",
+    )
+    assert.deepEqual(message?.content, [
+      {
+        type: "text",
+        text: `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n${prompt}`,
+      },
+    ])
+    assert.match(
+      errors.mock.calls.map((call) => call.arguments.join(" ")).join("\n"),
+      /ENOENT/,
+    )
+  },
+)
+
+test(
+  "native catalog aliases deduplicate by resource with the first reference's context",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, undefined, false, {
+      skillsOverride: (result) => {
+        const review = result.skills.find((skill) => skill.name === "review")
+        assert(review)
+        return {
+          ...result,
+          skills: [...result.skills, { ...review, name: "review-alias" }],
+        }
+      },
+    })
+    for (const [draft, name] of [
+      ["/skill:review-alias Then /skill:review.", "review-alias"],
+      ["Apply /skill:review, then /skill:review-alias.", "review"],
+    ] as const) {
+      host.ui.setEditorText(draft)
+      assert.equal(
+        await host.submit(),
+        `<skill name="${name}" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n${draft}`,
+      )
+    }
+  },
+)
+
+test(
+  "skill bodies retain canonical references without recursively invoking them",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, async (pi, directory) => {
+      const planDir = join(directory, "skills", "plan")
+      await mkdir(planDir, { recursive: true })
+      await writeFile(
+        join(planDir, "SKILL.md"),
+        "---\nname: plan\ndescription: Plan changes\n---\nPlan the smallest change.\n",
+      )
+      pi.on("resources_discover", () => ({ skillPaths: [planDir] }))
+    })
+    await writeFile(
+      host.skillPath,
+      "Review without invoking /skill:plan or /skill:review.\n",
+    )
+    const draft = "Please apply /skill:review and /skill:review."
+    host.ui.setEditorText(draft)
+    assert.equal(
+      await host.submit(),
+      `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview without invoking /skill:plan or /skill:review.\n</skill>\n\n${draft}`,
+    )
+  },
+)
+
+test(
   "native extension and built-in commands receive their original arguments",
   { timeout: 15000 },
   async (t) => {
@@ -359,5 +518,125 @@ test(
     )
     assert.deepEqual(message?.content, [{ type: "text", text: draft }])
     assert.deepEqual(host.inputs, [{ text: draft, draft: "" }])
+  },
+)
+
+for (const route of ["normal", "steer", "followUp"] as const) {
+  for (const placement of ["before", "after"] as const) {
+    test(
+      `native ${route} preserves images and transforms ${placement} skill expansion`,
+      { timeout: 15000 },
+      async (t) => {
+        const deliveries: InputEvent[] = []
+        const host = await createHost(
+          t,
+          (pi) => {
+            pi.on("input", (event) => {
+              deliveries.push(event)
+              if (event.text === "First request") return
+              return {
+                action: "transform",
+                text: `${event.text}\nOther input transformation.`,
+                images: [...(event.images ?? []), image],
+              }
+            })
+          },
+          route !== "normal",
+          placement === "after"
+            ? { extensionsOverride: (result) => result }
+            : {},
+        )
+        const draft = "/skill:review Check /skill:review again."
+        const expanded = `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n${draft}`
+        const expected = `${expanded}\nOther input transformation.`
+        if (route !== "normal") {
+          host.ui.setEditorText("First request")
+          host.terminal.input("\r")
+          await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+        }
+
+        host.ui.setEditorText(draft)
+        if (route === "normal") {
+          assert.equal(await host.submit(), expected)
+        } else {
+          host.terminal.input(route === "steer" ? "\r" : "\x1b\r")
+          await t.waitFor(() =>
+            assert.deepEqual(
+              route === "steer"
+                ? host.session.getSteeringMessages()
+                : host.session.getFollowUpMessages(),
+              [expected],
+            ),
+          )
+          host.reply()
+          await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+          host.reply()
+          await host.session.waitForIdle()
+        }
+
+        assert.equal(
+          deliveries.at(-1)?.text,
+          placement === "before" ? draft : expanded,
+        )
+        assert.equal(deliveries.at(-1)?.source, "interactive")
+        assert.equal(
+          deliveries.at(-1)?.streamingBehavior,
+          route === "normal" ? undefined : route,
+        )
+        const message = host.session.messages.findLast(
+          (item) => item.role === "user",
+        )
+        assert.deepEqual(message?.content, [
+          { type: "text", text: expected },
+          image,
+        ])
+        host.terminal.input("\x1b[A")
+        assert.equal(host.ui.getEditorText(), draft)
+      },
+    )
+  }
+}
+
+test(
+  "public session submissions retain input source, incoming images, and the active draft",
+  { timeout: 15000 },
+  async (t) => {
+    const deliveries: InputEvent[] = []
+    const host = await createHost(
+      t,
+      (pi) => {
+        pi.on("input", (event) => {
+          deliveries.push(event)
+        })
+      },
+      false,
+      { extensionsOverride: (result) => result },
+    )
+    const activeDraft = "Keep this unsent draft /skill:review."
+    const prompt = "/skill:review Apply /skill:review again."
+    const expected = `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n${prompt}`
+    host.ui.setEditorText(activeDraft)
+    for (const source of ["rpc", "extension"] as const) {
+      if (source === "rpc") {
+        await host.session.prompt(prompt, { source, images: [image] })
+      } else {
+        await host.session.sendUserMessage([
+          { type: "text", text: prompt },
+          image,
+        ])
+      }
+      await host.session.waitForIdle()
+      assert.equal(deliveries.at(-1)?.text, expected)
+      assert.equal(deliveries.at(-1)?.source, source)
+      assert.deepEqual(deliveries.at(-1)?.images, [image])
+      const message = host.session.messages.findLast(
+        (item) => item.role === "user",
+      )
+      assert.deepEqual(message?.content, [
+        { type: "text", text: expected },
+        image,
+      ])
+      assert.equal(host.ui.getEditorText(), activeDraft)
+    }
   },
 )
