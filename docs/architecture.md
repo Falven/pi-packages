@@ -37,6 +37,14 @@ Every package uses existing public Pi contracts and consumes the effective servi
 
 Pi supports one active replacement editor. Independently loaded packages must cooperate through public interfaces and cannot assume they share a dependency instance. Sources: [editor contract](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/editor-component.ts), [extension interfaces](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/core/extensions/types.ts), and [package dependencies](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/docs/packages.md).
 
+## Keyboard ownership
+
+The terminal handles its shortcuts before input reaches Pi. Pi owns terminal input decoding, protocol negotiation, and effective keybinding configuration; the active editor applies the resolved editing action to its draft. A replacement editor must implement those operations against its own state rather than delegate them to the inherited editor's separate document.
+
+Native input listeners, focused UI, application actions, and accepted extension shortcuts retain Pi's dispatch behavior. Effective native editing bindings take precedence over composer aliases, and an explicit Pi binding override suppresses aliases for that action, including when its binding list is empty. Composer actions without native action IDs have documented fixed shortcuts, and Pi configuration is not an automatic import of macOS text-field preferences.
+
+Terminal shortcut delivery requires separate verification from editor behavior. Any terminal integration must identify Pi's terminal, follow actual terminal ownership through handoffs, and remove only its own changes while preserving other integrations and behavior outside Pi. The [keyboard spec revision plan](composer-keyboard-spec-plan.md) records the required editing corrections, verified terminal limitations, and acceptance coverage.
+
 ## Integration requirements
 
 Pi exposes raw terminal listeners, text insertion/replacement, widgets, and input transformations. Its public editor contract does not expose an atomic operation combining selected text and attachment membership. Terminal listeners alone also do not cover clipboard and extension calls that enter the editor directly.
@@ -76,5 +84,8 @@ Shared decisions apply to every package:
 - [Preserve Pi extension contracts](adr/0001-preserve-pi-extension-contracts.md)
 - [One editor owns draft transactions](adr/0002-one-editor-owns-draft-transactions.md)
 - [Independent composition extensions](adr/0003-independent-composition-extensions.md)
+- [Scope terminal integration to Pi's terminal ownership](adr/0010-scope-terminal-integration-to-pi.md)
+
+The composer also follows [native editing action resolution](adr/0009-pi-composer-native-editing-actions.md).
 
 All ADRs use one sequence in [docs/adr/](adr/). Package-specific [specifications](specs/) link to their decisions, whose filenames identify the owning package. The [glossary](../GLOSSARY.md) defines the shared terminology.
