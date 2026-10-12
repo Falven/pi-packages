@@ -143,15 +143,32 @@ export class Projection {
 
   adjacent(position: number, direction: -1 | 1): number {
     if (direction < 0) {
-      return (
+      return this.boundary(
         this.cells.findLast((cell) => cell.from < position)?.from ??
-        Math.min(position, this.documentBoundary(-1))
+          Math.min(position, this.documentBoundary(-1)),
       )
     }
-    return (
+    return this.boundary(
       this.cells.find((cell) => cell.to > position)?.to ??
-      Math.max(position, this.documentBoundary(1))
+        Math.max(position, this.documentBoundary(1)),
     )
+  }
+
+  private boundary(position: number): number {
+    if (!this.marks.length) return position
+    const previous = this.cells.findLast((cell) => cell.to <= position)
+    const next = this.cells.find((cell) => cell.from >= position)
+    if (!previous || !next || previous.to === next.from) return position
+    // Pick one side of hidden delimiters for every movement direction.
+    const closesMark =
+      previous.text !== "\n" &&
+      this.marks.some(
+        (mark) =>
+          mark.contentTo >= previous.to &&
+          mark.to <= next.from &&
+          mark.contentTo < mark.to,
+      )
+    return closesMark ? previous.to : next.from
   }
 
   documentBoundary(direction: -1 | 1): number {
@@ -203,7 +220,7 @@ export class Projection {
     for (const cell of this.cells) {
       const end = offset + cell.text.length
       if (direction < 0 ? target < end : target <= end) {
-        return target <= offset ? cell.from : cell.to
+        return this.boundary(target <= offset ? cell.from : cell.to)
       }
       offset = end
     }
@@ -291,10 +308,14 @@ export class Projection {
         current.cells
           .filter((cell) => cell.to <= position)
           .reduce((sum, cell) => sum + cell.width, 0)
-    const targetIndex = Math.max(
-      0,
-      Math.min(this.rows.length - 1, currentIndex + direction),
-    )
+    return {
+      position: this.positionAt(currentIndex + direction, column),
+      column,
+    }
+  }
+
+  positionAt(row: number, column: number): number {
+    const targetIndex = Math.max(0, Math.min(this.rows.length - 1, row))
     const target = this.rows[targetIndex]!
     let next = target.cells[0]?.from ?? target.from
     let cells = target.prefix.reduce((sum, cell) => sum + cell.width, 0)
@@ -307,7 +328,7 @@ export class Projection {
       next = cell.to
       cells += cell.width
     }
-    return { position: next, column }
+    return this.boundary(next)
   }
 
   renderRow(

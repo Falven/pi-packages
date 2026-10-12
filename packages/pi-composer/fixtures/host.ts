@@ -26,12 +26,20 @@ class RecordingTerminal {
   kittyProtocolActive = true
   output = ""
   input: ((data: string) => void) | undefined
+  onResize: (() => void) | undefined
 
-  start(onInput: (data: string) => void) {
+  start(onInput: (data: string) => void, onResize: () => void) {
     this.input = onInput
+    this.onResize = onResize
   }
   stop() {
     this.input = undefined
+    this.onResize = undefined
+  }
+  resize(columns: number, rows: number) {
+    this.columns = columns
+    this.rows = rows
+    this.onResize?.()
   }
   async drainInput() {}
   write(data: string) {
