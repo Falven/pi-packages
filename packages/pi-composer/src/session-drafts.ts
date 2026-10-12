@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
 import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import { Clipboard } from "./clipboard.ts"
 import { SourceEditor, type DraftHistory } from "./source-editor.ts"
 import {
   checkpointType,
@@ -20,6 +21,7 @@ const histories = (processState[historiesKey] ??= new Map())
 export function sessionDrafts(pi: ExtensionAPI): void {
   const directory = join(getAgentDir(), "pi-composer", "drafts")
   let editor: SourceEditor | undefined
+  let clipboard: Clipboard | undefined
   let historyKey: string | undefined
   let active = false
   let revision = 0
@@ -28,6 +30,9 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   const recoveryAbort = new AbortController()
   pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return
+    clipboard?.deactivate()
+    const currentClipboard = new Clipboard(ctx)
+    clipboard = currentClipboard
     const sessionId = ctx.sessionManager.getSessionId()
     const sessionFile = ctx.sessionManager.getSessionFile()
     const cwd = ctx.cwd
@@ -133,7 +138,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     }
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const previous = editor?.getDraftHistory()
-      const next = new SourceEditor(tui, theme, keybindings)
+      const next = new SourceEditor(tui, theme, keybindings, currentClipboard)
       if (previous) next.restoreDraft(previous.draft.text, previous)
       editor = next
       next.onDraftChange = (draft) => {
@@ -159,6 +164,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     cancel: (await flush?.()) === false,
   }))
   pi.on("session_shutdown", async () => {
+    clipboard?.deactivate()
     await flush?.()
     active = false
     recoveryAbort.abort()
