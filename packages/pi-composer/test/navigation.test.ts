@@ -13,18 +13,8 @@ for (const sourceView of [false, true]) {
     if (sourceView) await host.key("\x1b[109;10u")
     const original = "**first**\n**abcdefghijklmno**\n**last**"
     for (const [input, expected] of [
-      [
-        "\x1b[1;9A",
-        sourceView
-          ? "X**first**\n**abcdefghijklmno**\n**last**"
-          : "**Xfirst**\n**abcdefghijklmno**\n**last**",
-      ],
-      [
-        "\x1b[1;9B",
-        sourceView
-          ? "**first**\n**abcdefghijklmno**\n**last**X"
-          : "**first**\n**abcdefghijklmno**\n**lastX**",
-      ],
+      ["\x1b[1;9A", "X**first**\n**abcdefghijklmno**\n**last**"],
+      ["\x1b[1;9B", "**first**\n**abcdefghijklmno**\n**last**X"],
     ] as const) {
       host.ui.setEditorText(original)
       await host.output()
@@ -51,13 +41,7 @@ for (const sourceView of [false, true]) {
       await host.key("\x1b[A")
       await host.key(input)
       await host.type("X")
-      const line = end
-        ? sourceView
-          ? "**abcdefghijklmno**X"
-          : "**abcdefghijklmnoX**"
-        : sourceView
-          ? "X**abcdefghijklmno**"
-          : "**Xabcdefghijklmno**"
+      const line = end ? "**abcdefghijklmno**X" : "X**abcdefghijklmno**"
       assert.equal(host.ui.getEditorText(), `first\n${line}\nlast`, name)
     }
   })

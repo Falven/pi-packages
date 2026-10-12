@@ -166,13 +166,12 @@ for (const view of ["formatted", "source"]) {
     const source = "Keep `foo.bar\t👩‍💻 cafe\u0301`"
     host.ui.setEditorText(source)
     await host.key("\x05")
-    if (view === "source") await host.key("\x1b[D")
     await host.key("\x17")
-    assert.equal(host.ui.getEditorText(), "Keep `foo.bar\t👩‍💻 `")
+    assert.equal(host.ui.getEditorText(), "Keep `foo.bar\t👩‍💻 cafe\u0301")
     await host.key("\x17")
-    assert.equal(host.ui.getEditorText(), "Keep `foo.bar\t`")
+    assert.equal(host.ui.getEditorText(), "Keep `foo.bar\t👩‍💻 ")
     await host.key("\x17")
-    assert.equal(host.ui.getEditorText(), "Keep `foo.`")
+    assert.equal(host.ui.getEditorText(), "Keep `foo.bar\t")
     await host.key("\x1b[122;9u")
     await host.key("\x1b[122;9u")
     await host.key("\x1b[122;9u")
@@ -187,7 +186,7 @@ test("every native word and line deletion consumes the formatted selection befor
       before: "red **blue** green",
       from: 4,
       length: 4,
-      after: "red  green",
+      after: "red **** green",
       replacement: "red **X** green",
     },
     {
@@ -201,7 +200,7 @@ test("every native word and line deletion consumes the formatted selection befor
       before: "**blue** and _green_",
       from: 0,
       length: 12,
-      after: "_en_",
+      after: "en_",
       replacement: "X_en_",
     },
   ]) {

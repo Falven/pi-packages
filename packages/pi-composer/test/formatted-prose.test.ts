@@ -87,7 +87,7 @@ test("formatted vertical selection follows terminal cells across wide text and w
   assert.equal(host.ui.getEditorText(), "**abcd界X!**\nklmnop")
 })
 
-test("word and line movement edit link labels and heading text", async (t) => {
+test("word movement edits link labels and line movement reaches the heading source boundaries", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("# Title #\nOne **two** [three](https://pi.dev)")
   await host.key("\x1b[1;4D")
@@ -106,7 +106,7 @@ test("word and line movement edit link labels and heading text", async (t) => {
   await host.type("!")
   assert.equal(
     host.ui.getEditorText(),
-    "# New Title! #\nNext One **two** [four](https://pi.dev)",
+    "New # Title #!\nNext One **two** [four](https://pi.dev)",
   )
 })
 
@@ -147,7 +147,7 @@ test("a selection inside source syntax remains exact after switching to formatte
   assert.equal(host.ui.getEditorText(), "*Yord**")
 })
 
-test("formatted deletion and replacement keep whole graphemes across hidden delimiters", async (t) => {
+test("formatted deletion preserves source graphemes and replacement preserves displayed graphemes", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("A **e**\u0301👩‍💻界B")
   await host.key("\x1b[D")
@@ -156,7 +156,7 @@ test("formatted deletion and replacement keep whole graphemes across hidden deli
   await host.key("\x7f")
   assert.equal(host.ui.getEditorText(), "A **e**\u0301B")
   await host.key("\x7f")
-  assert.equal(host.ui.getEditorText(), "A B")
+  assert.equal(host.ui.getEditorText(), "A **e*B")
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "A **e**\u0301👩‍💻界B")
 
@@ -230,7 +230,7 @@ test("native insertion into formatted prose preserves code, references, and sour
   assert.equal(host.ui.getEditorText(), `***edit***${rest}`)
 })
 
-test("formatted movement clamps to visible document bounds without selecting hidden markers", async (t) => {
+test("formatted movement clamps to source document bounds", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("**text**")
   await host.key("\x1b[3~")
@@ -242,11 +242,11 @@ test("formatted movement clamps to visible document bounds without selecting hid
   await host.key("\x1b[1;9A")
   await host.key("\x1b[1;2D")
   await host.type("X")
-  assert.equal(host.ui.getEditorText(), "**Xtext**")
+  assert.equal(host.ui.getEditorText(), "X**text**")
   await host.key("\x1b[1;9B")
   await host.key("\x1b[1;2C")
   await host.type("Y")
-  assert.equal(host.ui.getEditorText(), "**XtextY**")
+  assert.equal(host.ui.getEditorText(), "X**text**Y")
 })
 
 test("a narrow formatted draft fits terminal cells without rewriting tabs or wide text", async (t) => {

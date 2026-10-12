@@ -218,7 +218,7 @@ test("configured deletion and yank preserve a mixed draft through view changes a
   for (let index = 0; index < 4; index++) host.input("\x1b[C")
   for (let index = 0; index < 4; index++) host.input("\x1b[1;2C")
   host.input("\x1b[97;9u")
-  const deleted = draft.replace("red **blue** green", "red  green")
+  const deleted = draft.replace("red **blue** green", "red **** green")
   assert.equal(host.ui.getEditorText(), deleted)
   host.input(undo)
   assert.equal(host.ui.getEditorText(), deleted)

@@ -315,7 +315,7 @@ export class SourceEditor extends CustomEditor {
     let nextText = current.slice(0, from) + text + current.slice(to)
     let position = from + text.length
     let removed = from === to ? [] : [{ from, to }]
-    if ((source?.formatted ?? this.formatted) && from !== to) {
+    if (text && (source?.formatted ?? this.formatted) && from !== to) {
       const projection = source
         ? new Projection(current, this.sourceWidth, source.formatted)
         : this.project()
@@ -352,7 +352,7 @@ export class SourceEditor extends CustomEditor {
       }
       return position
     }
-    // Delimiters removed later can surround text retained by an earlier deletion.
+    // Keep retained source in order when consecutive deletions change direction.
     const ranges = [
       ...source.removed,
       ...removed.map((range) => ({
@@ -478,7 +478,10 @@ export class SourceEditor extends CustomEditor {
     const projection = this.project()
     const row = projection.rowAt(this.draft.head) + direction
     if (row < 0 || row >= projection.rows.length) {
-      this.moveTo(projection.lineBoundary(this.draft.head, direction), select)
+      this.moveTo(
+        this.project(false).lineBoundary(this.draft.head, direction),
+        select,
+      )
       return
     }
     const target = projection.vertical(
@@ -628,8 +631,10 @@ export class SourceEditor extends CustomEditor {
       const direction = lineEnd ? 1 : -1
       let end = anchor
       if (anchor === head) {
-        end = this.project().lineBoundary(head, direction)
-        if (lineEnd ? end <= head : end >= head) end = this.adjacent(direction)
+        const source = this.project(false)
+        end = source.lineBoundary(head, direction)
+        if (lineEnd ? end <= head : end >= head)
+          end = source.adjacent(head, direction)
       }
       this.retainDeletion(Math.min(head, end), Math.max(head, end))
       return
@@ -638,14 +643,19 @@ export class SourceEditor extends CustomEditor {
     if (wordBackward || keys.matches(data, "tui.editor.deleteWordForward")) {
       const { anchor, head } = this.draft
       const end =
-        anchor === head ? this.wordBoundary(wordBackward ? -1 : 1) : anchor
+        anchor === head
+          ? this.project(false).wordBoundary(head, wordBackward ? -1 : 1)
+          : anchor
       this.retainDeletion(Math.min(head, end), Math.max(head, end))
       return
     }
     const backward = keys.matches(data, "tui.editor.deleteCharBackward")
     if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
       const { anchor, head } = this.draft
-      const end = anchor === head ? this.adjacent(backward ? -1 : 1) : anchor
+      const end =
+        anchor === head
+          ? this.project(false).adjacent(head, backward ? -1 : 1)
+          : anchor
       this.replaceRange(
         Math.min(head, end),
         Math.max(head, end),
@@ -676,7 +686,7 @@ export class SourceEditor extends CustomEditor {
         "super+shift+left",
       )
     ) {
-      this.moveTo(this.project().lineBoundary(this.draft.head, -1), select)
+      this.moveTo(this.project(false).lineBoundary(this.draft.head, -1), select)
       return
     }
     if (
@@ -687,7 +697,7 @@ export class SourceEditor extends CustomEditor {
         "super+shift+right",
       )
     ) {
-      this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)
+      this.moveTo(this.project(false).lineBoundary(this.draft.head, 1), select)
       return
     }
     if (movementMatches("tui.editor.cursorWordLeft")) {
@@ -741,8 +751,7 @@ export class SourceEditor extends CustomEditor {
       if (
         !select &&
         projection.rowAt(this.draft.head) === 0 &&
-        (this.promptIndex >= 0 ||
-          this.draft.head <= projection.documentBoundary(-1))
+        (this.promptIndex >= 0 || this.draft.head === 0)
       ) {
         this.browsePrompt(-1)
         return
@@ -795,11 +804,11 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (fallbackMatches("super+up", "super+shift+up")) {
-      this.moveTo(this.project().documentBoundary(-1), select)
+      this.moveTo(0, select)
       return
     }
     if (fallbackMatches("super+down", "super+shift+down")) {
-      this.moveTo(this.project().documentBoundary(1), select)
+      this.moveTo(this.getText().length, select)
       return
     }
     const printable = decodeKittyPrintable(data) ?? data
@@ -814,18 +823,18 @@ export class SourceEditor extends CustomEditor {
     }
   }
 
-  private project(): Projection {
+  private project(formatted = this.formatted): Projection {
     const text = this.getText()
     if (
       this.projection?.text !== text ||
       this.projection.width !== this.sourceWidth ||
-      this.projection.formatted !== this.formatted
+      this.projection.formatted !== formatted
     ) {
       this.projection = {
         text,
         width: this.sourceWidth,
-        formatted: this.formatted,
-        value: new Projection(text, this.sourceWidth, this.formatted),
+        formatted,
+        value: new Projection(text, this.sourceWidth, formatted),
       }
     }
     return this.projection.value

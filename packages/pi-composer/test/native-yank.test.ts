@@ -27,7 +27,9 @@ test("successive formatted deletions retain delimiters in their original source 
   await host.key("\x1b[1;2D")
   await host.key("\x1b[1;2D")
   await host.key("\x17")
-  assert.equal(host.ui.getEditorText(), "**a**")
+  assert.equal(host.ui.getEditorText(), "**a")
+  await host.key("\x17")
+  assert.equal(host.ui.getEditorText(), "**")
   await host.key("\x17")
   assert.equal(host.ui.getEditorText(), "")
   await host.key("\x19")
@@ -35,7 +37,9 @@ test("successive formatted deletions retain delimiters in their original source 
   await host.key(undo)
   assert.equal(host.ui.getEditorText(), "")
   await host.key(undo)
-  assert.equal(host.ui.getEditorText(), "**a**")
+  assert.equal(host.ui.getEditorText(), "**")
+  await host.key(undo)
+  assert.equal(host.ui.getEditorText(), "**a")
 })
 
 test("forward formatted deletions retain repeated text inside its original delimiters", async (t) => {
@@ -45,7 +49,9 @@ test("forward formatted deletions retain repeated text inside its original delim
   await host.key("\x1b[1;2C")
   await host.key("\x1b[1;2C")
   await host.key("\x1bd")
-  assert.equal(host.ui.getEditorText(), "**a**")
+  assert.equal(host.ui.getEditorText(), "a**")
+  await host.key("\x1bd")
+  assert.equal(host.ui.getEditorText(), "**")
   await host.key("\x1bd")
   assert.equal(host.ui.getEditorText(), "")
   await host.key("\x19")
@@ -57,7 +63,7 @@ for (const direction of ["backward", "forward"]) {
     const host = await openHost(t)
     host.ui.setEditorText("**a-a-a**")
     await host.key(direction === "backward" ? "\x05" : "\x01")
-    for (let index = 0; index < 5; index++) {
+    for (let index = 0; index < 7; index++) {
       await host.key(direction === "backward" ? "\x17" : "\x1bd")
     }
     assert.equal(host.ui.getEditorText(), "")
@@ -99,15 +105,15 @@ test("an extension rewrite after deletion ends retained-source accumulation", as
   assert.equal(host.ui.getEditorText(), "Prefix one ")
 })
 
-test("formatted deletion retains removed Markdown without surviving delimiters", async (t) => {
+test("formatted deletion retains exactly the selected source including selected delimiters", async (t) => {
   const host = await openHost(t)
   for (const { before, from, length, after, retained, replacement } of [
     {
       before: "red **blue** green",
       from: 4,
       length: 4,
-      after: "red  green",
-      retained: "**blue**",
+      after: "red **** green",
+      retained: "blue",
       replacement: "red **X** green",
     },
     {
@@ -122,8 +128,8 @@ test("formatted deletion retains removed Markdown without surviving delimiters",
       before: "**blue** and _green_",
       from: 0,
       length: 12,
-      after: "_en_",
-      retained: "**blue** and gre",
+      after: "en_",
+      retained: "**blue** and _gre",
       replacement: "X_en_",
     },
   ]) {
@@ -245,7 +251,7 @@ for (const view of ["formatted", "source"]) {
   })
 }
 
-test("partial formatted deletions yank into their surviving and a different formatting context", async (t) => {
+test("partial formatted deletions yank exact source into their original and another draft", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("**blue**")
   await host.key("\x15")
@@ -254,24 +260,24 @@ test("partial formatted deletions yank into their surviving and a different form
   await host.key("\x1b[1;2D")
   await host.key("\x1b[1;2D")
   await host.key("\x17")
-  assert.equal(host.ui.getEditorText(), "**alp**")
+  assert.equal(host.ui.getEditorText(), "**alp")
   await host.key("\x19")
   assert.equal(host.ui.getEditorText(), "**alpha**")
   await host.key(undo)
-  assert.equal(host.ui.getEditorText(), "**alp**")
+  assert.equal(host.ui.getEditorText(), "**alp")
   host.ui.setEditorText("_keep_")
   await host.key("\x05")
   await host.key("\x19")
-  assert.equal(host.ui.getEditorText(), "_keepha_")
+  assert.equal(host.ui.getEditorText(), "_keep_ha**")
   await host.key(toggleView)
   await host.key("\x1by")
-  assert.equal(host.ui.getEditorText(), "_keep**blue**_")
+  assert.equal(host.ui.getEditorText(), "_keep_**blue**")
   await host.key("\x1by")
-  assert.equal(host.ui.getEditorText(), "_keepha_")
+  assert.equal(host.ui.getEditorText(), "_keep_ha**")
   await host.key(undo)
-  assert.equal(host.ui.getEditorText(), "_keep**blue**_")
+  assert.equal(host.ui.getEditorText(), "_keep_**blue**")
   await host.key(undo)
-  assert.equal(host.ui.getEditorText(), "_keepha_")
+  assert.equal(host.ui.getEditorText(), "_keep_ha**")
   await host.key(undo)
   assert.equal(host.ui.getEditorText(), "_keep_")
 })

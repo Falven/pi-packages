@@ -109,7 +109,7 @@ for (const sourceView of [false, true]) {
     await host.key("\x1d")
     await host.key("*")
     await host.type("X")
-    assert.equal(host.ui.getEditorText(), sourceView ? "*X*a** z" : "**Xa** z")
+    assert.equal(host.ui.getEditorText(), sourceView ? "*X*a** z" : "X**a** z")
   })
 }
 
