@@ -7,6 +7,9 @@ const options: {
   sessionFile: string
   text: string
   recover?: boolean
+  clearedText?: string
+  clearedIndex?: number
+  extensionPaths?: string[]
 } = JSON.parse(process.argv[2]!)
 
 test("a fresh Pi process restores the saved draft", async (t) => {
@@ -34,4 +37,19 @@ test("a fresh Pi process restores the saved draft", async (t) => {
     await host.key("\x1b[122;10u")
   }
   assert.equal(host.ui.getEditorText(), options.text)
+  if (options.clearedText) {
+    const recovery = host.session.sendUserMessage("/composer-recover", {
+      expandPromptTemplates: true,
+    })
+    assert((await host.output()).includes("Recover draft"))
+    for (let index = 0; index < (options.clearedIndex ?? 1); index++) {
+      // oxlint-disable-next-line no-await-in-loop -- Navigate the native picker in order.
+      await host.key("\x1b[B")
+    }
+    await host.key("\r")
+    await recovery
+    assert.equal(host.ui.getEditorText(), options.clearedText)
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), options.text)
+  }
 })

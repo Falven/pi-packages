@@ -4,11 +4,13 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts; 02: pi-attachments: attach text and file snapshots.
 
-**Status:** in-progress
+**Status:** implemented; recovery and final acceptance pending
 
-- [ ] Normal, steer, and follow-up paths associate each submitted draft with its own text and attachments through native host delivery.
-- [ ] Preserve command dispatch, input transformations, input source, and existing native image content.
+- [x] Normal, steer, and follow-up paths associate each submitted draft with its own text and attachments through native host delivery.
+- [x] Preserve command dispatch, input transformations, input source, and existing native image content.
 - [ ] Exercise failures before and after a host editor clear; the original draft and retained attachment contents remain recoverable without overwriting later work.
-- [ ] Do not treat the text-only submission callback, a void send return, or a cleared editor as delivery acknowledgement.
-- [ ] Exercise queued input and session changes during pending work through actual public lifecycle events with controlled model responses.
-- [ ] Document any public-contract failure precisely and leave its acceptance criteria unmet; do not add a new acknowledgement protocol.
+- [x] Do not treat the text-only submission callback, a void send return, or a cleared editor as delivery acknowledgement.
+- [x] Exercise queued input and session changes during pending work through actual public lifecycle events with controlled model responses.
+- [x] Document any public-contract failure precisely and leave its acceptance criteria unmet; do not add a new acknowledgement protocol.
+
+Integration evidence: `2fb6c7b`; all 270 combined tests, formatting, lint, and root/composer typechecks pass. Native normal/steer/follow-up, queues, clears, replay, session/restart recovery and image snapshots are covered. Ticket20 must close the separate clipboard/image double-persistence failure gaps. Real terminal acceptance remains pending.
