@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { realpathSync } from "node:fs"
 import fs, {
   mkdir,
   mkdtemp,
@@ -61,6 +62,12 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
     const chunks = []
     for await (const chunk of request) chunks.push(chunk)
     requests.push(JSON.parse(Buffer.concat(chunks).toString()))
+    const reply = await replies.shift()
+    if (reply instanceof Error) {
+      response.writeHead(500, { "content-type": "application/json" })
+      response.end(JSON.stringify({ error: { message: reply.message } }))
+      return
+    }
     response.writeHead(200, { "content-type": "text/event-stream" })
     response.end(
       `data: ${JSON.stringify({
@@ -69,7 +76,7 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
         created: 1,
         model: "snapshot-model",
         choices: [
-          replies.shift() ?? {
+          reply ?? {
             index: 0,
             delta: { role: "assistant", content: "Received." },
             finish_reason: "stop",
@@ -89,7 +96,12 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
           api: "openai-completions",
           apiKey: "local-test-only",
           models: [
-            { id: "snapshot-model", contextWindow: 100000, maxTokens: 100 },
+            {
+              id: "snapshot-model",
+              input: ["text", "image"],
+              contextWindow: 100000,
+              maxTokens: 100,
+            },
           ],
         },
       },
@@ -98,7 +110,15 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
 
   let ui
   let tui
+  const inputs = []
+  const users = []
   const observer = (pi) => {
+    pi.on("input", (event) => {
+      inputs.push(event)
+    })
+    pi.on("message_end", (event) => {
+      if (event.message.role === "user") users.push(event.message)
+    })
     pi.on("session_start", (_event, ctx) => {
       ui = ctx.ui
       ctx.ui.setWidget("test-other-widget", (nativeTui) => {
@@ -133,7 +153,7 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
           ...extensionPaths,
           fileURLToPath(new URL("../src/index.ts", import.meta.url)),
         ],
-        extensionFactories: [observer],
+        extensionFactories: [observer, ...(state.extensionFactories ?? [])],
       },
     })
     assert.deepEqual(services.resourceLoader.getExtensions().errors, [])
@@ -200,8 +220,13 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
     close,
     requests,
     replies,
+    inputs,
+    users,
     get ui() {
       return ui
+    },
+    get output() {
+      return output
     },
     input: (data) => input(data),
     submit(text) {
@@ -228,11 +253,12 @@ export function snapshotPath(text) {
 
 export function holdFileRead(t, source) {
   const read = fs.readFile
+  const canonicalSource = realpathSync(source)
   const gate = Promise.withResolvers()
   let started = false
   const mocked = t.mock.method(fs, "readFile", async (...args) => {
     const contents = await read(...args)
-    if (args[0] === source) {
+    if (args[0] === source || args[0] === canonicalSource) {
       started = true
       await gate.promise
     }
@@ -251,7 +277,7 @@ export function holdFileRead(t, source) {
   }
 }
 
-export async function retainedRequest(host) {
+export async function retainedRequest(host, contains = "") {
   const entries = await readdir(host.agentDir, {
     recursive: true,
     withFileTypes: true,
@@ -264,8 +290,9 @@ export async function retainedRequest(host) {
         return { path, text: await readFile(path, "utf8") }
       }),
   )
-  const request = files.find(({ text }) =>
-    text.startsWith("# Attachment request\n"),
+  const request = files.find(
+    ({ text }) =>
+      text.startsWith("# Attachment request\n") && text.includes(contains),
   )
   assert.ok(request, "No readable attachment request was retained")
   return request
