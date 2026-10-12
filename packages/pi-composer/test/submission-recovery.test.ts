@@ -1,7 +1,9 @@
 import assert from "node:assert/strict"
-import { readFile, rm, writeFile } from "node:fs/promises"
+import { execFile } from "node:child_process"
+import { access, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { test } from "node:test"
+import { promisify } from "node:util"
 import { openHost } from "../fixtures/host.ts"
 
 const attachments = new URL(
@@ -113,11 +115,9 @@ for (const mode of ["normal", "steer", "followUp"] as const) {
     const recovering = host.session.sendUserMessage("/composer-recover", {
       expandPromptTemplates: true,
     })
-    await t.waitFor(async () =>
-      assert(
-        (await host.output()).includes("Recover draft"),
-        "Recovery must offer the cleared draft",
-      ),
+    assert(
+      (await host.output()).includes("Recover draft"),
+      "Recovery must offer the cleared draft",
     )
     assert.equal(host.ui.getEditorText(), "Later draft stays available")
     await host.key("\r")
@@ -131,3 +131,54 @@ for (const mode of ["normal", "steer", "followUp"] as const) {
     )
   })
 }
+
+test("a first preflight failure keeps the original and later draft recoverable after restart", async (t) => {
+  const host = await openHost(t, {
+    persistSession: true,
+    noAuth: true,
+    extensionPaths: [attachments],
+  })
+  const sessionFile = host.session.sessionFile!
+  const source = join(host.directory, "preflight.txt")
+  await writeFile(source, "Snapshot survives a preflight failure.\n")
+  host.ui.setEditorText("  First preflight draft\t\n")
+  await host.session.sendUserMessage(`/attach-file ${source}`, {
+    expandPromptTemplates: true,
+  })
+  const original = host.ui.getEditorText()
+  const snapshot = /\[Attachment: preflight.txt\]\(<([^>]+)>\)/.exec(
+    original,
+  )?.[1]
+  assert(snapshot)
+  await rm(source)
+  await host.key("\r")
+  assert.equal(host.ui.getEditorText(), "")
+  assert((await host.output()).includes("No API key"))
+  assert.equal(host.requests.length, 0)
+  host.ui.setEditorText("Later unsent draft")
+  await host.close()
+  await assert.rejects(access(sessionFile), { code: "ENOENT" })
+
+  const environment = { ...process.env }
+  delete environment["NODE_TEST_CONTEXT"]
+  await promisify(execFile)(
+    process.execPath,
+    [
+      new URL("../fixtures/restart-session.ts", import.meta.url).pathname,
+      JSON.stringify({
+        directory: host.directory,
+        sessionFile,
+        text: "Later unsent draft",
+        recover: true,
+        clearedText: original,
+        extensionPaths: [attachments],
+      }),
+    ],
+    { env: environment },
+  )
+  assert.equal(
+    await readFile(snapshot, "utf8"),
+    "Snapshot survives a preflight failure.\n",
+  )
+  await assert.rejects(access(sessionFile), { code: "ENOENT" })
+})

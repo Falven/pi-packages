@@ -54,6 +54,7 @@ type HostOptions = {
   extensionPaths?: string[]
   holdResponses?: boolean
   responseStatus?: number
+  noAuth?: boolean
   persistSession?: boolean
   directory?: string
   cwd?: string
@@ -176,7 +177,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,
                 api: "openai-completions",
-                apiKey: "test-only",
+                ...(options.noAuth ? {} : { apiKey: "test-only" }),
                 models: [
                   {
                     id: "draft-test",

@@ -23,6 +23,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   let historyKey: string | undefined
   let active = false
   let revision = 0
+  let clearedDrafts: string[] = []
   let flush: (() => Promise<boolean>) | undefined
   const recoveryAbort = new AbortController()
   pi.on("session_start", (_event, ctx) => {
@@ -55,7 +56,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         recovery.drafts.some(
           (draft) =>
             draft.sessionId !== sessionId &&
-            draft.text &&
+            (draft.text || draft.clearedDrafts?.length) &&
             !existsSync(draft.sessionFile),
         )
       ) {
@@ -66,6 +67,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     }
     const history = histories.get(historyKey)
     const text = checkpoint?.text ?? history?.draft.text ?? ""
+    clearedDrafts = checkpoint?.clearedDrafts ?? []
     revision = checkpoint?.revision ?? 0
     let latest: DraftCheckpoint | undefined
     let savedRevision = revision
@@ -121,6 +123,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         cwd,
         revision,
         text: draft,
+        clearedDrafts: [...clearedDrafts],
       }
       clearTimeout(timer)
       timer = setTimeout(() => {
@@ -135,6 +138,10 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       editor = next
       next.onDraftChange = (draft) => {
         if (editor === next) changed(draft)
+      }
+      next.onDraftClear = (draft) => {
+        // shortcut: Pi cannot acknowledge each submission; keep cleared drafts for explicit recovery.
+        if (active && editor === next) clearedDrafts.push(draft)
       }
       return next
     })
@@ -158,27 +165,42 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     if (!editor || !historyKey) return
     histories.set(historyKey, editor.getDraftHistory())
     editor.onDraftChange = undefined
+    editor.onDraftClear = undefined
   })
 
   pi.registerCommand("composer-recover", {
-    description: "Recover a saved draft from an unsaved session",
+    description: "Recover a cleared draft or a draft from an unsaved session",
     handler: async (_args, ctx) => {
       if (!active || !editor) return
       const requestedRevision = revision
       const recovery = readDrafts(directory)
       for (const error of recovery.errors) ctx.ui.notify(error, "error")
-      const drafts = recovery.drafts.filter(
-        (draft) =>
-          draft.text &&
-          draft.sessionId !== ctx.sessionManager.getSessionId() &&
-          !existsSync(draft.sessionFile),
-      )
+      const sessionId = ctx.sessionManager.getSessionId()
+      const drafts = [
+        ...clearedDrafts.toReversed().map((text) => ({ sessionId, text })),
+        ...recovery.drafts
+          .filter(
+            (draft) =>
+              draft.sessionId !== sessionId && !existsSync(draft.sessionFile),
+          )
+          .flatMap((draft) => [
+            ...(draft.text
+              ? [{ sessionId: draft.sessionId, text: draft.text }]
+              : []),
+            ...(draft.clearedDrafts ?? [])
+              .toReversed()
+              .map((text) => ({ sessionId: draft.sessionId, text })),
+          ]),
+      ]
       if (!drafts.length) {
-        ctx.ui.notify("No drafts from unsaved sessions are available.")
+        ctx.ui.notify(
+          "No cleared drafts or drafts from unsaved sessions are available.",
+        )
         return
       }
       const labels = drafts.map(
-        (draft) => `${draft.sessionId}: ${draft.text.split("\n")[0]}`,
+        (draft, index) =>
+          `${index + 1}. ${draft.sessionId}: ${draft.text.split("\n")[0]}`,
       )
       const selected = await ctx.ui.select("Recover draft", labels, {
         signal: recoveryAbort.signal,

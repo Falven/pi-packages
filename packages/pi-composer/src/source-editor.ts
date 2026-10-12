@@ -25,6 +25,7 @@ type EditKind = "typing" | "backspace" | "delete"
 
 export class SourceEditor extends CustomEditor {
   onDraftChange: ((text: string) => void) | undefined
+  onDraftClear: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
@@ -131,6 +132,7 @@ export class SourceEditor extends CustomEditor {
   override setText(text: string): void {
     text = text.replace(/\r\n?/g, "\n")
     if (text === this.getText()) return
+    if (!text) this.onDraftClear?.(this.getText())
     this.commit({ text, anchor: text.length, head: text.length })
   }
 
