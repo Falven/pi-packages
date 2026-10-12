@@ -1,5 +1,6 @@
 import { Marked, type Token } from "@earendil-works/pi-tui"
-import { projectCode, projectNestedCode } from "./code.ts"
+import { projectCode } from "./code.ts"
+import { projectStructure } from "./structures.ts"
 
 const parser = new Marked()
 
@@ -12,12 +13,17 @@ export type ProseStyle =
   | "underline"
   | "code"
   | "codeBlockBorder"
+  | "quote"
+  | "quoteBorder"
+  | "listBullet"
+  | "hr"
 
 export type ProseSpan = {
   from: number
   to: number
   styles: ProseStyle[]
-  highlight?: string
+  code?: { language: string | undefined }
+  text?: string
 }
 
 export type ProseMark = {
@@ -27,10 +33,15 @@ export type ProseMark = {
   contentTo: number
 }
 
-export function projectProse(source: string): {
+export type Prose = {
   spans: ProseSpan[]
   marks: ProseMark[]
-} {
+}
+
+export function projectProse(
+  source: string,
+  parsed: Token[] = parser.lexer(source),
+): Prose {
   const spans: ProseSpan[] = []
   const marks: ProseMark[] = []
   const append = (from: number, to: number, styles: ProseStyle[]) => {
@@ -47,11 +58,33 @@ export function projectProse(source: string): {
         offset = end
         continue
       }
+      const structure = projectStructure(token, projectProse)
+      if (structure) {
+        spans.push(
+          ...structure.spans.map((span) => ({
+            ...span,
+            from: offset + span.from,
+            to: offset + span.to,
+            styles: [...styles, ...span.styles],
+          })),
+        )
+        marks.push(
+          ...structure.marks.map((mark) => ({
+            from: offset + mark.from,
+            to: offset + mark.to,
+            contentFrom: offset + mark.contentFrom,
+            contentTo: offset + mark.contentTo,
+          })),
+        )
+        offset = end
+        continue
+      }
       let contentStart = 0
       let added: ProseStyle[] = []
       let children: Token[] = "tokens" in token ? (token.tokens ?? []) : []
       switch (token.type) {
         case "paragraph":
+        case "text":
           break
         case "heading":
           contentStart =
@@ -91,15 +124,10 @@ export function projectProse(source: string): {
           }
           break
         }
-        default: {
-          const nested = projectNestedCode(token, offset, styles)
-          if (nested) {
-            spans.push(...nested.spans)
-            marks.push(...nested.marks)
-          } else append(offset, end, styles)
+        default:
+          append(offset, end, styles)
           offset = end
           continue
-        }
       }
       const content = children.map((child) => child.raw).join("")
       const start = content ? token.raw.indexOf(content, contentStart) : -1
@@ -122,7 +150,15 @@ export function projectProse(source: string): {
     }
     return offset
   }
-  const end = visit(parser.lexer(source), 0, [])
+  const end = visit(parsed, 0, [])
   append(end, source.length, [])
-  return { spans, marks }
+  // Marked can append a newline to a container token at the end of the draft.
+  for (const span of spans) span.to = Math.min(span.to, source.length)
+  return {
+    spans: spans.filter(
+      (span) =>
+        span.from < span.to || (span.text && span.from <= source.length),
+    ),
+    marks,
+  }
 }

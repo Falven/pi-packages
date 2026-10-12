@@ -4,7 +4,7 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 ## Packages
 
-These packages are unpublished scaffolds. Each has a loadable extension entry point and a specification; feature behavior is not implemented yet.
+These packages are under development. Each has a loadable extension entry point, a specification, and tests through Pi's public host boundary. Real Ghostty/macOS acceptance remains pending.
 
 | Package                                                       | Responsibility                                                             |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |
@@ -15,7 +15,7 @@ These packages are unpublished scaffolds. Each has a loadable extension entry po
 
 Paste, attachment, and skill-reference functionality is designed for Pi's native editor as well as `pi-composer`. See the [shared architecture](docs/architecture.md), [specifications](docs/specs/), [ADRs](docs/adr/), and [glossary](GLOSSARY.md).
 
-## Load local scaffolds
+## Load local packages
 
 From the repository root, install the packages you want to work on:
 

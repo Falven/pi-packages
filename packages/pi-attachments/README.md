@@ -1,6 +1,6 @@
 # pi-attachments
 
-Preserved text and file attachments for the [pi coding agent](https://pi.dev).
+Preserved text, file, and image attachments for the [pi coding agent](https://pi.dev).
 
 Use native commands or shortcuts to capture contents as a file and insert a readable Markdown attachment reference. A widget above the editor lists the draft's attachments. Removing a reference from the draft removes its membership while keeping the saved contents.
 
@@ -25,7 +25,13 @@ pi install ./packages/pi-attachments
 
 Use shortcuts while composing to keep the existing draft. The text dialog preserves leading whitespace and final newlines; native command submission trims its input. The file command treats everything after the command name as the path, so paths with spaces do not need quotes. Relative paths resolve against the session's working directory.
 
-Attachments are saved under `pi-attachments/` in Pi's agent directory before their references enter the draft. Editing or deleting the source file does not change the snapshot. Normal `@file` references continue to identify the working file. On submission, attachment references remain text; Pi can read the saved files on demand. A draft containing only attachment references can be submitted normally.
+Attachments are saved under `pi-attachments/` in Pi's agent directory before their references enter the draft. Editing or deleting the source file does not change the snapshot. Normal `@file` references continue to identify the working file. Text and file attachment references remain readable on demand. A draft containing only attachment references can be submitted normally.
+
+## Images
+
+`/attach-file` recognizes PNG, JPEG, GIF, WebP, and BMP images from the captured bytes, including files with a different extension. Each image gets a small preview above the native editor or composer, using Pi's theme and image graphics. Terminals without image graphics show Pi's filename and dimensions fallback. Removing a reference removes its preview and draft membership while retaining the snapshot for undo and older requests.
+
+Images are delivered as native image content on Enter, steering, and follow-up submissions. Delivery follows the submitted references and preserves images supplied by earlier input handlers. BMP conversion, preview thumbnails, and resizing for the current model leave the original snapshot unchanged. References stay in queued text so native dequeue and resubmission can regenerate the images.
 
 ## Recovery
 
@@ -34,3 +40,7 @@ Read and write errors leave the main draft intact. Failed text saves reopen the 
 Text changes, terminal activity, another submission, or session replacement during preparation keep the result out of the newer draft. Text changes are observed through the effective editor's native callback, including changes that return to the original text. The saved snapshot gets an adjacent `.draft.md` recovery file containing the requesting session ID, original draft, and attachment reference. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
 
 Later editor factory decorators remain compatible when they delegate to the observed editor and preserve callback assignments. A replacement that bypasses observation, or an editor installation or callback change during preparation, saves a recovery file instead of inserting into the current draft.
+
+Image submissions save a readable `request-*/request.draft.md` under the same storage directory before delivery. The file records the requesting session, submission mode, and draft. Incoming images from other input handlers are preserved beside it as snapshot references. These recovery copies also survive native authentication or provider failures after the editor clears; they do not imply successful delivery. Copy their attachment references back into the draft to reuse the captured images.
+
+Image read, conversion, and recovery-write errors stop that submission and report the available recovery location. Preview errors leave the reference and bytes intact. Pending preparation never restores text over a newer draft or sends into a replacement session. If recovery storage cannot be written, the request is checkpointed through Pi's native session entries when possible. That fallback remains in memory until Pi persists the session; in 0.87.1, a new session does not persist until an assistant message exists.

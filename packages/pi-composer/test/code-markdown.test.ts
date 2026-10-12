@@ -146,6 +146,35 @@ test("native application Enter bindings take precedence inside fenced code", asy
   assert.equal(host.ui.getEditorText(), source)
 })
 
+test("explicit native Enter bindings retain newline, submit, and application priority in code", async (t) => {
+  const host = await openHost(t, {
+    keybindings: {
+      "tui.input.newLine": "enter",
+      "tui.input.submit": "shift+enter",
+      "app.clear": "super+enter",
+    },
+  })
+  host.ui.setEditorText("```ts\nconst value = 1;\n```")
+  await host.key("\x1b[1;9A")
+  await host.key("\x1b[B")
+  await host.key("\x1b[1;9C")
+  await host.key("\r")
+  const source = "```ts\nconst value = 1;\n\n```"
+  assert.equal(host.ui.getEditorText(), source)
+  await host.key("\x1b[13;9u")
+  assert.equal(host.ui.getEditorText(), "")
+  assert.equal(host.requests.length, 0)
+  await host.key("\x1b[122;9u")
+  await host.key("\x1b[109;10u")
+  await host.key("\x1b[13;2u")
+  assert.equal(host.ui.getEditorText(), "")
+  await host.settled()
+  assert.deepEqual(
+    host.requests[0]?.messages.filter((message) => message.role === "user"),
+    [{ role: "user", content: [{ type: "text", text: source }] }],
+  )
+})
+
 test("native replacement and paste keep code tabs and literal references with the composer's LF handling", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("```text\r\n\told\r```")
@@ -323,9 +352,9 @@ test("nested inline and fenced code render from the original quoted and listed s
   host.terminal.output = ""
   const output = await host.output()
   assert.match(output, /title/)
-  assert.match(output, />  `quoted` /)
+  assert.match(output, /│  `quoted` /)
   assert.match(output, /- item inline/)
-  assert.match(output, />     const value = `literal`;/)
+  assert.match(output, /│     const value = `literal`;/)
   const highlighted = getMarkdownTheme().highlightCode!(
     "const value = `literal`;",
     "ts",
@@ -350,6 +379,49 @@ test("nested inline and fenced code render from the original quoted and listed s
       "  > ```",
     ].join("\n"),
   )
+  await host.key("\x1b[109;10u")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), source)
+})
+
+test("nested code renders the original tab when it also provides container indentation", async (t) => {
+  const host = await openHost(t)
+  const source = "- ```ts\n\tconst value = `界`;\n  ```"
+  host.ui.setEditorText(source)
+  host.terminal.output = ""
+  assert.match(await host.output(), /    const value = `界`;/)
+  assert.equal(host.ui.getEditorText(), source)
+  await host.key("\x1b[1;9A")
+  await host.key("\x1b[B")
+  await host.key("\x1b[1;9D")
+  await host.key("\x1b[C")
+  await host.type("X")
+  assert.equal(
+    host.ui.getEditorText(),
+    "- ```ts\n\tXconst value = `界`;\n  ```",
+  )
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), source)
+})
+
+test("code after a task paragraph keeps its source mapping and continuation", async (t) => {
+  const host = await openHost(t)
+  host.terminal.rows = 60
+  const source = "- [x] item\n\n  ```ts\n  \tconst value = 1;\n  ```"
+  host.ui.setEditorText(source)
+  host.terminal.output = ""
+  const output = await host.output()
+  assert.match(output, /- \[x\] item/)
+  assert.match(output, /      const value = 1;/)
+  assert.equal(host.ui.getEditorText(), source)
+  await host.key("\x1b[A")
+  await host.key("\x1b[1;9C")
+  await host.key("\r")
+  assert.equal(
+    host.ui.getEditorText(),
+    "- [x] item\n\n  ```ts\n  \tconst value = 1;\n  \t\n  ```",
+  )
+  assert.equal(host.requests.length, 0)
   await host.key("\x1b[109;10u")
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), source)
