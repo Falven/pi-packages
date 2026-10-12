@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: pi-skill-references: invoke canonical inline skills.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Resolve multiple canonical references and add each distinct native skill's instructions once in first-reference order.
 - [ ] Deduplicate leading and inline references against the real host expansion order, including repeated references to the same resolved resource.
