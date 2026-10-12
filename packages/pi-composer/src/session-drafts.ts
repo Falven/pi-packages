@@ -11,10 +11,12 @@ import {
   type DraftCheckpoint,
 } from "./session-draft-storage.ts"
 
+type SessionHistory = DraftHistory & { clearedDrafts?: string[] }
+
 // Pi reloads extension modules when the cwd or resources change.
 const historiesKey = Symbol.for("pi-composer:histories")
 const processState = globalThis as typeof globalThis & {
-  [historiesKey]?: Map<string, DraftHistory>
+  [historiesKey]?: Map<string, SessionHistory>
 }
 const histories = (processState[historiesKey] ??= new Map())
 
@@ -72,7 +74,9 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     }
     const history = histories.get(historyKey)
     const text = checkpoint?.text ?? history?.draft.text ?? ""
-    clearedDrafts = checkpoint?.clearedDrafts ?? []
+    clearedDrafts = [
+      ...(history?.clearedDrafts ?? checkpoint?.clearedDrafts ?? []),
+    ]
     revision = checkpoint?.revision ?? 0
     let latest: DraftCheckpoint | undefined
     let savedRevision = revision
@@ -146,7 +150,9 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }
       next.onDraftClear = (draft) => {
         // shortcut: Pi cannot acknowledge each submission; keep cleared drafts for explicit recovery.
-        if (active && editor === next) clearedDrafts.push(draft)
+        if (active && editor === next && draft.trim() !== "/composer-recover") {
+          clearedDrafts.push(draft)
+        }
       }
       return next
     })
@@ -169,7 +175,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     active = false
     recoveryAbort.abort()
     if (!editor || !historyKey) return
-    histories.set(historyKey, editor.getDraftHistory())
+    histories.set(historyKey, { ...editor.getDraftHistory(), clearedDrafts })
     editor.onDraftChange = undefined
     editor.onDraftClear = undefined
   })
@@ -219,7 +225,10 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         )
         return
       }
-      ctx.ui.setEditorText(drafts[labels.indexOf(selected)]!.text)
+      const text = drafts[labels.indexOf(selected)]!.text
+      const current = editor.getText()
+      if (current && current !== text) clearedDrafts.push(current)
+      ctx.ui.setEditorText(text)
     },
   })
 }
