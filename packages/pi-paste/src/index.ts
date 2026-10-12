@@ -21,13 +21,23 @@ type PasteRequest = {
   observed: boolean
 }
 
+type RetainedPaste = { text: string; request: Omit<PasteRequest, "ctx"> }
+
+// Pi reloads extension modules when the cwd or resources change.
+const unsavedKey = Symbol.for("pi-paste:unsaved")
+const processState = globalThis as typeof globalThis & {
+  [unsavedKey]?: Map<string, RetainedPaste[]>
+}
+const unsavedByStorage = (processState[unsavedKey] ??= new Map())
+
 export default function piPaste(pi: ExtensionAPI): void {
   const storage = join(getAgentDir(), "pi-paste")
+  const unsaved = unsavedByStorage.get(storage) ?? []
+  unsavedByStorage.set(storage, unsaved)
   const lifetime = new AbortController()
   let revision = 0
   let readObserved = false
   let pasteInline: (() => Promise<void>) | undefined
-  const unsaved: { text: string; request: PasteRequest }[] = []
   const handoffs = new Set<string>()
 
   function changed(): void {
@@ -80,7 +90,7 @@ export default function piPaste(pi: ExtensionAPI): void {
       }
       await Promise.all(
         pending.map(({ text, request: original }) =>
-          preserve(text, original, "Recovered paste"),
+          preserve(text, { ...original, ctx }, "Recovered paste"),
         ),
       )
     },
@@ -116,7 +126,8 @@ export default function piPaste(pi: ExtensionAPI): void {
     paste: PasteRequest,
     problem?: string,
   ): Promise<void> {
-    const { ctx, draft, sessionId } = paste
+    const { ctx, ...original } = paste
+    const { draft, sessionId } = original
     try {
       await mkdir(storage, { recursive: true, mode: 0o700 })
       const directory = await mkdtemp(join(storage, "paste-"))
@@ -165,10 +176,10 @@ export default function piPaste(pi: ExtensionAPI): void {
         )
       }
     } catch (error) {
-      unsaved.push({ text, request: paste })
+      unsaved.push({ text, request: original })
       if (!lifetime.signal.aborted) {
         ctx.ui.notify(
-          `Could not preserve paste: ${String(error)}. Text retained in memory; use /paste-recover before changing sessions or reloading.`,
+          `Could not preserve paste: ${String(error)}. Text retained in memory until Pi exits; use /paste-recover.`,
           "error",
         )
       }

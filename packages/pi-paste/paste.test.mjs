@@ -249,6 +249,178 @@ test("a failed staging write keeps the payload available to the native recovery 
   assert.equal(host.requests.length, 0)
 })
 
+for (const change of ["session replacement", "resource reload", "cwd reload"]) {
+  test(`a failed staging write survives ${change} and recovers its original draft`, async (t) => {
+    const host = await nativePi(t, [pastePath])
+    if (change === "cwd reload")
+      await host.runtime.session.prompt("Seed a persisted session")
+    const storage = join(host.agentDir, "pi-paste")
+    await mkdir(storage)
+    await chmod(storage, 0o500)
+    const draft = "Original request\n/skill:review @notes.ts"
+    const text = `\t${"😀\r\n".repeat(1250)}`
+    const sessionId = host.runtime.session.sessionManager.getSessionId()
+    host.ui.setEditorText(draft)
+    try {
+      host.ui.pasteToEditor(text)
+      await waitFor(() =>
+        assert.match(host.render(), /Could not preserve paste/),
+      )
+      assert.equal(host.ui.getEditorText(), draft)
+      if (change === "session replacement") {
+        assert.deepEqual(await host.runtime.newSession(), { cancelled: false })
+        assert.notEqual(
+          host.runtime.session.sessionManager.getSessionId(),
+          sessionId,
+        )
+      } else if (change === "resource reload") {
+        await host.runtime.session.reload()
+      } else {
+        const cwd = join(host.directory, "other-project")
+        await mkdir(cwd)
+        assert.deepEqual(
+          await host.runtime.switchSession(host.runtime.session.sessionFile, {
+            cwdOverride: cwd,
+          }),
+          { cancelled: false },
+        )
+        assert.equal(host.runtime.cwd, cwd)
+      }
+      host.ui.setEditorText("Later draft")
+      await host.runtime.session.prompt("/paste-recover")
+      const failureOutput = host.render()
+      assert.match(failureOutput, /Could not preserve paste/)
+      assert.doesNotMatch(failureOutput, /No unsaved pastes/)
+      assert.equal(host.ui.getEditorText(), "Later draft")
+    } finally {
+      await chmod(storage, 0o700)
+    }
+    await host.runtime.session.prompt("/paste-recover")
+    assert.match(host.render(), /Recovered paste/)
+    const recovery = await retainedPaste(host)
+    const path = join(recovery.path, "../text.txt")
+    assert.deepEqual(await readFile(path), Buffer.from(text))
+    assert.equal(
+      recovery.text,
+      `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+    )
+    assert.equal(host.ui.getEditorText(), "Later draft")
+    assert.equal(host.requests.length, change === "cwd reload" ? 1 : 0)
+    await host.runtime.session.prompt("/paste-recover")
+    assert.match(host.render(), /No unsaved pastes/)
+  })
+}
+
+test("unsaved pastes stay isolated by agent storage directory", async (t) => {
+  const host = await nativePi(t, [pastePath])
+  const storage = join(host.agentDir, "pi-paste")
+  await mkdir(storage)
+  await chmod(storage, 0o500)
+  const draft = "Original agent draft"
+  const text = `\t${"private 😀\r\n".repeat(500)}`
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
+  host.ui.setEditorText(draft)
+  try {
+    host.ui.pasteToEditor(text)
+    await waitFor(() => assert.match(host.render(), /Could not preserve paste/))
+    await t.test(
+      "another agent directory cannot recover this payload",
+      async (otherTest) => {
+        const other = await nativePi(otherTest, [pastePath])
+        assert.notEqual(other.agentDir, host.agentDir)
+        other.ui.setEditorText("Other agent draft")
+        await other.runtime.session.prompt("/paste-recover")
+        assert.match(other.render(), /No unsaved pastes/)
+        assert.equal(other.ui.getEditorText(), "Other agent draft")
+        await assert.rejects(readdir(join(other.agentDir, "pi-paste")), {
+          code: "ENOENT",
+        })
+      },
+    )
+    await host.runtime.session.reload()
+    host.ui.setEditorText("Later agent draft")
+  } finally {
+    await chmod(storage, 0o700)
+  }
+  await host.runtime.session.prompt("/paste-recover")
+  assert.match(host.render(), /Recovered paste/)
+  const recovery = await retainedPaste(host)
+  const path = join(recovery.path, "../text.txt")
+  assert.deepEqual(await readFile(path), Buffer.from(text))
+  assert.equal(
+    recovery.text,
+    `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+  )
+  assert.equal(host.ui.getEditorText(), "Later agent draft")
+  assert.equal(host.requests.length, 0)
+})
+
+test("a staging failure arriving after outgoing shutdown remains recoverable by the live session", async (t) => {
+  const host = await nativePi(t, [pastePath])
+  const storage = join(host.agentDir, "pi-paste")
+  const write = fs.writeFile
+  const gate = Promise.withResolvers()
+  let source
+  let failure
+  const mocked = t.mock.method(fs, "writeFile", async (...args) => {
+    const staging =
+      String(args[0]).startsWith(storage) &&
+      String(args[0]).endsWith("/text.txt")
+    if (staging) {
+      source = args[0]
+      await gate.promise
+    }
+    try {
+      return await write(...args)
+    } catch (error) {
+      if (staging) failure = error
+      throw error
+    }
+  })
+  syncBuiltinESMExports()
+  t.after(() => {
+    gate.resolve()
+    mocked.mock.restore()
+    syncBuiltinESMExports()
+  })
+  const draft = "Outgoing draft @before.ts\nKeep this association"
+  const text = `\t${"late 😀\r\n".repeat(700)}`
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
+  host.ui.setEditorText(draft)
+  let directory
+  try {
+    host.ui.pasteToEditor(text)
+    await waitFor(() => assert.ok(source, "the captured paste reached storage"))
+    directory = join(source, "..")
+    await chmod(directory, 0o500)
+    assert.deepEqual(await host.runtime.newSession(), { cancelled: false })
+    assert.notEqual(
+      host.runtime.session.sessionManager.getSessionId(),
+      sessionId,
+    )
+    await host.runtime.session.prompt("/paste-recover")
+    assert.match(host.render(), /No unsaved pastes/)
+    await host.runtime.session.reload()
+    host.ui.setEditorText("Later session draft")
+    gate.resolve()
+    await waitFor(() => assert.equal(failure?.code, "EACCES"))
+  } finally {
+    gate.resolve()
+    if (directory) await chmod(directory, 0o700)
+  }
+  await host.runtime.session.prompt("/paste-recover")
+  assert.match(host.render(), /Recovered paste/)
+  const recovery = await retainedPaste(host)
+  const path = join(recovery.path, "../text.txt")
+  assert.deepEqual(await readFile(path), Buffer.from(text))
+  assert.equal(
+    recovery.text,
+    `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+  )
+  assert.equal(host.ui.getEditorText(), "Later session draft")
+  assert.equal(host.requests.length, 0)
+})
+
 test("the cutoff measures decoded bracketed text before native whitespace formatting", async (t) => {
   const host = await nativePi(t, [pastePath])
   host.input(`\x1b[200~\x1b[106;5u${"d".repeat(4998)}\x1b[201~`)
