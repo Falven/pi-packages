@@ -4,7 +4,7 @@
 
 **Blocked by:** 20: Restore complete drafts with attachment membership.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Provide an explicit native cleanup action; do not introduce automatic expiry.
 - [ ] Retain every snapshot that has entered a draft, including contents potentially held in hidden undo/redo, saved drafts, submissions, and forks.

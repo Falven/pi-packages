@@ -4,13 +4,13 @@
 
 **Blocked by:** 05: Compose attachment pastes as one undoable edit; 18: pi-composer: autosave session text drafts; 19: pi-attachments: retain snapshots across sessions.
 
-**Status:** in-progress
+**Status:** implemented; final acceptance pending
 
-- [ ] Switch sessions or restart and restore matching text, reference text, attachment membership, and readable retained snapshots.
-- [ ] Keep session undo histories isolated; restarting clears history without deleting attachment contents.
-- [ ] Pending clipboard, attachment, or persistence work remains with the requesting draft and preserves later edits.
-- [ ] When an original insertion is no longer safe, retain its contents and report recovery context instead of applying it to another draft.
-- [ ] Failed restoration or submission cannot destroy the saved draft, retained files, or unrelated current work.
-- [ ] Drive real host lifecycle transitions with the loaded packages and assert visible drafts, membership, and readable files.
+- [x] Switch sessions or restart and restore matching text, reference text, attachment membership, and readable retained snapshots.
+- [x] Keep session undo histories isolated; restarting clears history without deleting attachment contents.
+- [x] Pending clipboard, attachment, or persistence work remains with the requesting draft and preserves later edits.
+- [x] When an original insertion is no longer safe, retain its contents and report recovery context instead of applying it to another draft.
+- [x] Failed restoration or submission cannot destroy the saved draft, retained files, or unrelated current work.
+- [x] Drive real host lifecycle transitions with the loaded packages and assert visible drafts, membership, and readable files.
 
-Integration follow-up: preserve already captured members if a later read in an explicit multi-file attachment fails, including when an earlier original disappears. Verify retrieval through the native recovery action after reload. Resolve the compaction test’s intermittent input-observer ordering assertion while retaining model-delivery ordering checks.
+Integration evidence: `11c623c`; 393 combined tests and the external partial-file-capture probe pass on Pi 1.0.2, with formatting, lint, and root/composer typechecks. Complete mixed drafts survive switches, cwd changes, reload, forks and fresh processes. Captured members survive later read failures and source deletion; native recovery retrieves the group after reload. Model delivery order stays asserted independently of concurrent input preprocessing. Real Ghostty/macOS acceptance remains pending.
