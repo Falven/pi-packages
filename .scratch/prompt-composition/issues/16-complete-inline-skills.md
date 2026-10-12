@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: pi-skill-references: invoke canonical inline skills.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Prose-position triggers offer skills from Pi's effective catalog; accepting a suggestion inserts canonical native skill text at the correct range and caret.
 - [ ] Unaccepted shorthand stays literal and completed references remain character-editable and copyable.
