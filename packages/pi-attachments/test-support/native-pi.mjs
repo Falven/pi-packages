@@ -36,20 +36,23 @@ export async function waitFor(check) {
   /* eslint-enable no-await-in-loop */
 }
 
-export async function nativePi(t, extensionPaths = []) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-attachments-test-"))
+export async function nativePi(t, extensionPaths = [], state = {}) {
+  const directory =
+    state.directory ?? (await mkdtemp(join(tmpdir(), "pi-attachments-test-")))
   const agentDir = join(directory, "agent")
-  await mkdir(agentDir)
+  await mkdir(agentDir, { recursive: true })
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR
   const previousOffline = process.env.PI_OFFLINE
   process.env.PI_CODING_AGENT_DIR = agentDir
   process.env.PI_OFFLINE = "1"
+  let close
   t.after(async () => {
+    await close?.()
     if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR
     else process.env.PI_CODING_AGENT_DIR = previousAgentDir
     if (previousOffline === undefined) delete process.env.PI_OFFLINE
     else process.env.PI_OFFLINE = previousOffline
-    await rm(directory, { recursive: true, force: true })
+    if (!state.directory) await rm(directory, { recursive: true, force: true })
   })
 
   const requests = []
@@ -151,10 +154,9 @@ export async function nativePi(t, extensionPaths = []) {
   const runtime = await createAgentSessionRuntime(createRuntime, {
     cwd: directory,
     agentDir,
-    sessionManager: SessionManager.create(
-      directory,
-      join(agentDir, "sessions"),
-    ),
+    sessionManager: state.sessionFile
+      ? SessionManager.open(state.sessionFile, undefined, directory)
+      : SessionManager.create(directory, join(agentDir, "sessions")),
   })
   let input
   let output = ""
@@ -181,10 +183,13 @@ export async function nativePi(t, extensionPaths = []) {
     setProgramStatus() {},
   }
   const mode = new InteractiveMode(runtime, { terminal, tuiMode: "fullscreen" })
-  t.after(async () => {
+  let closed = false
+  close = async () => {
+    if (closed) return
+    closed = true
     mode.stop()
     await runtime.dispose()
-  })
+  }
   await mode.init()
   void mode.run()
   await delay(0)
@@ -192,6 +197,7 @@ export async function nativePi(t, extensionPaths = []) {
     directory,
     agentDir,
     runtime,
+    close,
     requests,
     replies,
     get ui() {
