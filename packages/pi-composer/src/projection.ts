@@ -262,7 +262,7 @@ export class Projection {
     from: number,
     to: number,
     text: string,
-  ): { text: string; position: number } {
+  ): { text: string; position: number; removed: string } {
     const selected = this.cells.filter(
       (cell) => cell.to > from && cell.from < to,
     )
@@ -281,6 +281,7 @@ export class Projection {
       return {
         text: this.source.slice(0, from) + text + this.source.slice(to),
         position: from + text.length,
+        removed: this.source.slice(from, to),
       }
     }
     const cuts = selected.flatMap((cell) => cell.ranges)
@@ -308,6 +309,7 @@ export class Projection {
     }
     cuts.sort((a, b) => a.from - b.from)
     let result = ""
+    let removed = ""
     let offset = 0
     let position: number | undefined
     // Keep delimiters around surviving text, including across a selection boundary.
@@ -317,9 +319,15 @@ export class Projection {
         result += text
         position = result.length
       }
+      if (cut.to > offset)
+        removed += this.source.slice(Math.max(offset, cut.from), cut.to)
       offset = Math.max(offset, cut.to)
     }
-    return { text: result + this.source.slice(offset), position: position! }
+    return {
+      text: result + this.source.slice(offset),
+      position: position!,
+      removed,
+    }
   }
 
   rowAt(position: number): number {

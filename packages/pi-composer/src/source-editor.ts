@@ -27,6 +27,7 @@ const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 type Draft = { text: string; anchor: number; head: number }
 export type DraftHistory = { draft: Draft; past: Draft[]; future: Draft[] }
 type EditKind = "typing" | "backspace" | "delete"
+type YankSource = Draft & { formatted: boolean }
 
 export class SourceEditor extends CustomEditor {
   onDraftChange: ((text: string) => void) | undefined
@@ -53,6 +54,9 @@ export class SourceEditor extends CustomEditor {
   private editGroup: { kind: EditKind; time: number } | undefined
   private transaction: { draft: Draft; recorded: boolean } | undefined
   private pendingPaste: string | undefined
+  private retained: string[] = []
+  private accumulatingDeletion = false
+  private yankSource: YankSource | undefined
   private prompts: string[] = []
   private promptIndex = -1
   private promptDraft: Draft | undefined
@@ -246,15 +250,21 @@ export class SourceEditor extends CustomEditor {
     to: number,
     text: string,
     kind?: EditKind,
-  ): void {
-    const current = this.getText()
+    source?: YankSource,
+  ): string {
+    const current = source?.text ?? this.getText()
     text = text.replace(/\r\n?/g, "\n")
     let nextText = current.slice(0, from) + text + current.slice(to)
     let position = from + text.length
-    if (this.formatted && from !== to) {
-      const edit = this.project().replace(from, to, text)
+    let removed = current.slice(from, to)
+    if ((source?.formatted ?? this.formatted) && from !== to) {
+      const projection = source
+        ? new Projection(current, this.sourceWidth, source.formatted)
+        : this.project()
+      const edit = projection.replace(from, to, text)
       nextText = edit.text
       position = edit.position
+      removed = edit.removed
     }
     const joined = graphemes.segment(nextText).containing(position)
     if (joined && joined.index < position) {
@@ -268,6 +278,41 @@ export class SourceEditor extends CustomEditor {
       },
       kind,
     )
+    return removed
+  }
+
+  private retainDeletion(from: number, to: number, direction: -1 | 1): void {
+    if (from === to) return
+    const accumulate = this.accumulatingDeletion
+    const removed = this.replaceRange(from, to, "")
+    if (!removed) return
+    const previous = accumulate ? this.retained.pop() : undefined
+    this.retained.push(
+      previous === undefined
+        ? removed
+        : direction < 0
+          ? removed + previous
+          : previous + removed,
+    )
+    this.accumulatingDeletion = true
+  }
+
+  private yankRetained(pop: boolean): void {
+    const source = pop
+      ? this.yankSource
+      : { ...this.draft, formatted: this.formatted }
+    if (!source || !this.retained.length || (pop && this.retained.length < 2))
+      return
+    if (pop) this.retained.unshift(this.retained.pop()!)
+    // Replay the original selection without removing surviving Markdown delimiters.
+    this.replaceRange(
+      Math.min(source.anchor, source.head),
+      Math.max(source.anchor, source.head),
+      this.retained.at(-1)!,
+      undefined,
+      source,
+    )
+    this.yankSource = source
   }
 
   private commit(next: Draft, kind?: EditKind): void {
@@ -312,6 +357,8 @@ export class SourceEditor extends CustomEditor {
   }
 
   private changed(autocomplete = false): void {
+    this.accumulatingDeletion = false
+    this.yankSource = undefined
     this.revision++
     this.jumpDirection = undefined
     this.dragging = false
@@ -325,6 +372,8 @@ export class SourceEditor extends CustomEditor {
 
   private moveTo(position: number, select: boolean): void {
     this.jumpDirection = undefined
+    this.accumulatingDeletion = false
+    this.yankSource = undefined
     this.revealCaret = true
     this.preferredCell = undefined
     this.editGroup = undefined
@@ -519,6 +568,8 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (fallbackMatches("super+a")) {
+      this.accumulatingDeletion = false
+      this.yankSource = undefined
       this.revealCaret = true
       this.editGroup = undefined
       this.preferredCell = undefined
@@ -631,7 +682,7 @@ export class SourceEditor extends CustomEditor {
         if (lineStart ? end >= head : end <= head)
           end = this.adjacent(direction)
       }
-      this.replaceRange(Math.min(head, end), Math.max(head, end), "")
+      this.retainDeletion(Math.min(head, end), Math.max(head, end), direction)
       return
     }
     const wordBackward = keys.matches(data, "tui.editor.deleteWordBackward")
@@ -639,7 +690,19 @@ export class SourceEditor extends CustomEditor {
       const { anchor, head } = this.draft
       const end =
         anchor === head ? this.wordBoundary(wordBackward ? -1 : 1) : anchor
-      this.replaceRange(Math.min(head, end), Math.max(head, end), "")
+      this.retainDeletion(
+        Math.min(head, end),
+        Math.max(head, end),
+        wordBackward ? -1 : 1,
+      )
+      return
+    }
+    if (keys.matches(data, "tui.editor.yank")) {
+      this.yankRetained(false)
+      return
+    }
+    if (keys.matches(data, "tui.editor.yankPop")) {
+      this.yankRetained(true)
       return
     }
     const backward = keys.matches(data, "tui.editor.deleteCharBackward")
