@@ -2,6 +2,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
 import {
+  chown,
   mkdir,
   readFile,
   readdir,
@@ -21,7 +22,12 @@ test("unsupported keybinding setup arguments show usage without submitting the d
       pi.on("session_start", () => {
         registered = pi
           .getCommands()
-          .some(({ name }) => name === "setup-keybinds")
+          .some(
+            ({ name, description }) =>
+              name === "setup-keybinds" &&
+              description ===
+                "Review, install, or remove persistent terminal keybindings",
+          )
       })
     },
   })
@@ -34,11 +40,44 @@ test("unsupported keybinding setup arguments show usage without submitting the d
     "/setup-keybinds ghostty remove extra",
   ]) {
     await host.session.sendUserMessage(command, { expandPromptTemplates: true })
-    assert.match(await host.output(), /Usage: \/setup-keybinds ghostty/)
+    assert.match(
+      await host.output(),
+      /Usage: \/setup-keybinds <terminal> \[remove\]/,
+    )
+    assert.match(await host.output(), /Supported terminals: ghostty/)
     assert.equal(host.ui.getEditorText(), "Retained draft")
   }
   assert.equal(host.requests.length, 0)
 })
+
+for (const sameUser of [true, false]) {
+  test(`a root-owned login intermediary ${sameUser ? "allows verification of same-user Ghostty" : "does not authorize another user's Ghostty"}`, async (t) => {
+    const { host, file, state } = await setupHost(t, "font-size = 14\n")
+    const uid = process.getuid!()
+    state.ancestors = new Map([
+      [process.pid, `900001 ${uid} node`],
+      [900001, `900002 ${uid} -/bin/zsh`],
+      [900002, "900003 0 /usr/bin/login"],
+      [
+        900003,
+        `1 ${sameUser ? uid : uid + 1} /Applications/Ghostty.app/Contents/MacOS/ghostty`,
+      ],
+    ])
+    state.denied = true
+    await host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    assert.match(
+      (await host.output()).replace(/\s+/g, " "),
+      sameUser
+        ? /runtime arguments or roots cannot be matched/
+        : /no same-user Ghostty ancestor/,
+    )
+    assert.match(await host.output(), /No\s+settings\s+changed/)
+    assert.equal(await readFile(file, "utf8"), "font-size = 14\n")
+    assert.equal(host.requests.length, 0)
+  })
+}
 
 for (const [command, source] of [
   ["/setup-keybinds ghostty", false],
@@ -175,6 +214,7 @@ for (const scenario of [
   "includes",
   "invalid",
   "candidateInvalid",
+  "candidateAcl",
   "extra-root",
   "edited-block",
   "duplicated-block",
@@ -315,6 +355,214 @@ test("an intact but ineffective managed block does not report repeat success", a
   assert.deepEqual(await readFile(file), before)
   assert.match(await host.output(), /super\+a is not effective/)
   assert.doesNotMatch(await host.output(), /already installed/)
+})
+
+for (const binding of [
+  "super+key_a=select_all",
+  "super+key_z=undo",
+  "super+shift+key_z=redo",
+  "super+key_z>x=new_window",
+  "work/super+key_a=select_all",
+]) {
+  test(`higher-priority physical binding ${binding} prevents Ghostty installation`, async (t) => {
+    const original = `keybind = ${binding}\n`
+    const { host, file, state } = await setupHost(t, original)
+    state.effective = original + "keybind = super+a=select_all\n"
+    const command = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    try {
+      await t.waitFor(async () =>
+        assert.match(
+          await host.output(),
+          /Set up Ghostty|No\s+settings\s+changed/,
+        ),
+      )
+      assert(
+        (await host.output())
+          .replace(/\s+/g, " ")
+          .includes(`physical binding ${binding.split(/[=>]/)[0]}`),
+      )
+      assert.doesNotMatch(await host.output(), /Set up Ghostty keybindings/)
+    } finally {
+      await host.key("\x1b")
+      await command
+    }
+    assert.equal(await readFile(file, "utf8"), original)
+    assert.deepEqual(await readdir(dirname(file)), ["config"])
+  })
+}
+
+test("native physical digit defaults remain compatible with the verified U.S. layout", async (t) => {
+  const { host, file, state } = await setupHost(t, "font-size = 14\n")
+  state.effective =
+    "keybind = super+digit_1=goto_tab:1\nkeybind = super+1=goto_tab:1\nkeybind = super+digit_8=goto_tab:8\nkeybind = super+8=goto_tab:8\n"
+  const installing = host.session.sendUserMessage("/setup-keybinds ghostty", {
+    expandPromptTemplates: true,
+  })
+  await t.waitFor(async () =>
+    assert.match(await host.output(), /Set up Ghostty keybindings/),
+  )
+  await host.key("\r")
+  await installing
+  assert((await readFile(file, "utf8")).includes(forwarding))
+  assert.match(await host.output(), /Ghostty keybindings installed/)
+})
+
+for (const limitation of ["layout", "modifier remapping"] as const) {
+  test(`unverified ${limitation} prevents Ghostty installation`, async (t) => {
+    const original = "font-size = 14\n"
+    const { host, file, state } = await setupHost(t, original)
+    if (limitation === "layout") state.usKeyboardLayout = false
+    else state.keyRemap = true
+    const command = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    try {
+      await t.waitFor(async () =>
+        assert.match(
+          await host.output(),
+          /Set up Ghostty|No\s+settings\s+changed/,
+        ),
+      )
+      const output = (await host.output()).replace(/\s+/g, " ")
+      assert.match(
+        output,
+        limitation === "layout"
+          ? /U\.S\. keyboard layout/
+          : /modifier remapping/,
+      )
+      assert.doesNotMatch(output, /Set up Ghostty keybindings/)
+    } finally {
+      await host.key("\x1b")
+      await command
+    }
+    assert.equal(await readFile(file, "utf8"), original)
+    assert.deepEqual(await readdir(dirname(file)), ["config"])
+  })
+}
+
+for (const limitation of [
+  "physical binding",
+  "layout",
+  "modifier remapping",
+] as const) {
+  test(`${limitation} prevents repeat success but allows removal`, async (t) => {
+    const original = "font-size = 14\n"
+    const { host, file, state } = await setupHost(t, original)
+    const installing = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Set up Ghostty keybindings/),
+    )
+    await host.key("\r")
+    await installing
+    let later = ""
+    if (limitation === "layout") state.usKeyboardLayout = false
+    else if (limitation === "modifier remapping") {
+      state.keyRemap = true
+      later = "key-remap = ctrl=super\n"
+    } else {
+      later = "keybind = super+shift+key_z>x=new_window\n"
+      state.effective = forwarding + "\n" + later
+    }
+    const before = (await readFile(file, "utf8")) + later
+    await writeFile(file, before)
+    const statBefore = await stat(file)
+    await host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    assert.match(await host.output(), /verification is unavailable/)
+    assert.doesNotMatch(await host.output(), /already installed/)
+    assert.equal(await readFile(file, "utf8"), before)
+    assert.equal((await stat(file)).ino, statBefore.ino)
+    const removing = host.session.sendUserMessage(
+      "/setup-keybinds ghostty remove",
+      {
+        expandPromptTemplates: true,
+      },
+    )
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Remove Ghostty keybindings/),
+    )
+    await host.key("\r")
+    await removing
+    assert.equal(await readFile(file, "utf8"), original + later)
+    assert.match(await host.output(), /Ghostty keybindings removed/)
+  })
+}
+
+for (const change of ["layout", "ACL"] as const) {
+  test(`a ${change} change during confirmation prevents replacement`, async (t) => {
+    const original = "font-size = 14\n"
+    const { host, file, state } = await setupHost(t, original)
+    const before = await stat(file)
+    const installing = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Set up Ghostty keybindings/),
+    )
+    if (change === "layout") state.usKeyboardLayout = false
+    else state.acl = true
+    await host.key("\r")
+    await installing
+    assert.equal(await readFile(file, "utf8"), original)
+    assert.equal((await stat(file)).ino, before.ino)
+    assert.match(await host.output(), /No\s+settings\s+changed/)
+    assert.doesNotMatch(await host.output(), /Ghostty keybindings installed/)
+  })
+}
+
+test("Ghostty setup leaves ACL permissions and configuration unchanged", async (t) => {
+  const original = "font-size = 14\n"
+  const { host, file, state } = await setupHost(t, original)
+  state.acl = true
+  const before = await stat(file)
+  const command = host.session.sendUserMessage("/setup-keybinds ghostty", {
+    expandPromptTemplates: true,
+  })
+  try {
+    await t.waitFor(async () =>
+      assert.match(
+        await host.output(),
+        /Set up Ghostty|No\s+settings\s+changed/,
+      ),
+    )
+    assert.match(await host.output(), /permissions.*ACL/)
+    assert.doesNotMatch(await host.output(), /Set up Ghostty keybindings/)
+  } finally {
+    await host.key("\x1b")
+    await command
+  }
+  assert.equal(await readFile(file, "utf8"), original)
+  assert.equal((await stat(file)).ino, before.ino)
+  assert.deepEqual(await readdir(dirname(file)), ["config"])
+})
+
+test("Ghostty setup preserves an original group different from its parent directory", async (t) => {
+  const { host, file } = await setupHost(t, "font-size = 14\n")
+  const original = await stat(file)
+  const group = process.getgroups?.().find((gid) => gid !== original.gid)
+  if (group === undefined) {
+    t.skip("The fixture needs another permitted group")
+    return
+  }
+  await chown(file, original.uid, group)
+  const installing = host.session.sendUserMessage("/setup-keybinds ghostty", {
+    expandPromptTemplates: true,
+  })
+  await t.waitFor(async () =>
+    assert.match(await host.output(), /Set up Ghostty keybindings/),
+  )
+  await host.key("\r")
+  await installing
+  assert.match(await host.output(), /Ghostty keybindings installed/)
+  const installed = await stat(file)
+  assert.equal(installed.uid, original.uid)
+  assert.equal(installed.gid, group)
+  assert.equal(installed.mode, original.mode)
 })
 
 for (const failure of ["cancelled", "invalid-remaining-config"] as const) {

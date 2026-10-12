@@ -2,6 +2,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import {
   chmod,
+  chown,
   lstat,
   mkdtemp,
   readFile,
@@ -35,7 +36,7 @@ async function execute(pi: ExtensionAPI, command: string, args: string[]) {
   return result.stdout
 }
 
-async function context(pi: ExtensionAPI) {
+async function context(pi: ExtensionAPI, requireUsLayout: boolean) {
   if (
     process.platform !== "darwin" ||
     process.env["CFFIXED_USER_HOME"] !== undefined
@@ -65,12 +66,13 @@ async function context(pi: ExtensionAPI) {
       ])
     ).trim()
     const match = /^(\d+)\s+(\d+)\s+(.+)$/.exec(row)
-    if (!match || Number(match[2]) !== process.getuid?.()) break
+    if (!match) break
     const path = match[3]!
     if (
       isAbsolute(path) &&
       path.endsWith("/Ghostty.app/Contents/MacOS/ghostty")
     ) {
+      if (Number(match[2]) !== process.getuid?.()) break
       binary = path
       break
     }
@@ -118,6 +120,10 @@ async function context(pi: ExtensionAPI) {
     throw new Error(
       "Ghostty setup verification is unavailable: runtime arguments or roots cannot be matched",
     )
+  if (requireUsLayout && fields["usKeyboardLayout"] !== true)
+    throw new Error(
+      "Ghostty setup verification is unavailable: require the native U.S. keyboard layout and input source; other or unknown layouts need manual setup",
+    )
   const version = await execute(pi, binary, ["+version"])
   if (!/^Ghostty 1\.3\.1(?:\r?\n|$)/.test(version))
     throw new Error(
@@ -126,7 +132,17 @@ async function context(pi: ExtensionAPI) {
   return { pid, binary, home, xdg }
 }
 
-async function sources(home: string, xdg: string | null) {
+async function verifyPermissions(pi: ExtensionAPI, path: string) {
+  const listing = await execute(pi, "/bin/ls", ["-lde", path])
+  if (listing[10] === "+" || /^\s*\d+:/m.test(listing))
+    throw new Error(
+      `Unsupported configuration permissions: ACL on ${path}; resolve it manually`,
+    )
+  if (!/^-[rwxSsTt-]{9}[@ ] [^\n]+\n$/.test(listing))
+    throw new Error(`Configuration permissions could not be verified: ${path}`)
+}
+
+async function sources(pi: ExtensionAPI, home: string, xdg: string | null) {
   const app = join(home, "Library/Application Support/com.mitchellh.ghostty")
   const xdgDirectory = join(xdg ?? join(home, ".config"), "ghostty")
   const paths = [
@@ -141,6 +157,7 @@ async function sources(home: string, xdg: string | null) {
         const stat = await lstat(path)
         if (!stat.isFile() || stat.uid !== process.getuid?.())
           throw new Error(`Unsupported configuration file: ${path}`)
+        await verifyPermissions(pi, path)
         const contents = await readFile(path)
         return { path, stat, contents }
       } catch (error) {
@@ -189,10 +206,13 @@ function managed(text: string) {
 
 export function setupKeybinds(pi: ExtensionAPI): void {
   pi.registerCommand("setup-keybinds", {
-    description: "Review, install, or remove persistent Ghostty keybindings",
+    description: "Review, install, or remove persistent terminal keybindings",
     handler: async (args, ctx) => {
       if (!/^ghostty(?:\s+remove)?$/.test(args.trim())) {
-        ctx.ui.notify("Usage: /setup-keybinds ghostty [remove]", "info")
+        ctx.ui.notify(
+          "Usage: /setup-keybinds <terminal> [remove]\nSupported terminals: ghostty",
+          "info",
+        )
         return
       }
       if (!ctx.hasUI) {
@@ -205,8 +225,13 @@ export function setupKeybinds(pi: ExtensionAPI): void {
       let staging: string | undefined
       let written = false
       try {
-        const initialContext = await context(pi)
-        const initial = await sources(initialContext.home, initialContext.xdg)
+        const removing = /\s+remove$/.test(args.trim())
+        const initialContext = await context(pi, !removing)
+        const initial = await sources(
+          pi,
+          initialContext.home,
+          initialContext.xdg,
+        )
         await execute(pi, initialContext.binary, ["+validate-config"])
         const config = await execute(pi, initialContext.binary, [
           "+show-config",
@@ -223,13 +248,26 @@ export function setupKeybinds(pi: ExtensionAPI): void {
         if (!Buffer.from(text).equals(initial.file.contents))
           throw new Error("Unsupported configuration encoding")
         const existing = managed(text)
-        const removing = /\s+remove$/.test(args.trim())
         if (removing && !existing) {
           ctx.ui.notify(
             "No managed Ghostty block is installed. No settings changed.",
             "info",
           )
           return
+        }
+        if (!removing) {
+          if (/^key-remap[ \t]*=[ \t]*\S/m.test(config))
+            throw new Error(
+              "Ghostty setup verification is unavailable: modifier remapping changes shortcut matching; resolve it manually",
+            )
+          const physical =
+            /^keybind = ((?:[^/\n=]+\/)?super\+(?:key_a|key_z|shift\+key_z))(?:=|>)/m.exec(
+              effective,
+            )
+          if (physical)
+            throw new Error(
+              `Ghostty setup verification is unavailable: physical binding ${physical[1]} has priority over letter forwarding in ${initial.file.path}; resolve it manually`,
+            )
         }
         if (!removing && existing) {
           const ineffective = bindings.find(
@@ -259,12 +297,14 @@ export function setupKeybinds(pi: ExtensionAPI): void {
         await writeFile(candidate, proposed, {
           mode: initial.file.stat.mode & 0o7777,
         })
+        await chown(candidate, initial.file.stat.uid, initial.file.stat.gid)
         await chmod(candidate, initial.file.stat.mode & 0o7777)
+        await verifyPermissions(pi, candidate)
         await execute(pi, initialContext.binary, [
           "+validate-config",
           `--config-file=${candidate}`,
         ])
-        // A matched single root with no later inputs makes the validated appended triggers last-wins.
+        // Last-wins applies only after excluding higher-priority physical bindings.
         const confirmed = await ctx.ui.confirm(
           removing
             ? "Remove Ghostty keybindings"
@@ -275,10 +315,14 @@ export function setupKeybinds(pi: ExtensionAPI): void {
           ctx.ui.notify("Cancelled. No settings changed.", "info")
           return
         }
-        const currentContext = await context(pi)
+        const currentContext = await context(pi, !removing)
         if (JSON.stringify(currentContext) !== JSON.stringify(initialContext))
           throw new Error("Ghostty context changed during review")
-        const current = await sources(initialContext.home, initialContext.xdg)
+        const current = await sources(
+          pi,
+          initialContext.home,
+          initialContext.xdg,
+        )
         if (
           current.files.some((file, index) => {
             const previous = initial.files[index]
@@ -289,7 +333,10 @@ export function setupKeybinds(pi: ExtensionAPI): void {
                   file.path !== previous.path ||
                   file.stat.ino !== previous.stat.ino ||
                   file.stat.dev !== previous.stat.dev ||
+                  file.stat.uid !== previous.stat.uid ||
+                  file.stat.gid !== previous.stat.gid ||
                   file.stat.mode !== previous.stat.mode ||
+                  file.stat.ctimeMs !== previous.stat.ctimeMs ||
                   file.stat.mtimeMs !== previous.stat.mtimeMs ||
                   !file.contents.equals(previous.contents)
           })

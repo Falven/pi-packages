@@ -24,6 +24,38 @@ def identity(pid):
     return int(parts[0]), parts[1]
 
 
+def us_keyboard_layout():
+    try:
+        carbon = ctypes.CDLL("/System/Library/Frameworks/Carbon.framework/Carbon")
+        cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        carbon.TISGetInputSourceProperty.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        carbon.TISGetInputSourceProperty.restype = ctypes.c_void_p
+        cf.CFStringGetCString.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_uint32]
+        cf.CFStringGetCString.restype = ctypes.c_bool
+        cf.CFRelease.argtypes = [ctypes.c_void_p]
+        cf.CFRelease.restype = None
+        prop = ctypes.c_void_p.in_dll(carbon, "kTISPropertyInputSourceID").value
+        for name in ["TISCopyCurrentKeyboardInputSource", "TISCopyCurrentKeyboardLayoutInputSource"]:
+            function = getattr(carbon, name)
+            function.argtypes = []
+            function.restype = ctypes.c_void_p
+            source = function()
+            if not source:
+                return False
+            try:
+                value = carbon.TISGetInputSourceProperty(source, prop)
+                buffer = ctypes.create_string_buffer(1024)
+                if not value or not cf.CFStringGetCString(value, buffer, len(buffer), 0x08000100):
+                    return False
+                if buffer.value != b"com.apple.keylayout.US":
+                    return False
+            finally:
+                cf.CFRelease(source)
+        return True
+    except Exception:
+        return False
+
+
 if sys.platform != "darwin" or len(sys.argv) != 3 or not sys.argv[1].isdigit():
     result(schema=1, readable=False, reason="unsupported")
     raise SystemExit(0)
@@ -106,6 +138,7 @@ try:
         xdgMatchesExpected=xdg_matches,
         fixedHomeAbsent=len(values["CFFIXED_USER_HOME"]) == 0,
         accountHomeMatchesExpected=pwd.getpwuid(os.geteuid()).pw_dir == expected_home,
+        usKeyboardLayout=us_keyboard_layout(),
     )
 except Exception:
     result(schema=1, readable=False, reason="probe-error")

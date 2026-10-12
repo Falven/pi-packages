@@ -61,11 +61,13 @@ Pi's default clipboard handler returns text-read failures as empty results and d
 
 ## Ghostty keybinding setup
 
-Run `/setup-keybinds ghostty` from Pi inside Ghostty to review and install forwarding for Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down. The command shows the target file and asks for confirmation after verification. It appends one marked block, leaving other settings and Pi keybindings intact. The forwarding stays active in other programs and after Pi exits.
+`/setup-keybinds <terminal> [remove]` reviews, installs, or removes persistent terminal keybindings. Ghostty is the supported terminal. Run `/setup-keybinds ghostty` from Pi inside Ghostty to review and install forwarding for Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down. The command shows the target file and asks for confirmation after verification. It appends one marked block, leaving other settings and Pi keybindings intact. The forwarding stays active in other programs and after Pi exits.
 
 Reload Ghostty configuration after installation or removal through its **Reload Configuration** action; the default shortcut is Cmd+Shift+Comma. `/setup-keybinds ghostty remove` reviews and removes the unmodified block while preserving unrelated later edits. Repeating either operation makes no write. An edited or incomplete block requires manual resolution. No backups are created.
 
-Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Application Support configuration (`config` or `config.ghostty`), no other default configuration files, no includes, and no extra Ghostty launch arguments. It requires `/usr/bin/python3` to verify that Pi and its Ghostty ancestor use the same configuration context. The macOS process query is an unstable platform interface; unavailable or mismatched verification leaves settings unchanged. Unsupported configurations require manual setup. Physical forwarding still requires the separate terminal checks.
+Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Application Support configuration (`config` or `config.ghostty`), no other default configuration files, no includes, and no extra Ghostty launch arguments. It requires `/usr/bin/python3` to verify that Pi and its same-user Ghostty ancestor use the same configuration context; macOS's root-owned `login` intermediary is supported. The macOS process query is an unstable platform interface; unavailable or mismatched verification leaves settings unchanged.
+
+Installation and repeat verification require the native U.S. keyboard input source and layout (`com.apple.keylayout.US`), no modifier remapping, and no higher-priority physical bindings for the three letter shortcuts. Other or unknown layouts require manual setup. Removal remains available after layout, remap, or physical-binding changes. Files with ACL permissions are refused; ordinary owner, group, mode, and surrounding contents are preserved. Physical forwarding still requires the separate terminal checks.
 
 ## Load
 
