@@ -6,7 +6,7 @@
 
 **Status:** complete
 
-- [x] Explicit native actions attach text or an existing file with pi-composer and pi-paste absent.
+- [x] Explicit native actions attach text or an existing file with pi-composer absent.
 - [x] Preserve contents before inserting a usable attachment reference; editing or removing the original source cannot change the snapshot.
 - [x] Show draft attachment membership through native UI facilities while preserving other registered widgets and actions.
 - [x] Submit readable snapshot references without expanding text/file bodies into the prompt, including a request consisting entirely of attachments.

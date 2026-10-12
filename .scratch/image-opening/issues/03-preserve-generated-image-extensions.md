@@ -6,9 +6,9 @@
 
 **Status:** implemented; manual acceptance pending
 
-**Specification:** [pi-paste](../../../docs/specs/pi-paste.md); [pi-attachments](../../../docs/specs/pi-attachments.md); [retained snapshots](../../../docs/adr/0007-pi-attachments-retain-snapshots.md).
+**Specification:** [pi-attachments](../../../docs/specs/pi-attachments.md); [retained snapshots](../../../docs/adr/0007-pi-attachments-retain-snapshots.md).
 
-- [x] Name clipboard captures using Pi's detected image format before native attachment handoff.
+- [x] Name clipboard captures using Pi's detected image format before snapshot storage.
 - [x] Preserve format extensions in generated native-image recovery references and conservative cleanup.
 - [x] Verify PNG and BMP clipboard capture, image recovery, retained bytes, and cleanup through existing public-host tests.
 - [x] Check a generated image link through the actual macOS application-selection and opening API.

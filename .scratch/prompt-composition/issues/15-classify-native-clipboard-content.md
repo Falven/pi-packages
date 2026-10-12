@@ -1,8 +1,8 @@
-# 15: pi-paste: classify copied files and images
+# 15: pi-attachments: classify copied files and images
 
 **What to build:** Paste the copied files or image using native clipboard identity and the correct content precedence.
 
-**Blocked by:** 04: pi-paste: route text pastes and explicit overrides; 14: pi-attachments: preview and submit image snapshots.
+**Blocked by:** 04: pi-attachments: route text pastes and explicit overrides; 14: pi-attachments: preview and submit image snapshots.
 
 **Status:** implemented; real-terminal acceptance pending
 

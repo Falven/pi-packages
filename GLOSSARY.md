@@ -1,6 +1,6 @@
 # Prompt composition
 
-The language used to describe composing prompts in Pi. These user-facing concepts are shared across the four composition packages.
+The language used to describe composing prompts in Pi. These user-facing concepts are shared across the three composition packages.
 
 ## Language
 
