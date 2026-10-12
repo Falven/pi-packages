@@ -6,6 +6,8 @@ Edit paragraphs, headings, emphasis, strikethrough, links, quotes, lists, tasks,
 
 In fullscreen mode, mouse dragging and keyboard selection address the same Markdown text. Wheel scrolling preserves the selection; editing brings the caret back into view. Resizing keeps the selection usable, and native widgets, overlays, and completion pickers retain their focus and mouse routing.
 
+For a blinking caret, enable **Show hardware cursor** in Pi's `/settings`. The composer then uses the terminal cursor in both views, following the terminal's shape and blinking preferences. Disabling the setting restores the drawn caret. Selection highlighting remains visible in either mode.
+
 The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
 
 Native `@` path completion, command completion, provider updates, and custom pickers continue through Pi's existing interfaces. File and skill references remain editable text.

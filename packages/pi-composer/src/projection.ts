@@ -374,6 +374,7 @@ export class Projection {
     anchor: number,
     head: number,
     focused: boolean,
+    showHardwareCursor: boolean,
   ): string {
     const theme = getMarkdownTheme()
     const row = this.rows[index]!
@@ -419,13 +420,13 @@ export class Projection {
       for (const style of cell.styles) display = theme[style](display)
       if (caretRow && caret === i) output += CURSOR_MARKER
       output +=
-        (caretRow && caret === i) ||
+        (caretRow && caret === i && !showHardwareCursor) ||
         (cell.to > Math.min(anchor, head) && cell.from < Math.max(anchor, head))
           ? `\x1b[7m${display}\x1b[27m`
           : display
     }
     if (caretRow && caret < 0) {
-      output += `${CURSOR_MARKER}\x1b[7m \x1b[27m`
+      output += CURSOR_MARKER + (showHardwareCursor ? " " : "\x1b[7m \x1b[27m")
     }
     return output
   }

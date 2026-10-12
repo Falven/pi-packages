@@ -1,5 +1,7 @@
+/* eslint-disable no-await-in-loop -- Keep terminal gestures and view changes in order. */
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import { Text, type TUI } from "@earendil-works/pi-tui"
 import { openHost } from "../fixtures/host.ts"
 
 test("Pi loads the composer and submits the edited multiline source draft", async (t) => {
@@ -158,12 +160,51 @@ test("native pasteToEditor replaces selected source as one undoable edit", async
   assert.equal(host.ui.getEditorText(), "Keep new\nsource")
 })
 
-test("the focused source draft renders a visible caret", async (t) => {
+test("native hardware-cursor display replaces the drawn caret and preserves selection in both views", async (t) => {
   const host = await openHost(t)
-  host.terminal.output = ""
-  host.ui.setEditorText("Caret")
-  await host.output()
-  assert(host.terminal.output.includes("\x1b[7m \x1b[27m"))
+  let nativeTui: TUI | undefined
+  host.ui.setWidget("cursor-setting", (tui) => {
+    nativeTui = tui
+    return new Text("", 0, 0)
+  })
+  assert(nativeTui)
+  for (const sourceView of [false, true]) {
+    if (sourceView) await host.key("\x1b[109;10u")
+    nativeTui.setShowHardwareCursor(false)
+    host.ui.setEditorText("Caret界")
+    await host.key("\x1b[1;9B")
+    host.terminal.output = ""
+    nativeTui.requestRender(true)
+    await host.output()
+    assert(host.terminal.output.includes("\x1b[7m \x1b[27m"))
+
+    host.terminal.output = ""
+    nativeTui.setShowHardwareCursor(true)
+    await host.output()
+    assert(!host.terminal.output.includes("\x1b[7m \x1b[27m"))
+    assert(host.terminal.output.includes(";8H\x1b[?25h"))
+
+    host.terminal.output = ""
+    await host.key("\x1b[D")
+    await host.output()
+    assert(host.terminal.output.includes(";6H\x1b[?25h"))
+    assert(!host.terminal.output.includes("\x1b[7m界\x1b[27m"))
+    await host.key("\x1b[1;2D")
+    await host.output()
+    assert(host.terminal.output.includes("\x1b[7mt\x1b[27m"))
+
+    host.terminal.output = ""
+    nativeTui.setShowHardwareCursor(false)
+    nativeTui.requestRender(true)
+    await host.output()
+    assert(host.terminal.output.includes("\x1b[7mt\x1b[27m"))
+    host.terminal.resize(6, 24)
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "CareX界")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), "Caret界")
+    host.terminal.resize(60, 24)
+  }
 })
 
 test("native application and extension shortcuts take priority over composer keys", async (t) => {

@@ -863,7 +863,13 @@ export class SourceEditor extends CustomEditor {
     const lines = visibleRows.map((_row, rowIndex) => {
       return (
         " ".repeat(padding) +
-        projection.renderRow(rowIndex + top, anchor, head, this.focused)
+        projection.renderRow(
+          rowIndex + top,
+          anchor,
+          head,
+          this.focused,
+          this.tui.getShowHardwareCursor(),
+        )
       )
     })
     return [
