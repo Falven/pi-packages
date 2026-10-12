@@ -122,8 +122,31 @@ export function withInlineSkills(
         item,
         completion.prefix,
       )
-      result.lines[cursorLine] = before + result.lines[cursorLine]
-      if (result.cursorLine === cursorLine) result.cursorCol += before.length
+      if (!before) return result
+      const reference = `/${item.value}`
+      const precedingReferences =
+        lines.slice(0, cursorLine).join("\n").split(reference).length - 1
+      const text = result.lines.join("\n")
+      let position = -1
+      for (let index = 0; index <= precedingReferences; index += 1) {
+        position = text.indexOf(reference, position + 1)
+        if (position < 0)
+          throw new Error("Could not locate completed skill reference")
+      }
+      const precedingLines = text.slice(0, position).split("\n")
+      const completedLine = precedingLines.length - 1
+      const completedCol = precedingLines.at(-1)!.length
+      const completed = result.lines[completedLine]!
+      result.lines[completedLine] =
+        completed.slice(0, completedCol) +
+        before +
+        completed.slice(completedCol)
+      if (
+        result.cursorLine === completedLine &&
+        result.cursorCol >= completedCol
+      ) {
+        result.cursorCol += before.length
+      }
       return result
     },
     shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
