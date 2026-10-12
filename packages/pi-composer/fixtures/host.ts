@@ -51,6 +51,7 @@ type HostOptions = {
   columns?: number
   keybindings?: Record<string, string>
   extension?: ExtensionFactory
+  extensionPaths?: string[]
   holdResponses?: boolean
   responseStatus?: number
 }
@@ -66,9 +67,12 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
 
   const requests: { messages: { role: string; content: unknown }[] }[] = []
   const pendingResponses: ServerResponse[] = []
-  const finishResponse = (response: ServerResponse) => {
-    if (options.responseStatus) {
-      response.writeHead(options.responseStatus, {
+  const finishResponse = (
+    response: ServerResponse,
+    status = options.responseStatus,
+  ) => {
+    if (status && status >= 400) {
+      response.writeHead(status, {
         "content-type": "application/json",
       })
       response.end(
@@ -144,6 +148,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
         resourceLoaderOptions: {
           additionalExtensionPaths: [
             new URL("../src/index.ts", import.meta.url).pathname,
+            ...(options.extensionPaths ?? []),
           ],
           noSkills: true,
           noPromptTemplates: true,
@@ -160,7 +165,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
                     id: "draft-test",
                     name: "Draft test",
                     reasoning: false,
-                    input: ["text"],
+                    input: ["text", "image"],
                     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
                     contextWindow: 128000,
                     maxTokens: 100,
@@ -213,14 +218,15 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
   await setTimeout(0)
 
   return {
+    directory,
     ui: context.ui,
     session: runtime.session,
     requests,
     terminal,
-    reply() {
+    reply(status?: number) {
       const response = pendingResponses.shift()
       assert(response, "The controlled model must have a pending request")
-      finishResponse(response)
+      finishResponse(response, status)
     },
     async key(data: string) {
       assert(terminal.input, "Pi must have started the terminal")
