@@ -8,11 +8,15 @@ import {
   matchesKey,
   parseKey,
   visibleWidth,
+  type AutocompleteProvider,
   type EditorTheme,
   type Keybinding,
   type KeyId,
   type TUI,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
 } from "@earendil-works/pi-tui"
+import { createCompletions } from "./completions.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 const words = new Intl.Segmenter(undefined, { granularity: "word" })
@@ -24,6 +28,7 @@ type EditKind = "typing" | "backspace" | "delete"
 export class SourceEditor extends CustomEditor {
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
+  private readonly completions: ReturnType<typeof createCompletions>
   private sourceWidth = 60
   private preferredCell: number | undefined
   private past: Draft[] = []
@@ -37,6 +42,26 @@ export class SourceEditor extends CustomEditor {
   constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
     super(tui, theme, keybindings)
     this.nativeKeys = keybindings
+    this.completions = createCompletions(
+      tui,
+      theme,
+      keybindings,
+      () => this.draft,
+      (text, cursor) => this.commit({ text, anchor: cursor, head: cursor }),
+      () => this.getAutocompleteMaxVisible(),
+    )
+  }
+
+  override setAutocompleteProvider(provider: AutocompleteProvider): void {
+    this.completions.setProvider(provider)
+  }
+
+  override isShowingAutocomplete(): boolean {
+    return this.completions.isShowing()
+  }
+
+  override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    return this.completions.handleMouse(event)
   }
 
   override getText(): string {
@@ -136,7 +161,7 @@ export class SourceEditor extends CustomEditor {
     }
     this.editGroup = kind ? { kind, time } : undefined
     this.draft = next
-    this.changed()
+    this.changed(kind !== undefined)
   }
 
   private restoreEdit(from: Draft[], to: Draft[]): void {
@@ -150,8 +175,9 @@ export class SourceEditor extends CustomEditor {
     this.changed()
   }
 
-  private changed(): void {
+  private changed(autocomplete = false): void {
     this.preferredCell = undefined
+    this.completions.update(autocomplete)
     this.onChange?.(this.getText())
     this.tui.requestRender()
   }
@@ -164,6 +190,7 @@ export class SourceEditor extends CustomEditor {
       head: position,
       anchor: select ? this.draft.anchor : position,
     }
+    this.completions.update()
     this.tui.requestRender()
   }
 
@@ -231,6 +258,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   override handleInput(data: string): void {
+    if (this.onExtensionShortcut?.(data)) return
     const keys = this.nativeKeys
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
     const nextPrompt = keys.matches(data, "tui.editor.historyNext")
@@ -245,14 +273,20 @@ export class SourceEditor extends CustomEditor {
       )
     if (
       keys.matches(data, "app.clipboard.pasteImage") ||
-      keys.matches(data, "app.interrupt") ||
+      (keys.matches(data, "app.interrupt") && !this.isShowingAutocomplete()) ||
       (keys.matches(data, "app.exit") && !this.getText()) ||
       appAction
     ) {
+      if (keys.matches(data, "app.interrupt")) this.completions.update()
       super.handleInput(data)
       return
     }
-    if (this.onExtensionShortcut?.(data)) return
+    if (
+      this.pendingPaste === undefined &&
+      !data.startsWith("\x1b[200~") &&
+      this.completions.handleInput(data)
+    )
+      return
     if (previousPrompt || nextPrompt) {
       this.browsePrompt(previousPrompt ? -1 : 1)
       return
@@ -283,6 +317,7 @@ export class SourceEditor extends CustomEditor {
       this.editGroup = undefined
       this.preferredCell = undefined
       this.draft = { ...this.draft, anchor: 0, head: this.getText().length }
+      this.completions.update()
       this.tui.requestRender()
       return
     }
@@ -458,6 +493,9 @@ export class SourceEditor extends CustomEditor {
       this.renderTopBorder(width, top),
       ...lines,
       this.renderBottomBorder(width, Math.max(0, rows.length - top - height)),
+      ...this.completions
+        .render(Math.max(1, width - padding * 2), lines.length + 2, padding)
+        .map((line) => " ".repeat(padding) + line),
     ]
   }
 }
