@@ -52,7 +52,10 @@ for (const mode of ["normal", "idleFollowUp", "steer", "followUp"] as const) {
           return {
             action: "transform",
             text: event.text,
-            images: [{ type: "image", data: imageData, mimeType: "image/png" }],
+            images: [
+              ...(event.images ?? []),
+              { type: "image", data: imageData, mimeType: "image/png" },
+            ],
           }
         })
         pi.on("input", (event) => ({
@@ -554,9 +557,7 @@ test("native compaction queues preserve draft attachments through compaction and
   await t.waitFor(() => assert.equal(host.requests.length, 3))
   assert.equal(host.ui.getEditorText(), "Later draft during compaction")
   assert.deepEqual(
-    host.requests[2]?.messages
-      .filter((message) => message.role === "user")
-      .at(-1),
+    host.requests[2]?.messages.findLast((message) => message.role === "user"),
     {
       role: "user",
       content: [{ type: "text", text: normal.text.trim() }],
@@ -565,9 +566,7 @@ test("native compaction queues preserve draft attachments through compaction and
   host.reply()
   await t.waitFor(() => assert.equal(host.requests.length, 4))
   assert.deepEqual(
-    host.requests[3]?.messages
-      .filter((message) => message.role === "user")
-      .at(-1),
+    host.requests[3]?.messages.findLast((message) => message.role === "user"),
     {
       role: "user",
       content: [{ type: "text", text: followUp.text.trim() }],
@@ -585,6 +584,7 @@ test("native compaction queues preserve draft attachments through compaction and
   const recovery = host.session.sendUserMessage("/composer-recover", {
     expandPromptTemplates: true,
   })
+  assert((await host.output()).includes("Recover draft"))
   await host.key("\r")
   await recovery
   assert.equal(host.ui.getEditorText(), followUp.text)
@@ -595,4 +595,129 @@ test("native compaction queues preserve draft attachments through compaction and
     await readFile(followUp.path, "utf8"),
     "Compaction follow-up bytes\n",
   )
+})
+
+for (const mode of ["steer", "followUp"] as const) {
+  test(`snapshot images survive native ${mode} dequeue, failed replay, and restart recovery`, async (t) => {
+    const host = await openHost(t, {
+      persistSession: true,
+      holdResponses: true,
+      extensionPaths: [attachments],
+      keybindings: { "app.message.dequeue": "super+q" },
+    })
+    host.ui.setEditorText("Hold the initial response")
+    await host.key("\r")
+    await t.waitFor(() => assert.equal(host.requests.length, 1))
+    const source = join(host.directory, "image.png")
+    await writeFile(source, Buffer.from(imageData, "base64"))
+    host.ui.setEditorText(`  Image ${mode} request\t\n`)
+    await host.session.sendUserMessage(`/attach-file ${source}`, {
+      expandPromptTemplates: true,
+    })
+    const original = host.ui.getEditorText()
+    const snapshot = /\[Attachment: image.png\]\(<([^>]+)>\)/.exec(
+      original,
+    )?.[1]
+    assert(snapshot)
+    await rm(source)
+    await host.key(mode === "followUp" ? "\x1b\r" : "\r")
+    await t.waitFor(() =>
+      assert.deepEqual(
+        mode === "followUp"
+          ? host.session.getFollowUpMessages()
+          : host.session.getSteeringMessages(),
+        [original.trim()],
+      ),
+    )
+    host.ui.setEditorText("Later image draft")
+    await host.key("\x1b[113;9u")
+    const replay = `${original.trim()}\n\nLater image draft`
+    assert.equal(host.ui.getEditorText(), replay)
+    assert.deepEqual(host.session.getSteeringMessages(), [])
+    assert.deepEqual(host.session.getFollowUpMessages(), [])
+    host.reply()
+    await host.settled()
+
+    await host.key("\r")
+    await t.waitFor(() => assert.equal(host.requests.length, 2))
+    assert.deepEqual(
+      host.requests[1]?.messages.findLast((message) => message.role === "user"),
+      {
+        role: "user",
+        content: [
+          { type: "text", text: replay },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/png;base64,${imageData}` },
+          },
+        ],
+      },
+    )
+    host.ui.setEditorText("Later work after image replay")
+    host.reply(400)
+    await host.settled()
+    await host.session.reload()
+    assert.equal(host.ui.getEditorText(), "Later work after image replay")
+    const recovery = host.session.sendUserMessage("/composer-recover", {
+      expandPromptTemplates: true,
+    })
+    assert((await host.output()).includes("Recover draft"))
+    await host.key("\x1b[B")
+    await host.key("\r")
+    await recovery
+    assert.equal(host.ui.getEditorText(), original)
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), "Later work after image replay")
+    const sessionFile = host.session.sessionFile!
+    await host.close()
+    const environment = { ...process.env }
+    delete environment["NODE_TEST_CONTEXT"]
+    await promisify(execFile)(
+      process.execPath,
+      [
+        new URL("../fixtures/restart-session.ts", import.meta.url).pathname,
+        JSON.stringify({
+          directory: host.directory,
+          sessionFile,
+          text: "Later work after image replay",
+          clearedText: original,
+          clearedIndex: 2,
+          extensionPaths: [attachments],
+        }),
+      ],
+      { env: environment },
+    )
+    assert.deepEqual(await readFile(snapshot), Buffer.from(imageData, "base64"))
+  })
+}
+
+test("the selected recovery stays visible when many cleared drafts are retained", async (t) => {
+  const host = await openHost(t, { responseStatus: 400 })
+  for (let index = 0; index < 30; index++) {
+    host.ui.setEditorText(`Older draft ${index}`)
+    host.ui.setEditorText("")
+  }
+  host.ui.setEditorText("Newest recoverable draft")
+  await host.key("\r")
+  await host.settled()
+  host.ui.setEditorText("Later work")
+  host.terminal.output = ""
+  const recovery = host.session.sendUserMessage("/composer-recover", {
+    expandPromptTemplates: true,
+  })
+  const output = await host.output()
+  assert(
+    output.includes("Newest recoverable draft"),
+    "The selected recovery must be visible",
+  )
+  for (let index = 0; index < 15; index++) {
+    // oxlint-disable-next-line no-await-in-loop -- Navigate beyond the first page of native choices.
+    await host.key("\x1b[B")
+  }
+  assert((await host.output()).includes("Older draft 15"))
+  await host.key("\r")
+  await recovery
+  assert.equal(host.ui.getEditorText(), "Older draft 15")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Later work")
 })

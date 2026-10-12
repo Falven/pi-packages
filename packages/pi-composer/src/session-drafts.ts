@@ -1,6 +1,12 @@
 import { existsSync } from "node:fs"
 import { join } from "node:path"
-import { getAgentDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import {
+  getAgentDir,
+  getSelectListTheme,
+  keyHint,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent"
+import { Container, SelectList, Text } from "@earendil-works/pi-tui"
 import { Clipboard } from "./clipboard.ts"
 import { SourceEditor, type DraftHistory } from "./source-editor.ts"
 import {
@@ -149,7 +155,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         if (editor === next) changed(draft)
       }
       next.onDraftClear = (draft) => {
-        // shortcut: Pi cannot acknowledge each submission; keep cleared drafts for explicit recovery.
+        // shortcut: no per-submission acknowledgement, retain copies until Pi exposes correlated outcomes.
         if (active && editor === next && draft.trim() !== "/composer-recover") {
           clearedDrafts.push(draft)
         }
@@ -188,22 +194,18 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       const recovery = readDrafts(directory)
       for (const error of recovery.errors) ctx.ui.notify(error, "error")
       const sessionId = ctx.sessionManager.getSessionId()
-      const drafts = [
-        ...clearedDrafts.toReversed().map((text) => ({ sessionId, text })),
-        ...recovery.drafts
-          .filter(
-            (draft) =>
-              draft.sessionId !== sessionId && !existsSync(draft.sessionFile),
-          )
-          .flatMap((draft) => [
-            ...(draft.text
-              ? [{ sessionId: draft.sessionId, text: draft.text }]
-              : []),
-            ...(draft.clearedDrafts ?? [])
-              .toReversed()
-              .map((text) => ({ sessionId: draft.sessionId, text })),
-          ]),
-      ]
+      const drafts = clearedDrafts
+        .toReversed()
+        .map((text) => ({ sessionId, text }))
+      for (const draft of recovery.drafts) {
+        if (draft.sessionId === sessionId || existsSync(draft.sessionFile))
+          continue
+        if (draft.text)
+          drafts.push({ sessionId: draft.sessionId, text: draft.text })
+        for (const text of (draft.clearedDrafts ?? []).toReversed()) {
+          drafts.push({ sessionId: draft.sessionId, text })
+        }
+      }
       if (!drafts.length) {
         ctx.ui.notify(
           "No cleared drafts or drafts from unsaved sessions are available.",
@@ -212,11 +214,51 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }
       const labels = drafts.map(
         (draft, index) =>
-          `${index + 1}. ${draft.sessionId}: ${draft.text.split("\n")[0]}`,
+          `${index + 1}. ${draft.text.trim().split("\n")[0]} (${draft.sessionId})`,
       )
-      const selected = await ctx.ui.select("Recover draft", labels, {
-        signal: recoveryAbort.signal,
-      })
+      const selected = await ctx.ui.custom<string | undefined>(
+        (tui, theme, _keybindings, done) => {
+          const list = new SelectList(
+            labels.map((label) => ({ value: label, label })),
+            Math.max(1, Math.min(10, tui.terminal.rows - 8)),
+            getSelectListTheme(),
+          )
+          const view = new Container()
+          view.addChild(new Text(theme.fg("accent", "Recover draft"), 0, 1))
+          view.addChild(list)
+          view.addChild(
+            new Text(
+              `${keyHint("tui.select.confirm", "recover")}  ${keyHint("tui.select.cancel", "cancel")}`,
+              0,
+              1,
+            ),
+          )
+          const cancel = () => done(undefined)
+          recoveryAbort.signal.addEventListener("abort", cancel, { once: true })
+          list.onSelect = ({ value }) => done(value)
+          list.onCancel = cancel
+          return {
+            render(width) {
+              return view.render(width)
+            },
+            handleInput(data) {
+              list.handleInput(data)
+              tui.requestRender()
+            },
+            handleMouse(event) {
+              return view.handleMouse(event)
+            },
+            invalidate() {
+              view.invalidate()
+            },
+            dispose() {
+              recoveryAbort.signal.removeEventListener("abort", cancel)
+            },
+          }
+        },
+        // Non-overlay custom dialogs restore stale editor text when they close.
+        { overlay: true },
+      )
       if (!active || !selected) return
       if (revision !== requestedRevision) {
         ctx.ui.notify(

@@ -410,6 +410,7 @@ test("a recovery selection cannot replace edits made while its picker is open", 
   const retry = host.session.sendUserMessage("/composer-recover", {
     expandPromptTemplates: true,
   })
+  assert.match(await host.output(), /Recover draft/)
   await host.key("\r")
   await retry
   assert.equal(host.ui.getEditorText(), "Orphaned first draft")
