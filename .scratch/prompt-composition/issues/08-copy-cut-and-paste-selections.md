@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Cmd+C copies selected Markdown as plain text; Cmd+X copies before deleting; Cmd+V inserts at the caret or replaces the selected range.
 - [ ] Clipboard failure leaves selected content intact and reports the failure.

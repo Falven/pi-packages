@@ -45,7 +45,7 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 - Wrap the supplied `AutocompleteProvider` through `addAutocompleteProvider`. Delegate unrelated suggestions and edits, preserve wrapper order and later provider updates, and carry cancellation, completion ranges, and resulting cursor positions through the native contract.
 - Native and custom pickers use the same canonical text insertion behavior. The package supplies completion behavior to the active editor and preserves native `@` path completion and leading command/argument completion.
 - Distinguish skill selection from a command sharing its display name by inserting the qualified native skill spelling. Preserve Pi's native dispatch priority and command behavior.
-- Recognize invocation tokens using Markdown-aware prose boundaries. Inline and fenced code, indented code, escaped text, link destinations, URLs, and incidental path/slash/dollar text retain their literal meaning. Match complete skill names rather than prefixes embedded in other text.
+- Recognize invocation tokens in the text delivered by Pi using Markdown-aware prose boundaries. Inline and fenced code, indented code, escaped text, link destinations, URLs, and incidental path/slash/dollar text retain their literal meaning. Pi's native submission trimming applies: use fenced code for a leading literal example whose indentation would otherwise be removed. Match complete skill names rather than prefixes embedded in other text.
 - Expand resolved references through Pi's public input transformation boundary. Preserve the draft's ordinary text representation; prepare the submitted instruction content without rewriting the saved draft.
 - Deduplicate by the resolved native skill in first-reference order, including leading and inline occurrences. Each selected skill contributes one instruction block with its native resource context. Preserve surrounding prose and avoid expanding references inside inserted skill instruction bodies.
 - Use public native discovery and exported helpers where available. Pi's built-in leading skill expansion is private, so it is an implementation reference rather than a callable public API. The extension's transformation must compose with that native leading-expansion step without duplication.
@@ -55,6 +55,7 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 
 ## Testing Decisions
 
+- Verify native leading-whitespace trimming and a fenced leading literal example through normal, steer, and follow-up submission.
 - Test through the public Pi editor/session boundary. Load the extension, request and accept completion through the effective provider, and submit through native input processing. Assert the resulting draft, instruction blocks, preserved literal text, image content, and errors.
 - Use the shared host setup with the native editor and `pi-composer`, with custom pickers and provider wrappers installed in different supported orders. Test provider updates after the package is active.
 - Use the existing Node test runner. Pi's skill slash-completion, skill-loading, and extension input-event suites provide prior art for catalog fixtures, command collisions, and transformation chaining. Assert externally visible results rather than private parser structure.
