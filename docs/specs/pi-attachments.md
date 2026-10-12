@@ -113,4 +113,4 @@ Native evidence and testing prior art: [extension UI, input, and submission cont
 - [Independent composition extensions](../adr/0003-independent-composition-extensions.md)
 - [Retain attachment snapshots](../adr/0007-pi-attachments-retain-snapshots.md)
 - [Resolve native editing actions before composer shortcuts](../adr/0009-pi-composer-native-editing-actions.md)
-- [Scope terminal integration to Pi's terminal ownership](../adr/0010-scope-terminal-integration-to-pi.md)
+- [Make terminal keybinding setup explicit and reversible](../adr/0010-explicit-terminal-keybinding-setup.md)

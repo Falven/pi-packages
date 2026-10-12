@@ -1,0 +1,3 @@
+# Make terminal keybinding setup explicit and reversible
+
+Terminal shortcuts can prevent Pi from receiving editing input, so `pi-composer` owns explicit, reversible setup through `/setup-keybinds ghostty`, with review of the affected shortcuts and configuration before installation. Setup appends one marked block, preserves surrounding settings, creates no backups, and uses Ghostty's validation and binding inspection; a conflicting include or an unverified effective result leaves the configuration unchanged. These bindings remain effective outside Pi until the unmodified managed block is explicitly removed and Ghostty reloads its configuration, while forwarded keys retain their identities and follow Pi's native dispatch and configured actions.

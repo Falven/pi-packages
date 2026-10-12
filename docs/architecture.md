@@ -43,7 +43,7 @@ The terminal handles its shortcuts before input reaches Pi. Pi owns terminal inp
 
 Native input listeners, focused UI, application actions, and accepted extension shortcuts retain Pi's dispatch behavior. Effective native editing bindings take precedence over composer aliases, and an explicit Pi binding override suppresses aliases for that action, including when its binding list is empty. Composer actions without native action IDs have documented fixed shortcuts, and Pi configuration is not an automatic import of macOS text-field preferences.
 
-Terminal shortcut delivery requires separate verification from editor behavior. Any terminal integration must identify Pi's terminal, follow actual terminal ownership through handoffs, and remove only its own changes while preserving other integrations and behavior outside Pi. The [keyboard implementation plan](composer-keyboard-spec-plan.md) links the package requirements, verified terminal limitations, and acceptance procedure.
+Terminal shortcut delivery requires separate verification from editor behavior. `pi-composer` owns explicit, persistent terminal keybinding setup through `/setup-keybinds ghostty`; installation requires review and leaves existing settings in place around one removable block. The installed bindings remain effective in other programs until removal. The [keyboard change plan](composer-keyboard-spec-plan.md) defines the setup contract, page-selection requirements, and spec amendments.
 
 ## Integration requirements
 
@@ -84,7 +84,7 @@ Shared decisions apply to every package:
 - [Preserve Pi extension contracts](adr/0001-preserve-pi-extension-contracts.md)
 - [One editor owns draft transactions](adr/0002-one-editor-owns-draft-transactions.md)
 - [Independent composition extensions](adr/0003-independent-composition-extensions.md)
-- [Scope terminal integration to Pi's terminal ownership](adr/0010-scope-terminal-integration-to-pi.md)
+- [Make terminal keybinding setup explicit and reversible](adr/0010-explicit-terminal-keybinding-setup.md)
 
 The composer also follows [native editing action resolution](adr/0009-pi-composer-native-editing-actions.md).
 

@@ -111,4 +111,4 @@ Native evidence and testing prior art: [provider composition](https://github.com
 - [Independent composition extensions](../adr/0003-independent-composition-extensions.md)
 - [Skill invocation is portable text](../adr/0008-pi-skill-references-portable-invocation.md)
 - [Resolve native editing actions before composer shortcuts](../adr/0009-pi-composer-native-editing-actions.md)
-- [Scope terminal integration to Pi's terminal ownership](../adr/0010-scope-terminal-integration-to-pi.md)
+- [Make terminal keybinding setup explicit and reversible](../adr/0010-explicit-terminal-keybinding-setup.md)

@@ -195,4 +195,4 @@ Native evidence and testing prior art: [editor contract](https://github.com/eare
 - [Live Markdown editing](../adr/0004-pi-composer-live-markdown-editing.md)
 - [One Markdown text state](../adr/0005-pi-composer-one-markdown-text-state.md)
 - [Resolve native editing actions before composer shortcuts](../adr/0009-pi-composer-native-editing-actions.md)
-- [Scope terminal integration to Pi's terminal ownership](../adr/0010-scope-terminal-integration-to-pi.md)
+- [Make terminal keybinding setup explicit and reversible](../adr/0010-explicit-terminal-keybinding-setup.md)
