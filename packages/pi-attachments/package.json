@@ -1,7 +1,7 @@
 {
   "name": "pi-attachments",
   "version": "0.1.0",
-  "description": "Attachment storage and preview extension scaffold for Pi.",
+  "description": "Preserved text and file attachments for Pi.",
   "keywords": [
     "attachments",
     "pi",
