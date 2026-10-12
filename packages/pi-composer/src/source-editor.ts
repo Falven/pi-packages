@@ -6,6 +6,7 @@ import {
   decodeKittyPrintable,
   matchesKey,
   parseKey,
+  ScrollView,
   type AutocompleteProvider,
   type EditorTheme,
   type Keybinding,
@@ -37,6 +38,14 @@ export class SourceEditor extends CustomEditor {
   private revision = 0
   private sourceWidth = 60
   private formatted = true
+  private projection:
+    | {
+        text: string
+        width: number
+        formatted: boolean
+        value: Projection
+      }
+    | undefined
   private preferredCell: number | undefined
   private past: Draft[] = []
   private future: Draft[] = []
@@ -45,6 +54,13 @@ export class SourceEditor extends CustomEditor {
   private prompts: string[] = []
   private promptIndex = -1
   private promptDraft: Draft | undefined
+  private dragging = false
+  private visibleTop = 0
+  private visibleRowCount = 0
+  private renderedPadding = 0
+  // Pi owns the scroll offset; the editor renders only visible mapped rows.
+  private readonly viewport = new ScrollView(this)
+  private revealCaret = true
 
   constructor(
     tui: TUI,
@@ -75,11 +91,50 @@ export class SourceEditor extends CustomEditor {
   }
 
   override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-    return this.completions.handleMouse(event)
+    if (event.type === "press") this.dragging = false
+    if (!this.dragging) {
+      const completion = this.completions.handleMouse(event)
+      if (completion) return completion
+    }
+    if (event.type === "wheel") {
+      const delta = event.wheelDelta ?? 0
+      if (this.viewport.scrollBy(delta) === delta) return undefined
+      this.revealCaret = false
+      return { handled: true }
+    }
+    if (event.button !== "left") return undefined
+    const inside = event.y > 0 && event.y <= this.visibleRowCount
+    if (event.type === "press" && inside) {
+      this.dragging = true
+    } else if (
+      !this.dragging ||
+      (event.type !== "drag" && event.type !== "release")
+    ) {
+      return event.type === "press" || event.type === "click"
+        ? { handled: true, focus: true }
+        : undefined
+    }
+    let top = this.visibleTop
+    if (event.type === "drag" && !inside) {
+      this.viewport.scrollBy(event.y <= 0 ? -1 : 1)
+      top = this.viewport.scrollTop
+    }
+    const row = Math.max(0, Math.min(this.visibleRowCount - 1, event.y - 1))
+    this.moveTo(
+      this.project().positionAt(top + row, event.x - this.renderedPadding),
+      event.type !== "press" || event.shift,
+    )
+    this.dragging = event.type !== "release"
+    return { handled: true, focus: true, capture: this.dragging, render: true }
   }
 
   override getText(): string {
     return this.draft.text
+  }
+
+  override invalidate(): void {
+    super.invalidate()
+    this.projection = undefined
   }
 
   getDraftHistory(): DraftHistory {
@@ -215,6 +270,8 @@ export class SourceEditor extends CustomEditor {
 
   private changed(autocomplete = false): void {
     this.revision++
+    this.dragging = false
+    this.revealCaret = true
     this.preferredCell = undefined
     this.completions.update(autocomplete)
     this.onChange?.(this.getText())
@@ -223,6 +280,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   private moveTo(position: number, select: boolean): void {
+    this.revealCaret = true
     this.preferredCell = undefined
     this.editGroup = undefined
     this.draft = {
@@ -262,6 +320,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   override handleInput(data: string): void {
+    this.dragging = false
     if (this.onExtensionShortcut?.(data)) return
     const keys = this.nativeKeys
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
@@ -346,6 +405,7 @@ export class SourceEditor extends CustomEditor {
     }
     if (matchesKey(data, "super+shift+m")) {
       this.formatted = !this.formatted
+      this.revealCaret = true
       this.preferredCell = undefined
       this.tui.requestRender()
       return
@@ -359,6 +419,7 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (matchesKey(data, "super+a")) {
+      this.revealCaret = true
       this.editGroup = undefined
       this.preferredCell = undefined
       this.draft = { ...this.draft, anchor: 0, head: this.getText().length }
@@ -501,19 +562,51 @@ export class SourceEditor extends CustomEditor {
   }
 
   private project(): Projection {
-    return new Projection(this.getText(), this.sourceWidth, this.formatted)
+    const text = this.getText()
+    if (
+      this.projection?.text !== text ||
+      this.projection.width !== this.sourceWidth ||
+      this.projection.formatted !== this.formatted
+    ) {
+      this.projection = {
+        text,
+        width: this.sourceWidth,
+        formatted: this.formatted,
+        value: new Projection(text, this.sourceWidth, this.formatted),
+      }
+    }
+    return this.projection.value
   }
 
   override render(width: number): string[] {
     const padding = this.getPaddingX()
-    this.sourceWidth = Math.max(1, width - padding * 2 - 1)
+    const sourceWidth = Math.max(1, width - padding * 2 - 1)
+    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.3))
+    this.revealCaret ||=
+      this.sourceWidth !== sourceWidth ||
+      this.viewport.viewportHeight !== height
+    this.sourceWidth = sourceWidth
     const projection = this.project()
     const rows = projection.rows
     const { anchor, head } = this.draft
     const cursorRow = rows.findLastIndex((row) => row.from <= head)
-    const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.3))
-    const top = Math.max(0, cursorRow - height + 1)
+    this.viewport.updateLayout(rows.length, height, () =>
+      this.tui.requestRender(),
+    )
+    if (this.revealCaret) {
+      this.viewport.scrollTo(
+        Math.min(
+          cursorRow,
+          Math.max(this.viewport.scrollTop, cursorRow - height + 1),
+        ),
+      )
+      this.revealCaret = false
+    }
+    const top = this.viewport.scrollTop
     const visibleRows = rows.slice(top, top + height)
+    this.visibleTop = top
+    this.visibleRowCount = visibleRows.length
+    this.renderedPadding = padding
     const lines = visibleRows.map((_row, rowIndex) => {
       return (
         " ".repeat(padding) +
