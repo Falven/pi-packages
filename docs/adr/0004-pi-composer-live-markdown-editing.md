@@ -1,3 +1,3 @@
 # Live Markdown editing
 
-`pi-composer` renders supported Markdown inside the editable draft, with a source view for direct syntax editing. Both views support caret movement, selection, and shared undo so users can edit formatted content and its source consistently. The formatting and normalization rules are recorded in the [specification](../specs/pi-composer.md).
+`pi-composer` renders supported Markdown inside the editable draft, with a source view for direct syntax editing. Both views share caret movement, selection, and undo, honor Pi's hardware-cursor setting, and render recognized link text with Pi's native hyperlinks while keeping Markdown authoritative. Cursor appearance and link destinations are presentation metadata, so terminal interaction does not become a draft edit; formatting and normalization rules are recorded in the [specification](../specs/pi-composer.md).
