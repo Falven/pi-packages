@@ -6,6 +6,12 @@ Edit paragraphs, headings, bold, italic, strikethrough, and links with Pi's nati
 
 The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
 
+Each native session autosaves its Markdown draft, including file, skill, and attachment references. Edits save after 150 ms of idle time and flush before switching sessions or shutting down. Reopening a saved session restores its draft, including an explicitly cleared draft. Undo/redo stays in memory, isolated by session, across working-directory changes and resource reloads. Restarting Pi begins with fresh history.
+
+Recovery files live in `pi-composer/drafts` inside Pi's agent directory. If Pi has not yet saved a native session, `/composer-recover` lets you choose its retained draft and restore it as an undoable edit in the current session. Recovery never automatically replaces an unrelated session's text. `--no-session` keeps drafts in memory without writing recovery files.
+
+Save failures report an error and preserve the current text and the last usable checkpoint. A failed save cancels a session switch or fork. Complete replacement files remain available for recovery if their final rename fails.
+
 ## Keys
 
 | Key                       | Action                                |
