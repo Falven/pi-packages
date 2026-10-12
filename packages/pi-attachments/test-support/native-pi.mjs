@@ -22,6 +22,7 @@ import {
   InteractiveMode,
   SessionManager,
   SettingsManager,
+  VERSION,
 } from "@earendil-works/pi-coding-agent"
 
 export async function waitFor(check) {
@@ -139,7 +140,7 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
       settingsManager: SettingsManager.inMemory({
         quietStartup: true,
         theme: "dark",
-        lastChangelogVersion: "0.87.1",
+        lastChangelogVersion: VERSION,
         compaction: { enabled: false },
         retry: { enabled: false },
       }),
@@ -277,7 +278,11 @@ export function holdFileRead(t, source) {
   }
 }
 
-export async function retainedRequest(host, contains = "") {
+export async function retainedRequest(
+  host,
+  contains = "",
+  kind = "Attachment",
+) {
   const entries = await readdir(host.agentDir, {
     recursive: true,
     withFileTypes: true,
@@ -292,7 +297,7 @@ export async function retainedRequest(host, contains = "") {
   )
   const request = files.find(
     ({ text }) =>
-      text.startsWith("# Attachment request\n") && text.includes(contains),
+      text.startsWith(`# ${kind} request\n`) && text.includes(contains),
   )
   assert.ok(request, "No readable attachment request was retained")
   return request

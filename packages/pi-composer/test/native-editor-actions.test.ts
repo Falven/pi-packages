@@ -33,7 +33,15 @@ test("Pi's external-editor action replaces the inline draft and shares its undo 
 
 test("Pi's clipboard application action inserts into the same draft and selection history", async (t) => {
   const clipboard = getNativeClipboard()
-  assert(clipboard, "The native clipboard boundary must be available")
+  assert(
+    clipboard?.getFilePaths,
+    "The native clipboard boundary must be available",
+  )
+  t.mock.method(
+    clipboard as { getFilePaths: NonNullable<typeof clipboard.getFilePaths> },
+    "getFilePaths",
+    async () => null,
+  )
   t.mock.method(clipboard, "getImage", async () => null)
   t.mock.method(clipboard, "getText", async () => "new\nreference")
   const host = await openHost(t, {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict"
 import fs, { chmod, mkdir, readFile, readdir } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
-import { test } from "node:test"
+import { beforeEach, test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { getNativeClipboard, StdinBuffer } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
@@ -24,6 +24,14 @@ const composerPath = fileURLToPath(
 const attachmentsPath = fileURLToPath(
   new URL("../pi-attachments/src/index.ts", import.meta.url),
 )
+
+beforeEach((t) => {
+  const clipboard = getNativeClipboard()
+  assert.ok(clipboard?.getFilePaths)
+  t.mock.method(clipboard, "getFilePaths", async () => null)
+  t.mock.method(clipboard, "getImage", async () => null)
+  t.mock.method(clipboard, "getText", async () => null)
+})
 
 test("a 4,999-unit paste stays visibly inline through terminal and extension routes", async (t) => {
   const host = await nativePi(t, [pastePath])

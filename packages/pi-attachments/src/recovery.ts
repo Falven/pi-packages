@@ -14,7 +14,7 @@ type RequestContext = {
 }
 type ImageRequest = InputEvent & RequestContext
 export type Snapshot = { name: string; contents: string | Buffer }
-type SnapshotRequest = RequestContext & { snapshot: Snapshot }
+type SnapshotRequest = RequestContext & { snapshots: Snapshot[] }
 type RetainedRequest = ImageRequest | SnapshotRequest
 
 // Pi reloads extension modules when the cwd or resources change.
@@ -30,21 +30,34 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
   try {
     await mkdir(storage, { recursive: true, mode: 0o700 })
     const directory = await mkdtemp(join(storage, "snapshot-"))
-    const path = join(directory, request.snapshot.name)
-    const reference = `[Attachment: ${request.snapshot.name}](<${path}>)`
-    const recovery = `${path}.draft.md`
+    const files = await Promise.all(
+      request.snapshots.map(async (snapshot, index, all) => {
+        const parent =
+          all.length === 1 ? directory : join(directory, String(index + 1))
+        await mkdir(parent, { recursive: true, mode: 0o700 })
+        return { ...snapshot, path: join(parent, snapshot.name) }
+      }),
+    )
+    const reference = files
+      .map(({ name, path }) => `[Attachment: ${name}](<${path}>)`)
+      .join("\n")
+    const recovery = `${files[0]!.path}.draft.md`
     await writeFile(
       recovery,
       `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\n\n${request.text}\n\n${reference}\n`,
       { flag: "wx", mode: 0o600, flush: true },
     )
-    await writeFile(path, request.snapshot.contents, {
-      flag: "wx",
-      mode: 0o600,
-      flush: true,
-    })
+    await Promise.all(
+      files.map(({ path, contents }) =>
+        writeFile(path, contents, {
+          flag: "wx",
+          mode: 0o600,
+          flush: true,
+        }),
+      ),
+    )
     unsaved.delete(request)
-    return { path, reference, recovery }
+    return { reference, recovery }
   } catch (error) {
     unsaved.add(request)
     throw error
@@ -97,7 +110,7 @@ export function registerRecovery(
       requests.map(async (request) => {
         try {
           const path =
-            "snapshot" in request
+            "snapshots" in request
               ? (await saveSnapshot(storage, request)).recovery
               : await saveRequest(storage, request)
           if (!signal.aborted) ctx.ui.notify(`Request saved: ${path}`, "info")

@@ -1,8 +1,9 @@
-import { unlinkSync } from "node:fs"
-import { link, mkdir, mkdtemp, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { constants, unlinkSync } from "node:fs"
+import { link, mkdir, mkdtemp, open, writeFile } from "node:fs/promises"
+import { basename, dirname, join } from "node:path"
 import {
   CustomEditor,
+  detectSupportedImageMimeTypeFromFile,
   getAgentDir,
   type ExtensionAPI,
   type ExtensionContext,
@@ -10,6 +11,7 @@ import {
 import {
   getNativeClipboard,
   isFocusable,
+  matchesKey,
   type TuiMouseEvent,
 } from "@earendil-works/pi-tui"
 
@@ -21,7 +23,12 @@ type PasteRequest = {
   observed: boolean
 }
 
-type RetainedPaste = { text: string; request: Omit<PasteRequest, "ctx"> }
+type PasteFile =
+  | { path: string; contents?: Uint8Array }
+  | { name: string; contents: Uint8Array; image: true }
+type RetainedPaste = ({ text: string } | { files: PasteFile[] }) & {
+  request: Omit<PasteRequest, "ctx">
+}
 
 // Pi reloads extension modules when the cwd or resources change.
 const unsavedKey = Symbol.for("pi-paste:unsaved")
@@ -81,7 +88,7 @@ export default function piPaste(pi: ExtensionAPI): void {
     handler: inline,
   })
   pi.registerCommand("paste-recover", {
-    description: "Save pastes retained after a storage failure",
+    description: "Save pastes retained after a read or storage failure",
     handler: async (_args, ctx) => {
       const pending = unsaved.splice(0)
       if (pending.length === 0) {
@@ -89,8 +96,12 @@ export default function piPaste(pi: ExtensionAPI): void {
         return
       }
       await Promise.all(
-        pending.map(({ text, request: original }) =>
-          preserve(text, { ...original, ctx }, "Recovered paste"),
+        pending.map((retained) =>
+          preserve(
+            "text" in retained ? retained.text : retained.files,
+            { ...retained.request, ctx },
+            "Recovered paste",
+          ),
         ),
       )
     },
@@ -122,26 +133,82 @@ export default function piPaste(pi: ExtensionAPI): void {
   }
 
   async function preserve(
-    text: string,
+    content: string | PasteFile[],
     paste: PasteRequest,
     problem?: string,
   ): Promise<void> {
     const { ctx, ...original } = paste
     const { draft, sessionId } = original
     try {
+      const files =
+        typeof content === "string"
+          ? [{ name: "text.txt", contents: content }]
+          : content
+      const reads = await Promise.allSettled(
+        files.map(async (file) => {
+          if ("path" in file && file.contents === undefined) {
+            // Reject non-files without blocking on FIFO paths.
+            const source = await open(
+              file.path,
+              constants.O_RDONLY | constants.O_NONBLOCK,
+            )
+            try {
+              if (!(await source.stat()).isFile())
+                throw new Error(`Not a regular file: ${file.path}`)
+              file.contents = await source.readFile()
+            } finally {
+              await source.close()
+            }
+          }
+        }),
+      )
+      const failedRead = reads.find((read) => read.status === "rejected")
+      if (failedRead) throw failedRead.reason
       await mkdir(storage, { recursive: true, mode: 0o700 })
       const directory = await mkdtemp(join(storage, "paste-"))
-      const path = join(directory, "text.txt")
-      await writeFile(path, text, { flag: "wx", mode: 0o600 })
+      const paths = files.map((file, index) =>
+        join(
+          directory,
+          typeof content === "string" ? "" : String(index + 1),
+          "path" in file ? basename(file.path) : file.name,
+        ),
+      )
+      const saves = await Promise.allSettled(
+        files.map(async (file, index) => {
+          const path = paths[index]!
+          await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+          await writeFile(path, file.contents!, { flag: "wx", mode: 0o600 })
+        }),
+      )
+      const failed = saves.find((save) => save.status === "rejected")
+      if (failed) throw failed.reason
+      const details = [
+        ...paths.map((path) => `Paste: ${path}`),
+        ...files.flatMap((file) =>
+          "path" in file ? [`Source: ${file.path}`] : [],
+        ),
+      ].join("\n")
       await writeFile(
         join(directory, "request.md"),
-        `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+        `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\n${details}\n`,
         { flag: "wx", mode: 0o600 },
       )
+      const invalidImages = await Promise.all(
+        files.map(
+          async (file, index) =>
+            "image" in file &&
+            !(await detectSupportedImageMimeTypeFromFile(paths[index]!)),
+        ),
+      )
       if (lifetime.signal.aborted) return
-      if (problem || !unchanged(paste)) {
+      if (invalidImages.some(Boolean)) {
         ctx.ui.notify(
-          `${problem ?? "The requesting draft changed"}. Paste retained: ${path}`,
+          `Clipboard image format is unsupported. Paste retained: ${paths.join(", ")}`,
+          "error",
+        )
+      } else if (problem || !unchanged(paste)) {
+        ctx.ui.notify(
+          `${problem ?? "The requesting draft changed"}. Paste retained: ${paths.join(", ")}`,
           "warning",
         )
       } else if (
@@ -152,34 +219,48 @@ export default function piPaste(pi: ExtensionAPI): void {
               command.name === "attach-file" && command.source === "extension",
           )
       ) {
-        const source = join(directory, "paste.txt")
-        await link(path, source)
+        const sources = paths.map((path, index) =>
+          typeof content === "string"
+            ? join(directory, "paste.txt")
+            : join(directory, "handoff", String(index + 1), basename(path)),
+        )
+        await Promise.all(
+          sources.map(async (source, index) => {
+            await mkdir(dirname(source), { recursive: true, mode: 0o700 })
+            await link(paths[index]!, source)
+          }),
+        )
         if (!unchanged(paste)) {
-          unlinkSync(source)
+          for (const source of sources) unlinkSync(source)
           if (!lifetime.signal.aborted) {
             ctx.ui.notify(
-              `The requesting draft changed. Paste retained: ${path}`,
+              `The requesting draft changed. Paste retained: ${paths.join(", ")}`,
               "warning",
             )
           }
           return
         }
         // Native commands can be deferred; retire their source when the requesting target changes.
-        handoffs.add(source)
-        pi.sendUserMessage(`/attach-file ${source}`, {
+        for (const source of sources) handoffs.add(source)
+        pi.sendUserMessage(`/attach-file ${sources.join("\n")}`, {
           expandPromptTemplates: true,
         })
       } else {
         ctx.ui.notify(
-          `Attach File is unavailable. Paste retained: ${path}`,
+          `Attach File is unavailable. Paste retained: ${paths.join(", ")}`,
           "error",
         )
       }
     } catch (error) {
-      unsaved.push({ text, request: original })
+      unsaved.push({
+        ...(typeof content === "string"
+          ? { text: content }
+          : { files: content }),
+        request: original,
+      })
       if (!lifetime.signal.aborted) {
         ctx.ui.notify(
-          `Could not preserve paste: ${String(error)}. Text retained in memory until Pi exits; use /paste-recover.`,
+          `Could not preserve paste: ${String(error)}. Paste retained in memory until Pi exits; use /paste-recover.`,
           "error",
         )
       }
@@ -198,7 +279,6 @@ export default function piPaste(pi: ExtensionAPI): void {
         ? previous(tui, theme, keybindings)
         : new CustomEditor(tui, theme, keybindings)
       let pendingPaste: string | undefined
-      let nativeClipboardPaste = Reflect.get(editor, "onPasteImage", editor)
 
       function paste(
         text: string,
@@ -222,11 +302,22 @@ export default function piPaste(pi: ExtensionAPI): void {
         try {
           const clipboard = getNativeClipboard()
           if (!clipboard) throw new Error("Native clipboard is unavailable")
+          const paths = forceInline ? null : await clipboard.getFilePaths?.()
+          if (paths?.length) {
+            if (paths.some((path) => /\p{Cc}/u.test(path)))
+              throw new Error("Clipboard file path contains control characters")
+            await preserve(
+              paths.map((path) => ({ path })),
+              pending,
+            )
+            return
+          }
           const image = forceInline ? null : await clipboard.getImage()
           if (image) {
-            if (!nativeClipboardPaste)
-              throw new Error("Native image paste is unavailable")
-            nativeClipboardPaste()
+            await preserve(
+              [{ name: "clipboard-image", contents: image, image: true }],
+              pending,
+            )
             return
           }
           const text = await clipboard.getText()
@@ -297,7 +388,31 @@ export default function piPaste(pi: ExtensionAPI): void {
                 paste(text)
                 if (rest) handleInput(rest)
               } else {
-                target.handleInput(data)
+                const clipboardAction = Reflect.get(
+                  target,
+                  "onPasteImage",
+                  target,
+                )
+                if (
+                  matchesKey(data, "super+v") &&
+                  typeof clipboardAction === "function" &&
+                  !Object.values(keybindings.getEffectiveConfig())
+                    .flat()
+                    .some((key) => key && matchesKey(data, key))
+                ) {
+                  const shortcut = Reflect.get(
+                    target,
+                    "onExtensionShortcut",
+                    target,
+                  )
+                  if (
+                    typeof shortcut !== "function" ||
+                    !shortcut.call(target, data)
+                  )
+                    clipboardAction.call(target)
+                } else {
+                  target.handleInput(data)
+                }
               }
             }
           }
@@ -331,7 +446,6 @@ export default function piPaste(pi: ExtensionAPI): void {
             !Reflect.get(target, property, target) &&
             typeof value === "function"
           ) {
-            nativeClipboardPaste = value
             return Reflect.set(
               target,
               property,

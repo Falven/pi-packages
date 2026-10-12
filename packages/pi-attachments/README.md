@@ -21,9 +21,16 @@ pi install ./packages/pi-attachments
 | Open the text attachment dialog | `/attach-text`        | `Ctrl+Alt+T` |
 | Attach command text             | `/attach-text <text>` |              |
 | Choose a file path              | `/attach-file`        | `Ctrl+Alt+F` |
-| Attach a file directly          | `/attach-file <path>` |              |
+| Attach files directly           | `/attach-file <path>` |              |
 
-Use shortcuts while composing to keep the existing draft. The text dialog preserves leading whitespace and final newlines; native command submission trims its input. The file command treats everything after the command name as the path, so paths with spaces do not need quotes. Relative paths resolve against the session's working directory.
+Use shortcuts while composing to keep the existing draft. The text dialog preserves leading whitespace and final newlines; native command submission trims its input. The file command accepts one path per line, so spaces within a path do not need quotes. Relative paths resolve against the session's working directory. For example:
+
+```text
+/attach-file /path/first file.txt
+/path/第二文件.png
+```
+
+Every file in the set is captured before its references enter the draft as one edit. Spaces and Unicode in names are preserved, and files with the same name are stored separately. With `pi-composer`, one undo restores the selection and removes the whole set's membership.
 
 Attachments are saved under `pi-attachments/` in Pi's agent directory before their references enter the draft. Editing or deleting the source file does not change the snapshot. Normal `@file` references continue to identify the working file. Text and file attachment references remain readable on demand. A draft containing only attachment references can be submitted normally.
 
@@ -35,12 +42,12 @@ Images are delivered as native image content on Enter, steering, and follow-up s
 
 ## Recovery
 
-Read and write errors leave the main draft intact. Failed text saves reopen the text dialog with its contents. Failed file saves offer **Retry save**, using the already captured bytes even if the source has changed or disappeared.
+Read and write errors leave the main draft intact. Failed text saves reopen the text dialog with its contents. Failed file saves offer **Retry save** for the whole set, using the already captured bytes even if the sources have changed or disappeared.
 
-Text changes, terminal activity, another submission, or session replacement during preparation keep the result out of the newer draft. Text changes are observed through the effective editor's native callback, including changes that return to the original text. The saved snapshot gets an adjacent `.draft.md` recovery file containing the requesting session ID, original draft, and attachment reference. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
+Text changes, terminal activity, another submission, or session replacement during preparation keep the result out of the newer draft. Text changes are observed through the effective editor's native callback, including changes that return to the original text. Each action saves a `.draft.md` recovery file beside its first snapshot, containing the requesting session ID, original draft, and all attachment references. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
 
 Later editor factory decorators remain compatible when they delegate to the observed editor and preserve callback assignments. A replacement that bypasses observation, or an editor installation or callback change during preparation, saves a recovery file instead of inserting into the current draft.
 
 Image submissions save a readable `request-*/request.draft.md` under the same storage directory before delivery. The file records the requesting session, submission mode, and draft. Incoming images from other input handlers are preserved beside it as snapshot references. These recovery copies also survive native authentication or provider failures after the editor clears; they do not imply successful delivery. Copy their attachment references back into the draft to reuse the captured images.
 
-Image read, conversion, and recovery-write errors stop that submission and report the available recovery location. Preview errors leave the reference and bytes intact. Pending preparation never restores text over a newer draft or sends into a replacement session. If recovery storage cannot be written, the request is checkpointed through Pi's native session entries when possible. That fallback remains in memory until Pi persists the session; in 0.87.1, a new session does not persist until an assistant message exists.
+Image read, conversion, and recovery-write errors stop that submission and report the available recovery location. Preview errors leave the reference and bytes intact. Pending preparation never restores text over a newer draft or sends into a replacement session. If recovery storage cannot be written, the request is checkpointed through Pi's native session entries when possible. That fallback remains in memory until Pi persists the session; a new session can remain memory-only until an assistant message exists.
