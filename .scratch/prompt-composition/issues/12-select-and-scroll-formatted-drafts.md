@@ -4,7 +4,7 @@
 
 **Blocked by:** 10: pi-composer: edit lists, quotes, and rules; 11: pi-composer: edit inline and fenced code.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Mouse and keyboard selection identify the same source ranges across formatted prose, lists, quotes, and code.
 - [ ] Replace selected text accurately across wrapped lines, combining characters, emoji, and wide characters.

@@ -59,7 +59,7 @@ Users need to attach text, files, and images without losing the contents when an
 
 - Test through the public Pi editor/session boundary using loaded extensions and temporary attachment storage. Assert visible membership, previewed/restored text, preserved bytes, submitted references/images, and readable files after lifecycle changes. Avoid assertions about private metadata layout or storage helper calls.
 - Exercise explicit attachments with native Pi alone, pasted attachments with `pi-paste`, and history behavior with `pi-composer`. Use the same host setup to verify compatibility with other native input transformations and UI registrations.
-- Use the existing Node test runner. Pi's clipboard/image tests, virtual-terminal tests, and extension input-event tests provide prior art for content fixtures, native rendering, and transformation chaining. The current package has no feature-test suite to preserve.
+- Use the existing Node test runner. Pi's clipboard/image tests, virtual-terminal tests, and extension input-event tests provide prior art for content fixtures, native rendering, and transformation chaining. Reuse the package's public-host fixtures and behavior tests.
 - Cover the following observable scenarios:
 
 | Scenario                                                                                    | Required result                                                                                            |
@@ -82,7 +82,7 @@ Users need to attach text, files, and images without losing the contents when an
 
 ## Further Notes
 
-The package currently contains a loadable scaffold. These requirements define implementation acceptance; feature behavior has not been implemented or verified.
+The local implementation tickets track verification of these requirements through public Pi host tests and real terminal acceptance.
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [paste specification](pi-paste.md), and [composer specification](pi-composer.md).
 

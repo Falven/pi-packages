@@ -1,6 +1,8 @@
 # pi-skill-references
 
-Invoke configured [Pi](https://pi.dev) skills with ordinary `/skill:name` references in prose.
+Complete and invoke configured [Pi](https://pi.dev) skills with ordinary `/skill:name` references in prose.
+
+Use `$` or `/` completion within prose to choose a skill from Pi's effective picker and insert its canonical reference. Inline `/` opens with Tab in the native editor and automatically in `pi-composer`. Native commands, file completion, provider updates, and custom pickers retain their existing contracts. A custom picker can insert canonical reference text through Pi's native text interfaces.
 
 Type, paste, or insert a canonical reference through Pi's native text APIs:
 
@@ -8,7 +10,7 @@ Type, paste, or insert a canonical reference through Pi's native text APIs:
 Please apply /skill:review to this change.
 ```
 
-Submission adds the skill's instructions and native resource directory. References remain editable text in the editor and its history. Resolution follows Pi's effective catalog, including resource discovery, precedence, and reloads.
+Submission includes each resolved skill's instructions once, in first-reference order, with its native resource directory. Repeated references and catalog aliases pointing to the same skill file share that instruction block. References remain editable text in the editor and its history. Resolution follows Pi's effective catalog, including resource discovery, precedence, and reloads.
 
 Markdown code, escaped references, link destinations, URLs, paths, and shorthand stay literal. Unknown references keep their text. Read failures use Pi's error reporting and preserve the request for recovery. Leading native commands retain their dispatch and argument handling.
 

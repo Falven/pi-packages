@@ -12,6 +12,7 @@ export type DraftCheckpoint = {
   cwd: string
   revision: number
   text: string
+  clearedDrafts?: string[]
 }
 
 export function isCheckpoint(data: unknown): data is DraftCheckpoint {
@@ -34,7 +35,10 @@ export function isCheckpoint(data: unknown): data is DraftCheckpoint {
     Number.isSafeInteger(data.revision) &&
     data.revision >= 0 &&
     "text" in data &&
-    typeof data.text === "string"
+    typeof data.text === "string" &&
+    (!("clearedDrafts" in data) ||
+      (Array.isArray(data.clearedDrafts) &&
+        data.clearedDrafts.every((text) => typeof text === "string")))
   )
 }
 

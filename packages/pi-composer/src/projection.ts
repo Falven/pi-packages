@@ -1,9 +1,11 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent"
 import {
   CURSOR_MARKER,
+  sliceByColumn,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui"
+import { highlightCodeSpans } from "./code.ts"
 import { projectProse, type ProseMark, type ProseStyle } from "./prose.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
@@ -16,10 +18,11 @@ type Cell = {
   display: string
   width: number
   styles: ProseStyle[]
+  highlight: { line: string; column: number; width: number } | undefined
   ranges: { from: number; to: number }[]
 }
 
-type Row = { from: number; to: number; cells: Cell[] }
+type Row = { from: number; to: number; cells: Cell[]; prefix: Cell[] }
 
 export class Projection {
   readonly rows: Row[] = []
@@ -31,28 +34,37 @@ export class Projection {
   constructor(source: string, width: number, formatted: boolean) {
     this.length = source.length
     this.source = source
-    let row: Row = { from: 0, to: 0, cells: [] }
+    let row: Row = { from: 0, to: 0, cells: [], prefix: [] }
     let column = 0
-    const { spans, marks } = formatted
+    let prefix: Cell[] = []
+    let inPrefix = true
+    const { spans, marks }: ReturnType<typeof projectProse> = formatted
       ? projectProse(source)
       : { spans: [{ from: 0, to: source.length, styles: [] }], marks: [] }
     this.marks = marks
+    const highlights = highlightCodeSpans(source, spans)
     const visible = spans
-      .map((span) => source.slice(span.from, span.to))
+      .map((span) => span.text ?? source.slice(span.from, span.to))
       .join("")
     let spanIndex = 0
     let spanOffset = 0
+    let spanColumn = 0
     for (const { segment, index } of graphemes.segment(visible)) {
-      const styles = spans[spanIndex]!.styles
+      const currentSpan = spanIndex
+      const { styles } = spans[spanIndex]!
+      const color = highlights.get(spans[spanIndex]!)
       const ranges: { from: number; to: number }[] = []
       let offset = index
       while (offset < index + segment.length) {
         const span = spans[spanIndex]!
-        const end = spanOffset + span.to - span.from
+        const end = spanOffset + (span.text?.length ?? span.to - span.from)
         const next = Math.min(index + segment.length, end)
         ranges.push({
-          from: span.from + offset - spanOffset,
-          to: span.from + next - spanOffset,
+          from:
+            span.text === undefined
+              ? span.from + offset - spanOffset
+              : span.from,
+          to: span.text === undefined ? span.from + next - spanOffset : span.to,
         })
         offset = next
         if (offset === end) {
@@ -62,15 +74,27 @@ export class Projection {
       }
       const from = ranges[0]!.from
       const to = ranges.at(-1)!.to
+      const plain =
+        segment === "\n"
+          ? segment
+          : segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�")
+      const fullWidth = visibleWidth(plain)
       const display =
         segment === "\n"
           ? segment
-          : truncateToWidth(
-              segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�"),
-              width,
-              "�",
-            )
+          : styles.includes("hr")
+            ? "─".repeat(Math.min(80, Math.max(1, width - column)))
+            : truncateToWidth(plain, width, "�")
       const cells = visibleWidth(display)
+      const highlight =
+        color !== undefined && segment !== "\n" && fullWidth > 0
+          ? {
+              line: color.line,
+              column: color.column + spanColumn,
+              width: fullWidth,
+            }
+          : undefined
+      spanColumn = spanIndex === currentSpan ? spanColumn + fullWidth : 0
       const cell = {
         from,
         to,
@@ -78,24 +102,40 @@ export class Projection {
         display,
         width: cells,
         styles,
+        highlight,
         ranges,
       }
-      this.cells.push(cell)
+      if (from < to) this.cells.push(cell)
       if (segment === "\n") {
         row.to = from
         this.rows.push(row)
-        row = { from: to, to, cells: [] }
+        row = { from: to, to, cells: [], prefix: [] }
         column = 0
+        prefix = []
+        inPrefix = true
         continue
       }
+      inPrefix &&=
+        styles.includes("quoteBorder") || styles.includes("listBullet")
       if (column > 0 && column + cells > width) {
         row.to = from
         this.rows.push(row)
-        row = { from, to, cells: [] }
+        const continued: Cell[] = []
         column = 0
+        if (!inPrefix) {
+          for (const part of prefix) {
+            if (column + part.width + cells > width) break
+            continued.push(part)
+            column += part.width
+          }
+        }
+        row = { from, to, cells: [], prefix: continued }
       }
       row.cells.push(cell)
       column += cells
+      if (inPrefix) {
+        prefix.push(cell)
+      }
     }
     row.to = source.length
     this.rows.push(row)
@@ -207,8 +247,10 @@ export class Projection {
         content.every((cell) => cell.to > from && cell.from < to)
       const replacingInside =
         text.length > 0 &&
+        !text.startsWith("\n") &&
+        !text.endsWith("\n") &&
         selected[0]!.from >= mark.contentFrom &&
-        selected[0]!.from < mark.contentTo
+        selected.at(-1)!.from < mark.contentTo
       if (
         (from <= mark.from && to >= mark.to) ||
         (covered && !replacingInside)
@@ -245,16 +287,17 @@ export class Projection {
     const current = this.rows[currentIndex]!
     const column =
       preferred ??
-      current.cells
-        .filter((cell) => cell.to <= position)
-        .reduce((sum, cell) => sum + cell.width, 0)
+      current.prefix.reduce((sum, cell) => sum + cell.width, 0) +
+        current.cells
+          .filter((cell) => cell.to <= position)
+          .reduce((sum, cell) => sum + cell.width, 0)
     const targetIndex = Math.max(
       0,
       Math.min(this.rows.length - 1, currentIndex + direction),
     )
     const target = this.rows[targetIndex]!
     let next = target.cells[0]?.from ?? target.from
-    let cells = 0
+    let cells = target.prefix.reduce((sum, cell) => sum + cell.width, 0)
     for (const cell of target.cells) {
       if (
         cells + cell.width > column ||
@@ -277,9 +320,43 @@ export class Projection {
     const row = this.rows[index]!
     const caretRow = focused && this.rowAt(head) === index
     const caret = row.cells.findIndex((cell) => cell.to > head)
-    let output = ""
+    let output = row.prefix
+      .map((cell) => {
+        let display = cell.styles.includes("quoteBorder")
+          ? cell.display.replace(/>/g, "│")
+          : " ".repeat(cell.width)
+        for (const style of cell.styles) display = theme[style](display)
+        return display
+      })
+      .join("")
+    let highlighted:
+      | { source: string; line: string; column: number }
+      | undefined
     for (const [i, cell] of row.cells.entries()) {
-      let display = cell.display
+      let display = cell.styles.includes("quoteBorder")
+        ? cell.display.replace(/>/g, "│")
+        : cell.display
+      if (cell.highlight) {
+        const { line, column, width } = cell.highlight
+        if (highlighted?.source !== line) {
+          // Slice the row once so each cell does not rescan offscreen code.
+          const rowWidth = row.cells.reduce(
+            (sum, item) => sum + (item.highlight?.width ?? item.width),
+            0,
+          )
+          highlighted = {
+            source: line,
+            line: sliceByColumn(line, column, rowWidth),
+            column,
+          }
+        }
+        display =
+          truncateToWidth(
+            sliceByColumn(highlighted.line, column - highlighted.column, width),
+            cell.width,
+            "�",
+          ) + "\x1b[0m"
+      }
       for (const style of cell.styles) display = theme[style](display)
       if (caretRow && caret === i) output += CURSOR_MARKER
       output +=

@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Compose attachment pastes as one undoable edit.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Preview preserved text through native UI with both the native editor and pi-composer.
 - [ ] Restore Inline inserts complete preserved text at the caret or over the selection, including code and content above the paste cutoff. The native editor retains its tab expansion and LF normalization; pi-composer preserves tabs, and snapshot bytes remain unchanged.
