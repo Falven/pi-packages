@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] With native Pi alone, a canonical skill reference in ordinary prose resolves through Pi's effective skill catalog and contributes the intended instructions and native resource context.
 - [ ] Typing, pasting, or native insertion by another extension produces the same invocation behavior; references remain character-editable plain text.
