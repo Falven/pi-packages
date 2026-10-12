@@ -582,6 +582,27 @@ export class SourceEditor extends CustomEditor {
       )
       return
     }
+    const lineStart = keys.matches(data, "tui.editor.deleteToLineStart")
+    if (lineStart || keys.matches(data, "tui.editor.deleteToLineEnd")) {
+      const { anchor, head } = this.draft
+      const direction = lineStart ? -1 : 1
+      let end = anchor
+      if (anchor === head) {
+        end = this.project().lineBoundary(head, direction)
+        if (lineStart ? end >= head : end <= head)
+          end = this.adjacent(direction)
+      }
+      this.replaceRange(Math.min(head, end), Math.max(head, end), "")
+      return
+    }
+    const wordBackward = keys.matches(data, "tui.editor.deleteWordBackward")
+    if (wordBackward || keys.matches(data, "tui.editor.deleteWordForward")) {
+      const { anchor, head } = this.draft
+      const end =
+        anchor === head ? this.wordBoundary(wordBackward ? -1 : 1) : anchor
+      this.replaceRange(Math.min(head, end), Math.max(head, end), "")
+      return
+    }
     const backward = keys.matches(data, "tui.editor.deleteCharBackward")
     if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
       const { anchor, head } = this.draft

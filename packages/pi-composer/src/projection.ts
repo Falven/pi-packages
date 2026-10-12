@@ -201,21 +201,40 @@ export class Projection {
       (direction > 0 && head === text.length)
     )
       return position
-    const segments = [...words.segment(text)]
-    const word =
+    const newline = text.indexOf("\n", head)
+    const fragment =
       direction < 0
-        ? segments.findLast(
-            ({ index, segment }) => index < head && /\S/u.test(segment),
-          )
-        : segments.find(
-            ({ index, segment }) =>
-              index + segment.length > head && /\S/u.test(segment),
-          )
-    const target = word
-      ? word.index + (direction < 0 ? 0 : word.segment.length)
-      : direction < 0
-        ? 0
-        : text.length
+        ? text.slice(text.lastIndexOf("\n", head - 1) + 1, head)
+        : text.slice(head, newline < 0 ? text.length : newline)
+    if (!fragment) return this.adjacent(position, direction)
+    const segments = [...words.segment(fragment)]
+    if (direction < 0) segments.reverse()
+    let distance = 0
+    let index = 0
+    while (segments[index] && !/\S/u.test(segments[index]!.segment)) {
+      distance += segments[index++]!.segment.length
+    }
+    const word = segments[index]
+    if (word?.isWordLike) {
+      // Pi stops at ASCII punctuation within an Intl word, such as foo.bar.
+      const punctuation = [
+        ...word.segment.matchAll(/[(){}[\]<>.,;:'"!?+\-=*/\\|&%^$#@~`]/g),
+      ]
+      distance +=
+        direction < 0
+          ? word.segment.length -
+            (punctuation.at(-1) ? punctuation.at(-1)!.index + 1 : 0)
+          : (punctuation[0]?.index ?? word.segment.length)
+    } else {
+      while (
+        segments[index] &&
+        !segments[index]!.isWordLike &&
+        /\S/u.test(segments[index]!.segment)
+      ) {
+        distance += segments[index++]!.segment.length
+      }
+    }
+    const target = head + direction * distance
     let offset = 0
     for (const cell of this.cells) {
       const end = offset + cell.text.length
