@@ -82,6 +82,9 @@ test("old submitted references survive draft removal, source loss, native resume
   host.ui.setEditorText(draft)
   host.ui.setEditorText("")
   assert.doesNotMatch(host.render(), /Attachments \(/)
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
   host.input("\x1b[45;5u")
   assert.equal(host.ui.getEditorText(), draft)
   assert.match(host.render(), /Attachments \(1\): retained\.txt/)
@@ -148,6 +151,9 @@ test("native fork prefills the submitted reference and the child survives restar
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const sessionFile = host.runtime.session.sessionFile
   assert.notEqual(sessionId, parentId)
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
   assert.equal(host.ui.getEditorText(), draft)
   assert.match(host.render(), /Attachments \(1\): forked\.txt/)
   assert.equal(await readFile(path, "utf8"), "Captured for the fork.\n")
@@ -435,4 +441,12 @@ test("a partial multi-file read retains captured members for recovery with the o
     expandPromptTemplates: true,
   })
   assert.match(host.render(), /No unsaved attachment requests/)
+  await host.runtime.session.sendUserMessage("/attachments-cleanup", {
+    expandPromptTemplates: true,
+  })
+  assert.equal(await readFile(partial.path, "utf8"), partial.text)
+  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
+  host.input("\x1b[122;10u")
+  assert.match(host.render(), /Attachments \(2\): first.txt, second.txt/)
 })

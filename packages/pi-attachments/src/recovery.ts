@@ -5,12 +5,15 @@ import type {
   ExtensionContext,
   InputEvent,
 } from "@earendil-works/pi-coding-agent"
+import { markUnused, type UnpublishedCapture } from "./cleanup.ts"
 
+const unpublishedKey = Symbol.for("pi-attachments:unpublished-captures")
 type RequestContext = {
   sessionId: string
   sessionFile: string | undefined
   cwd: string
   text: string
+  [unpublishedKey]?: UnpublishedCapture[]
 }
 type ImageRequest = InputEvent & RequestContext
 export type Snapshot =
@@ -94,10 +97,18 @@ export async function saveRequest(
 ): Promise<string> {
   const unsaved = unsavedByStorage.get(storage) ?? new Set()
   unsavedByStorage.set(storage, unsaved)
+  let unpublished: UnpublishedCapture | undefined
   try {
     await mkdir(storage, { recursive: true, mode: 0o700 })
     const directory = await mkdtemp(join(storage, "request-"))
-    const references = await Promise.all(
+    unpublished = {
+      directory,
+      files: (request.images ?? []).map((image, index) => ({
+        name: `input-image-${index + 1}`,
+        data: image.data,
+      })),
+    }
+    const writes = await Promise.allSettled(
       (request.images ?? []).map(async (image, index) => {
         const name = `input-image-${index + 1}`
         const path = join(directory, name)
@@ -109,15 +120,33 @@ export async function saveRequest(
         return `[Attachment: ${name}](<${path}>)`
       }),
     )
+    const references = writes.map((write) => {
+      if (write.status === "rejected") throw write.reason
+      return write.value
+    })
     const path = join(directory, "request.draft.md")
+    // Even a failed metadata write may expose a usable recovery reference.
+    unpublished = undefined
     await writeFile(
       path,
       `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\nDelivery: ${request.streamingBehavior ?? "normal"}\n\n${request.text}\n\n${references.join("\n")}\n`,
       { flag: "wx", mode: 0o600, flush: true },
     )
+    try {
+      for (const capture of request[unpublishedKey]?.slice() ?? []) {
+        markUnused(storage, capture, directory)
+        request[unpublishedKey]!.shift()
+      }
+    } catch (error) {
+      throw new Error(
+        `Request saved: ${path}\nCould not record cleanup eligibility: ${String(error)}`,
+        { cause: error },
+      )
+    }
     unsaved.delete(request)
     return path
   } catch (error) {
+    if (unpublished) (request[unpublishedKey] ??= []).push(unpublished)
     unsaved.add(request)
     throw error
   }
@@ -141,7 +170,7 @@ export function registerRecovery(
         } catch (error) {
           if (!signal.aborted) {
             ctx.ui.notify(
-              `Could not save recovery for session ${request.sessionId}: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`,
+              `Attachment recovery incomplete for session ${request.sessionId}: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`,
               "error",
             )
           }

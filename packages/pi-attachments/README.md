@@ -53,3 +53,13 @@ Later editor factory decorators remain compatible when they delegate to the obse
 Image submissions save a readable `request-*/request.draft.md` under the same storage directory before delivery. The file records the requesting session, submission mode, and draft. Incoming images from other input handlers are preserved beside it as snapshot references. These recovery copies also survive native authentication or provider failures after the editor clears; they do not imply successful delivery. Copy their attachment references back into the draft to reuse the captured images.
 
 Image read, conversion, and recovery-write errors stop that submission and report the available recovery location. Preview errors leave the reference and bytes intact. Pending preparation never restores text over a newer draft or sends into a replacement session. When storage fails, captures and incoming image bytes remain in package-owned process memory across cwd changes, session replacement, and reload. `/attachments-recover` retries them from any live session. A native checkpoint is also attempted for image requests, but a failed append is not a durable copy. Contents held only in memory are lost if Pi exits before a write succeeds.
+
+## Cleanup
+
+Run `/attachments-cleanup` to reclaim proven-unused attachment staging. The command appears in native slash-command completion and reports the number of files and bytes removed, with any deletion failures. Cleanup is explicit; storage does not expire automatically.
+
+Every snapshot added to a draft stays readable for native and composer undo, saved drafts, submissions, and forks. All readable or partial recovery records and their snapshots remain retained, including after a later successful retry. Removing a reference or clearing the editor changes no storage eligibility.
+
+An image-request preparation can fail while writing incoming images, before it attempts to publish a recovery record. Once a complete retry saves those images and its recovery record, attachment-owned bookkeeping marks the earlier unpublished capture files as redundant. Cleanup can reclaim those bytes, including after session replacement or restart. It verifies the captured bytes and their replacement using checksums and retains pending writes, unclassified files, symlinks, and anything with uncertain eligibility. An interruption before eligibility is recorded leaves the capture retained.
+
+If cleanup reports a filesystem failure, the files it could not remove remain available for another cleanup attempt after the storage problem is fixed. Snapshots and recovery records remain protected throughout partial cleanup.
