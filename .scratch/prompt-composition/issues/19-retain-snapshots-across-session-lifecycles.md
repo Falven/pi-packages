@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Keep snapshot storage and references stable across Pi restarts, resumed sessions, and forks with the native editor.
 - [ ] Associate retained references with the correct native session and submission without depending on pi-composer.
