@@ -21,7 +21,7 @@ import {
   type ExtensionAPI,
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent"
-import type { Terminal } from "@earendil-works/pi-tui"
+import { Marked, type Terminal } from "@earendil-works/pi-tui"
 
 class TestTerminal implements Terminal {
   columns = 120
@@ -343,17 +343,25 @@ test(
 
 test(
   "a first-line indented code reference remains literal in the native editor",
-  {
-    timeout: 15000,
-    todo: "Pi 0.87.1 trims leading indentation and clears the editor before the public input event",
-  },
+  { timeout: 15000 },
   async (t) => {
     const host = await createHost(t)
-    host.ui.setEditorText("    /skill:review")
-    assert.equal(host.ui.getEditorText(), "    /skill:review")
+    const draft = "    /skill:review"
+    host.ui.setEditorText(draft)
+    assert.equal(host.ui.getEditorText(), draft)
     const submitted = await host.submit()
-    assert.deepEqual(host.inputs, [{ text: "/skill:review", draft: "" }])
-    assert.equal(submitted, "/skill:review")
+    host.terminal.input("\x1b[A")
+    // Pending acceptance: native trimming loses the code boundary and saved source.
+    assert.deepEqual(
+      {
+        rendered: await new Marked().parse(submitted),
+        history: host.ui.getEditorText(),
+      },
+      {
+        rendered: "<pre><code>/skill:review\n</code></pre>\n",
+        history: draft,
+      },
+    )
   },
 )
 
