@@ -1,6 +1,6 @@
 # Terminal acceptance
 
-**Status: revised keyboard behavior and real Ghostty/macOS fullscreen acceptance pending.** The [composer specification](specs/pi-composer.md) defines the required results; this procedure does not claim the current implementation passes them. Record each observed result below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; physical gestures, clipboard formats, layout, and graphics need this run.
+**Status: public-host keyboard checks pass; real Ghostty/macOS fullscreen acceptance remains pending.** The [verification record](../.scratch/composer-keyboard/verification.md) records software results and physical access limitations. The [composer specification](specs/pi-composer.md) defines the required results. Record each observed physical result below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; physical gestures, clipboard formats, layout, and graphics need this run.
 
 Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg`. The workspace lockfile supplies Pi and pi-tui 1.0.2, including the native clipboard backend. Finder and Preview supply actual copied-file and image clipboard data. All state, fixtures, model requests, and session files go into the temporary directory created below.
 

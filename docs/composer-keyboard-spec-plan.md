@@ -1,6 +1,6 @@
 # Composer keyboard implementation plan
 
-The four [composition specifications](specs/) define the keyboard requirements and are marked `ready-for-agent` in the local Markdown tracker. Runtime corrections and acceptance remain pending. Source and formatted views retain one Markdown draft, selection, and undo history.
+The four [composition specifications](specs/) have implemented keyboard behavior with public-host acceptance coverage. Real Ghostty/macOS acceptance remains pending in [ticket 08](../.scratch/composer-keyboard/issues/08-verify-combined-editing-in-ghostty.md). Source and formatted views retain one Markdown draft, selection, and undo history. The [verification record](../.scratch/composer-keyboard/verification.md) records the tested versions, checks, and remaining physical gate.
 
 The governing decisions are [native Pi contracts](adr/0001-preserve-pi-extension-contracts.md), [draft ownership](adr/0002-one-editor-owns-draft-transactions.md), [native editing actions](adr/0009-pi-composer-native-editing-actions.md), and [terminal ownership](adr/0010-scope-terminal-integration-to-pi.md).
 
@@ -13,9 +13,9 @@ The governing decisions are [native Pi contracts](adr/0001-preserve-pi-extension
 | [Attachments](specs/pi-attachments.md)           | Verify that the existing native widget and image previews preserve draft selection and focus. Keep management keys with their focused native UI and verify image/file clipboard delivery separately from text paste.                                                                                   |
 | [Skill references](specs/pi-skill-references.md) | Preserve effective completion bindings, native undo priority, extension-owned picker focus, and public text insertion through the shared history.                                                                                                                                                      |
 
-Implement native operations and boundary movement first, then binding precedence and cross-package input routing. Reuse current public-host fixtures and the existing Node test runner. Verify observable draft text, selections, retained files, submissions, and native UI behavior; do not introduce another runtime contract.
+The public-host fixtures verify native operations, boundary movement, binding precedence, and cross-package input routing through the existing Node test runner. Assertions cover observable draft text, selections, retained files, submissions, and native UI behavior through current Pi contracts.
 
-Run the [terminal acceptance procedure](terminal-checks.md) after automated behavior passes. Start with effective Ghostty settings unchanged and record delivered-input editing separately from physical interception. The [library integration notes](pi-composer-library-integration.md) describe native service ownership, and the [composer README](../packages/pi-composer/README.md#keys) labels the keyboard revision as pending.
+The remaining [terminal acceptance procedure](terminal-checks.md) starts with effective Ghostty settings unchanged and records delivered-input editing separately from physical interception. The [library integration notes](pi-composer-library-integration.md) describe native service ownership, and the [composer README](../packages/pi-composer/README.md#keys) documents available actions and delivery limits.
 
 ## Terminal delivery and capability evidence
 
@@ -40,7 +40,7 @@ The inspected capabilities do not establish automatic scoping that satisfies the
 
 ## Native implementation evidence
 
-- The [composer input handler](../packages/pi-composer/src/source-editor.ts) owns its draft operations, and [projection](../packages/pi-composer/src/projection.ts) maps logical positions and visual rows. Current handlers omit word/line deletion and clamp vertical movement to the current column at the outer rows.
+- The [composer input handler](../packages/pi-composer/src/source-editor.ts) owns its draft operations, and [projection](../packages/pi-composer/src/projection.ts) maps logical positions and visual rows. The handlers implement native word/line deletion, retained-text recovery, logical-line boundaries, outer-row movement, character jumps, and delivered editor paging against that draft.
 - Pi's [native action definitions and manager](https://github.com/earendil-works/pi/blob/6fb2e7815167e6b19006fc526d1a5d0f5f998787/packages/tui/src/keybindings.ts) define effective action IDs and configuration behavior. Its [editor](https://github.com/earendil-works/pi/blob/6fb2e7815167e6b19006fc526d1a5d0f5f998787/packages/tui/src/components/editor.ts) supplies the reference behavior for line boundaries, prompt history, deletion, and yank.
 - Pi's [custom editor dispatch](https://github.com/earendil-works/pi/blob/6fb2e7815167e6b19006fc526d1a5d0f5f998787/packages/coding-agent/src/modes/interactive/components/custom-editor.ts) preserves application and explicit-history priority. Its [extension runner](https://github.com/earendil-works/pi/blob/6fb2e7815167e6b19006fc526d1a5d0f5f998787/packages/coding-agent/src/core/extensions/runner.ts) resolves accepted shortcut registrations, and [extension interfaces](https://github.com/earendil-works/pi/blob/6fb2e7815167e6b19006fc526d1a5d0f5f998787/packages/coding-agent/src/core/extensions/types.ts) expose literal shortcut registration and session events.
-- The [attachment preview implementation](../packages/pi-attachments/src/images.ts) already uses Pi's public widget API and native `Image` component. Keyboard acceptance must preserve editor focus and selection when previews redraw.
+- The [attachment preview implementation](../packages/pi-attachments/src/images.ts) already uses Pi's public widget API and native `Image` component. Public-host checks verify editor focus and selection across preview redraws, resizing, failures, and native UI cancellation. Actual image graphics remain part of physical acceptance.

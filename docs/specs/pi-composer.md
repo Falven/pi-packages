@@ -1,6 +1,6 @@
 # Composer specification
 
-**Triage:** `ready-for-agent`
+**Triage:** `acceptance-pending`
 
 ## Problem Statement
 
@@ -181,7 +181,7 @@ Paste classification, attachment storage and previews, and skill expansion belon
 
 ## Further Notes
 
-This local Markdown specification is ready for implementation of the revised keyboard contract. Existing implementation tickets and prior automated results do not establish the new acceptance scenarios. Runtime fixes and real terminal acceptance remain pending; the [keyboard implementation plan](../composer-keyboard-spec-plan.md) and [terminal procedure](../terminal-checks.md) track that work.
+The revised keyboard behavior is implemented and verified at the public Pi editor/session boundary. Real Ghostty/macOS acceptance remains pending. The [verification record](../../.scratch/composer-keyboard/verification.md), [keyboard implementation plan](../composer-keyboard-spec-plan.md), and [terminal procedure](../terminal-checks.md) separate those results and track the remaining checks.
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), and [library integration notes](../pi-composer-library-integration.md). Related behavior is specified by [pi-paste](pi-paste.md), [pi-attachments](pi-attachments.md), and [pi-skill-references](pi-skill-references.md).
 

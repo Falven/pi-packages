@@ -1,6 +1,6 @@
 # Skill references specification
 
-**Triage:** `ready-for-agent`
+**Triage:** `acceptance-pending`
 
 ## Problem Statement
 
@@ -99,7 +99,7 @@ The active editor owns draft selection, history, and in-editor picker presentati
 
 ## Further Notes
 
-This local Markdown specification is ready for verification against the revised keyboard contract. Existing completion and expansion results do not establish the added binding-priority and focused-UI scenarios. See the [keyboard implementation plan](../composer-keyboard-spec-plan.md) and [terminal procedure](../terminal-checks.md).
+Public-host checks verify effective completion bindings, native undo priority, focused custom pickers, shared selection history, and deduplicated instruction delivery in mixed submissions. Physical picker input and clipboard round trips remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 

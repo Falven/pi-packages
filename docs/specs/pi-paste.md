@@ -1,6 +1,6 @@
 # Paste specification
 
-**Triage:** `ready-for-agent`
+**Triage:** `acceptance-pending`
 
 ## Problem Statement
 
@@ -96,7 +96,7 @@ Draft state and history belong to the active editor. Snapshot storage, previews,
 
 ## Further Notes
 
-This local Markdown specification is ready for implementation of the revised input-routing contract. Prior automated results do not establish the new binding and terminal-delivery scenarios. The [keyboard implementation plan](../composer-keyboard-spec-plan.md) and [terminal procedure](../terminal-checks.md) track the remaining verification.
+The revised input routing is implemented and verified through public Pi input with the native editor and composer. Tests cover effective bindings, supplied clipboard handlers, terminal text, metadata precedence, and retained-content recovery. Physical clipboard formats and terminal delivery remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 

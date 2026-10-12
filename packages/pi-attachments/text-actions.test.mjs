@@ -145,7 +145,8 @@ for (const selection of ["prose", "attachment"]) {
       selection === "prose" ? "**aa bb** cc" : `**aa ${chosen} bb** cc`
     const before = `${line}\n${chosen}\nKeep /skill:review @current.md\n${other}\n${chosen}\nTail`
     host.ui.setEditorText(before)
-    host.input("\x1b[1;9A")
+    host.input("\x1b[97;9u")
+    host.input("\x1b[D")
     const prefix = selection === "prose" ? "aa " : "aa Attachment: "
     const selected = selection === "prose" ? "bb cc" : "text.txt bb cc"
     for (let index = 0; index < prefix.length; index++) host.input("\x1b[C")

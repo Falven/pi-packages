@@ -18,9 +18,9 @@ Save failures report an error and preserve the current text and the last usable 
 
 ## Keys
 
-**Keyboard revision pending implementation and acceptance.** The tables below define the required contract. Native word/line deletion, outer-row navigation, Cmd+Up/Down line movement, and complete binding precedence still need the corrections described in the [specification](../../docs/specs/pi-composer.md). Physical delivery remains subject to the terminal's effective bindings.
+**Keyboard editing is implemented and verified through public Pi input.** Real Ghostty/macOS acceptance remains pending; physical delivery depends on the terminal's effective bindings. The [verification record](../../.scratch/composer-keyboard/verification.md) separates software results from physical checks.
 
-| Native action               | Default or useful delivered input               | Required behavior                                                                                                   |
+| Native action               | Default or useful delivered input               | Behavior                                                                                                            |
 | --------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Character and word movement | Arrows; Option+Left/Right                       | Move by grapheme or word.                                                                                           |
 | Line boundaries             | Home/Ctrl+A; End/Ctrl+E                         | Reach the current logical line's beginning/end.                                                                     |
@@ -29,6 +29,8 @@ Save failures report an error and preserve the current text and the last usable 
 | Word deletion               | Ctrl+W/Option+Backspace; Option+D/Option+Delete | Remove the selection or word in the requested direction.                                                            |
 | Line deletion               | Ctrl+U/Ctrl+K                                   | Delete toward the logical line boundary; join lines when already at that boundary.                                  |
 | Retained-text recovery      | Ctrl+Y; Option+Y                                | Yank the retained deletion; rotate the preceding yank.                                                              |
+| Character jump              | Ctrl+]; Ctrl+Alt+]                              | Await a printable target and move to its next/previous occurrence.                                                  |
+| Editor paging               | PageUp/PageDown when delivered to the editor    | Move by the visible editor page; preserve host-owned fullscreen viewport keys.                                      |
 | Undo                        | Ctrl+-                                          | Undo the prior coherent edit.                                                                                       |
 | Clipboard paste             | Ctrl+V                                          | Use the effective native clipboard handler.                                                                         |
 | Submit/newline              | Enter; Shift+Enter/Ctrl+J                       | Submit prose or continue a list/code block; insert a newline.                                                       |
@@ -46,7 +48,7 @@ Any explicit Pi override, including an empty binding list, suppresses the aliase
 
 Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. The package leaves terminal settings unchanged.
 
-Continuous typing and deletion group until movement, another kind of edit, or a pause of more than 500 ms. Native replacements and pastes each form one undoable edit. A fresh edit after undo discards the old redo branch.
+Continuous typing and character deletion group until movement, another kind of edit, or a pause of more than 500 ms. Word/line deletion, yank, yank-pop, native replacement, and paste each form one undoable edit. A fresh edit after undo discards the old redo branch.
 
 Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V invokes the same supplied handler as the effective native clipboard action. With `pi-paste` loaded, that handler classifies copied files, images, and text before insertion. A custom handler retains its chosen insertion route. Terminal and public extension paste carry only their supplied text; suppressing the raw Cmd+V alias does not disable those routes.
 

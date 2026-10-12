@@ -1,6 +1,6 @@
 # Attachments specification
 
-**Triage:** `ready-for-agent`
+**Triage:** `acceptance-pending`
 
 ## Problem Statement
 
@@ -100,7 +100,7 @@ Paste classification belongs to the paste specification. Selection, editing bind
 
 ## Further Notes
 
-This local Markdown specification is ready for verification against the revised keyboard contract. Native widget and image-component reuse is already implemented; the new selection, focus, and physical clipboard scenarios still require acceptance evidence. See the [keyboard implementation plan](../composer-keyboard-spec-plan.md) and [terminal procedure](../terminal-checks.md).
+Public-host checks verify selection and focus through native widget and image-preview updates, attachment actions, and combined draft history. Actual image graphics and physical clipboard routes remain pending in the [verification record](../../.scratch/composer-keyboard/verification.md) and [terminal procedure](../terminal-checks.md).
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [paste specification](pi-paste.md), and [composer specification](pi-composer.md).
 

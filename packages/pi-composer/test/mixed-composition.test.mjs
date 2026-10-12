@@ -178,6 +178,82 @@ test("mixed snapshots stay opaque until Restore Inline invokes prose while resto
   assert.deepEqual(await readFile(imagePath), Buffer.from(PNG, "base64"))
 })
 
+test("configured deletion and yank preserve a mixed draft through view changes and skill submission", async (t) => {
+  const clipboard = getNativeClipboard()
+  assert.ok(clipboard)
+  t.mock.method(clipboard, "getFilePaths", async () => null)
+  t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
+  t.mock.method(clipboard, "getText", async () => "Unused image text")
+  const host = await nativePi(t, extensions, {
+    skillPaths: [await catalog(t)],
+    keybindings: {
+      "tui.editor.deleteWordBackward": "super+a",
+      "tui.editor.yank": "ctrl+alt+y",
+      "tui.editor.undo": "ctrl+shift+u",
+    },
+  })
+  const body = "Opaque /skill:literal context ".repeat(180)
+  host.ui.pasteToEditor(body)
+  const textPath = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  const textReference = host.ui.getEditorText().trim()
+  host.input("\x16")
+  await waitFor(() => assert.match(host.render(), /Attachments \(2\):/))
+  const imageReference = host.ui
+    .getEditorText()
+    .slice(textReference.length)
+    .trim()
+  const imagePath = snapshotPath(imageReference)
+  const prefix = `# Mixed\n\n${textReference}\n${imageReference}\nApply `
+  host.ui.setEditorText(prefix)
+  host.input("$re")
+  await waitFor(() => assert.match(host.render(), /review/))
+  host.input("\r")
+  assert.equal(host.ui.getEditorText(), `${prefix}/skill:review `)
+  assert.equal(host.requests.length, 0)
+  host.input("\x1b[200~\nred **blue** green\x1b[201~")
+  const draft = `${prefix}/skill:review \nred **blue** green`
+  assert.equal(host.ui.getEditorText(), draft)
+
+  host.input("\x01")
+  for (let index = 0; index < 4; index++) host.input("\x1b[C")
+  for (let index = 0; index < 4; index++) host.input("\x1b[1;2C")
+  host.input("\x1b[97;9u")
+  const deleted = draft.replace("red **blue** green", "red  green")
+  assert.equal(host.ui.getEditorText(), deleted)
+  host.input(undo)
+  assert.equal(host.ui.getEditorText(), deleted)
+  host.input("\x1b[117;6u")
+  assert.equal(host.ui.getEditorText(), draft)
+  host.input(redo)
+  assert.equal(host.ui.getEditorText(), deleted)
+  host.input("\x1b[121;7u")
+  assert.equal(host.ui.getEditorText(), draft)
+
+  host.input("\x1b[109;10u")
+  host.input("\x01")
+  host.input("\x0b")
+  assert.equal(host.ui.getEditorText(), `${prefix}/skill:review \n`)
+  host.input("\x1b[121;7u")
+  assert.equal(host.ui.getEditorText(), draft)
+  host.input("\x1b[109;10u")
+  assert.match(host.render(), /Attachments \(2\):/)
+  assert.equal(await readFile(textPath, "utf8"), body)
+  assert.deepEqual(await readFile(imagePath), Buffer.from(PNG, "base64"))
+
+  host.input(submit)
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  await host.runtime.session.waitForIdle()
+  const delivered = host.users.at(-1).content
+  const text = delivered.find((item) => item.type === "text").text
+  assert.equal(text.match(/<skill name="review"/g)?.length, 1)
+  assert.ok(text.endsWith(draft))
+  assert.doesNotMatch(text, /<skill name="literal"|Opaque \/skill:literal/)
+  assert.deepEqual(
+    delivered.filter((item) => item.type === "image"),
+    [{ type: "image", data: PNG, mimeType: "image/png" }],
+  )
+})
+
 for (const [route, paste] of [
   [
     "fragmented terminal text",
