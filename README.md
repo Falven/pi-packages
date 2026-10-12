@@ -4,7 +4,7 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 ## Packages
 
-These packages are under development. Each has a loadable extension entry point, a specification, and tests through Pi's public host boundary. Real Ghostty/macOS acceptance remains pending.
+These packages are under development. Each has a loadable extension entry point, a specification, and tests through Pi's public host boundary. Real Ghostty/macOS acceptance remains pending; use the [isolated terminal checks](docs/terminal-checks.md).
 
 | Package                                                       | Responsibility                                                             |
 | ------------------------------------------------------------- | -------------------------------------------------------------------------- |

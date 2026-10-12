@@ -6,14 +6,19 @@ Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg
 
 ## Prepare the isolated run
 
-In a Ghostty shell, from the checkout under review:
+In a Ghostty shell, from the repository root:
 
 ```sh
-cd /path/to/pi-packages
 node --version
 pnpm --version
-command -v fd rg
 pnpm install --frozen-lockfile --offline --ignore-scripts
+
+export PI_CHECK_NATIVE_BIN="$(node --input-type=module -e '
+  import { getAgentDir } from "@earendil-works/pi-coding-agent";
+  import { join } from "node:path";
+  process.stdout.write(join(getAgentDir(), "bin"));
+')"
+PATH="$PI_CHECK_NATIVE_BIN:$PATH" command -v fd rg
 
 export PI_CHECK_REPO="$(pwd -P)"
 export PI_CHECK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/pi-ticket22.XXXXXX")"
@@ -29,6 +34,8 @@ cat "$PI_CHECK_ROOT/ready.json"
 printf 'PI_CHECK_REPO=%s\nPI_CHECK_ROOT=%s\n' "$PI_CHECK_REPO" "$PI_CHECK_ROOT"
 ```
 
+The launch reuses tools from Pi's current agent directory and the shell search path. Confirm the tool check prints paths for both `fd` and `rg`.
+
 Proceed when the log says `Local acceptance model ready` and `ready.json` contains a loopback URL. Keep a second shell with `PI_CHECK_REPO` and `PI_CHECK_ROOT` set to these exact printed paths. Run the clipboard, file, and model-control commands there while Pi occupies the first shell.
 
 The fixture creates three skills (`review`, `audit`, `literal`), text files of exactly 4,999/5,000/5,001 UTF-16 units, short text, formatted and scrolling drafts, copied-file sources, and a red/blue PNG. Its local HTTP model records each request in `request-N.json` and `requests.jsonl`. Replies report image counts and the number of instruction blocks for each skill. `model.hold` delays responses; `model.fail` produces an actual HTTP 500.
@@ -43,6 +50,7 @@ Define and run this function in the first Ghostty shell:
 pi_ticket22() {
   (
     cd "$PI_CHECK_ROOT/files" || exit 1
+    PATH="$PI_CHECK_NATIVE_BIN:$PATH" \
     PI_CODING_AGENT_DIR="$PI_CHECK_ROOT/agent" PI_TELEMETRY=0 \
       "$PI_CHECK_REPO/node_modules/.bin/pi" \
       --tui-mode fullscreen --offline --no-tools \
