@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { chmod, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import test from "node:test"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { Text } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
@@ -10,19 +10,19 @@ import {
   nativePi,
   snapshotPath,
   waitFor,
-} from "./test-support/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
 const composerPath = fileURLToPath(
-  new URL("../pi-composer/src/index.ts", import.meta.url),
+  new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
 const pastePath = fileURLToPath(
-  new URL("../pi-paste/src/index.ts", import.meta.url),
+  new URL("../../pi-paste/src/index.ts", import.meta.url),
 )
 const attachmentsPath = fileURLToPath(
-  new URL("./src/index.ts", import.meta.url),
+  new URL("../src/index.ts", import.meta.url),
 )
 const skillsPath = fileURLToPath(
-  new URL("../pi-skill-references/src/index.ts", import.meta.url),
+  new URL("../../pi-skill-references/src/index.ts", import.meta.url),
 )
 
 async function startAction(host, action, index = 0) {

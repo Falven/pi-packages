@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url"
 import {
   nativePi,
   snapshotPath,
-} from "../../pi-attachments/test-support/native-pi.mjs"
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const composer = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 

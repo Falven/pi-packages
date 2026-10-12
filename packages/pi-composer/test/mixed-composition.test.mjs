@@ -27,7 +27,7 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../../pi-attachments/test-support/native-pi.mjs"
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const composerPath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const pastePath = fileURLToPath(
@@ -44,7 +44,7 @@ const acceptancePath = fileURLToPath(
   new URL("../fixtures/mixed-acceptance.ts", import.meta.url),
 )
 const imageInputPath = fileURLToPath(
-  new URL("../../pi-attachments/test-support/image-input.ts", import.meta.url),
+  new URL("../../pi-attachments/fixtures/image-input.ts", import.meta.url),
 )
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="

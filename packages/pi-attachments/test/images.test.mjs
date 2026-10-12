@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises"
 import { join } from "node:path"
-import test from "node:test"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import {
   getCapabilities,
@@ -21,7 +21,7 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "./test-support/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
 // Two pixels: red, blue. The fixture is decoded by Pi's real image helpers.
 const PNG =
@@ -29,7 +29,7 @@ const PNG =
 const BMP =
   "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA=="
 const inputExtension = fileURLToPath(
-  new URL("./test-support/image-input.ts", import.meta.url),
+  new URL("../fixtures/image-input.ts", import.meta.url),
 )
 
 test("image previews identify current membership beside the native editor and other widgets", async (t) => {
@@ -605,7 +605,7 @@ test("a provider rejection retains the image request and leaves later draft edit
 
 test("composer image insertion, membership, undo, and redo use the same retained snapshot", async (t) => {
   const host = await nativePi(t, [
-    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
   ])
   const source = join(host.directory, "selection.png")
   await writeFile(source, Buffer.from(PNG, "base64"))

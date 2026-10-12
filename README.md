@@ -30,11 +30,12 @@ Each package README links to its specification and ADRs.
 
 ## Development
 
+Each package keeps behavior tests in `test/` and supporting hosts and fixtures in `fixtures/`. Tests use `node:test` and Pi's public editor/session APIs. The root typecheck covers source, TypeScript tests, and TypeScript fixtures across all packages.
+
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
 pnpm run format:check
 pnpm run lint
 pnpm run typecheck
-pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json
 pnpm test
 ```

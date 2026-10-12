@@ -12,7 +12,7 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { promisify, stripVTControlCharacters } from "node:util"
 import type { TUI } from "@earendil-works/pi-tui"
-import { snapshotPath } from "../../pi-attachments/test-support/native-pi.mjs"
+import { snapshotPath } from "../../pi-attachments/fixtures/native-pi.mjs"
 import { openHost } from "../fixtures/host.ts"
 
 const extensions = [

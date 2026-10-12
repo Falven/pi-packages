@@ -15,7 +15,7 @@ import fs, {
 } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { dirname, join } from "node:path"
-import test from "node:test"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { convertToPng } from "@earendil-works/pi-coding-agent"
@@ -24,7 +24,7 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "./test-support/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
 async function failedPreparation(t, hold = false) {
   const write = fs.writeFile
@@ -203,7 +203,7 @@ test("cleanup preserves pending writes, then reclaims their abandoned bytes afte
   await promisify(execFile)(
     process.execPath,
     [
-      fileURLToPath(new URL("./test-support/restart-pi.mjs", import.meta.url)),
+      fileURLToPath(new URL("../fixtures/restart-pi.mjs", import.meta.url)),
       JSON.stringify({
         directory: host.directory,
         sessionId,
@@ -356,7 +356,7 @@ for (const changed of ["staging", "replacement"]) {
 
 test("composer recovery restores attachment membership after cleanup and stays undoable", async (t) => {
   const host = await nativePi(t, [
-    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
   ])
   host.ui.setEditorText("**Recover this complete draft**")
   await host.runtime.session.sendUserMessage(
@@ -409,7 +409,7 @@ test("an image recovery record remains readable after a late write failure, retr
     syncBuiltinESMExports()
   })
   const host = await nativePi(t, [
-    fileURLToPath(new URL("./test-support/image-input.ts", import.meta.url)),
+    fileURLToPath(new URL("../fixtures/image-input.ts", import.meta.url)),
   ])
   const bytes = Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg==",

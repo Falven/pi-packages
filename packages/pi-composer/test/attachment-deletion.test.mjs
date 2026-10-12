@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { openHost } from "../fixtures/host.ts"
-import { snapshotPath } from "../../pi-attachments/test-support/native-pi.mjs"
+import { snapshotPath } from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const attachments = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),

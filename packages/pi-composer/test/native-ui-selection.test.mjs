@@ -19,7 +19,7 @@ import piSkillReferences from "../../pi-skill-references/src/index.ts"
 import {
   holdFileRead,
   snapshotPath,
-} from "../../pi-attachments/test-support/native-pi.mjs"
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const attachments = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),

@@ -7,22 +7,22 @@ import { beforeEach, test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { getNativeClipboard, StdinBuffer } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
-import { openHost } from "../pi-composer/fixtures/host.ts"
-import piPaste from "./src/index.ts"
-import piAttachments from "../pi-attachments/src/index.ts"
+import { openHost } from "../../pi-composer/fixtures/host.ts"
+import piPaste from "../src/index.ts"
+import piAttachments from "../../pi-attachments/src/index.ts"
 import {
   nativePi,
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../pi-attachments/test-support/native-pi.mjs"
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
-const pastePath = fileURLToPath(new URL("./src/index.ts", import.meta.url))
+const pastePath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const composerPath = fileURLToPath(
-  new URL("../pi-composer/src/index.ts", import.meta.url),
+  new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
 const attachmentsPath = fileURLToPath(
-  new URL("../pi-attachments/src/index.ts", import.meta.url),
+  new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
 
 beforeEach((t) => {

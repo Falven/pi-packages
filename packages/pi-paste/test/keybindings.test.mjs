@@ -3,14 +3,14 @@ import { beforeEach, test } from "node:test"
 import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
-import { nativePi, waitFor } from "../pi-attachments/test-support/native-pi.mjs"
+import { nativePi, waitFor } from "../../pi-attachments/fixtures/native-pi.mjs"
 
-const pastePath = fileURLToPath(new URL("./src/index.ts", import.meta.url))
+const pastePath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const composerPath = fileURLToPath(
-  new URL("../pi-composer/src/index.ts", import.meta.url),
+  new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
 const attachmentsPath = fileURLToPath(
-  new URL("../pi-attachments/src/index.ts", import.meta.url),
+  new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
 
 beforeEach((t) => {

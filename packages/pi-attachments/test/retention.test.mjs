@@ -10,7 +10,7 @@ import fs, {
 } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
-import test from "node:test"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import {
@@ -19,14 +19,14 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "./test-support/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
 async function restart(host, expected) {
   await host.close()
   await promisify(execFile)(
     process.execPath,
     [
-      fileURLToPath(new URL("./test-support/restart-pi.mjs", import.meta.url)),
+      fileURLToPath(new URL("../fixtures/restart-pi.mjs", import.meta.url)),
       JSON.stringify({ directory: host.directory, ...expected }),
     ],
     { timeout: 15000 },
@@ -314,8 +314,8 @@ test("a late snapshot write error preserves saved bytes and their original draft
 
 test("a captured file remains recoverable when all snapshot writes fail after shutdown", async (t) => {
   const host = await nativePi(t, [
-    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
-    fileURLToPath(new URL("../pi-paste/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-paste/src/index.ts", import.meta.url)),
   ])
   const source = join(host.directory, "late.bin")
   const bytes = Buffer.from([0, 1, 255, 13, 10, 9, 128])
@@ -366,8 +366,8 @@ test("a captured file remains recoverable when all snapshot writes fail after sh
 
 test("a partial multi-file read retains captured members for recovery with the original group", async (t) => {
   const host = await nativePi(t, [
-    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
-    fileURLToPath(new URL("../pi-paste/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-paste/src/index.ts", import.meta.url)),
   ])
   const first = join(host.directory, "first.txt")
   const second = join(host.directory, "second.txt")

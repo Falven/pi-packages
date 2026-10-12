@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { chmod, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import test from "node:test"
+import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
@@ -11,7 +11,7 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "./test-support/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
 test("native Attach Text preserves text before inserting its snapshot reference", async (t) => {
   const host = await nativePi(t)
@@ -452,7 +452,7 @@ for (const replacement of ["before", "during"]) {
 for (const installation of ["recreated", "reused"]) {
   test(`an observed editor ${installation} during attachment preparation retains the requesting snapshot`, async (t) => {
     const host = await nativePi(t, [
-      fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+      fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
     ])
     const previous = host.ui.getEditorComponent()
     let editor
@@ -484,7 +484,7 @@ for (const installation of ["recreated", "reused"]) {
 
 test("a later factory keeps composer selection replacement and undo when attaching a snapshot", async (t) => {
   const host = await nativePi(t, [
-    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
   ])
   const previous = host.ui.getEditorComponent()
   host.ui.setEditorComponent((...args) => previous(...args))

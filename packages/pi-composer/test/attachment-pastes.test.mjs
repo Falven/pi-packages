@@ -12,7 +12,7 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../../pi-attachments/test-support/native-pi.mjs"
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const composerPath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const pastePath = fileURLToPath(
