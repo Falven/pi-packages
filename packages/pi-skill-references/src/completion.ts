@@ -37,7 +37,13 @@ export function withInlineSkills(
       .join("\n")
     let prose = false
     markdown.walkTokens(markdown.lexer(source), (token) => {
-      if (token.type === "text" && token.raw.includes(marker)) prose = true
+      if (
+        token.type === "text" &&
+        !token.tokens &&
+        token.raw.includes(marker)
+      ) {
+        prose = true
+      }
     })
     return prose ? prefix : undefined
   }

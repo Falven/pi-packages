@@ -62,6 +62,7 @@ export async function createHost(
     directory: string,
   ) => void | Promise<void>,
   holdResponses = false,
+  extraExtensionPaths: string[] = [],
 ) {
   const root = await mkdtemp(join(tmpdir(), "pi-inline-skills-"))
   const agentDir = join(root, "agent")
@@ -150,6 +151,7 @@ export async function createHost(
           noContextFiles: true,
           additionalExtensionPaths: [
             fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+            ...extraExtensionPaths,
           ],
           additionalSkillPaths: [skillDir],
           extensionsOverride: (result) => ({

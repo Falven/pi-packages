@@ -4,8 +4,37 @@ import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { test } from "node:test"
 import { setImmediate } from "node:timers/promises"
+import { fileURLToPath } from "node:url"
 import { stripVTControlCharacters } from "node:util"
 import { createHost } from "../fixtures/host.ts"
+
+test(
+  "composer opens dollar and inline slash skill completion automatically through the native provider contract",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, undefined, false, [
+      fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
+    ])
+    for (const trigger of ["$", "/"]) {
+      host.ui.setEditorText("Use ")
+      host.terminal.output = ""
+      host.terminal.input(trigger)
+      await t.waitFor(() =>
+        assert.match(
+          stripVTControlCharacters(host.terminal.output),
+          /skill:review/,
+        ),
+      )
+      assert.equal(host.ui.getEditorText(), `Use ${trigger}`)
+      host.terminal.input("\t")
+      host.terminal.input("here.")
+      assert.equal(host.ui.getEditorText(), "Use /skill:review here.")
+      const submitted = await host.submit()
+      assert(submitted.includes("Review the actual behavior."), submitted)
+      assert(submitted.includes("Use /skill:review here."), submitted)
+    }
+  },
+)
 
 test(
   "native dollar completion inserts portable skill text and submits its instructions",
@@ -434,6 +463,7 @@ test(
       ["Apply ($rvw).", ").", "Apply (/skill:review )."],
       ['Apply "$rvw".', '".', 'Apply "/skill:review ".'],
       ["First paragraph.\n> $rvw", "", "First paragraph.\n> /skill:review "],
+      ["- Apply $rvw", "", "- Apply /skill:review "],
     ] as const) {
       host.ui.setEditorText(draft)
       for (let index = 0; index < suffix.length; index += 1) {
@@ -456,6 +486,9 @@ test(
       ["```text\n$rvw\n```", "\n```"],
       ["Example\n\n    $rvw", ""],
       ["[guide]($rvw)", ")"],
+      ["- ` $rvw `", " `"],
+      ["> - ` $rvw `", " `"],
+      ["- [guide]($rvw)", ")"],
     ] as const) {
       host.ui.setEditorText(draft)
       for (let index = 0; index < suffix.length; index += 1) {
