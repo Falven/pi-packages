@@ -20,7 +20,7 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import type { KeybindingsConfig } from "@earendil-works/pi-tui"
 
-// Only the terminal and model server are substitutes; Pi owns all host routes.
+// Pi owns host routes; fixtures substitute the terminal, model server, and optional public OS boundary.
 class RecordingTerminal {
   columns = 60
   rows = 24
@@ -59,6 +59,7 @@ class RecordingTerminal {
 type HostOptions = {
   columns?: number
   keybindings?: KeybindingsConfig
+  composer?: ExtensionFactory
   extension?: ExtensionFactory
   extensionPaths?: string[]
   skillPaths?: string[]
@@ -175,7 +176,9 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
         }),
         resourceLoaderOptions: {
           additionalExtensionPaths: [
-            new URL("../src/index.ts", import.meta.url).pathname,
+            ...(options.composer
+              ? []
+              : [new URL("../src/index.ts", import.meta.url).pathname]),
             ...(options.extensionPaths ?? []),
           ],
           noExtensions: true,
@@ -185,6 +188,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
           noThemes: true,
           noContextFiles: true,
           extensionFactories: [
+            ...(options.composer ? [options.composer] : []),
             (pi) => {
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,
