@@ -41,7 +41,8 @@ On a Mac keyboard, Delete means backward deletion, named `backspace` in bindings
 
 | Composer shortcut                      | Configuration contract                                            |
 | -------------------------------------- | ----------------------------------------------------------------- |
-| Cmd+Left/Up; Cmd+Right/Down            | Line-start/end aliases, including Shift selection.                |
+| Cmd+Left/Right                         | Line-start/end aliases, including Shift selection.                |
+| Cmd+Up/Down                            | Fixed draft-start/end movement, including Shift selection.        |
 | Cmd+C, Cmd+V, Cmd+Z, Cmd+Enter         | Copy, clipboard paste, undo, and explicit-submit aliases.         |
 | Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and formatted/source-view shortcuts. |
 

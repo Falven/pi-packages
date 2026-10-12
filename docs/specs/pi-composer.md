@@ -53,7 +53,7 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 39. As a Pi user, I want deletion to remove an existing selection first, so that a word or line shortcut cannot remove additional unselected text.
 40. As a Pi user, I want native yank and yank-pop to recover word and line deletions, so that replacing the editor preserves retained-text recovery.
 41. As a Pi user, I want formatted deletions to retain the Markdown needed for recovery, so that hidden delimiters do not cause lost or duplicated content.
-42. As a Pi user, I want Cmd+Up/Down and Cmd+Left/Right to reach the current logical line's boundaries when their aliases apply, so that line navigation is consistent in either view.
+42. As a Pi user, I want Cmd+Up/Down to reach the draft's beginning/end and Cmd+Left/Right to reach the current logical line's boundaries, so that I can navigate the whole draft or one line in either view.
 43. As a Pi user, I want an extra Up on the first visual row or Down on the last visual row to reach that line's boundary, so that the caret does not remain stranded in the middle of the row.
 44. As a Pi user, I want shifted movement to keep its original selection anchor and stay in the draft at its boundaries, so that extending a selection cannot browse prompt history.
 45. As a Pi user, I want native prompt history, character jumps, and editor paging to remain available through their effective bindings, so that the replacement preserves established navigation.
@@ -136,17 +136,20 @@ Preserve the native input path in this order:
 
 For Shift selection, resolve any effective action on the full chord first. Otherwise extend using the effective movement binding or an available movement alias, keeping the original anchor. Do not derive selection keys from suppressed aliases. Option+Up/Down retain Pi's effective application behavior, including its default dequeue action on Option+Up.
 
-| Composer key                           | Action/configuration contract                                                                                                                                     |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cmd+Left or Cmd+Up; Shift variants     | Aliases for `tui.editor.cursorLineStart`; target the current logical line.                                                                                        |
-| Cmd+Right or Cmd+Down; Shift variants  | Aliases for `tui.editor.cursorLineEnd`; target the current logical line.                                                                                          |
-| Cmd+C                                  | Alias for `tui.input.copy` when native dispatch delivers it to the editor; preserve parent interrupt/clear behavior.                                              |
-| Cmd+V                                  | Alias for the effective `app.clipboard.pasteImage` route; preserve its supplied handler and paste policy.                                                         |
-| Cmd+Z                                  | Alias for `tui.editor.undo`.                                                                                                                                      |
-| Cmd+Enter                              | Alias for `tui.input.submit`, requesting explicit submission after higher-priority handlers.                                                                      |
-| Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and source-view actions. These have no configurable native action IDs and yield to effective native and accepted extension bindings. |
+| Composer key                           | Action/configuration contract                                                                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cmd+Left; Shift variant                | Alias for `tui.editor.cursorLineStart`; target the current logical line.                                                                                           |
+| Cmd+Right; Shift variant               | Alias for `tui.editor.cursorLineEnd`; target the current logical line.                                                                                             |
+| Cmd+Up/Down; Shift variants            | Fixed movement to the draft's beginning/end, or selection to that boundary. No native action IDs exist; yield to effective native and accepted extension bindings. |
+| Cmd+C                                  | Alias for `tui.input.copy` when native dispatch delivers it to the editor; preserve parent interrupt/clear behavior.                                               |
+| Cmd+V                                  | Alias for the effective `app.clipboard.pasteImage` route; preserve its supplied handler and paste policy.                                                          |
+| Cmd+Z                                  | Alias for `tui.editor.undo`.                                                                                                                                       |
+| Cmd+Enter                              | Alias for `tui.input.submit`, requesting explicit submission after higher-priority handlers.                                                                       |
+| Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and source-view actions. These have no configurable native action IDs and yield to effective native and accepted extension bindings.  |
 
-Existing native movement, deletion, history, recovery, newline, and submit actions remain configurable through Pi. A terminal translation such as Cmd+Delete producing Ctrl+U follows whichever native action currently owns Ctrl+U. Suppressing a raw Cmd+V alias does not disable terminal-generated bracketed paste. Each input performs at most one operation.
+Existing native movement, deletion, history, recovery, newline, and submit actions remain configurable through Pi. Changing or clearing native line actions suppresses Cmd+Left/Right aliases without disabling the independent Cmd+Up/Down draft shortcuts. A terminal translation such as Cmd+Delete producing Ctrl+U follows whichever native action currently owns Ctrl+U. Suppressing a raw Cmd+V alias does not disable terminal-generated bracketed paste. Each input performs at most one operation.
+
+Draft-boundary movement targets the first or last editable position in the active view. Shift preserves the original anchor across repeated gestures and direction changes. Movement at a draft boundary stays in the draft and creates no undo entry.
 
 Fixed shortcuts are package behavior. Pi's current public manager cannot register new configurable action IDs; literal extension shortcut registration does not change that. Native `/hotkeys` describes host actions and registered extension shortcuts, while this specification documents the direct composer aliases. Neither Pi nor the composer automatically imports macOS text-field settings.
 
@@ -160,7 +163,7 @@ Repeated gestures extend the same range and opposite gestures contract it before
 
 ### Ghostty keybinding setup
 
-Register `setup-keybinds` through Pi's public command API. `/setup-keybinds ghostty` reviews and installs the block; `/setup-keybinds ghostty remove` reviews and removes it. Missing or unsupported arguments produce usage information without a write. Use native confirmation and notification facilities; without interactive confirmation the command cannot modify configuration. Pi retains normal command dispatch. From the start of its handler, setup preserves the draft, selection, history, and editor ownership; closing its native dialog restores editor focus without an additional edit or model submission.
+Register `setup-keybinds` through Pi's public command API with the description "Review, install, or remove persistent terminal keybindings". Usage is `/setup-keybinds <terminal> [remove]`; list `ghostty` as the supported terminal. `/setup-keybinds ghostty` reviews and installs the block; `/setup-keybinds ghostty remove` reviews and removes it. Missing or unsupported arguments produce usage information without a write. Use native confirmation and notification facilities; without interactive confirmation the command cannot modify configuration. Pi retains normal command dispatch. From the start of its handler, setup preserves the draft, selection, history, and editor ownership; closing its native dialog restores editor focus without an additional edit or model submission.
 
 Before confirmation, show the resolved target file, the eight affected shortcuts, and the fact that forwarding remains active outside Pi until removal and configuration reload. Existing Pi overrides still determine which action receives each chord. Installation leaves working Cmd+C and Cmd+Shift+Up/Down bindings intact and does not edit Pi's keybinding configuration.
 
@@ -170,8 +173,8 @@ The block contains exactly these forwarding rules. CSI payloads omit the escape-
 | ---------------- | ------------------ | ----------- | ---------------------------------------------------- |
 | Cmd+A            | `super+a`          | `97;9u`     | Select the entire draft and retain the selection.    |
 | Cmd+Enter        | `super+enter`      | `13;9u`     | Submit explicitly after higher-priority handlers.    |
-| Cmd+Up           | `super+arrow_up`   | `1;9A`      | Move to the current logical line's start.            |
-| Cmd+Down         | `super+arrow_down` | `1;9B`      | Move to the current logical line's end.              |
+| Cmd+Up           | `super+arrow_up`   | `1;9A`      | Move to the draft's beginning.                       |
+| Cmd+Down         | `super+arrow_down` | `1;9B`      | Move to the draft's end.                             |
 | Cmd+Z            | `super+z`          | `122;9u`    | Undo a draft edit.                                   |
 | Cmd+Shift+Z      | `super+shift+z`    | `122;10u`   | Redo an undone edit.                                 |
 | Shift+Fn+Up      | `shift+page_up`    | `5;2~`      | Extend selection one visible composer page upward.   |

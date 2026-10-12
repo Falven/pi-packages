@@ -67,6 +67,8 @@ Four native checks passed after review. The existing configuration was inspected
 
 The unchanged-configuration baseline is the user's report: Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down fail; Cmd+Shift+Up/Down works, and Cmd+C appears to work. These are reported results, not newly observed checks or proof of a particular input route.
 
+On 2026-10-12, the user reported that the other shortcuts were working, while Cmd+Up/Down reached line boundaries. The requested behavior is draft-boundary movement, including Shift selection. This follow-up is user-reported physical evidence; it does not record installation/removal, conditional terminal states, or the full acceptance matrix. The draft-boundary correction needs a physical recheck after reloading Pi.
+
 The earlier [keyboard verification](../composer-keyboard/verification.md#physical-acceptance) records the normal computer-use call `let app = await cua.getApp("Ghostty");` returning `Computer Use is not allowed to use the app 'com.mitchellh.ghostty' for safety reasons.` No UI state or gestures were available. This acceptance work did not retry through another control route, change live settings, or infer physical behavior from delivered-input tests.
 
 | Configuration phase and check                                                                                                               | Result  |
