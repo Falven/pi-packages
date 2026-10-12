@@ -5,25 +5,45 @@ import {
   convertToPng,
   detectSupportedImageMimeTypeFromFile,
   formatDimensionNote,
+  rawKeyHint,
   resizeImage,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
 import { Image } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 
-function attachmentPaths(text: string, storage: string): string[] {
-  const paths = new Set<string>()
+export function attachmentReferences(text: string, storage: string) {
+  const references: { path: string; from: number; to: number }[] = []
   for (const match of text.matchAll(/\[Attachment: [^\]]+\]\(<([^>]+)>\)/g)) {
     const path = match[1] && resolve(match[1])
-    if (path?.startsWith(storage + sep)) paths.add(path)
+    if (path?.startsWith(storage + sep))
+      references.push({
+        path,
+        from: match.index,
+        to: match.index + match[0].length,
+      })
   }
-  return [...paths]
+  return references
 }
 
-async function readImage(path: string, storage: string) {
+export function attachmentPaths(text: string, storage: string): string[] {
+  return [
+    ...new Set(attachmentReferences(text, storage).map(({ path }) => path)),
+  ]
+}
+
+export async function snapshotFile(
+  path: string,
+  storage: string,
+): Promise<string> {
   const [file, root] = await Promise.all([realpath(path), realpath(storage)])
   if (!file.startsWith(root + sep))
     throw new Error(`Snapshot is outside retained storage: ${path}`)
+  return file
+}
+
+async function readImage(path: string, storage: string) {
+  const file = await snapshotFile(path, storage)
   const mimeType = await detectSupportedImageMimeTypeFromFile(file)
   if (!mimeType) return undefined
   const contents = await readFile(file)
@@ -165,7 +185,7 @@ export function registerImages(
           if (paths.length === 0) return []
           const names = paths.map((path) => basename(path)).join(", ")
           const lines = truncateToVisualLines(
-            theme.fg("muted", `Attachments (${paths.length}): ${names}`),
+            `${theme.fg("muted", `Attachments (${paths.length}): ${names}`)}\n${rawKeyHint("ctrl+alt+a", "/attachments")}`,
             5,
             width,
           ).visualLines

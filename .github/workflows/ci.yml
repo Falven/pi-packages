@@ -30,4 +30,5 @@ jobs:
         run: |
           pnpm run lint
           pnpm run typecheck
+          pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json
       - run: pnpm test

@@ -2,9 +2,13 @@
 
 A Markdown composer for the [pi coding agent](https://pi.dev).
 
-Edit paragraphs, headings, bold, italic, strikethrough, and links with Pi's native styles. Cmd+Shift+M switches between formatted and source views of the same Markdown draft, preserving selection and grouped undo/redo. Native text replacement and insertion reach that draft and history. Movement and deletion preserve graphemes, including combining characters, emoji, and wide text across wrapped lines.
+Edit paragraphs, headings, emphasis, strikethrough, links, quotes, lists, tasks, rules, and inline or fenced code with Pi's native styles and highlighting. Cmd+Shift+M switches between formatted and source views of the same Markdown draft, preserving selection and grouped undo/redo. Native text replacement and insertion reach that draft and history. Movement and deletion preserve graphemes, including combining characters, emoji, and wide text across wrapped lines.
+
+In fullscreen mode, mouse dragging and keyboard selection address the same Markdown text. Wheel scrolling preserves the selection; editing brings the caret back into view. Resizing keeps the selection usable, and native widgets, overlays, and completion pickers retain their focus and mouse routing.
 
 The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
+
+Native `@` path completion, command completion, provider updates, and custom pickers continue through Pi's existing interfaces. File and skill references remain editable text.
 
 Each native session autosaves its Markdown draft, including file, skill, and attachment references. Edits save after 150 ms of idle time and flush before switching sessions or shutting down. Reopening a saved session restores its draft, including an explicitly cleared draft. Undo/redo stays in memory, isolated by session, across working-directory changes and resource reloads. Restarting Pi begins with fresh history.
 
@@ -14,26 +18,27 @@ Save failures report an error and preserve the current text and the last usable 
 
 ## Keys
 
-| Key                       | Action                                 |
-| ------------------------- | -------------------------------------- |
-| Arrow keys                | Move by grapheme or visual line        |
-| Option+Left/Right         | Move by word                           |
-| Cmd+Left/Right            | Move to the start/end of the line      |
-| Cmd+Up/Down               | Move to the start/end of the document  |
-| Shift with a movement key | Extend the selection                   |
-| Cmd+A                     | Select the whole draft                 |
-| Cmd+C / Cmd+X             | Copy / cut selected Markdown           |
-| Cmd+V                     | Paste text through native paste policy |
-| Backspace/Delete          | Delete a grapheme or the selection     |
-| Cmd+Z / Cmd+Shift+Z       | Undo / redo                            |
-| Cmd+Shift+M               | Toggle formatted / source view         |
-| Enter / Cmd+Enter         | Submit                                 |
-| Shift+Enter               | Insert a newline                       |
-| Option+Enter              | Native follow-up submission            |
+| Key                       | Action                                      |
+| ------------------------- | ------------------------------------------- |
+| Arrow keys                | Move by grapheme or visual line             |
+| Option+Left/Right         | Move by word                                |
+| Cmd+Left/Right            | Move to the start/end of the line           |
+| Cmd+Up/Down               | Move to the start/end of the document       |
+| Shift with a movement key | Extend the selection                        |
+| Cmd+A                     | Select the whole draft                      |
+| Cmd+C / Cmd+X             | Copy / cut selected Markdown                |
+| Cmd+V                     | Paste through the active clipboard handler  |
+| Backspace/Delete          | Delete a grapheme or the selection          |
+| Cmd+Z / Cmd+Shift+Z       | Undo / redo                                 |
+| Cmd+Shift+M               | Toggle formatted / source view              |
+| Enter                     | Submit prose; continue a list or code block |
+| Cmd+Enter                 | Submit explicitly                           |
+| Shift+Enter               | Insert a newline                            |
+| Option+Enter              | Native follow-up submission                 |
 
 Pi's configured movement keys remain effective. Native extension and application shortcuts retain their priority. Continuous typing and deletion group until movement, another kind of edit, or a pause of more than 500 ms. Native replacements and pastes each form one undoable edit. A fresh edit after undo discards the old redo branch.
 
-Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V reads Pi's native text clipboard and enters `pasteToEditor`, preserving installed paste decorators.
+Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Standalone Command+V reads text and enters Pi's paste route. With `pi-paste` loaded, the effective clipboard handler classifies copied files, images, and text before insertion. An open completion picker accepts Enter before contextual editing or submission.
 
 If a clipboard read finishes after its draft or selection changes, or paste dispatch fails, the original session, cwd, draft, selection offsets, and clipboard text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory across session changes and reloads. Starting a session or running `/composer-recover` retries those writes and reports the saved files without inserting into the current draft.
 

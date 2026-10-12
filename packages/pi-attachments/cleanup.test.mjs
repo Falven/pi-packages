@@ -185,7 +185,7 @@ test("cleanup preserves pending writes, then reclaims their abandoned bytes afte
   )
   assert.match(await cleanup(host), /removed 0 files \(0 bytes\)/)
   repair()
-  host.submit("/new")
+  await host.runtime.newSession()
   await waitFor(() => retainedRequest(host, "Delivery:"))
   assert.deepEqual(await readFile(abandoned[0]), bytes)
   await host.runtime.session.sendUserMessage(

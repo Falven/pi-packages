@@ -1,7 +1,7 @@
 {
   "name": "pi-composer",
   "version": "0.1.0",
-  "description": "Markdown source composer for Pi.",
+  "description": "Formatted Markdown editing and session drafts for Pi.",
   "keywords": [
     "composer",
     "pi",
