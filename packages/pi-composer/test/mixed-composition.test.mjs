@@ -490,6 +490,91 @@ test("mixed drafts retain early and updated native providers, character editing,
   assert.equal(host.ui.getEditorText(), "Later work")
 })
 
+test("mixed dequeue replay preserves skills, opaque text, images, and input transformations", async (t) => {
+  const skills = await catalog(t)
+  await writeFile(
+    join(skills, "review", "SKILL.md"),
+    "---\nname: review\ndescription: Review changes\n---\nReview without invoking /skill:audit.\n",
+  )
+  const host = await nativePi(
+    t,
+    [composerPath, pastePath, imageInputPath, skillsPath, attachmentsPath],
+    {
+      skillPaths: [skills],
+      extensionFactories: [
+        (pi) => {
+          pi.on("input", (event) => {
+            if (event.text.includes("[Attachment:"))
+              return {
+                action: "transform",
+                text: `${event.text}\nAfter replay transformation.`,
+              }
+            return undefined
+          })
+        },
+      ],
+    },
+  )
+  const response = Promise.withResolvers()
+  t.after(() => response.resolve())
+  host.replies.push(response.promise)
+  host.submit("Hold the first response")
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  host.ui.setEditorText(
+    "Apply /skill:review with **surrounding prose** @source.md",
+  )
+  const body = "Opaque /skill:audit\n".repeat(300)
+  host.ui.pasteToEditor(body)
+  const textPath = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  const beforeImage = host.ui.getEditorText()
+  const source = join(host.directory, "replay.bmp")
+  await writeFile(source, Buffer.from(BMP, "base64"))
+  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
+    expandPromptTemplates: true,
+  })
+  const imagePath = snapshotPath(
+    host.ui.getEditorText().slice(beforeImage.length),
+  )
+  const draft = host.ui.getEditorText().trim()
+  await rm(source)
+  host.input("\x1b\r")
+  const queued = await waitFor(() => {
+    const messages = host.runtime.session.getFollowUpMessages()
+    assert.equal(messages.length, 1)
+    return messages[0]
+  })
+  assert.equal(queued.match(/<skill name="review"/g)?.length, 1)
+  assert.doesNotMatch(queued, /<skill name="audit"/)
+  host.input("\x1b[1;3A")
+  assert.deepEqual(host.runtime.session.getFollowUpMessages(), [])
+  assert.equal(host.ui.getEditorText(), queued)
+  response.resolve()
+  await host.runtime.session.waitForIdle()
+  host.input(submit)
+  await waitFor(() => assert.equal(host.requests.length, 2))
+  await host.runtime.session.waitForIdle()
+  const content = host.users.at(-1).content
+  assert.equal(
+    content[0].text,
+    `Before attachments\n${queued}\nAfter replay transformation.`,
+  )
+  assert.ok(content[0].text.includes(draft))
+  assert.equal(content[0].text.match(/<skill name="review"/g)?.length, 1)
+  assert.doesNotMatch(
+    content[0].text,
+    /<skill name="audit"|Opaque \/skill:audit/,
+  )
+  const images = content.filter((item) => item.type === "image")
+  assert.equal(images.length, 2)
+  assert.equal(images[0].data, PNG)
+  assert.deepEqual(getImageDimensions(images[1].data, images[1].mimeType), {
+    widthPx: 1,
+    heightPx: 1,
+  })
+  assert.equal(await readFile(textPath, "utf8"), body)
+  assert.deepEqual(await readFile(imagePath), Buffer.from(BMP, "base64"))
+})
+
 for (const delivery of ["normal", "steer", "followUp"]) {
   test(`native ${delivery} composes skills, opaque text, snapshot images, and ordered input transforms`, async (t) => {
     const observed = []

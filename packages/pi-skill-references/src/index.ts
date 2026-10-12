@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { dirname } from "node:path"
 import {
+  parseSkillBlock,
   stripFrontmatter,
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent"
@@ -13,6 +14,21 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
   })
   const markdown = new Marked({
     extensions: [
+      {
+        name: "skillBlock",
+        level: "block",
+        start: (text) => text.indexOf("<skill "),
+        tokenizer(text) {
+          if (!text.startsWith("<skill ")) return undefined
+          const end = text.indexOf("\n</skill>")
+          if (end < 0) return undefined
+          const raw = text.slice(0, end + "\n</skill>".length)
+          const block = parseSkillBlock(raw)
+          if (block)
+            return { type: "skillBlock", raw, location: block.location }
+          return undefined
+        },
+      },
       {
         name: "skillReference",
         level: "inline",
@@ -43,11 +59,26 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
       return { action: "continue" }
     }
     const references: string[] = []
-    // Pi owns submission trimming; literal boundaries follow the delivered Markdown.
-    markdown.walkTokens(markdown.lexer(event.text), (token) => {
-      if (token.type === "skillReference") references.push(token.raw.slice(1))
-    })
     const expandedPaths = new Set<string>()
+    let removedBlock = false
+    const tokens = markdown.lexer(event.text).filter((token) => {
+      if (token.type !== "skillBlock") return true
+      const path = token["location"]
+      if (expandedPaths.has(path)) {
+        removedBlock = true
+        return false
+      }
+      expandedPaths.add(path)
+      return true
+    })
+    const text = removedBlock
+      ? tokens.map((token) => token.raw).join("")
+      : event.text
+    // Pi owns submission trimming; literal boundaries follow the delivered Markdown.
+    markdown.walkTokens(tokens, (token) => {
+      if (token.type === "skillReference") references.push(token.raw.slice(1))
+      if (token.type === "skillBlock") expandedPaths.add(token["location"])
+    })
     const blocks = await Promise.all(
       references.map(async (reference) => {
         const name = reference.replace(/[.,:;!?]+$/, "")
@@ -76,8 +107,11 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
     )
     const instructions = blocks.filter(Boolean).join("\n\n")
     // Pi expands leading skills after input handlers; instruction blocks keep it from expanding twice.
-    return instructions
-      ? { action: "transform", text: `${instructions}\n\n${event.text}` }
+    return instructions || removedBlock
+      ? {
+          action: "transform",
+          text: instructions ? `${instructions}\n\n${text}` : text,
+        }
       : { action: "continue" }
   })
 }
