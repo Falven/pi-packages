@@ -45,6 +45,7 @@ export class SourceEditor extends CustomEditor {
       theme,
       keybindings,
       () => this.draft,
+      (from, to) => this.project().replace(from, to, ""),
       (text, cursor) => this.commit({ text, anchor: cursor, head: cursor }),
       () => this.getAutocompleteMaxVisible(),
     )

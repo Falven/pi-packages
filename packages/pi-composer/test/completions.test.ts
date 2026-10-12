@@ -318,6 +318,41 @@ test("native completion replaces selected source and undo restores that selectio
   assert.equal(host.ui.getEditorText(), "Keep @manual")
 })
 
+test("native completion preserves formatted selection syntax and history across views", async (t) => {
+  const host = await openHost(t, {
+    extension: (pi) => {
+      pi.on("session_start", async (_event, ctx) => {
+        await mkdir(join(ctx.cwd, "manual"))
+      })
+    },
+  })
+  const original = "**Use @manOLD**"
+  host.ui.setEditorText(original)
+  await host.key("\x1b[1;2D")
+  await host.key("\x1b[1;2D")
+  await host.key("\x1b[1;2D")
+  host.terminal.output = ""
+  await host.key("\t")
+  await t.waitFor(() =>
+    assert.equal(host.ui.getEditorText(), "**Use @manual/**"),
+  )
+  assert.equal(host.requests.length, 0)
+  assert.match(await host.output(), /Use @manual\//)
+  assert.doesNotMatch(await host.output(), /\*\*/)
+  await host.key("\x1b[109;10u")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), original)
+  await host.key("\x1b[122;10u")
+  await host.key("\x1b[109;10u")
+  await host.type("child")
+  assert.equal(host.ui.getEditorText(), "**Use @manual/child**")
+  await host.key("\x1b[122;9u")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), original)
+  await host.type("ual")
+  assert.equal(host.ui.getEditorText(), "**Use @manual**")
+})
+
 test("Command Enter accepts an open completion before explicit submission", async (t) => {
   const host = await openHost(t, {
     extension: (pi) => {

@@ -19,6 +19,10 @@ export function createCompletions(
   theme: EditorTheme,
   keys: KeybindingsManager,
   read: () => { text: string; anchor: number; head: number },
+  withoutSelection: (
+    from: number,
+    to: number,
+  ) => { text: string; position: number },
   commit: (text: string, cursor: number) => void,
   maxVisible: () => number,
 ) {
@@ -50,10 +54,12 @@ export function createCompletions(
     if (!effective) return
     const draft = read()
     const from = Math.min(draft.anchor, draft.head)
-    const text =
-      draft.text.slice(0, from) +
-      draft.text.slice(Math.max(draft.anchor, draft.head))
-    const before = text.slice(0, from).split("\n")
+    const to = Math.max(draft.anchor, draft.head)
+    const { text, position } =
+      from === to
+        ? { text: draft.text, position: from }
+        : withoutSelection(from, to)
+    const before = text.slice(0, position).split("\n")
     const line = before.length - 1
     const col = before.at(-1)!.length
     const triggers = ["@", "#", ...(effective.triggerCharacters ?? [])]
