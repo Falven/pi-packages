@@ -1,12 +1,14 @@
 # Skill references specification
 
+**Triage:** `ready-for-agent`
+
 ## Problem Statement
 
 Users need to invoke skills while composing ordinary prose and retain native or custom skill pickers. References must survive ordinary text editing and clipboard operations, contribute the intended instructions once, and preserve code examples and unrelated command behavior.
 
 ## Solution
 
-`pi-skill-references` extends native completion with `$` and inline `/` skill triggers and inserts ordinary `/skill:name` text. Canonical skill references carry their invocation meaning whether typed, pasted, or inserted by another extension. Submission includes each referenced skill's instructions once. The package works with native Pi and `pi-composer`, initially in Ghostty on local macOS with Pi's fullscreen mode.
+`pi-skill-references` extends native completion with `$` and inline `/` skill triggers and inserts ordinary `/skill:name` text. Canonical skill references carry their invocation meaning whether typed, pasted, or inserted by another extension. Submission includes each referenced skill's instructions once. The package works with native Pi and `pi-composer`, initially targeting Ghostty on local macOS with Pi's fullscreen mode. Physical input requires separate acceptance evidence.
 
 ## User Stories
 
@@ -35,6 +37,11 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 23. As a Pi user, I want skill expansion with normal, steer, and follow-up submissions, so that explicit references work through native delivery.
 24. As a Pi user, I want inline skills with native Pi when `pi-composer` is absent, so that my skill workflow does not depend on one editor.
 25. As a Pi user, I want attached text to remain available on demand until I restore it into the draft, so that scanning references does not pull attachment contents into the prompt.
+26. As a Pi user, I want completion navigation, acceptance, and cancellation to use effective native bindings, so that my picker controls remain familiar.
+27. As a Pi user, I want native undo to retain priority over in-editor completion keys, so that a remapped undo cannot accidentally accept a skill or submit a draft.
+28. As a Pi user, I want extension-owned pickers to retain their focus and accepted shortcuts, so that their keys cannot also edit the background composer.
+29. As a Pi user, I want completion and custom-picker insertion to replace a selection through the editor's normal history, so that one undo restores the selected prose and references.
+30. As a Pi user, I want cancelling a custom picker to preserve my draft and selection, so that browsing skills does not commit an edit.
 
 ## Implementation Decisions
 
@@ -43,7 +50,9 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 - Complete canonical skill references in ordinary prose carry explicit invocation intent regardless of whether they were typed, pasted, or inserted by another extension. Editing a reference changes its meaning according to the resulting text; no hidden identity is required.
 - Use the effective native skill catalog and command/resource information exposed by public Pi interfaces. Retain native skill-command availability, filtering, and resource precedence.
 - Wrap the supplied `AutocompleteProvider` through `addAutocompleteProvider`. Delegate unrelated suggestions and edits, preserve wrapper order and later provider updates, and carry cancellation, completion ranges, and resulting cursor positions through the native contract.
-- Native and custom pickers use the same canonical text insertion behavior. The package supplies completion behavior to the active editor and preserves native `@` path completion and leading command/argument completion.
+- Native completion providers and extension-owned pickers share canonical text insertion through existing Pi interfaces. The package preserves native `@` path completion and leading command/argument completion. The active editor controls its in-editor picker presentation; current Pi contracts do not provide a general renderer-replacement hook. Extension-owned pickers may use native UI and text insertion without a package-specific interface.
+- Keep native action-specific key precedence. Accepted extension shortcuts and focused overlays retain host routing. Native undo runs before in-editor autocomplete; picker navigation, acceptance, and cancellation then precede ordinary editor fallbacks. A configured undo sharing a picker key must not also accept a reference, move a choice, or submit. Preserve native leading-command dispatch.
+- Completion applies the effective provider's returned edit and caret position once through the active editor. An extension-owned picker uses the public text insertion/replacement route it chooses; selection replacement in `pi-composer` belongs to the same draft history. Cancelling a picker makes no edit and preserves the selection. Stale asynchronous results cannot replace later work.
 - Distinguish skill selection from a command sharing its display name by inserting the qualified native skill spelling. Preserve Pi's native dispatch priority and command behavior.
 - Recognize invocation tokens in the text delivered by Pi using Markdown-aware prose boundaries. Inline and fenced code, indented code, escaped text, link destinations, URLs, and incidental path/slash/dollar text retain their literal meaning. Pi's native submission trimming applies: use fenced code for a leading literal example whose indentation would otherwise be removed. Match complete skill names rather than prefixes embedded in other text.
 - Expand resolved references through Pi's public input transformation boundary. Preserve the draft's ordinary text representation; prepare the submitted instruction content without rewriting the saved draft.
@@ -61,27 +70,36 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 - Use the existing Node test runner. Pi's skill slash-completion, skill-loading, and extension input-event suites provide prior art for catalog fixtures, command collisions, and transformation chaining. Assert externally visible results rather than private parser structure.
 - Cover the following observable scenarios:
 
-| Scenario                                                                                  | Required result                                                                                             |
-| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Complete `$` or `/` at different prose positions                                          | Selection inserts the canonical reference at the correct range and caret position.                          |
-| Insert the same canonical reference by typing, pasting, or a custom picker                | Each route produces equivalent invocation behavior.                                                         |
-| Edit, cut, copy, and paste reference text between drafts                                  | The resulting literal text determines invocation; canonical references remain portable.                     |
-| Reference one skill repeatedly, including at the start and inline                         | Exactly one instruction block is submitted for that resolved skill.                                         |
-| Reference several skills                                                                  | Each resolved skill contributes one block in first-reference order.                                         |
-| Include code, escaped references, URLs, link destinations, paths, or incidental shorthand | Literal spans survive and do not produce instruction blocks.                                                |
-| Choose a skill whose display name matches a command                                       | The selected completion inserts qualified skill syntax; ordinary command selection retains native behavior. |
-| Update providers, cancel completion, or type while suggestions are pending                | Native provider behavior remains effective and stale results do not overwrite the draft.                    |
-| Change native skill availability or encounter name collisions                             | Completion and resolution follow the effective native catalog and precedence.                               |
-| Use an unknown skill or make a known skill unreadable                                     | The reference text survives; read failures are surfaced; no successful expansion is fabricated.             |
-| Submit with images, other input transforms, or steer/follow-up delivery                   | Skill expansion preserves their content and native delivery behavior.                                       |
-| Attach text containing canonical references, then restore it into prose or code           | The attachment stays opaque to expansion; restored text follows the applicable prose or code rule.          |
+| Scenario                                                                                   | Required result                                                                                             |
+| ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Complete `$` or `/` at different prose positions                                           | Selection inserts the canonical reference at the correct range and caret position.                          |
+| Insert the same canonical reference by typing, pasting, or a custom picker                 | Each route produces equivalent invocation behavior.                                                         |
+| Edit, cut, copy, and paste reference text between drafts                                   | The resulting literal text determines invocation; canonical references remain portable.                     |
+| Reference one skill repeatedly, including at the start and inline                          | Exactly one instruction block is submitted for that resolved skill.                                         |
+| Reference several skills                                                                   | Each resolved skill contributes one block in first-reference order.                                         |
+| Include code, escaped references, URLs, link destinations, paths, or incidental shorthand  | Literal spans survive and do not produce instruction blocks.                                                |
+| Choose a skill whose display name matches a command                                        | The selected completion inserts qualified skill syntax; ordinary command selection retains native behavior. |
+| Update providers, cancel completion, or type while suggestions are pending                 | Native provider behavior remains effective and stale results do not overwrite the draft.                    |
+| Change native skill availability or encounter name collisions                              | Completion and resolution follow the effective native catalog and precedence.                               |
+| Use an unknown skill or make a known skill unreadable                                      | The reference text survives; read failures are surfaced; no successful expansion is fabricated.             |
+| Submit with images, other input transforms, or steer/follow-up delivery                    | Skill expansion preserves their content and native delivery behavior.                                       |
+| Attach text containing canonical references, then restore it into prose or code            | The attachment stays opaque to expansion; restored text follows the applicable prose or code rule.          |
+| Remap native picker navigation, confirmation, or cancellation                              | The effective bindings control the picker; accepting a skill makes one intended completion edit.            |
+| Bind native undo to a picker navigation or confirmation key with in-editor completion open | Undo retains native priority; no reference is accepted and no draft is submitted.                           |
+| Use an accepted extension shortcut or navigate an extension-owned picker                   | Native routing handles the key once and the background draft is unchanged until an insertion is chosen.     |
+| Insert canonical text over selected prose through a custom picker's public paste route     | One composer undo restores the prose, selection, and prior reference text; redo restores the insertion.     |
+| Cancel an extension-owned picker while a draft range is selected and image previews redraw | Text, selection, and membership remain intact; focus returns through the native UI contract.                |
 
-- Run real Ghostty/macOS checks for inline picker use, keyboard acceptance, custom picker text insertion, and plain-text clipboard round trips.
+- Run real Ghostty/macOS checks for inline picker use, effective keyboard acceptance/cancellation, custom picker text insertion, and plain-text clipboard round trips. Verify request counts so picker acceptance is distinguishable from submission. Record terminal interception separately from input that reached a focused native component.
 - Prove leading/inline deduplication against the real host expansion order. A standalone input-handler assertion does not establish that Pi will not expand the same skill again.
+
+## Out of Scope
+
+The active editor owns draft selection, history, and in-editor picker presentation. Pi owns discovery, command dispatch, and native UI routing; attachment contents follow the attachment specification.
 
 ## Further Notes
 
-The local implementation tickets track verification of these requirements through public Pi host tests and real terminal acceptance.
+This local Markdown specification is ready for verification against the revised keyboard contract. Existing completion and expansion results do not establish the added binding-priority and focused-UI scenarios. See the [keyboard implementation plan](../composer-keyboard-spec-plan.md) and [terminal procedure](../terminal-checks.md).
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 
@@ -92,3 +110,5 @@ Native evidence and testing prior art: [provider composition](https://github.com
 - [Preserve Pi extension contracts](../adr/0001-preserve-pi-extension-contracts.md)
 - [Independent composition extensions](../adr/0003-independent-composition-extensions.md)
 - [Skill invocation is portable text](../adr/0008-pi-skill-references-portable-invocation.md)
+- [Resolve native editing actions before composer shortcuts](../adr/0009-pi-composer-native-editing-actions.md)
+- [Scope terminal integration to Pi's terminal ownership](../adr/0010-scope-terminal-integration-to-pi.md)
