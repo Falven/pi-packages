@@ -4,7 +4,7 @@
 
 **Blocked by:** 09: pi-composer: edit formatted prose and source.
 
-**Status:** implemented; final acceptance pending
+**Status:** implemented; real-terminal acceptance pending
 
 - [x] Inline and fenced code have readable live presentation while their complete contents remain editable.
 - [x] Preserve indentation, whitespace, delimiters, and example text when editing, wrapping, or changing views.
@@ -14,3 +14,5 @@
 - [ ] Use public Pi highlighting/rendering services and verify exported source, visible output, and Enter behavior through the host boundary and Ghostty.
 
 Integration evidence: `96648f8`; all 318 combined tests, formatting, lint, and root/composer typechecks pass. The 26 code scenarios cover inline/fenced highlighting, whitespace and Unicode mapping, selection/history, contextual Enter, and native shortcut/completion priority. Real Ghostty/macOS acceptance remains pending.
+
+Final verification: [shared results](../verification.md).

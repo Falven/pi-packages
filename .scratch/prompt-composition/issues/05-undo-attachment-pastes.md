@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts; 04: pi-paste: route text pastes and explicit overrides.
 
-**Status:** implemented; final acceptance pending
+**Status:** complete
 
 - [x] Load pi-composer, pi-paste, and pi-attachments as separate extensions and paste large text over a selected range.
 - [x] Preserve the snapshot before discarding selected text; text replacement and attachment membership commit as one edit.
@@ -14,4 +14,6 @@
 - [x] Demonstrate handoff and capability availability through existing public Pi contracts without assuming shared dependency instances.
 - [x] Verify visible text, membership, and readable files at the host boundary. An unavailable atomic handoff remains an explicit blocker, not a completed feature.
 
-Integration evidence: `fc3e0da`; all 318 combined tests, formatting, lint, and root/composer typechecks pass. The 22 attachment scenarios cover capture before replacement, one-step undo/redo, retained bytes, native paste routes, late operations, and native decorators. Real Ghostty/macOS acceptance remains pending.
+Integration evidence: `fc3e0da`; all 318 combined tests, formatting, lint, and root/composer typechecks pass. The 22 attachment scenarios cover capture before replacement, one-step undo/redo, retained bytes, native paste routes, late operations, and native decorators. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
+
+Final verification: [shared results](../verification.md).

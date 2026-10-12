@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** implemented; final acceptance pending
+**Status:** complete
 
 - [x] Keep snapshot storage and references stable across Pi restarts, resumed sessions, and forks with the native editor.
 - [x] Associate retained references with the correct native session and submission without depending on pi-composer.
@@ -13,4 +13,6 @@
 - [x] A lifecycle transition or asynchronous failure preserves readable assets and their recoverable association with the requesting draft.
 - [x] Verify actual retained bytes and references across native lifecycle actions through the public host boundary.
 
-Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Final combined and terminal acceptance remain pending.
+Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Project terminal acceptance is tracked by [ticket 22](22-compose-and-resume-mixed-requests.md).
+
+Final verification: [shared results](../verification.md).

@@ -4,7 +4,7 @@
 
 **Blocked by:** 09: pi-composer: edit formatted prose and source.
 
-**Status:** implemented; final acceptance pending
+**Status:** implemented; real-terminal acceptance pending
 
 - [x] Quotes, lists, task lists, and horizontal rules display their structure while their source remains editable.
 - [x] Nested and wrapped structures preserve correct caret/selection mapping and surrounding Markdown.
@@ -13,3 +13,5 @@
 - [ ] Verify user-visible structured editing and Enter behavior through the public Pi boundary and real Ghostty.
 
 Integration evidence: `dd2e5fb`; 17 structured Markdown scenarios and all 254 combined tests pass, with formatting, lint, and root/composer typechecks. Real terminal structured editing and selection/Enter checks remain pending.
+
+Final verification: [shared results](../verification.md).

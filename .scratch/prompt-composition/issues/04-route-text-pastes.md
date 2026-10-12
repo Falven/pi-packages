@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** implemented; final acceptance pending
+**Status:** implemented; real-terminal acceptance pending
 
 - [x] In native Pi, decoded text below 5,000 UTF-16 units appears inline; text at or above 5,000 units becomes a readable text attachment.
 - [x] Demonstrate the policy through actual terminal, clipboard-shortcut, right-click, and native extension paste routes; one route's handler test is insufficient.
@@ -17,3 +17,5 @@
 - [ ] Run public-boundary automated checks and real Ghostty/macOS clipboard, shortcut, and right-click checks.
 
 Integration evidence: `54000e0`; 56 paste tests and all 237 combined tests pass, along with formatting, lint, and root/composer typechecks. Public-host coverage includes route priority, deferred command guards, cutoff/overrides, and recovery across session/cwd/reload. Real terminal paste and clipboard checks remain pending.
+
+Final verification: [shared results](../verification.md).

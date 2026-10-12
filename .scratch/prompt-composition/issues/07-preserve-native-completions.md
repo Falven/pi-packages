@@ -14,3 +14,5 @@
 - [ ] Verify provider and external-editor actions through the public Pi host boundary and real Ghostty picker interaction.
 
 Automated acceptance: integration `70bff00`; formatting, lint, type checks, and 95 public-boundary tests pass. Real Ghostty checks remain pending.
+
+Final verification: [shared results](../verification.md).

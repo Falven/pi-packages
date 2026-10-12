@@ -9,6 +9,7 @@ Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg
 In a Ghostty shell, from the repository root:
 
 ```sh
+git rev-parse HEAD
 node --version
 pnpm --version
 pnpm install --frozen-lockfile --offline --ignore-scripts
@@ -236,7 +237,7 @@ For a run with composition extensions disabled, launch the local Pi binary with 
 
 ## Record and retain evidence
 
-For each numbered check, record pass/fail/pending, macOS/Ghostty versions, the load order, the actual physical gesture, and any error. Retain the temporary directory, relevant `request-N.json` files, session paths, snapshot hashes, and screenshots of graphics/layout failures. A native clipboard result identifies whether Pi received clipboard metadata or terminal text. Keep any unexercised physical route pending.
+For each numbered check, record pass/fail/pending, the checkout commit, macOS/Ghostty versions, the load order, the actual physical gesture, and any error. Retain the temporary directory, relevant `request-N.json` files, session paths, snapshot hashes, and screenshots of graphics/layout failures. A native clipboard result identifies whether Pi received clipboard metadata or terminal text. Keep any unexercised physical route pending.
 
 Run the software checks from the repository root:
 

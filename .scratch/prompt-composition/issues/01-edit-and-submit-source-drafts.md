@@ -13,3 +13,5 @@
 - [x] Native text reads and replacements reach the same draft. Replacing or typing a long document keeps it inline.
 - [ ] Verify observable draft and submitted content through Pi's public editor/session boundary using the existing Node test runner; verify required Command-key forwarding in real Ghostty on local macOS in fullscreen mode.
 - [x] Reuse Pi services and public runtime APIs. Any state/history dependency must run without a browser view and preserve the authoritative text model.
+
+Final verification: [shared results](../verification.md).

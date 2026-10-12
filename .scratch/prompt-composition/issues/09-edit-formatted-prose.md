@@ -14,3 +14,5 @@
 - [ ] Verify visible formatted output and exported Markdown at the public host boundary; inspect editing in real Ghostty fullscreen mode.
 
 Automated acceptance: integration `70bff00`; formatting, lint, type checks, and 95 public-boundary tests pass. Real Ghostty checks remain pending.
+
+Final verification: [shared results](../verification.md).

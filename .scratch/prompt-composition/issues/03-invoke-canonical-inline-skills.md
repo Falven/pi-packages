@@ -13,3 +13,5 @@
 - [x] Keep the saved draft unchanged during submission-time expansion and preserve native leading command dispatch.
 - [ ] Verify behavior at the actual Pi editor/session and input-transformation boundary, including the host's subsequent native leading-skill step. Check plain-text clipboard portability in real Ghostty/macOS.
 - [x] Use existing public discovery and transformation contracts; private native expansion code is reference material only.
+
+Final verification: [shared results](../verification.md).

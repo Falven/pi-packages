@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts.
 
-**Status:** implemented; final acceptance pending
+**Status:** implemented; real-terminal acceptance pending
 
 - [x] Cmd+C copies selected Markdown as plain text; Cmd+X copies before deleting; Cmd+V inserts at the caret or replaces the selected range.
 - [x] Clipboard failure leaves selected content intact and reports the failure.
@@ -14,3 +14,5 @@
 - [ ] Verify observable selection, clipboard text, history, and native shortcut priority through public-boundary tests and real Ghostty/macOS clipboard checks.
 
 Automated acceptance: integration `a22accf`; formatting, lint, type checks, and 143 public-boundary tests pass. Final combined and terminal acceptance remain pending.
+
+Final verification: [shared results](../verification.md).

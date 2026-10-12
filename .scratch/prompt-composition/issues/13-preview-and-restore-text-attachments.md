@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Compose attachment pastes as one undoable edit.
 
-**Status:** implemented; final acceptance pending
+**Status:** implemented; real-terminal acceptance pending
 
 - [x] Preview preserved text through native UI with both the native editor and pi-composer.
 - [x] Restore Inline inserts complete preserved text at the caret or over the selection, including code and content above the paste cutoff. The native editor retains its tab expansion and LF normalization; pi-composer preserves tabs, and snapshot bytes remain unchanged.
@@ -15,3 +15,5 @@
 - [ ] Verify displayed/restored text, membership, and retained files at the public Pi boundary and keyboard access in Ghostty.
 
 Integration evidence: `a8e5af0`; all 426 combined tests, formatting, lint, and root/composer typechecks pass. Three additional public-host probes confirm generic callback grouping/error recovery and image/session coexistence. Preview, restore, removal, selection mapping, one-step history, native placeholders, retained bytes and delayed operations are covered. Real Ghostty/macOS keyboard and preview acceptance remains pending.
+
+Final verification: [shared results](../verification.md).
