@@ -342,15 +342,6 @@ export class SourceEditor extends CustomEditor {
     return this.project().wordBoundary(this.draft.head, direction)
   }
 
-  private movementMatches(data: string, action: Keybinding): boolean {
-    return (
-      this.nativeKeys.matches(data, action) ||
-      this.nativeKeys
-        .getKeys(action)
-        .some((key) => matchesKey(data, `shift+${key}` as KeyId))
-    )
-  }
-
   private moveVertically(direction: -1 | 1, select: boolean): void {
     const target = this.project().vertical(
       this.draft.head,
@@ -367,29 +358,66 @@ export class SourceEditor extends CustomEditor {
     const keys = this.nativeKeys
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
     const nextPrompt = keys.matches(data, "tui.editor.historyNext")
-    const appAction =
-      !previousPrompt &&
-      !nextPrompt &&
-      [...this.actionHandlers.keys()].some(
-        (action) =>
+    if (keys.matches(data, "app.clipboard.pasteImage")) {
+      this.onPasteImage?.()
+      return
+    }
+    const interrupt = keys.matches(data, "app.interrupt")
+    if (interrupt && !this.isShowingAutocomplete()) {
+      this.completions.update()
+      const handler = this.onEscape ?? this.actionHandlers.get("app.interrupt")
+      if (handler) {
+        handler()
+        return
+      }
+    }
+    if (keys.matches(data, "app.exit") && !this.getText()) {
+      const handler = this.onCtrlD ?? this.actionHandlers.get("app.exit")
+      handler?.()
+      return
+    }
+    if (!interrupt && !previousPrompt && !nextPrompt) {
+      for (const [action, handler] of this.actionHandlers) {
+        if (
           action !== "app.interrupt" &&
           action !== "app.exit" &&
-          keys.matches(data, action),
-      )
-    if (
-      keys.matches(data, "app.clipboard.pasteImage") ||
-      (keys.matches(data, "app.interrupt") && !this.isShowingAutocomplete()) ||
-      (keys.matches(data, "app.exit") && !this.getText()) ||
-      appAction
-    ) {
-      if (keys.matches(data, "app.interrupt")) this.completions.update()
-      super.handleInput(data)
-      return
+          keys.matches(data, action)
+        ) {
+          handler()
+          return
+        }
+      }
     }
     if (
       this.pendingPaste === undefined &&
+      keys.matches(data, "tui.editor.undo")
+    ) {
+      this.restoreEdit(this.past, this.future)
+      return
+    }
+    const nativeEditingKey = Object.entries(keys.getEffectiveConfig()).some(
+      ([action, bindings]) =>
+        (action.startsWith("tui.editor.") || action.startsWith("tui.input.")) &&
+        (Array.isArray(bindings) ? bindings : [bindings]).some(
+          (key) => key !== undefined && matchesKey(data, key),
+        ),
+    )
+    const fallbackMatches = (...bindings: KeyId[]) =>
+      !nativeEditingKey && bindings.some((key) => matchesKey(data, key))
+    const userBindings = keys.getUserBindings()
+    const aliasMatches = (action: Keybinding, ...bindings: KeyId[]) =>
+      !Object.hasOwn(userBindings, action) && fallbackMatches(...bindings)
+    const movementMatches = (action: Keybinding) =>
+      keys.matches(data, action) ||
+      (!nativeEditingKey &&
+        keys
+          .getKeys(action)
+          .some((key) => matchesKey(data, `shift+${key}` as KeyId)))
+    const submitAlias = aliasMatches("tui.input.submit", "super+enter")
+    if (
+      this.pendingPaste === undefined &&
       !data.startsWith("\x1b[200~") &&
-      this.completions.handleInput(data)
+      this.completions.handleInput(data, submitAlias)
     )
       return
     if (previousPrompt || nextPrompt) {
@@ -397,8 +425,12 @@ export class SourceEditor extends CustomEditor {
       return
     }
 
-    const cut = matchesKey(data, "super+x")
-    if (matchesKey(data, "super+c") || cut) {
+    const cut = fallbackMatches("super+x")
+    if (
+      keys.matches(data, "tui.input.copy") ||
+      aliasMatches("tui.input.copy", "super+c") ||
+      cut
+    ) {
       const selection = this.draft
       const revision = this.revision
       const { text, anchor, head } = selection
@@ -418,7 +450,7 @@ export class SourceEditor extends CustomEditor {
       return
     }
 
-    if (matchesKey(data, "super+v")) {
+    if (aliasMatches("app.clipboard.pasteImage", "super+v")) {
       const selection = this.draft
       const revision = this.revision
       void this.clipboard.paste(
@@ -445,22 +477,22 @@ export class SourceEditor extends CustomEditor {
       if (rest) this.handleInput(rest)
       return
     }
-    if (matchesKey(data, "super+shift+m")) {
+    if (fallbackMatches("super+shift+m")) {
       this.formatted = !this.formatted
       this.revealCaret = true
       this.preferredCell = undefined
       this.tui.requestRender()
       return
     }
-    if (matchesKey(data, "super+z") || keys.matches(data, "tui.editor.undo")) {
+    if (aliasMatches("tui.editor.undo", "super+z")) {
       this.restoreEdit(this.past, this.future)
       return
     }
-    if (matchesKey(data, "super+shift+z")) {
+    if (fallbackMatches("super+shift+z")) {
       this.restoreEdit(this.future, this.past)
       return
     }
-    if (matchesKey(data, "super+a")) {
+    if (fallbackMatches("super+a")) {
       this.revealCaret = true
       this.editGroup = undefined
       this.preferredCell = undefined
@@ -470,26 +502,27 @@ export class SourceEditor extends CustomEditor {
       return
     }
     const select = parseKey(data)?.includes("shift+") ?? false
-    if (matchesKey(data, "super+up") || matchesKey(data, "super+shift+up")) {
+    if (
+      aliasMatches("tui.editor.cursorLineStart", "super+up", "super+shift+up")
+    ) {
       this.moveTo(this.project().documentBoundary(-1), select)
       return
     }
     if (
-      matchesKey(data, "super+down") ||
-      matchesKey(data, "super+shift+down")
+      aliasMatches("tui.editor.cursorLineEnd", "super+down", "super+shift+down")
     ) {
       this.moveTo(this.project().documentBoundary(1), select)
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorWordLeft")) {
+    if (movementMatches("tui.editor.cursorWordLeft")) {
       this.moveTo(this.wordBoundary(-1), select)
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorWordRight")) {
+    if (movementMatches("tui.editor.cursorWordRight")) {
       this.moveTo(this.wordBoundary(1), select)
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorUp")) {
+    if (movementMatches("tui.editor.cursorUp")) {
       if (!select && this.draft.head <= this.project().documentBoundary(-1)) {
         this.browsePrompt(-1)
         return
@@ -497,7 +530,7 @@ export class SourceEditor extends CustomEditor {
       this.moveVertically(-1, select)
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorDown")) {
+    if (movementMatches("tui.editor.cursorDown")) {
       const lastRow = this.project().rows.at(-1)!
       if (!select && this.promptIndex >= 0 && this.draft.head >= lastRow.from) {
         this.browsePrompt(1)
@@ -507,22 +540,28 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (
-      this.movementMatches(data, "tui.editor.cursorLineStart") ||
-      matchesKey(data, "super+left") ||
-      matchesKey(data, "super+shift+left")
+      movementMatches("tui.editor.cursorLineStart") ||
+      aliasMatches(
+        "tui.editor.cursorLineStart",
+        "super+left",
+        "super+shift+left",
+      )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, -1), select)
       return
     }
     if (
-      this.movementMatches(data, "tui.editor.cursorLineEnd") ||
-      matchesKey(data, "super+right") ||
-      matchesKey(data, "super+shift+right")
+      movementMatches("tui.editor.cursorLineEnd") ||
+      aliasMatches(
+        "tui.editor.cursorLineEnd",
+        "super+right",
+        "super+shift+right",
+      )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorLeft")) {
+    if (movementMatches("tui.editor.cursorLeft")) {
       const { anchor, head } = this.draft
       this.moveTo(
         !select && anchor !== head ? Math.min(anchor, head) : this.adjacent(-1),
@@ -530,7 +569,7 @@ export class SourceEditor extends CustomEditor {
       )
       return
     }
-    if (this.movementMatches(data, "tui.editor.cursorRight")) {
+    if (movementMatches("tui.editor.cursorRight")) {
       const { anchor, head } = this.draft
       this.moveTo(
         !select && anchor !== head ? Math.max(anchor, head) : this.adjacent(1),
@@ -581,10 +620,7 @@ export class SourceEditor extends CustomEditor {
         return
       }
     }
-    if (
-      keys.matches(data, "tui.input.submit") ||
-      matchesKey(data, "super+enter")
-    ) {
+    if (keys.matches(data, "tui.input.submit") || submitAlias) {
       if (this.disableSubmit || !this.getText().trim()) return
       const text = this.getText()
       this.setText("")

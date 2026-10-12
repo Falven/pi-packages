@@ -18,6 +18,7 @@ import {
   type ExtensionContext,
   type ExtensionFactory,
 } from "@earendil-works/pi-coding-agent"
+import type { KeybindingsConfig } from "@earendil-works/pi-tui"
 
 // Only the terminal and model server are substitutes; Pi owns all host routes.
 class RecordingTerminal {
@@ -57,7 +58,7 @@ class RecordingTerminal {
 
 type HostOptions = {
   columns?: number
-  keybindings?: Record<string, string>
+  keybindings?: KeybindingsConfig
   extension?: ExtensionFactory
   extensionPaths?: string[]
   skillPaths?: string[]

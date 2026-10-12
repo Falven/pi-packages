@@ -1,7 +1,6 @@
 import type { KeybindingsManager } from "@earendil-works/pi-coding-agent"
 import {
   SelectList,
-  matchesKey,
   truncateToWidth,
   type AutocompleteItem,
   type AutocompleteProvider,
@@ -185,21 +184,21 @@ export function createCompletions(
     isShowing() {
       return list !== undefined
     },
-    handleInput(data: string) {
+    handleInput(data: string, submitAlias: boolean) {
       if (
         list &&
         controller &&
         (keys.matches(data, "tui.input.tab") ||
           keys.matches(data, "tui.select.confirm") ||
           keys.matches(data, "tui.input.submit") ||
-          matchesKey(data, "super+enter"))
+          submitAlias)
       ) {
         return true
       }
       if (
         list &&
         (keys.matches(data, "tui.input.tab") ||
-          matchesKey(data, "super+enter") ||
+          submitAlias ||
           (keys.matches(data, "tui.input.submit") &&
             !keys.matches(data, "tui.select.confirm")))
       ) {
