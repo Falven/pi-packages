@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Native file/directory completion retains filtering, quoting, navigation, completion edits, and cursor placement.
 - [ ] Consume effective autocomplete providers registered before and after composer activation; preserve wrapper order, cancellation, and later updates.

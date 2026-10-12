@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Autosave one authoritative text draft per native session and restore the matching text when switching sessions or restarting.
 - [ ] Keep ordinary file, skill, and snapshot reference text intact during persistence.
