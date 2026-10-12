@@ -11,6 +11,8 @@ import { projectProse, type ProseMark, type ProseStyle } from "./prose.ts"
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 const words = new Intl.Segmenter(undefined, { granularity: "word" })
 
+export type SourceRange = { from: number; to: number }
+
 type Cell = {
   from: number
   to: number
@@ -19,7 +21,7 @@ type Cell = {
   width: number
   styles: ProseStyle[]
   highlight: { line: string; column: number; width: number } | undefined
-  ranges: { from: number; to: number }[]
+  ranges: SourceRange[]
 }
 
 type Row = { from: number; to: number; cells: Cell[]; prefix: Cell[] }
@@ -53,7 +55,7 @@ export class Projection {
       const currentSpan = spanIndex
       const { styles } = spans[spanIndex]!
       const color = highlights.get(spans[spanIndex]!)
-      const ranges: { from: number; to: number }[] = []
+      const ranges: SourceRange[] = []
       let offset = index
       while (offset < index + segment.length) {
         const span = spans[spanIndex]!
@@ -262,7 +264,7 @@ export class Projection {
     from: number,
     to: number,
     text: string,
-  ): { text: string; position: number; removed: string } {
+  ): { text: string; position: number; removed: SourceRange[] } {
     const selected = this.cells.filter(
       (cell) => cell.to > from && cell.from < to,
     )
@@ -281,7 +283,7 @@ export class Projection {
       return {
         text: this.source.slice(0, from) + text + this.source.slice(to),
         position: from + text.length,
-        removed: this.source.slice(from, to),
+        removed: from === to ? [] : [{ from, to }],
       }
     }
     const cuts = selected.flatMap((cell) => cell.ranges)
@@ -309,7 +311,6 @@ export class Projection {
     }
     cuts.sort((a, b) => a.from - b.from)
     let result = ""
-    let removed = ""
     let offset = 0
     let position: number | undefined
     // Keep delimiters around surviving text, including across a selection boundary.
@@ -319,14 +320,12 @@ export class Projection {
         result += text
         position = result.length
       }
-      if (cut.to > offset)
-        removed += this.source.slice(Math.max(offset, cut.from), cut.to)
       offset = Math.max(offset, cut.to)
     }
     return {
       text: result + this.source.slice(offset),
       position: position!,
-      removed,
+      removed: cuts,
     }
   }
 

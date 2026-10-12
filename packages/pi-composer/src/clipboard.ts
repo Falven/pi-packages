@@ -86,6 +86,11 @@ export class Clipboard {
     applyToRequest: (insert: () => void) => boolean,
     handler: () => void,
   ): void {
+    // A later decorator can call a saved handler after its own asynchronous work.
+    if (pendingPaste.getStore()) {
+      handler()
+      return
+    }
     const original = {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile,

@@ -96,6 +96,52 @@ for (const [editor, extensions] of [
     assert.doesNotMatch(host.render(), /Attachments \(/)
   })
 
+  if (editor !== "native") {
+    for (const [gesture, input] of [
+      ["Command V", "\x1b[118;9u"],
+      ["native clipboard", "\x16"],
+    ]) {
+      test(`${editor} retains late ${gesture} results from a decorated clipboard handler`, async (t) => {
+        const pending = Promise.withResolvers()
+        const delivered = Promise.withResolvers()
+        t.after(() => pending.resolve())
+        const host = await nativePi(t, extensions, {
+          extensionFactories: [
+            (pi) => {
+              pi.on("session_start", (_event, ctx) => {
+                const previous = ctx.ui.getEditorComponent()
+                assert.ok(previous)
+                ctx.ui.setEditorComponent((...args) => {
+                  const component = previous(...args)
+                  component.onPasteImage = function () {
+                    this.insertTextAtCursor(" supplied paste")
+                  }
+                  const paste = component.onPasteImage
+                  component.onPasteImage = async function () {
+                    await pending.promise
+                    paste.call(this)
+                    delivered.resolve()
+                  }
+                  return component
+                })
+              })
+            },
+          ],
+        })
+        host.ui.setEditorText("Original")
+        host.input(input)
+        host.input(" user edit")
+        pending.resolve()
+        await delivered.promise
+        assert.equal(host.ui.getEditorText(), "Original user edit")
+        await waitFor(() =>
+          assert.match(host.render(), /Clipboard paste saved to /),
+        )
+        assert.equal(host.requests.length, 0)
+      })
+    }
+  }
+
   test(`${editor} leaves clipboard keys with a focused native input`, async (t) => {
     let reads = 0
     t.mock.method(getNativeClipboard(), "getFilePaths", async () => {

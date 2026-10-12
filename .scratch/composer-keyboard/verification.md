@@ -1,6 +1,6 @@
 # Keyboard verification
 
-Public-host implementation and combined-package acceptance are complete. Physical Ghostty/macOS acceptance remains pending in [ticket 08](issues/08-verify-combined-editing-in-ghostty.md).
+Public-host implementation and combined-package acceptance are complete. All three [code-review findings](review.md) are resolved. Physical Ghostty/macOS acceptance remains pending in [ticket 08](issues/08-verify-combined-editing-in-ghostty.md).
 
 ## Environment
 
@@ -32,7 +32,7 @@ Two existing Restore Inline setups used Cmd+Up to reach the whole draft's beginn
 
 | Command                                                                                                               | Result                                                    |
 | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test`                                                             | 589 passed; 0 failed, skipped, or todo                    |
+| `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test`                                                             | 606 passed; 0 failed, skipped, or todo                    |
 | `node --test packages/pi-attachments/text-actions.test.mjs`                                                           | 35 passed after correcting the two stale selection setups |
 | `node --test --test-name-pattern='configured deletion and yank' packages/pi-composer/test/mixed-composition.test.mjs` | Combined regression passed                                |
 | `pnpm run format:check`                                                                                               | Passed                                                    |
@@ -41,7 +41,7 @@ Two existing Restore Inline setups used Cmd+Up to reach the whole draft's beginn
 | `pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json`                                                        | Passed                                                    |
 | `git diff --check`                                                                                                    | Passed                                                    |
 
-The initial full run passed 587 tests and exposed only the two stale document-start setups described above. Their focused suite and the complete rerun pass. Local Markdown links in the changed documentation resolve.
+The review corrections add 17 regressions for overlapping native bindings, delayed clipboard decorators, and retained Markdown source order. Focused checks pass all 18 native-binding, 54 clipboard/paste, and 38 deletion/yank cases. The complete suite includes these checks. Local Markdown links in the changed documentation resolve.
 
 ## Physical acceptance
 

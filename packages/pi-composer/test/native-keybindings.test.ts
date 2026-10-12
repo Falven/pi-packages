@@ -51,6 +51,78 @@ test("native character deletion owns composer shortcuts and full shifted chords"
   assert.equal(host.requests.length, 0)
 })
 
+test("native word deletion retains priority when it shares a movement key", async (t) => {
+  const host = await openHost(t, {
+    keybindings: { "tui.editor.deleteWordBackward": "left" },
+  })
+  host.ui.setEditorText("one two")
+  await host.key("\x1b[D")
+  assert.equal(host.ui.getEditorText(), "one ")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "one two")
+  assert.equal(host.requests.length, 0)
+})
+
+for (const [owner, other, expected] of [
+  ["deleteToLineEnd", "deleteToLineStart", "one twX"],
+  ["deleteCharBackward", "yank", "one tXo"],
+  ["deleteWordBackward", "historyPrevious", "one Xo"],
+  ["cursorLineStart", "cursorWordLeft", "Xone two"],
+  ["cursorRight", "cursorLeft", "one twoX"],
+]) {
+  test(`native ${owner} precedes ${other} on an overlapping binding`, async (t) => {
+    const host = await openHost(t, {
+      keybindings: {
+        [`tui.editor.${owner}`]: "ctrl+shift+j",
+        [`tui.editor.${other}`]: "ctrl+shift+j",
+      },
+    })
+    host.ui.setEditorText("one two")
+    await host.key("\x1b[D")
+    await host.key("\x1b[106;6u")
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), expected)
+    assert.equal(host.requests.length, 0)
+  })
+}
+
+test("native newline precedes an overlapping arrow binding", async (t) => {
+  const host = await openHost(t, {
+    keybindings: { "tui.input.newLine": "left" },
+  })
+  host.ui.setEditorText("one two")
+  await host.key("\x1b[D")
+  await host.type("X")
+  assert.equal(host.ui.getEditorText(), "one two\nX")
+  assert.equal(host.requests.length, 0)
+})
+
+test("native copy precedes undo on an overlapping binding", async (t) => {
+  const clipboard = getNativeClipboard()
+  assert(clipboard?.setText)
+  let copied = "Previous clipboard"
+  t.mock.method(
+    clipboard as { setText: NonNullable<typeof clipboard.setText> },
+    "setText",
+    async (text: string) => {
+      copied = text
+    },
+  )
+  const host = await openHost(t, {
+    keybindings: {
+      "tui.input.copy": "ctrl+shift+j",
+      "tui.editor.undo": "ctrl+shift+j",
+    },
+  })
+  host.ui.setEditorText("Original")
+  await host.type(" changed")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[106;6u")
+  assert.equal(host.ui.getEditorText(), "Original changed")
+  await t.waitFor(() => assert.equal(copied, "Original changed"))
+  assert.equal(host.requests.length, 0)
+})
+
 for (const [description, binding, input] of [
   ["cleared", [], undefined],
   ["repeated default", "ctrl+-", "\x1b[45;5u"],

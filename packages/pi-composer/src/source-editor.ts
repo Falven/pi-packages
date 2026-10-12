@@ -18,7 +18,7 @@ import {
 import { Clipboard } from "./clipboard.ts"
 import { codeNewline } from "./code.ts"
 import { createCompletions } from "./completions.ts"
-import { Projection } from "./projection.ts"
+import { Projection, type SourceRange } from "./projection.ts"
 import { projectProse } from "./prose.ts"
 import { continueList } from "./structures.ts"
 
@@ -55,7 +55,7 @@ export class SourceEditor extends CustomEditor {
   private transaction: { draft: Draft; recorded: boolean } | undefined
   private pendingPaste: string | undefined
   private retained: string[] = []
-  private accumulatingDeletion = false
+  private deletionSource: { text: string; removed: SourceRange[] } | undefined
   private yankSource: YankSource | undefined
   private prompts: string[] = []
   private promptIndex = -1
@@ -77,6 +77,20 @@ export class SourceEditor extends CustomEditor {
     super(tui, theme, keybindings)
     this.nativeKeys = keybindings
     this.clipboard = clipboard
+    const pasteClipboard = this.pasteClipboard.bind(this)
+    let paste: CustomEditor["onPasteImage"]
+    Object.defineProperty(this, "onPasteImage", {
+      configurable: true,
+      get: () => paste,
+      set: (handler: CustomEditor["onPasteImage"]) => {
+        // Other editor decorators can invoke this public callback directly.
+        paste = handler
+          ? function (this: unknown) {
+              pasteClipboard(() => handler.call(this))
+            }
+          : undefined
+      },
+    })
     this.completions = createCompletions(
       tui,
       theme,
@@ -248,9 +262,7 @@ export class SourceEditor extends CustomEditor {
     if (!Clipboard.insert(text, insert)) insert()
   }
 
-  private pasteClipboard(): void {
-    const handler = this.onPasteImage
-    if (!handler) return
+  private pasteClipboard(handler: () => void): void {
     let selection = this.draft
     let revision = this.revision
     this.clipboard.paste(
@@ -268,8 +280,27 @@ export class SourceEditor extends CustomEditor {
         revision = this.revision
         return true
       },
-      () => handler.call(this),
+      handler,
     )
+  }
+
+  private copySelection(cut: boolean): void {
+    const selection = this.draft
+    const revision = this.revision
+    const { text, anchor, head } = selection
+    void this.clipboard
+      .copy(text.slice(Math.min(anchor, head), Math.max(anchor, head)))
+      .then((copied) => {
+        if (
+          copied &&
+          cut &&
+          this.focused &&
+          this.draft === selection &&
+          this.revision === revision
+        ) {
+          this.insertTextAtCursor("")
+        }
+      })
   }
 
   private replaceRange(
@@ -278,12 +309,12 @@ export class SourceEditor extends CustomEditor {
     text: string,
     kind?: EditKind,
     source?: YankSource,
-  ): string {
+  ): { text: string; removed: SourceRange[] } {
     const current = source?.text ?? this.getText()
     text = text.replace(/\r\n?/g, "\n")
     let nextText = current.slice(0, from) + text + current.slice(to)
     let position = from + text.length
-    let removed = current.slice(from, to)
+    let removed = from === to ? [] : [{ from, to }]
     if ((source?.formatted ?? this.formatted) && from !== to) {
       const projection = source
         ? new Projection(current, this.sourceWidth, source.formatted)
@@ -305,23 +336,45 @@ export class SourceEditor extends CustomEditor {
       },
       kind,
     )
-    return removed
+    return { text: nextText, removed }
   }
 
-  private retainDeletion(from: number, to: number, direction: -1 | 1): void {
+  private retainDeletion(from: number, to: number): void {
     if (from === to) return
-    const accumulate = this.accumulatingDeletion
-    const removed = this.replaceRange(from, to, "")
-    if (!removed) return
-    const previous = accumulate ? this.retained.pop() : undefined
+    const accumulate = this.deletionSource !== undefined
+    const source = this.deletionSource ?? { text: this.getText(), removed: [] }
+    const { text, removed } = this.replaceRange(from, to, "")
+    if (!removed.length) return
+    const originalPosition = (position: number) => {
+      for (const range of source.removed) {
+        if (range.from > position) break
+        position += range.to - range.from
+      }
+      return position
+    }
+    // Delimiters removed later can surround text retained by an earlier deletion.
+    const ranges = [
+      ...source.removed,
+      ...removed.map((range) => ({
+        from: originalPosition(range.from),
+        to: originalPosition(range.to),
+      })),
+    ].toSorted((a, b) => a.from - b.from)
+    const merged: SourceRange[] = []
+    for (const range of ranges) {
+      const previous = merged.at(-1)
+      if (previous && range.from <= previous.to) {
+        previous.to = Math.max(previous.to, range.to)
+      } else merged.push({ ...range })
+    }
+    if (accumulate) this.retained.pop()
     this.retained.push(
-      previous === undefined
-        ? removed
-        : direction < 0
-          ? removed + previous
-          : previous + removed,
+      merged.map((range) => source.text.slice(range.from, range.to)).join(""),
     )
-    this.accumulatingDeletion = true
+    this.deletionSource =
+      this.getText() === text
+        ? { text: source.text, removed: merged }
+        : undefined
   }
 
   private yankRetained(pop: boolean): void {
@@ -384,7 +437,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   private changed(autocomplete = false): void {
-    this.accumulatingDeletion = false
+    this.deletionSource = undefined
     this.yankSource = undefined
     this.revision++
     this.jumpDirection = undefined
@@ -399,7 +452,7 @@ export class SourceEditor extends CustomEditor {
 
   private moveTo(position: number, select: boolean): void {
     this.jumpDirection = undefined
-    this.accumulatingDeletion = false
+    this.deletionSource = undefined
     this.yankSource = undefined
     this.revealCaret = true
     this.preferredCell = undefined
@@ -446,7 +499,7 @@ export class SourceEditor extends CustomEditor {
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
     const nextPrompt = keys.matches(data, "tui.editor.historyNext")
     if (keys.matches(data, "app.clipboard.pasteImage")) {
-      this.pasteClipboard()
+      this.onPasteImage?.()
       return
     }
     const interrupt = keys.matches(data, "app.interrupt")
@@ -490,10 +543,24 @@ export class SourceEditor extends CustomEditor {
         return
       }
     }
-    if (
-      this.pendingPaste === undefined &&
-      keys.matches(data, "tui.editor.undo")
-    ) {
+    if (this.pendingPaste !== undefined || data.startsWith("\x1b[200~")) {
+      this.pendingPaste =
+        (this.pendingPaste ?? "") +
+        (this.pendingPaste === undefined ? data.slice(6) : data)
+      const end = this.pendingPaste.indexOf("\x1b[201~")
+      if (end < 0) return
+      const text = this.pendingPaste.slice(0, end)
+      const rest = this.pendingPaste.slice(end + 6)
+      this.pendingPaste = undefined
+      this.insertTextAtCursor(text)
+      if (rest) this.handleInput(rest)
+      return
+    }
+    if (keys.matches(data, "tui.input.copy")) {
+      this.copySelection(false)
+      return
+    }
+    if (keys.matches(data, "tui.editor.undo")) {
       this.restoreEdit(this.past, this.future)
       return
     }
@@ -516,60 +583,19 @@ export class SourceEditor extends CustomEditor {
           .getKeys(action)
           .some((key) => matchesKey(data, `shift+${key}` as KeyId)))
     const submitAlias = aliasMatches("tui.input.submit", "super+enter")
-    if (
-      this.pendingPaste === undefined &&
-      !data.startsWith("\x1b[200~") &&
-      this.completions.handleInput(data, submitAlias)
-    )
-      return
-    if (previousPrompt || nextPrompt) {
-      this.browsePrompt(previousPrompt ? -1 : 1)
-      return
-    }
+    if (this.completions.handleInput(data, submitAlias)) return
 
     const cut = fallbackMatches("super+x")
-    if (
-      keys.matches(data, "tui.input.copy") ||
-      aliasMatches("tui.input.copy", "super+c") ||
-      cut
-    ) {
-      const selection = this.draft
-      const revision = this.revision
-      const { text, anchor, head } = selection
-      void this.clipboard
-        .copy(text.slice(Math.min(anchor, head), Math.max(anchor, head)))
-        .then((copied) => {
-          if (
-            copied &&
-            cut &&
-            this.focused &&
-            this.draft === selection &&
-            this.revision === revision
-          ) {
-            this.insertTextAtCursor("")
-          }
-        })
+    if (aliasMatches("tui.input.copy", "super+c") || cut) {
+      this.copySelection(cut)
       return
     }
 
     if (aliasMatches("app.clipboard.pasteImage", "super+v")) {
-      this.pasteClipboard()
+      this.onPasteImage?.()
       return
     }
 
-    if (this.pendingPaste !== undefined || data.startsWith("\x1b[200~")) {
-      this.pendingPaste =
-        (this.pendingPaste ?? "") +
-        (this.pendingPaste === undefined ? data.slice(6) : data)
-      const end = this.pendingPaste.indexOf("\x1b[201~")
-      if (end < 0) return
-      const text = this.pendingPaste.slice(0, end)
-      const rest = this.pendingPaste.slice(end + 6)
-      this.pendingPaste = undefined
-      this.insertTextAtCursor(text)
-      if (rest) this.handleInput(rest)
-      return
-    }
     if (fallbackMatches("super+shift+m")) {
       this.formatted = !this.formatted
       this.revealCaret = true
@@ -586,7 +612,7 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (fallbackMatches("super+a")) {
-      this.accumulatingDeletion = false
+      this.deletionSource = undefined
       this.yankSource = undefined
       this.revealCaret = true
       this.editGroup = undefined
@@ -596,39 +622,52 @@ export class SourceEditor extends CustomEditor {
       this.tui.requestRender()
       return
     }
+    const lineEnd = keys.matches(data, "tui.editor.deleteToLineEnd")
+    if (lineEnd || keys.matches(data, "tui.editor.deleteToLineStart")) {
+      const { anchor, head } = this.draft
+      const direction = lineEnd ? 1 : -1
+      let end = anchor
+      if (anchor === head) {
+        end = this.project().lineBoundary(head, direction)
+        if (lineEnd ? end <= head : end >= head) end = this.adjacent(direction)
+      }
+      this.retainDeletion(Math.min(head, end), Math.max(head, end))
+      return
+    }
+    const wordBackward = keys.matches(data, "tui.editor.deleteWordBackward")
+    if (wordBackward || keys.matches(data, "tui.editor.deleteWordForward")) {
+      const { anchor, head } = this.draft
+      const end =
+        anchor === head ? this.wordBoundary(wordBackward ? -1 : 1) : anchor
+      this.retainDeletion(Math.min(head, end), Math.max(head, end))
+      return
+    }
+    const backward = keys.matches(data, "tui.editor.deleteCharBackward")
+    if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
+      const { anchor, head } = this.draft
+      const end = anchor === head ? this.adjacent(backward ? -1 : 1) : anchor
+      this.replaceRange(
+        Math.min(head, end),
+        Math.max(head, end),
+        "",
+        backward ? "backspace" : "delete",
+      )
+      return
+    }
+    if (keys.matches(data, "tui.editor.yank")) {
+      this.yankRetained(false)
+      return
+    }
+    if (keys.matches(data, "tui.editor.yankPop")) {
+      this.yankRetained(true)
+      return
+    }
+    if (previousPrompt || nextPrompt) {
+      this.browsePrompt(previousPrompt ? -1 : 1)
+      return
+    }
     const select =
       !nativeEditingKey && (parseKey(data)?.includes("shift+") ?? false)
-    if (movementMatches("tui.editor.cursorWordLeft")) {
-      this.moveTo(this.wordBoundary(-1), select)
-      return
-    }
-    if (movementMatches("tui.editor.cursorWordRight")) {
-      this.moveTo(this.wordBoundary(1), select)
-      return
-    }
-    if (movementMatches("tui.editor.cursorUp")) {
-      const projection = this.project()
-      if (
-        !select &&
-        projection.rowAt(this.draft.head) === 0 &&
-        (this.promptIndex >= 0 ||
-          this.draft.head <= projection.documentBoundary(-1))
-      ) {
-        this.browsePrompt(-1)
-        return
-      }
-      this.moveVertically(-1, select)
-      return
-    }
-    if (movementMatches("tui.editor.cursorDown")) {
-      const lastRow = this.project().rows.at(-1)!
-      if (!select && this.promptIndex >= 0 && this.draft.head >= lastRow.from) {
-        this.browsePrompt(1)
-        return
-      }
-      this.moveVertically(1, select)
-      return
-    }
     if (
       movementMatches("tui.editor.cursorLineStart") ||
       aliasMatches(
@@ -655,84 +694,12 @@ export class SourceEditor extends CustomEditor {
       this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)
       return
     }
-    if (movementMatches("tui.editor.cursorLeft")) {
-      const { anchor, head } = this.draft
-      this.moveTo(
-        !select && anchor !== head ? Math.min(anchor, head) : this.adjacent(-1),
-        select,
-      )
+    if (movementMatches("tui.editor.cursorWordLeft")) {
+      this.moveTo(this.wordBoundary(-1), select)
       return
     }
-    if (movementMatches("tui.editor.cursorRight")) {
-      const { anchor, head } = this.draft
-      this.moveTo(
-        !select && anchor !== head ? Math.max(anchor, head) : this.adjacent(1),
-        select,
-      )
-      return
-    }
-    const pageUp = keys.matches(data, "tui.editor.pageUp")
-    if (pageUp || keys.matches(data, "tui.editor.pageDown")) {
-      const target = this.project().vertical(
-        this.draft.head,
-        (pageUp ? -1 : 1) * Math.max(1, this.viewport.viewportHeight),
-        this.preferredCell,
-      )
-      this.moveTo(target.position, false)
-      this.preferredCell = target.column
-      return
-    }
-    if (keys.matches(data, "tui.editor.jumpForward")) {
-      this.jumpDirection = 1
-      return
-    }
-    if (keys.matches(data, "tui.editor.jumpBackward")) {
-      this.jumpDirection = -1
-      return
-    }
-    const lineStart = keys.matches(data, "tui.editor.deleteToLineStart")
-    if (lineStart || keys.matches(data, "tui.editor.deleteToLineEnd")) {
-      const { anchor, head } = this.draft
-      const direction = lineStart ? -1 : 1
-      let end = anchor
-      if (anchor === head) {
-        end = this.project().lineBoundary(head, direction)
-        if (lineStart ? end >= head : end <= head)
-          end = this.adjacent(direction)
-      }
-      this.retainDeletion(Math.min(head, end), Math.max(head, end), direction)
-      return
-    }
-    const wordBackward = keys.matches(data, "tui.editor.deleteWordBackward")
-    if (wordBackward || keys.matches(data, "tui.editor.deleteWordForward")) {
-      const { anchor, head } = this.draft
-      const end =
-        anchor === head ? this.wordBoundary(wordBackward ? -1 : 1) : anchor
-      this.retainDeletion(
-        Math.min(head, end),
-        Math.max(head, end),
-        wordBackward ? -1 : 1,
-      )
-      return
-    }
-    if (keys.matches(data, "tui.editor.yank")) {
-      this.yankRetained(false)
-      return
-    }
-    if (keys.matches(data, "tui.editor.yankPop")) {
-      this.yankRetained(true)
-      return
-    }
-    const backward = keys.matches(data, "tui.editor.deleteCharBackward")
-    if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
-      const { anchor, head } = this.draft
-      const end = anchor === head ? this.adjacent(backward ? -1 : 1) : anchor
-      this.replaceRange(
-        Math.min(head, end),
-        Math.max(head, end),
-        "",
-        backward ? "backspace" : "delete",
-      )
+    if (movementMatches("tui.editor.cursorWordRight")) {
+      this.moveTo(this.wordBoundary(1), select)
       return
     }
     if (keys.matches(data, "tui.input.newLine")) {
@@ -771,6 +738,64 @@ export class SourceEditor extends CustomEditor {
       const text = this.getText()
       this.setText("")
       this.onSubmit?.(text)
+      return
+    }
+    if (movementMatches("tui.editor.cursorUp")) {
+      const projection = this.project()
+      if (
+        !select &&
+        projection.rowAt(this.draft.head) === 0 &&
+        (this.promptIndex >= 0 ||
+          this.draft.head <= projection.documentBoundary(-1))
+      ) {
+        this.browsePrompt(-1)
+        return
+      }
+      this.moveVertically(-1, select)
+      return
+    }
+    if (movementMatches("tui.editor.cursorDown")) {
+      const lastRow = this.project().rows.at(-1)!
+      if (!select && this.promptIndex >= 0 && this.draft.head >= lastRow.from) {
+        this.browsePrompt(1)
+        return
+      }
+      this.moveVertically(1, select)
+      return
+    }
+    if (movementMatches("tui.editor.cursorRight")) {
+      const { anchor, head } = this.draft
+      this.moveTo(
+        !select && anchor !== head ? Math.max(anchor, head) : this.adjacent(1),
+        select,
+      )
+      return
+    }
+    if (movementMatches("tui.editor.cursorLeft")) {
+      const { anchor, head } = this.draft
+      this.moveTo(
+        !select && anchor !== head ? Math.min(anchor, head) : this.adjacent(-1),
+        select,
+      )
+      return
+    }
+    const pageUp = keys.matches(data, "tui.editor.pageUp")
+    if (pageUp || keys.matches(data, "tui.editor.pageDown")) {
+      const target = this.project().vertical(
+        this.draft.head,
+        (pageUp ? -1 : 1) * Math.max(1, this.viewport.viewportHeight),
+        this.preferredCell,
+      )
+      this.moveTo(target.position, false)
+      this.preferredCell = target.column
+      return
+    }
+    if (keys.matches(data, "tui.editor.jumpForward")) {
+      this.jumpDirection = 1
+      return
+    }
+    if (keys.matches(data, "tui.editor.jumpBackward")) {
+      this.jumpDirection = -1
       return
     }
     const printable = decodeKittyPrintable(data) ?? data

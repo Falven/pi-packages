@@ -20,6 +20,85 @@ test("native yank recovers a word deletion in the shared draft history", async (
   assert.equal(host.ui.getEditorText(), "one two three")
 })
 
+test("successive formatted deletions retain delimiters in their original source order", async (t) => {
+  const host = await openHost(t)
+  host.ui.setEditorText("**abc**")
+  await host.key("\x05")
+  await host.key("\x1b[1;2D")
+  await host.key("\x1b[1;2D")
+  await host.key("\x17")
+  assert.equal(host.ui.getEditorText(), "**a**")
+  await host.key("\x17")
+  assert.equal(host.ui.getEditorText(), "")
+  await host.key("\x19")
+  assert.equal(host.ui.getEditorText(), "**abc**")
+  await host.key(undo)
+  assert.equal(host.ui.getEditorText(), "")
+  await host.key(undo)
+  assert.equal(host.ui.getEditorText(), "**a**")
+})
+
+test("forward formatted deletions retain repeated text inside its original delimiters", async (t) => {
+  const host = await openHost(t)
+  host.ui.setEditorText("**aaa**")
+  await host.key("\x01")
+  await host.key("\x1b[1;2C")
+  await host.key("\x1b[1;2C")
+  await host.key("\x1bd")
+  assert.equal(host.ui.getEditorText(), "**a**")
+  await host.key("\x1bd")
+  assert.equal(host.ui.getEditorText(), "")
+  await host.key("\x19")
+  assert.equal(host.ui.getEditorText(), "**aaa**")
+})
+
+for (const direction of ["backward", "forward"]) {
+  test(`successive ${direction} deletions accumulate repeated formatted words and punctuation`, async (t) => {
+    const host = await openHost(t)
+    host.ui.setEditorText("**a-a-a**")
+    await host.key(direction === "backward" ? "\x05" : "\x01")
+    for (let index = 0; index < 5; index++) {
+      await host.key(direction === "backward" ? "\x17" : "\x1bd")
+    }
+    assert.equal(host.ui.getEditorText(), "")
+    await host.key("\x19")
+    assert.equal(host.ui.getEditorText(), "**a-a-a**")
+  })
+}
+
+test("an extension rewrite after deletion ends retained-source accumulation", async (t) => {
+  const host = await openHost(t, {
+    extension: (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        const previous = ctx.ui.getEditorComponent()
+        assert(previous)
+        ctx.ui.setEditorComponent((...args) => {
+          const editor = previous(...args)
+          return new Proxy(editor, {
+            set(target, property, value) {
+              if (property === "onChange") {
+                target.onChange = (text) => {
+                  value?.(text)
+                  if (text === "one ") ctx.ui.setEditorText("Prefix one ")
+                }
+                return true
+              }
+              return Reflect.set(target, property, value)
+            },
+          })
+        })
+      })
+    },
+  })
+  host.ui.setEditorText("one two")
+  await host.key("\x17")
+  assert.equal(host.ui.getEditorText(), "Prefix one ")
+  await host.key("\x17")
+  assert.equal(host.ui.getEditorText(), "Prefix ")
+  await host.key("\x19")
+  assert.equal(host.ui.getEditorText(), "Prefix one ")
+})
+
 test("formatted deletion retains removed Markdown without surviving delimiters", async (t) => {
   const host = await openHost(t)
   for (const { before, from, length, after, retained, replacement } of [
