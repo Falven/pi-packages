@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
 import { chmod, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
@@ -34,6 +35,48 @@ test("native Attach File keeps captured bytes after the source changes or is rem
   await rm(source)
   assert.equal(await readFile(path, "utf8"), "Original file\r\nSnowman: ☃\0\n")
 })
+
+test(
+  "native Attach File and recovery reject a FIFO without waiting for a writer",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await nativePi(t)
+    const source = join(host.directory, "input.fifo")
+    execFileSync("/usr/bin/mkfifo", [source])
+    host.ui.setEditorText("Keep this draft")
+    await host.runtime.session.prompt("/attach-text Already captured")
+    const draft = host.ui.getEditorText()
+    const retained = snapshotPath(draft)
+    /* eslint-disable no-await-in-loop -- Recovery retries the same rejected attachment request. */
+    for (const command of [`/attach-file ${source}`, "/attachments-recover"]) {
+      let completed = false
+      const pending = host.runtime.session
+        .sendUserMessage(command, {
+          expandPromptTemplates: true,
+        })
+        .finally(() => {
+          completed = true
+        })
+      try {
+        await waitFor(() =>
+          assert.equal(
+            completed,
+            true,
+            "The source must be rejected without a FIFO writer",
+          ),
+        )
+        assert.match(host.render(), /Not a regular file/)
+        assert.equal(host.ui.getEditorText(), draft)
+        assert.equal(await readFile(retained, "utf8"), "Already captured")
+      } finally {
+        if (!completed)
+          await writeFile(source, "Release a blocked regression probe")
+        await pending
+      }
+    }
+    /* eslint-enable no-await-in-loop */
+  },
+)
 
 test("native draft membership follows references and coexists with other widgets and actions", async (t) => {
   const host = await nativePi(t)

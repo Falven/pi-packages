@@ -931,19 +931,24 @@ test("the native attachment command runs while a response streams and preserves 
 
 test("an attachment read finishing after session replacement retains the requesting paste and snapshot", async (t) => {
   const host = await nativePi(t, [attachmentsPath, pastePath])
-  const read = fs.readFile
+  const open = fs.open
   const gate = Promise.withResolvers()
   let source
-  const mocked = t.mock.method(fs, "readFile", async (...args) => {
-    const bytes = await read(...args)
+  const mocked = t.mock.method(fs, "open", async (...args) => {
+    const file = await open(...args)
     if (
       String(args[0]).startsWith(join(host.agentDir, "pi-paste")) &&
       String(args[0]).endsWith("/paste.txt")
     ) {
-      source = args[0]
-      await gate.promise
+      const read = file.readFile.bind(file)
+      t.mock.method(file, "readFile", async (...options) => {
+        const bytes = await read(...options)
+        source = args[0]
+        await gate.promise
+        return bytes
+      })
     }
-    return bytes
+    return file
   })
   syncBuiltinESMExports()
   t.after(() => {

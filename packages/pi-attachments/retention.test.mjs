@@ -378,27 +378,7 @@ test("a partial multi-file read retains captured members for recovery with the o
   const original = host.ui.getEditorText()
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const sessionFile = host.runtime.session.sessionFile
-  const captured = Promise.withResolvers()
-  const read = fs.readFile
-  let failing = true
-  const mocked = t.mock.method(fs, "readFile", async (...args) => {
-    if (args[0] === first) {
-      const bytes = await read(...args)
-      await rm(first)
-      captured.resolve()
-      return bytes
-    }
-    if (args[0] === second && failing) {
-      await captured.promise
-      throw new Error("Second member became unreadable")
-    }
-    return read(...args)
-  })
-  syncBuiltinESMExports()
-  t.after(() => {
-    mocked.mock.restore()
-    syncBuiltinESMExports()
-  })
+  await chmod(second, 0o000)
   await host.runtime.session.sendUserMessage(
     `/attach-file ${first}\n${second}`,
     {
@@ -406,9 +386,10 @@ test("a partial multi-file read retains captured members for recovery with the o
     },
   )
   assert.equal(host.ui.getEditorText(), original)
-  assert.match(host.render(), /Second member became unreadable/)
+  assert.match(host.render(), /EACCES/)
   const partial = await retainedRequest(host, original)
   assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
+  await rm(first)
   assert.ok(
     partial.text.includes(second),
     "The partial request must identify the missing group member",
@@ -416,7 +397,7 @@ test("a partial multi-file read retains captured members for recovery with the o
   await host.runtime.newSession()
   await host.runtime.session.reload()
   host.ui.setEditorText("Unrelated current draft")
-  failing = false
+  await chmod(second, 0o600)
   await host.runtime.session.sendUserMessage("/attachments-recover", {
     expandPromptTemplates: true,
   })
