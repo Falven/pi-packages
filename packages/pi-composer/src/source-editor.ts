@@ -343,7 +343,13 @@ export class SourceEditor extends CustomEditor {
   }
 
   private moveVertically(direction: -1 | 1, select: boolean): void {
-    const target = this.project().vertical(
+    const projection = this.project()
+    const row = projection.rowAt(this.draft.head) + direction
+    if (row < 0 || row >= projection.rows.length) {
+      this.moveTo(projection.lineBoundary(this.draft.head, direction), select)
+      return
+    }
+    const target = projection.vertical(
       this.draft.head,
       direction,
       this.preferredCell,
@@ -501,19 +507,8 @@ export class SourceEditor extends CustomEditor {
       this.tui.requestRender()
       return
     }
-    const select = parseKey(data)?.includes("shift+") ?? false
-    if (
-      aliasMatches("tui.editor.cursorLineStart", "super+up", "super+shift+up")
-    ) {
-      this.moveTo(this.project().documentBoundary(-1), select)
-      return
-    }
-    if (
-      aliasMatches("tui.editor.cursorLineEnd", "super+down", "super+shift+down")
-    ) {
-      this.moveTo(this.project().documentBoundary(1), select)
-      return
-    }
+    const select =
+      !nativeEditingKey && (parseKey(data)?.includes("shift+") ?? false)
     if (movementMatches("tui.editor.cursorWordLeft")) {
       this.moveTo(this.wordBoundary(-1), select)
       return
@@ -523,7 +518,13 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (movementMatches("tui.editor.cursorUp")) {
-      if (!select && this.draft.head <= this.project().documentBoundary(-1)) {
+      const projection = this.project()
+      if (
+        !select &&
+        projection.rowAt(this.draft.head) === 0 &&
+        (this.promptIndex >= 0 ||
+          this.draft.head <= projection.documentBoundary(-1))
+      ) {
         this.browsePrompt(-1)
         return
       }
@@ -545,6 +546,8 @@ export class SourceEditor extends CustomEditor {
         "tui.editor.cursorLineStart",
         "super+left",
         "super+shift+left",
+        "super+up",
+        "super+shift+up",
       )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, -1), select)
@@ -556,6 +559,8 @@ export class SourceEditor extends CustomEditor {
         "tui.editor.cursorLineEnd",
         "super+right",
         "super+shift+right",
+        "super+down",
+        "super+shift+down",
       )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)

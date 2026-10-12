@@ -87,7 +87,7 @@ test("formatted vertical selection follows terminal cells across wide text and w
   assert.equal(host.ui.getEditorText(), "**abcd界X!**\nklmnop")
 })
 
-test("word, line, and document movement edit link labels and heading text", async (t) => {
+test("word and line movement edit link labels and heading text", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("# Title #\nOne **two** [three](https://pi.dev)")
   await host.key("\x1b[1;4D")
@@ -98,7 +98,9 @@ test("word, line, and document movement edit link labels and heading text", asyn
   )
   await host.key("\x1b[1;9D")
   await host.type("Next ")
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  await host.key("\x01")
   await host.type("New ")
   await host.key("\x1b[1;9C")
   await host.type("!")
@@ -209,7 +211,9 @@ test("native insertion into formatted prose preserves code, references, and sour
     "[ref]: https://pi.dev",
   ].join("\n")
   host.ui.setEditorText(`***edit***${rest}`)
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  await host.key("\x01")
   await host.key("\x1b[1;4C")
   host.ui.pasteToEditor("changed")
   assert.equal(host.ui.getEditorText(), `***changed***${rest}`)
@@ -272,7 +276,9 @@ test("setext headings and reference links retain their Markdown during live edit
   assert.match(output, /caption/)
   assert.doesNotMatch(output, /__Heading__|===|\[caption\]\[ref\]/)
   assert.match(output, /\[ref\]: \/path/)
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
+  await host.key("\x01")
   await host.key("\x1b[1;4C")
   await host.type("Title")
   assert.equal(

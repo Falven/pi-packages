@@ -71,7 +71,8 @@ test("native syntax colors survive multiline code and Unicode wrapping while edi
   assert(row)
   const comment = getMarkdownTheme().highlightCode!("/* continued */", "ts")[0]!
   assert(row.includes(sliceByColumn(comment, 3, 1)))
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
   await host.key("\x1b[B")
   await host.key("\x1b[B")
   await host.key("\x1b[1;9D")
@@ -112,7 +113,8 @@ for (const view of ["formatted", "source"]) {
     if (view === "source") await host.key("\x1b[109;10u")
     const source = "```ts\n\tconst value = 1;\n```"
     host.ui.setEditorText(source)
-    await host.key("\x1b[1;9A")
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
     await host.key("\x1b[B")
     await host.key("\x1b[1;9C")
     await host.key("\r")
@@ -155,7 +157,8 @@ test("explicit native Enter bindings retain newline, submit, and application pri
     },
   })
   host.ui.setEditorText("```ts\nconst value = 1;\n```")
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
   await host.key("\x1b[B")
   await host.key("\x1b[1;9C")
   await host.key("\r")
@@ -180,7 +183,8 @@ test("native replacement and paste keep code tabs and literal references with th
   host.ui.setEditorText("```text\r\n\told\r```")
   const original = "```text\n\told\n```"
   assert.equal(host.ui.getEditorText(), original)
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
   await host.key("\x1b[B")
   await host.key("\x1b[1;9C")
   for (let index = 0; index < 3; index++) await host.key("\x1b[1;2D")
@@ -300,7 +304,8 @@ for (const [name, accept] of [
       },
     })
     host.ui.setEditorText("```text\n@man\n```")
-    await host.key("\x1b[1;9A")
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
     await host.key("\x1b[B")
     await host.key("\x1b[1;9C")
     await host.type("u")
@@ -391,7 +396,8 @@ test("nested code renders the original tab when it also provides container inden
   host.terminal.output = ""
   assert.match(await host.output(), /    const value = `界`;/)
   assert.equal(host.ui.getEditorText(), source)
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[D")
   await host.key("\x1b[B")
   await host.key("\x1b[1;9D")
   await host.key("\x1b[C")
@@ -433,7 +439,8 @@ for (const view of ["formatted", "source"]) {
     if (view === "source") await host.key("\x1b[109;10u")
     const source = "- > ~~~ts\n  > \tconst value = 1;\n  > ~~~"
     host.ui.setEditorText(source)
-    await host.key("\x1b[1;9A")
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
     await host.key("\x1b[B")
     await host.key("\x1b[1;9C")
     await host.key("\r")
