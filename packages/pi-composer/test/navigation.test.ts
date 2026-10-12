@@ -5,16 +5,46 @@ import { openHost } from "../fixtures/host.ts"
 
 for (const sourceView of [false, true]) {
   const view = sourceView ? "source" : "formatted"
+  test(`Command Up and Down reach the draft boundaries in ${view} view`, async (t) => {
+    const host = await openHost(t, { columns: 12 })
+    host.ui.setEditorText("Earlier prompt")
+    await host.key("\r")
+    await host.settled()
+    if (sourceView) await host.key("\x1b[109;10u")
+    const original = "**first**\n**abcdefghijklmno**\n**last**"
+    for (const [input, expected] of [
+      [
+        "\x1b[1;9A",
+        sourceView
+          ? "X**first**\n**abcdefghijklmno**\n**last**"
+          : "**Xfirst**\n**abcdefghijklmno**\n**last**",
+      ],
+      [
+        "\x1b[1;9B",
+        sourceView
+          ? "**first**\n**abcdefghijklmno**\n**last**X"
+          : "**first**\n**abcdefghijklmno**\n**lastX**",
+      ],
+    ] as const) {
+      host.ui.setEditorText(original)
+      await host.output()
+      await host.key("\x1b[A")
+      await host.key(input)
+      await host.key(input)
+      assert.equal(host.ui.getEditorText(), original)
+      await host.type("X")
+      assert.equal(host.ui.getEditorText(), expected)
+    }
+  })
+
   test(`line actions reach a wrapped logical line's boundaries in ${view} view`, async (t) => {
     const host = await openHost(t, { columns: 12 })
     if (sourceView) await host.key("\x1b[109;10u")
     for (const [name, input, end] of [
       ["Ctrl+A", "\x01", false],
       ["Cmd+Left", "\x1b[1;9D", false],
-      ["Cmd+Up", "\x1b[1;9A", false],
       ["Ctrl+E", "\x05", true],
       ["Cmd+Right", "\x1b[1;9C", true],
-      ["Cmd+Down", "\x1b[1;9B", true],
     ] as const) {
       host.ui.setEditorText("first\n**abcdefghijklmno**\nlast")
       await host.output()
@@ -35,24 +65,48 @@ for (const sourceView of [false, true]) {
   test(`shifted Command line aliases keep the selection anchor in ${view} view`, async (t) => {
     const host = await openHost(t, { columns: 12 })
     if (sourceView) await host.key("\x1b[109;10u")
-    for (const [start, end] of [
-      ["\x1b[1;10A", "\x1b[1;10B"],
-      ["\x1b[1;10D", "\x1b[1;10C"],
-    ] as const) {
-      host.ui.setEditorText("first\nabcdefghijklmno\nlast")
-      await host.output()
-      await host.key("\x1b[A")
-      await host.key("\x01")
-      for (let i = 0; i < 4; i++) await host.key("\x1b[C")
-      await host.key(start)
-      await host.key(end)
-      await host.type("X")
-      assert.equal(host.ui.getEditorText(), "first\nabcdX\nlast")
-      await host.key("\x1b[122;9u")
-      await host.key(start)
-      await host.type("Y")
-      assert.equal(host.ui.getEditorText(), "first\nYefghijklmno\nlast")
-    }
+    host.ui.setEditorText("first\nabcdefghijklmno\nlast")
+    await host.output()
+    await host.key("\x1b[A")
+    await host.key("\x01")
+    for (let i = 0; i < 4; i++) await host.key("\x1b[C")
+    await host.key("\x1b[1;10D")
+    await host.key("\x1b[1;10C")
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "first\nabcdX\nlast")
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[1;10D")
+    await host.type("Y")
+    assert.equal(host.ui.getEditorText(), "first\nYefghijklmno\nlast")
+  })
+
+  test(`shifted Command draft shortcuts keep the selection anchor and undo history in ${view} view`, async (t) => {
+    const host = await openHost(t, { columns: 12 })
+    host.ui.setEditorText("Earlier prompt")
+    await host.key("\r")
+    await host.settled()
+    if (sourceView) await host.key("\x1b[109;10u")
+    const original = "**first**\nabcdefghijklmno\n**last**"
+    host.ui.setEditorText(original)
+    await host.output()
+    await host.key("\x1b[A")
+    await host.key("\x01")
+    for (let i = 0; i < 4; i++) await host.key("\x1b[C")
+    await host.key("\x1b[1;10A")
+    await host.key("\x1b[1;10A")
+    await host.key("\x1b[1;10B")
+    await host.key("\x1b[1;10B")
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "**first**\nabcdX")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), original)
+    await host.key("\x1b[1;10A")
+    await host.type("Y")
+    assert.equal(host.ui.getEditorText(), "Yefghijklmno\n**last**")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), original)
+    await host.key("\x1b[122;10u")
+    assert.equal(host.ui.getEditorText(), "Yefghijklmno\n**last**")
   })
 }
 
@@ -181,12 +235,12 @@ test("configured line and vertical actions own navigation and suppress Command l
   assert.equal(host.ui.getEditorText(), "first\nXmiddleY\nlast")
   await host.key("\x1b[110;7u")
   await host.type("Z")
-  await host.key("\x1b[1;9A")
+  await host.key("\x1b[1;9D")
   await host.type("W")
   assert.equal(host.ui.getEditorText(), "first\nXmiddleY\nlastZW")
   await host.key("\x1b[D")
   await host.key("\x1b[D")
-  await host.key("\x1b[1;9B")
+  await host.key("\x1b[1;9C")
   await host.key("\x1b[1;3B")
   await host.type("Q")
   assert.equal(host.ui.getEditorText(), "first\nXmiddleY\nlastQZW")

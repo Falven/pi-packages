@@ -33,7 +33,10 @@ test("native character deletion owns composer shortcuts and full shifted chords"
     ["super+shift+m", "\x1b[109;10u"],
     ["super+enter", "\x1b[13;9u"],
     ["super+left", "\x1b[1;9D"],
+    ["super+up", "\x1b[1;9A"],
     ["super+shift+up", "\x1b[1;10A"],
+    ["super+down", "\x1b[1;9B"],
+    ["super+shift+down", "\x1b[1;10B"],
     ["shift+left", "\x1b[1;2D"],
   ]
   const host = await openHost(t, {
@@ -148,23 +151,14 @@ for (const [description, binding, input] of [
   })
 }
 
-test("explicit line bindings suppress Command aliases and their shifted variants", async (t) => {
+test("explicit line bindings suppress Command line aliases and their shifted variants", async (t) => {
   const host = await openHost(t, {
     keybindings: {
       "tui.editor.cursorLineStart": "ctrl+a",
       "tui.editor.cursorLineEnd": [],
     },
   })
-  for (const input of [
-    "\x1b[1;9A",
-    "\x1b[1;10A",
-    "\x1b[1;9D",
-    "\x1b[1;10D",
-    "\x1b[1;9B",
-    "\x1b[1;10B",
-    "\x1b[1;9C",
-    "\x1b[1;10C",
-  ]) {
+  for (const input of ["\x1b[1;9D", "\x1b[1;10D", "\x1b[1;9C", "\x1b[1;10C"]) {
     host.ui.setEditorText("abc")
     await host.key("\x1b[D")
     await host.key(input)
@@ -174,6 +168,76 @@ test("explicit line bindings suppress Command aliases and their shifted variants
   await host.key("\x01")
   await host.type("Start ")
   assert.equal(host.ui.getEditorText(), "Start abXc")
+})
+
+test("explicit line bindings leave fixed Command draft shortcuts available", async (t) => {
+  const host = await openHost(t, {
+    keybindings: {
+      "tui.editor.cursorLineStart": "ctrl+a",
+      "tui.editor.cursorLineEnd": [],
+    },
+  })
+  for (const [input, expected] of [
+    ["\x1b[1;9A", "Xfirst\nmiddle\nlast"],
+    ["\x1b[1;10A", "Xle\nlast"],
+    ["\x1b[1;9B", "first\nmiddle\nlastX"],
+    ["\x1b[1;10B", "first\nmiddX"],
+  ] as const) {
+    host.ui.setEditorText("first\nmiddle\nlast")
+    await host.key("\x1b[A")
+    await host.key(input)
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), expected)
+  }
+})
+
+test("native movement bindings and their Shift selection precede fixed draft shortcuts", async (t) => {
+  const host = await openHost(t, {
+    keybindings: {
+      "tui.editor.cursorLeft": "super+up",
+      "tui.editor.cursorRight": "super+down",
+    },
+  })
+  for (const [input, expected] of [
+    ["\x1b[1;9A", "first\nmidXdle\nlast"],
+    ["\x1b[1;10A", "first\nmidXle\nlast"],
+    ["\x1b[1;9B", "first\nmiddlXe\nlast"],
+    ["\x1b[1;10B", "first\nmiddXe\nlast"],
+  ] as const) {
+    host.ui.setEditorText("first\nmiddle\nlast")
+    await host.key("\x1b[A")
+    await host.key(input)
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), expected)
+  }
+})
+
+test("accepted extension shortcuts retain Command draft gestures", async (t) => {
+  let invoked = 0
+  const host = await openHost(t, {
+    extension: (pi) => {
+      for (const key of [
+        "super+up",
+        "super+shift+up",
+        "super+down",
+        "super+shift+down",
+      ] as const) {
+        pi.registerShortcut(key, {
+          handler: () => {
+            invoked++
+          },
+        })
+      }
+    },
+  })
+  for (const input of ["\x1b[1;9A", "\x1b[1;10A", "\x1b[1;9B", "\x1b[1;10B"]) {
+    host.ui.setEditorText("first\nlast")
+    await host.key("\x1b[D")
+    await host.key(input)
+    await host.type("X")
+    assert.equal(host.ui.getEditorText(), "first\nlasXt")
+  }
+  assert.equal(invoked, 4)
 })
 
 test("configured copy exports the selection, suppresses its alias, and preserves native clear", async (t) => {

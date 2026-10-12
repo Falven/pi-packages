@@ -674,8 +674,6 @@ export class SourceEditor extends CustomEditor {
         "tui.editor.cursorLineStart",
         "super+left",
         "super+shift+left",
-        "super+up",
-        "super+shift+up",
       )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, -1), select)
@@ -687,8 +685,6 @@ export class SourceEditor extends CustomEditor {
         "tui.editor.cursorLineEnd",
         "super+right",
         "super+shift+right",
-        "super+down",
-        "super+shift+down",
       )
     ) {
       this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)
@@ -796,6 +792,14 @@ export class SourceEditor extends CustomEditor {
     }
     if (keys.matches(data, "tui.editor.jumpBackward")) {
       this.jumpDirection = -1
+      return
+    }
+    if (fallbackMatches("super+up", "super+shift+up")) {
+      this.moveTo(this.project().documentBoundary(-1), select)
+      return
+    }
+    if (fallbackMatches("super+down", "super+shift+down")) {
+      this.moveTo(this.project().documentBoundary(1), select)
       return
     }
     const printable = decodeKittyPrintable(data) ?? data
