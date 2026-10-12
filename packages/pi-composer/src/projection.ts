@@ -229,8 +229,10 @@ export class Projection {
         content.every((cell) => cell.to > from && cell.from < to)
       const replacingInside =
         text.length > 0 &&
+        !text.startsWith("\n") &&
+        !text.endsWith("\n") &&
         selected[0]!.from >= mark.contentFrom &&
-        selected[0]!.from < mark.contentTo
+        selected.at(-1)!.from < mark.contentTo
       if (
         (from <= mark.from && to >= mark.to) ||
         (covered && !replacingInside)
