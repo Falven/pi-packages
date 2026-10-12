@@ -18,27 +18,37 @@ Save failures report an error and preserve the current text and the last usable 
 
 ## Keys
 
-| Key                       | Action                                      |
-| ------------------------- | ------------------------------------------- |
-| Arrow keys                | Move by grapheme or visual line             |
-| Option+Left/Right         | Move by word                                |
-| Cmd+Left/Right            | Move to the start/end of the line           |
-| Cmd+Up/Down               | Move to the start/end of the document       |
-| Shift with a movement key | Extend the selection                        |
-| Cmd+A                     | Select the whole draft                      |
-| Cmd+C / Cmd+X             | Copy / cut selected Markdown                |
-| Cmd+V                     | Paste through the active clipboard handler  |
-| Backspace/Delete          | Delete a grapheme or the selection          |
-| Cmd+Z / Cmd+Shift+Z       | Undo / redo                                 |
-| Cmd+Shift+M               | Toggle formatted / source view              |
-| Enter                     | Submit prose; continue a list or code block |
-| Cmd+Enter                 | Submit explicitly                           |
-| Shift+Enter               | Insert a newline                            |
-| Option+Enter              | Native follow-up submission                 |
+**Keyboard revision pending implementation and acceptance.** The tables below define the required contract. Native word/line deletion, outer-row navigation, Cmd+Up/Down line movement, and complete binding precedence still need the corrections described in the [specification](../../docs/specs/pi-composer.md). Physical delivery remains subject to the terminal's effective bindings.
 
-Pi's configured movement keys remain effective. Native extension and application shortcuts retain their priority. Continuous typing and deletion group until movement, another kind of edit, or a pause of more than 500 ms. Native replacements and pastes each form one undoable edit. A fresh edit after undo discards the old redo branch.
+| Native action               | Default or useful delivered input               | Required behavior                                                                                                   |
+| --------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Character and word movement | Arrows; Option+Left/Right                       | Move by grapheme or word.                                                                                           |
+| Line boundaries             | Home/Ctrl+A; End/Ctrl+E                         | Reach the current logical line's beginning/end.                                                                     |
+| Vertical movement           | Up/Down                                         | Move by visual row; an extra press at the first/last row reaches its beginning/end. Preserve native prompt history. |
+| Character deletion          | Backspace; forward Delete/Ctrl+D                | Remove the selection or a grapheme; retain native empty-editor exit.                                                |
+| Word deletion               | Ctrl+W/Option+Backspace; Option+D/Option+Delete | Remove the selection or word in the requested direction.                                                            |
+| Line deletion               | Ctrl+U/Ctrl+K                                   | Delete toward the logical line boundary; join lines when already at that boundary.                                  |
+| Retained-text recovery      | Ctrl+Y; Option+Y                                | Yank the retained deletion; rotate the preceding yank.                                                              |
+| Undo                        | Ctrl+-                                          | Undo the prior coherent edit.                                                                                       |
+| Clipboard paste             | Ctrl+V                                          | Use the effective native clipboard handler.                                                                         |
+| Submit/newline              | Enter; Shift+Enter/Ctrl+J                       | Submit prose or continue a list/code block; insert a newline.                                                       |
+| Application actions         | Option+Enter; Option+Up/Down                    | Preserve native follow-up and other effective Pi behavior.                                                          |
 
-Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Standalone Command+V reads text and enters Pi's paste route. With `pi-paste` loaded, the effective clipboard handler classifies copied files, images, and text before insertion. An open completion picker accepts Enter before contextual editing or submission.
+On a Mac keyboard, Delete means backward deletion, named `backspace` in bindings. Ghostty's Cmd+Delete translation to Ctrl+U and Cmd+Left/Right translations to Ctrl+A/E can use native actions without new terminal rules. Pi's effective bindings control the received input.
+
+| Composer shortcut                      | Configuration contract                                            |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| Cmd+Left/Up; Cmd+Right/Down            | Line-start/end aliases, including Shift selection.                |
+| Cmd+C, Cmd+V, Cmd+Z, Cmd+Enter         | Copy, clipboard paste, undo, and explicit-submit aliases.         |
+| Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and formatted/source-view shortcuts. |
+
+Any explicit Pi override, including an empty binding list, suppresses the aliases for that native action. Fixed composer actions have no configurable native action IDs. Both kinds of shortcut yield to effective native bindings and accepted extension shortcuts. Shift movement keeps the selection anchored. Native undo precedes in-editor completion; the picker handles its acceptance keys before ordinary contextual submission. `/hotkeys` lists native actions and registered extension shortcuts; direct composer aliases are documented here. These bindings do not import macOS text-field settings.
+
+Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. The package leaves terminal settings unchanged.
+
+Continuous typing and deletion group until movement, another kind of edit, or a pause of more than 500 ms. Native replacements and pastes each form one undoable edit. A fresh edit after undo discards the old redo branch.
+
+Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Standalone Command+V reads text and enters Pi's paste route. With `pi-paste` loaded, the effective clipboard handler classifies copied files, images, and text before insertion. Terminal text paste carries only its supplied text; suppressing the raw Cmd+V alias does not disable that route.
 
 If a clipboard read finishes after its draft or selection changes, or paste dispatch fails, the original session, cwd, draft, selection offsets, and clipboard text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory across session changes and reloads. Starting a session or running `/composer-recover` retries those writes and reports the saved files without inserting into the current draft.
 

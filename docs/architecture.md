@@ -43,7 +43,7 @@ The terminal handles its shortcuts before input reaches Pi. Pi owns terminal inp
 
 Native input listeners, focused UI, application actions, and accepted extension shortcuts retain Pi's dispatch behavior. Effective native editing bindings take precedence over composer aliases, and an explicit Pi binding override suppresses aliases for that action, including when its binding list is empty. Composer actions without native action IDs have documented fixed shortcuts, and Pi configuration is not an automatic import of macOS text-field preferences.
 
-Terminal shortcut delivery requires separate verification from editor behavior. Any terminal integration must identify Pi's terminal, follow actual terminal ownership through handoffs, and remove only its own changes while preserving other integrations and behavior outside Pi. The [keyboard spec revision plan](composer-keyboard-spec-plan.md) records the required editing corrections, verified terminal limitations, and acceptance coverage.
+Terminal shortcut delivery requires separate verification from editor behavior. Any terminal integration must identify Pi's terminal, follow actual terminal ownership through handoffs, and remove only its own changes while preserving other integrations and behavior outside Pi. The [keyboard implementation plan](composer-keyboard-spec-plan.md) links the package requirements, verified terminal limitations, and acceptance procedure.
 
 ## Integration requirements
 

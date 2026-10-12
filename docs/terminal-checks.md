@@ -1,6 +1,6 @@
 # Terminal acceptance
 
-**Status: pending a real Ghostty/macOS fullscreen run.** Record the observed result of each check below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; the physical gestures, clipboard formats, layout, and graphics need this run.
+**Status: revised keyboard behavior and real Ghostty/macOS fullscreen acceptance pending.** The [composer specification](specs/pi-composer.md) defines the required results; this procedure does not claim the current implementation passes them. Record each observed result below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; physical gestures, clipboard formats, layout, and graphics need this run.
 
 Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg`. The workspace lockfile supplies Pi and pi-tui 1.0.2, including the native clipboard backend. Finder and Preview supply actual copied-file and image clipboard data. All state, fixtures, model requests, and session files go into the temporary directory created below.
 
@@ -86,6 +86,23 @@ pi_ticket22 --name "ticket22 A"
 
 These keys belong to the explicitly loaded acceptance fixture. Package actions are **Control+Option+V** (Paste Inline), **Control+Option+T** (Attach Text), **Control+Option+F** (Attach File), and **Control+Option+A** (manage attachments). Their commands are `/paste-inline`, `/attach-text`, `/attach-file`, and `/attachments`.
 
+## 0. Record physical delivery
+
+Begin with Ghostty's effective settings unchanged. Record macOS and Ghostty versions, the checkout commit, the local Pi version, and any configured bindings relevant to each gesture. Observe separately what the terminal does, what Pi does, and whether the editor changes. A terminal-consumed key is a delivery failure for that shortcut; incorrect editing after delivery is a composer failure. If delivery cannot be established, record it as unknown.
+
+| Physical gesture                          | Delivery check                                                                                                                              |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cmd+A                                     | Distinguish terminal selection from draft selection. Draft selection persists through redraw and changes which text the next edit replaces. |
+| Cmd+C                                     | Repeat with and without a Ghostty terminal selection; terminal copying can consume the key.                                                 |
+| Cmd+Z / Cmd+Shift+Z                       | Repeat with and without a terminal undo/redo action available. Record the terminal action and its state, or leave that case pending.        |
+| Cmd+Enter; Cmd+Up/Down and Shift variants | Check whether fullscreen or shell-prompt navigation consumes the gesture.                                                                   |
+| Cmd+Delete; Cmd+Left/Right                | Check the useful native Ctrl+U and Ctrl+A/E translations against the same native actions directly.                                          |
+| Option+Delete; Option+Left/Right          | Check native backward-word deletion and word movement; record any missing or different input.                                               |
+| Cmd+X; shifted movement; extra Up/Down    | Verify the draft result and stable selection when the input reaches Pi.                                                                     |
+| Cmd+V; menu paste; right-click            | Record terminal text versus native clipboard behavior using sections 3 and 4.                                                               |
+
+Do not change Ghostty settings to turn a blocked physical case into an unqualified pass. Continue other editing checks using delivered native keys, such as Ctrl+- for undo and Ctrl+V for clipboard paste, or keyboard/mouse range selection. Those results establish their own routes. Direct-input host tests cover composer aliases that the physical terminal consumes; they do not establish shortcut forwarding.
+
 ## 1. Command forwarding and formatted editing
 
 Submit `Start session A` with Enter and wait for a local response. This creates a resumable native session. Then run in the second shell:
@@ -104,13 +121,48 @@ Enter continues the list or fenced code at its caret. Shift+Enter inserts a newl
 wc -l "$PI_CHECK_ROOT/requests.jsonl"
 ```
 
+### Native deletion, navigation, and recovery
+
+Run the following in both formatted and source views, using a short multiline draft and then a narrow window that wraps it. On the Mac keyboard, Delete is backward deletion (`backspace`); use Fn+Delete for forward deletion where available.
+
+| Check                                                                               | Required result                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Ctrl+W or Option+Delete; Option+D or Option+forward Delete                          | Remove the word in the requested direction, or only the selected range. At a logical line boundary, join adjacent lines.                                                                   |
+| Ctrl+U/Ctrl+K, plus delivered Cmd+Delete                                            | Remove text toward the logical start/end, or only the selection. At the corresponding boundary, remove the newline; at the outer draft boundary, do nothing.                               |
+| Consecutive backward/forward word or line deletions, Ctrl+Y, then Option+Y          | Retained text accumulates in source order. Yank inserts it; yank-pop replaces only the previous yank. An intervening edit or movement prevents yank-pop. Undo restores each coherent edit. |
+| Home/Ctrl+A and End/Ctrl+E; delivered Cmd+Left/Right and Cmd+Up/Down                | Reach the current logical line's start/end, even when it spans several visual rows.                                                                                                        |
+| Up from the first visual row, with the caret after its beginning                    | First reach the beginning; another unmodified Up may browse native prompt history.                                                                                                         |
+| Down from the last visual row, with the caret before its end                        | Reach the end; preserve next-history behavior while already browsing history.                                                                                                              |
+| Shift movement across lines and past the first/last row                             | Keep the original anchor; stay within the draft and do not browse history.                                                                                                                 |
+| Select all or part, redraw, resize, scroll, and toggle views                        | Selection survives; typing changes exactly that range and undo restores it.                                                                                                                |
+| Native character jumps, explicit history actions, and delivered editor page actions | Preserve their native purpose. Fullscreen PageUp/Down stays with Pi's viewport when the host consumes it.                                                                                  |
+| Option+Up/Down                                                                      | Keep native Pi behavior, including dequeue where available.                                                                                                                                |
+
+Include punctuation, spaces, tabs, combining characters, emoji, wide characters, and fenced code. Use the [formatted deletion examples](specs/pi-composer.md#testing-decisions) to compare whole, partial, and cross-span selection results through deletion, yank into unformatted text, and undo. Inspect source view to verify retained delimiters; a visually similar result alone is insufficient.
+
+### Effective binding overrides
+
+Quit the isolated Pi process before each configuration case. Back up only `$PI_CHECK_ROOT/agent/keybindings.json`, add the case's binding while preserving the fixture's session bindings, and restart with the same isolated launch. Use a fresh case rather than relying on resource reload to reload keybindings. Restore the backup before continuing the baseline checks. Leave the user's normal Pi and terminal configuration untouched.
+
+| Temporary Pi binding case                                                               | Required result                                                                                                                                              |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `tui.editor.deleteWordBackward` set to `ctrl+alt+w`                                     | The new key deletes once; the old native keys no longer perform this action unless another effective action owns them.                                       |
+| `tui.editor.deleteWordBackward` set to `super+a`                                        | A delivered Cmd+A deletes once instead of selecting all. If Ghostty consumes it, record the physical limitation and use public-host tests for the collision. |
+| `tui.editor.undo` remapped, explicitly set to its default, then set to an empty list    | Effective bindings work; the extra Cmd+Z alias is suppressed in each case. Fixed redo remains available unless another native owner handles its key.         |
+| `tui.editor.cursorLineStart` or `tui.editor.cursorLineEnd` remapped or cleared          | Old Cmd+Arrow aliases and their shifted variants are suppressed for that action. New effective movement bindings still control it.                           |
+| `tui.input.copy`, `tui.input.submit`, or `app.clipboard.pasteImage` remapped or cleared | Each action's old Cmd alias is suppressed. Preserve parent clear/interrupt, picker, and clipboard priority.                                                  |
+| `tui.editor.undo` set to `up`, then to `enter`, with in-editor completion open          | Undo occurs before picker movement or acceptance; no completion or request is also sent.                                                                     |
+| Native clipboard action remapped with the same fixtures and then without `pi-composer`  | Both editors honor the effective binding. Terminal-generated bracketed paste still follows paste policy independently.                                       |
+
+For extension precedence, use the fixture's Control+Option+S notification and Control+Option+L listener with text selected. Both keep their native effects and cause no fallback edit. Public-host tests must additionally install an accepted extension shortcut on a composer alias key and verify that only the extension acts. The existing fixture does not provide that conflicting registration.
+
 ## 2. Native and custom completion, listeners, and surrounding UI
 
 In prose, type `Read @cur`, wait for the native file choice, and accept it. Pass: the inserted `@"current source.md"` is ordinary character-editable text. Move into the name, delete a character, and undo. Type `Apply $rev` and `Apply /rev` in turn and accept the skill choice. Both insert `/skill:review`; inline slash completion opens automatically in the composer.
 
 Press Control+Option+U. Repeat native path and skill completion. Pass: the picker labels include `updated`, retain the earlier provider's labels, and insert the same native text with the caret at the completion result. Escape dismisses a picker without changing text.
 
-Select a prose word and press Control+Option+P. Navigate the overlay choices and accept `Review mixed request`. Pass: `/skill:review` replaces the selection; one Command+Z restores it. Repeat and cancel with Escape. The draft, attachment widget, acceptance widget, and normal Pi controls remain usable.
+Select a prose word and press Control+Option+P. Navigate the overlay choices and accept `Review mixed request`. Pass: `/skill:review` replaces the selection; one effective undo restores it and its selection. Repeat and cancel with Escape. The unchanged draft and selection regain focus. Overlay keys cause no background movement or submission; verify the local request count. The draft, attachment widget, acceptance widget, and normal Pi controls remain usable.
 
 Press Control+Option+L over a selection. Pass: `LISTENER` replaces it through the terminal listener and undoes once. Control+Option+S displays `Acceptance shortcut received` without changing the draft.
 
@@ -129,6 +181,8 @@ Pass for each route: 4,999 units stay inline; 5,000 and 5,001 units become a `pa
 With `large-5001.txt` on the clipboard, Control+Option+V keeps the complete text inline, including inside code. With Control+Option+T, enter `Short /skill:audit` in the text dialog and press Enter. Pass: this short text becomes an attachment. Undo/redo each action once.
 
 Terminal paste and `ui.pasteToEditor` carry plain text. Native clipboard actions additionally inspect copied-file identities and images. A Command+V or right-click gesture that sends bracketed text establishes the terminal text route. Record the native clipboard route separately using the file/image checks below; pasted path text alone is not evidence of a native copied-file action.
+
+Repeat terminal text paste after clearing or remapping the native clipboard binding in the isolated configuration. Pass: delivered bracketed text still follows the cutoff once, while a raw Cmd+V event cannot bypass that override. Restore baseline bindings before using Control+V in section 4. Keep physical routes that Ghostty consumes or transforms distinct from direct-input host checks.
 
 ## 4. Copied files, image clipboard, and snapshot previews
 
@@ -151,7 +205,7 @@ printf 'Changed copied source\n' > "$PI_CHECK_ROOT/files/copied notes.txt"
 printf 'Current source version two\n' > "$PI_CHECK_ROOT/files/current source.md"
 ```
 
-Pass: Preview text still shows `Captured file /skill:literal`; the current-file reference still names `current source.md`, whose contents now say version two. Thumbnails remain beside the editor and coexist with native and acceptance widgets. Resize Ghostty narrower and wider; the image, attachment list, editor, and surrounding UI remain usable.
+Pass: Preview text still shows `Captured file /skill:literal`; the current-file reference still names `current source.md`, whose contents now say version two. Thumbnails remain beside the editor and coexist with native and acceptance widgets. Select part or all of the draft while previews load or refresh, then resize Ghostty narrower and wider. Pass: image display does not move focus or clear the selection; typing replaces the selected range and one undo restores it. Repeat in both views. Pi's native widget and image component supply these previews.
 
 ## 5. Mouse selection, scrolling, and resize
 
@@ -164,6 +218,8 @@ Select part of the final row, scroll up with the mouse wheel, resize the window,
 Build the mixed draft from `draft.md`, a pasted `large-5000.txt` attachment, the copied file, and one image. Submit with Command+Enter. Pass: the local reply reports `review=1, audit=0, literal=0` and the intended image count. Inspect the latest `request-N.json`: it contains readable snapshot references, the current-file path, and native image content. The attached text body remains on disk.
 
 Use Command+Z to recover the submitted draft. Select a final prose word, press Control+Option+A, choose `paste.txt`, then **Preview text**. Scroll the preview and close it with Escape. Pass: the selected draft is unchanged. Open the same attachment and choose **Restore Inline**. Pass: its full body replaces the selection, its reference leaves membership, and the image/file attachments remain. It stays inline at 5,000 units. One undo/redo restores both selection and membership.
+
+While the preview or management overlay is focused, test its navigation, acceptance, and cancellation keys. Pass: the background caret, selection, and request count do not change. Cancel management without choosing an action and verify the editor regains the same selection. Repeat while an image widget is visible.
 
 Submit the restored draft. Pass: `review=1, audit=1, literal=0`. The restored prose invokes `audit` once; its fenced `/skill:literal` stays literal. Recover the draft, use **Remove from draft**, then undo/redo. Pass: only the selected snapshot's membership changes, and the saved bytes remain readable:
 
@@ -237,7 +293,9 @@ For a run with composition extensions disabled, launch the local Pi binary with 
 
 ## Record and retain evidence
 
-For each numbered check, record pass/fail/pending, the checkout commit, macOS/Ghostty versions, the load order, the actual physical gesture, and any error. Retain the temporary directory, relevant `request-N.json` files, session paths, snapshot hashes, and screenshots of graphics/layout failures. A native clipboard result identifies whether Pi received clipboard metadata or terminal text. Keep any unexercised physical route pending.
+Before finishing, switch panes, enter and return from Pi's external editor, suspend/resume Pi, reload resources and Ghostty configuration, and exit. Pass: native terminal behavior outside Pi is preserved. The packages install no terminal override to restore; these checks do not establish an automatic key-table integration.
+
+For each numbered check, record pass/fail/pending, the checkout commit, Pi and macOS/Ghostty versions, relevant bindings, the load order, the actual physical gesture, observed input route, and any error. Record editor correctness separately from physical delivery; keep an unknown route unknown. Retain the temporary directory, relevant `request-N.json` files, session paths, snapshot hashes, and screenshots of graphics/layout failures. A native clipboard result identifies whether Pi received clipboard metadata or terminal text. Keep unexercised physical routes and terminal undo states pending.
 
 Run the software checks from the repository root:
 
