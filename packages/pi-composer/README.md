@@ -8,9 +8,9 @@ The composer uses Pi's application actions, commands, input transformations, and
 
 Each native session autosaves its Markdown draft, including file, skill, and attachment references. Edits save after 150 ms of idle time and flush before switching sessions or shutting down. Reopening a saved session restores its draft, including an explicitly cleared draft. Undo/redo stays in memory, isolated by session, across working-directory changes and resource reloads. Restarting Pi begins with fresh history.
 
-Recovery files live in `pi-composer/drafts` inside Pi's agent directory. If Pi has not yet saved a native session, `/composer-recover` lets you choose its retained draft and restore it as an undoable edit in the current session. Recovery never automatically replaces an unrelated session's text. `--no-session` keeps drafts in memory without writing recovery files.
+Recovery files live in `pi-composer/drafts` inside Pi's agent directory. `/composer-recover` offers cleared drafts, drafts from unsaved sessions, and drafts retained after failed saves. It restores the selected text as an undoable edit in the current session and keeps the draft it replaces recoverable. Text autosave respects `--no-session` and keeps those drafts in memory.
 
-Save failures report an error and preserve the current text and the last usable checkpoint. A failed save cancels a session switch or fork. Complete replacement files remain available for recovery if their final rename fails.
+Save failures report an error and preserve the current text and the last usable checkpoint. A failed save cancels a session switch or fork. Complete replacement files remain available for recovery if their final rename fails. If shutdown cannot save either copy, the pending draft stays with its process-lifetime history and is retried on resume. `/composer-recover` can also retrieve and save it from another session. Contents held only in memory are lost if Pi exits before a write succeeds.
 
 ## Keys
 
@@ -35,7 +35,7 @@ Pi's configured movement keys remain effective. Native extension and application
 
 Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V reads Pi's native text clipboard and enters `pasteToEditor`, preserving installed paste decorators.
 
-If a clipboard read finishes after its draft or selection changes, or paste dispatch fails, the original session, draft, selection offsets, and clipboard text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. The recovery path is reported in Pi, or on stderr after that session closes. Later work and undo history stay intact. If saving fails, the error and recovery contents are reported together.
+If a clipboard read finishes after its draft or selection changes, or paste dispatch fails, the original session, cwd, draft, selection offsets, and clipboard text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory across session changes and reloads. Starting a session or running `/composer-recover` retries those writes and reports the saved files without inserting into the current draft.
 
 ## Load
 

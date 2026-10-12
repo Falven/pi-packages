@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
 import { test } from "node:test"
 import { openHost } from "./host.ts"
 
@@ -10,11 +11,18 @@ const options: {
   clearedText?: string
   clearedIndex?: number
   extensionPaths?: string[]
+  cwd?: string
+  attachments?: { path: string; data: string }[]
+  recoveryReadError?: boolean
 } = JSON.parse(process.argv[2]!)
 
 test("a fresh Pi process restores the saved draft", async (t) => {
   const host = await openHost(t, options)
+  if (options.recoveryReadError) {
+    assert.match(await host.output(), /EACCES/)
+  }
   assert.equal(host.runtime.cwd, host.session.sessionManager.getCwd())
+  if (options.cwd) assert.equal(host.runtime.cwd, options.cwd)
   if (options.recover) {
     assert.equal(host.ui.getEditorText(), "")
     assert.match(await host.output(), /composer-recover/)
@@ -37,6 +45,18 @@ test("a fresh Pi process restores the saved draft", async (t) => {
     await host.key("\x1b[122;10u")
   }
   assert.equal(host.ui.getEditorText(), options.text)
+  if (options.attachments) {
+    assert(
+      (await host.output()).includes(
+        `Attachments (${options.attachments.length}):`,
+      ),
+    )
+    await Promise.all(
+      options.attachments.map(async ({ path, data }) => {
+        assert.deepEqual(await readFile(path), Buffer.from(data, "base64"))
+      }),
+    )
+  }
   if (options.clearedText) {
     const recovery = host.session.sendUserMessage("/composer-recover", {
       expandPromptTemplates: true,

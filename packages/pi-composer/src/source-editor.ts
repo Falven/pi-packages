@@ -381,6 +381,7 @@ export class SourceEditor extends CustomEditor {
       const revision = this.revision
       void this.clipboard.paste(
         selection,
+        revision,
         () =>
           this.focused &&
           this.draft === selection &&

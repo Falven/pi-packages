@@ -1,5 +1,5 @@
-import { mkdir, mkdtemp, readFile, realpath, writeFile } from "node:fs/promises"
-import { basename, join, resolve, sep } from "node:path"
+import { readFile, realpath } from "node:fs/promises"
+import { basename, resolve, sep } from "node:path"
 import {
   type ExtensionAPI,
   convertToPng,
@@ -9,6 +9,7 @@ import {
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
 import { Image } from "@earendil-works/pi-tui"
+import { registerRecovery, saveRequest } from "./recovery.ts"
 
 function attachmentPaths(text: string, storage: string): string[] {
   const paths = new Set<string>()
@@ -39,35 +40,23 @@ export function registerImages(
   storage: string,
   signal: AbortSignal,
 ): void {
+  registerRecovery(pi, storage, signal)
   pi.on("input", async (event, ctx) => {
     const paths = attachmentPaths(event.text, storage)
     if (paths.length === 0) return undefined
     const sessionId = ctx.sessionManager.getSessionId()
+    const request = {
+      ...event,
+      ...(event.images
+        ? { images: event.images.map((image) => ({ ...image })) }
+        : {}),
+      sessionId,
+      sessionFile: ctx.sessionManager.getSessionFile(),
+      cwd: ctx.cwd,
+    }
     const resizeOptions = ctx.model?.inputLimits?.images?.resize
     let recovery: Promise<string> | undefined
-    async function saveRequest() {
-      await mkdir(storage, { recursive: true, mode: 0o700 })
-      const directory = await mkdtemp(join(storage, "request-"))
-      const references = await Promise.all(
-        (event.images ?? []).map(async (image, index) => {
-          const name = `input-image-${index + 1}`
-          const path = join(directory, name)
-          await writeFile(path, Buffer.from(image.data, "base64"), {
-            flag: "wx",
-            mode: 0o600,
-          })
-          return `[Attachment: ${name}](<${path}>)`
-        }),
-      )
-      const path = join(directory, "request.draft.md")
-      await writeFile(
-        path,
-        `# Attachment request\n\nSession: ${sessionId}\nDelivery: ${event.streamingBehavior ?? "normal"}\n\n${event.text}\n\n${references.join("\n")}\n`,
-        { flag: "wx", mode: 0o600 },
-      )
-      return path
-    }
-    const retain = () => (recovery ??= saveRequest())
+    const retain = () => (recovery ??= saveRequest(storage, request))
     try {
       const captured = await Promise.all(
         paths.map((path) => readImage(path, storage)),
@@ -111,9 +100,11 @@ export function registerImages(
         message += `\nRequest saved: ${await retain()}`
       } catch (recoveryError) {
         message += `\nCould not save recovery: ${String(recoveryError)}`
+        message +=
+          "\nContents retained in memory until Pi exits; use /attachments-recover."
         if (!signal.aborted) {
           try {
-            pi.appendEntry("pi-attachments-request", { ...event, sessionId })
+            pi.appendEntry("pi-attachments-request", request)
             message += "\nRequest retained in session memory."
           } catch (sessionError) {
             message += `\nCould not checkpoint the request: ${String(sessionError)}`

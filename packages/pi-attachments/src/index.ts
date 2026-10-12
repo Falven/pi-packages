@@ -1,5 +1,4 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
-import { basename, join, resolve } from "node:path"
+import { basename, resolve } from "node:path"
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -10,9 +9,7 @@ import {
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
 import { registerImages } from "./images.ts"
-
-type Snapshot = { name: string; contents: string | Buffer }
-type AttachmentSource = Snapshot | { name: string; path: string }
+import { saveSnapshot, type Snapshot } from "./recovery.ts"
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
@@ -74,64 +71,35 @@ export default function piAttachments(pi: ExtensionAPI): void {
 
   async function attach(
     ctx: ExtensionContext,
-    capture: () => Promise<AttachmentSource[] | undefined>,
+    capture: () => Promise<Snapshot[] | undefined>,
   ): Promise<void> {
     readObserved = false
     const draft = ctx.ui.getEditorText()
     const observedDraft = readObserved
     const sessionId = ctx.sessionManager.getSessionId()
     const sessionFile = ctx.sessionManager.getSessionFile()
+    const cwd = ctx.cwd
     const submission = submissions
     const draftRevision = revision
     const insert = insertText
     let inputs = terminalInputs
     let changedDuringOperation = false
-    let snapshots: Snapshot[] | undefined
+    let snapshots: Snapshot[]
     try {
       const sources = await capture()
       if (!sources) return
       inputs = terminalInputs
-      snapshots = await Promise.all(
-        sources.map(async (source) =>
-          "path" in source
-            ? { name: source.name, contents: await readFile(source.path) }
-            : source,
-        ),
-      )
+      snapshots = sources
     } catch (error) {
       if (lifetime.signal.aborted) throw error
       ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
       return
     }
+    let request = { sessionId, sessionFile, cwd, text: draft, snapshots }
     /* eslint-disable no-await-in-loop -- A retry follows the failed save and the user's recovery action. */
-    while (snapshots) {
+    while (true) {
       try {
-        await mkdir(storage, { recursive: true, mode: 0o700 })
-        const directory = await mkdtemp(join(storage, "snapshot-"))
-        const files = await Promise.all(
-          snapshots.map(async (snapshot, index, all) => {
-            const parent =
-              all.length === 1 ? directory : join(directory, String(index + 1))
-            await mkdir(parent, { recursive: true, mode: 0o700 })
-            const path = join(parent, snapshot.name)
-            return { ...snapshot, path }
-          }),
-        )
-        const reference = files
-          .map(({ name, path }) => `[Attachment: ${name}](<${path}>)`)
-          .join("\n")
-        const recovery = `${files[0]!.path}.draft.md`
-        // New native sessions can remain memory-only until the first assistant reply.
-        await writeFile(
-          recovery,
-          `# Attachment request\n\nSession: ${sessionId}\n${sessionFile ? `\nSession file: ${sessionFile}\n` : ""}\n${draft}\n\n${reference}\n`,
-          { flag: "wx", mode: 0o600 },
-        )
-        await Promise.all(
-          files.map(({ path, contents }) =>
-            writeFile(path, contents, { flag: "wx", mode: 0o600 }),
-          ),
-        )
+        const { reference, recovery } = await saveSnapshot(storage, request)
         changedDuringOperation ||= terminalInputs !== inputs
         readObserved = false
         if (
@@ -157,17 +125,23 @@ export default function piAttachments(pi: ExtensionAPI): void {
         return
       } catch (error) {
         if (lifetime.signal.aborted) throw error
-        ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
+        ctx.ui.notify(
+          `Could not attach: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`,
+          "error",
+        )
         changedDuringOperation ||= terminalInputs !== inputs
+        if (snapshots.some((snapshot) => snapshot.contents === undefined))
+          return
         if (
           snapshots.length === 1 &&
           typeof snapshots[0]!.contents === "string"
         ) {
           const contents = await editText(ctx, snapshots[0]!.contents)
-          snapshots =
-            contents === undefined
-              ? undefined
-              : [{ ...snapshots[0]!, contents }]
+          if (contents === undefined) return
+          if (contents !== snapshots[0]!.contents) {
+            snapshots = [{ name: snapshots[0]!.name, contents }]
+            request = { sessionId, sessionFile, cwd, text: draft, snapshots }
+          }
         } else {
           const retry = await ctx.ui.select(
             `Save ${snapshots.map(({ name }) => name).join(", ")}`,
@@ -249,6 +223,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   }
 
   function attachFile(paths: string, ctx: ExtensionContext): Promise<void> {
+    const cwd = ctx.cwd
     return attach(ctx, async () => {
       const selected =
         paths ||
@@ -259,7 +234,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
       if (!selected) throw new Error("A file path is required")
       return selected.split("\n").map((path) => {
         if (!path || /\p{Cc}/u.test(path)) throw new Error("Invalid file path")
-        const source = resolve(ctx.cwd, path)
+        const source = resolve(cwd, path)
         return {
           name: basename(source).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
           path: source,

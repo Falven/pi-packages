@@ -17,7 +17,10 @@ import {
   type DraftCheckpoint,
 } from "./session-draft-storage.ts"
 
-type SessionHistory = DraftHistory & { clearedDrafts?: string[] }
+type SessionHistory = DraftHistory & {
+  clearedDrafts?: string[]
+  pendingDraft?: DraftCheckpoint
+}
 
 // Pi reloads extension modules when the cwd or resources change.
 const historiesKey = Symbol.for("pi-composer:histories")
@@ -34,6 +37,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   let active = false
   let revision = 0
   let clearedDrafts: string[] = []
+  let pendingDraft: DraftCheckpoint | undefined
   let flush: (() => Promise<boolean>) | undefined
   const recoveryAbort = new AbortController()
   pi.on("session_start", (_event, ctx) => {
@@ -79,13 +83,21 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }
     }
     const history = histories.get(historyKey)
+    if (
+      history?.pendingDraft &&
+      (!checkpoint || history.pendingDraft.revision >= checkpoint.revision)
+    ) {
+      checkpoint = history.pendingDraft
+    }
+    pendingDraft =
+      checkpoint === history?.pendingDraft ? history?.pendingDraft : undefined
     const text = checkpoint?.text ?? history?.draft.text ?? ""
     clearedDrafts = [
       ...(history?.clearedDrafts ?? checkpoint?.clearedDrafts ?? []),
     ]
     revision = checkpoint?.revision ?? 0
-    let latest: DraftCheckpoint | undefined
-    let savedRevision = revision
+    let latest = pendingDraft
+    let savedRevision = pendingDraft ? -1 : revision
     let timer: NodeJS.Timeout | undefined
     let saving: Promise<boolean> | undefined
     flush = () => {
@@ -118,8 +130,10 @@ export function sessionDrafts(pi: ExtensionAPI): void {
               "error",
             )
           }
-          if (saved) savedRevision = draft.revision
-          else if (latest === draft) break
+          if (saved) {
+            savedRevision = draft.revision
+            if (latest === draft) pendingDraft = undefined
+          } else if (latest === draft) break
         }
         return saved
       })().finally(() => {
@@ -140,6 +154,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         text: draft,
         clearedDrafts: [...clearedDrafts],
       }
+      pendingDraft = latest
       clearTimeout(timer)
       timer = setTimeout(() => {
         void flush?.()
@@ -167,6 +182,8 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       history?.draft.text === text ? history : undefined,
     )
     active = true
+    if (pendingDraft) void flush()
+    void currentClipboard.retry()
   })
 
   pi.on("session_before_switch", async () => ({
@@ -181,24 +198,60 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     active = false
     recoveryAbort.abort()
     if (!editor || !historyKey) return
-    histories.set(historyKey, { ...editor.getDraftHistory(), clearedDrafts })
+    histories.set(historyKey, {
+      ...editor.getDraftHistory(),
+      clearedDrafts,
+      ...(pendingDraft ? { pendingDraft } : {}),
+    })
     editor.onDraftChange = undefined
     editor.onDraftClear = undefined
   })
 
   pi.registerCommand("composer-recover", {
-    description: "Recover a cleared draft or a draft from an unsaved session",
+    description: "Recover cleared or unsaved drafts and clipboard captures",
     handler: async (_args, ctx) => {
       if (!active || !editor) return
       const requestedRevision = revision
+      const sessionId = ctx.sessionManager.getSessionId()
+      await clipboard?.retry()
+      if (!active) return
       const recovery = readDrafts(directory)
       for (const error of recovery.errors) ctx.ui.notify(error, "error")
-      const sessionId = ctx.sessionManager.getSessionId()
+      const pending = [...histories].flatMap(([key, history]) =>
+        key.startsWith(`${directory}\0`) &&
+        history.pendingDraft &&
+        history.pendingDraft.sessionId !== sessionId
+          ? [history.pendingDraft]
+          : [],
+      )
+      const saved = new Map(
+        recovery.drafts.map((draft) => [draft.sessionId, draft]),
+      )
+      await Promise.all(
+        pending.map(async (draft) => {
+          const previous = saved.get(draft.sessionId)
+          saved.set(draft.sessionId, draft)
+          if (previous && previous.revision >= draft.revision) return
+          try {
+            await writeDraft(directory, draft)
+          } catch (error) {
+            if (active)
+              ctx.ui.notify(
+                `Could not save draft recovery: ${String(error)}`,
+                "error",
+              )
+          }
+        }),
+      )
+      if (!active) return
       const drafts = clearedDrafts
         .toReversed()
         .map((text) => ({ sessionId, text }))
-      for (const draft of recovery.drafts) {
-        if (draft.sessionId === sessionId || existsSync(draft.sessionFile))
+      for (const draft of saved.values()) {
+        if (
+          draft.sessionId === sessionId ||
+          (existsSync(draft.sessionFile) && !pending.includes(draft))
+        )
           continue
         if (draft.text)
           drafts.push({ sessionId: draft.sessionId, text: draft.text })

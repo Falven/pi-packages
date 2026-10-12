@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { describe, test } from "node:test"
 import {
@@ -232,8 +232,11 @@ describe(
       const path = output.match(/Clipboard paste saved to (.+?\.json)/)?.[1]
       assert(path, "Pi must report the retained clipboard file")
       assert.equal((await stat(path)).mode & 0o777, 0o600)
-      assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+      const { revision, ...saved } = JSON.parse(await readFile(path, "utf8"))
+      assert(Number.isSafeInteger(revision))
+      assert.deepEqual(saved, {
         sessionId: host.session.sessionManager.getSessionId(),
+        cwd: host.directory,
         draft: { text: "Keep original", anchor: 13, head: 5 },
         clipboard: "Delayed /skill:review\n\tclipboard",
       })
@@ -349,14 +352,16 @@ describe(
         )
       })
       assert.equal(currentUI.getEditorText(), "New session work + later typing")
-      assert.deepEqual(
-        JSON.parse(await readFile(join(directory, paths[0]!), "utf8")),
-        {
-          sessionId: sessions[0],
-          draft: { text: "Original session draft", anchor: 0, head: 22 },
-          clipboard: "Old session clipboard",
-        },
+      const { revision, ...saved } = JSON.parse(
+        await readFile(join(directory, paths[0]!), "utf8"),
       )
+      assert(Number.isSafeInteger(revision))
+      assert.deepEqual(saved, {
+        sessionId: sessions[0],
+        cwd: host.directory,
+        draft: { text: "Original session draft", anchor: 0, head: 22 },
+        clipboard: "Old session clipboard",
+      })
     })
 
     test("a failed clipboard write reports the error and leaves the cut selection editable", async (t) => {
@@ -521,7 +526,7 @@ describe(
       assert.equal(host.requests.length, 0)
     })
 
-    test("a failed recovery write reports the recoverable contents and preserves later work", async (t) => {
+    test("a failed clipboard recovery write remains retrievable after reload from an unrelated draft", async (t) => {
       const clipboard = getNativeClipboard()
       assert(clipboard)
       const read = Promise.withResolvers<string>()
@@ -534,6 +539,7 @@ describe(
         "Unavailable storage",
       )
       host.ui.setEditorText("Keep original")
+      const sessionId = host.session.sessionManager.getSessionId()
       await host.key("\x1b[1;4D")
       await host.key("\x1b[118;9u")
       await host.type("Later work")
@@ -549,6 +555,27 @@ describe(
       assert.match(output, /"text": "Keep original"/)
       assert.match(output, /"clipboard": "Recover \/skill:review"/)
       assert.equal(host.ui.getEditorText(), "Keep Later work")
+
+      await host.session.reload()
+      await host.runtime.newSession()
+      host.ui.setEditorText("Unrelated current draft")
+      await rm(join(directory, "clipboard-recovery"))
+      await host.session.sendUserMessage("/composer-recover", {
+        expandPromptTemplates: true,
+      })
+      const path = (await host.output()).match(
+        /Clipboard paste saved to (.+?\.json)/,
+      )?.[1]
+      assert(path, "The recovery action must retry the retained clipboard")
+      const saved = JSON.parse(await readFile(path, "utf8"))
+      assert.equal(saved.sessionId, sessionId)
+      assert.deepEqual(saved.draft, {
+        text: "Keep original",
+        anchor: 13,
+        head: 5,
+      })
+      assert.equal(saved.clipboard, "Recover /skill:review")
+      assert.equal(host.ui.getEditorText(), "Unrelated current draft")
     })
 
     test("empty selections leave the clipboard untouched and unavailable reads leave selection intact", async (t) => {

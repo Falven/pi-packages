@@ -321,6 +321,79 @@ test("native checkpoint failures keep recovery usable through noncancellable shu
   }
 })
 
+test("failed native and recovery writes preserve the latest draft through noncancellable shutdown", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start a persisted session")
+  await host.key("\r")
+  await host.settled()
+  const sessionFile = host.session.sessionFile!
+  host.ui.setEditorText("Last saved draft")
+  await host.runtime.newSession()
+  await host.runtime.switchSession(sessionFile)
+  const recoveryDirectory = join(host.directory, "pi-composer", "drafts")
+  const savedFiles = await Promise.all(
+    (await readdir(recoveryDirectory)).map(async (name) => ({
+      name,
+      bytes: await readFile(join(recoveryDirectory, name)),
+    })),
+  )
+  const nativeBefore = await readFile(sessionFile)
+  await chmod(recoveryDirectory, 0o500)
+  await chmod(sessionFile, 0o400)
+  try {
+    host.ui.setEditorText("Latest **unsaved** draft /skill:review @source.ts")
+    await host.close()
+    assert.deepEqual(await readFile(sessionFile), nativeBefore)
+    for (const saved of savedFiles) {
+      assert.deepEqual(
+        // oxlint-disable-next-line no-await-in-loop -- Verify each pre-existing checkpoint remains intact.
+        await readFile(join(recoveryDirectory, saved.name)),
+        saved.bytes,
+      )
+    }
+  } finally {
+    await chmod(recoveryDirectory, 0o700)
+    await chmod(sessionFile, 0o600)
+  }
+
+  const other = await openHost(t, {
+    directory: host.directory,
+    persistSession: true,
+  })
+  other.ui.setEditorText("Unrelated current draft")
+  const recovery = other.session.sendUserMessage("/composer-recover", {
+    expandPromptTemplates: true,
+  })
+  assert.match(await other.output(), /Latest \*\*unsaved\*\* draft/)
+  await other.key("\r")
+  await recovery
+  assert.equal(
+    other.ui.getEditorText(),
+    "Latest **unsaved** draft /skill:review @source.ts",
+  )
+  await other.key("\x1b[122;9u")
+  assert.equal(other.ui.getEditorText(), "Unrelated current draft")
+  await other.close()
+
+  const resumed = await openHost(t, {
+    directory: host.directory,
+    sessionFile,
+  })
+  assert.equal(
+    resumed.ui.getEditorText(),
+    "Latest **unsaved** draft /skill:review @source.ts",
+  )
+  await resumed.key("\x1b[122;9u")
+  assert.equal(resumed.ui.getEditorText(), "Last saved draft")
+  await resumed.key("\x1b[122;10u")
+  await resumed.close()
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "Latest **unsaved** draft /skill:review @source.ts",
+  })
+})
+
 test("a delayed autosave drains newer edits before switching and cannot overwrite the next draft", async (t) => {
   const host = await openHost(t, { persistSession: true })
   host.ui.setEditorText("Start session A")

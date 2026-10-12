@@ -969,7 +969,10 @@ test("an attachment read finishing after session replacement retains the request
   assert.equal(host.ui.getEditorText(), "New draft")
   assert.ok(recovery.text.includes(sessionId))
   assert.match(recovery.text, /Original attachment draft/)
-  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text)
+  // Recovery metadata precedes the asynchronous snapshot write.
+  await waitFor(async () =>
+    assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text),
+  )
   assert.equal(await readFile(join(source, "../text.txt"), "utf8"), text)
 })
 
