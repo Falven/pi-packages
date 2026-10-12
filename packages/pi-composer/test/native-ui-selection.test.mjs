@@ -12,6 +12,10 @@ import {
 } from "@earendil-works/pi-tui"
 import { getSelectListTheme } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../fixtures/host.ts"
+import { setupHost, forwarding } from "../fixtures/ghostty-setup.ts"
+import piAttachments from "../../pi-attachments/src/index.ts"
+import piPaste from "../../pi-paste/src/index.ts"
+import piSkillReferences from "../../pi-skill-references/src/index.ts"
 import {
   holdFileRead,
   snapshotPath,
@@ -313,6 +317,83 @@ function highlighted(text) {
 }
 
 for (const view of ["formatted", "source"]) {
+  test(`setup confirmation preserves a page-selected mixed draft and snapshot membership in ${view} view`, async (t) => {
+    const capabilities = getCapabilities()
+    setCapabilities({ ...capabilities, images: null })
+    t.after(() => setCapabilities(capabilities))
+    const originalConfig = "font-size = 14\n"
+    const { host, file } = await setupHost(t, originalConfig, "config", [
+      piPaste,
+      piAttachments,
+      piSkillReferences,
+    ])
+    host.terminal.resize(300, 24)
+    const source = join(host.directory, "selected.png")
+    const bytes = Buffer.from(PNG, "base64")
+    await writeFile(source, bytes)
+    await host.session.sendUserMessage(`/attach-file ${source}`, {
+      expandPromptTemplates: true,
+    })
+    const reference = host.ui.getEditorText().trim()
+    const path = snapshotPath(reference)
+    const held = holdFileRead(t, path)
+    const draft = `row0\n**👩‍💻 e\u0301 界**\n${reference}\nApply /skill:review\nrow4\nrow5\nrow6\nrow7\nrow8`
+    host.ui.setEditorText(draft)
+    if (view === "source") await host.key(toggleView)
+    await held.started()
+    await host.output()
+    await host.key("\x1b[97;9u")
+    await host.key("\x1b[D")
+    for (let index = 0; index < 3; index++) await host.key("\x1b[C")
+    await host.key("\x1b[6;2~")
+
+    const cancelled = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Set up Ghostty keybindings/),
+    )
+    await host.key("\x1b[6;2~")
+    held.release()
+    await host.key("\x1b")
+    await cancelled
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /\[Image: selected\.png.*2x1/),
+    )
+    assert.equal(await readFile(file, "utf8"), originalConfig)
+    await host.key(toggleView)
+    await host.key(toggleView)
+    host.ui.pasteToEditor("X")
+    assert.equal(host.ui.getEditorText(), "rowX7\nrow8")
+    await host.key(undo)
+    assert.equal(host.ui.getEditorText(), draft)
+
+    const installed = host.session.sendUserMessage("/setup-keybinds ghostty", {
+      expandPromptTemplates: true,
+    })
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Set up Ghostty keybindings/),
+    )
+    await host.key("\r")
+    await installed
+    assert((await readFile(file, "utf8")).includes(forwarding))
+    host.terminal.output = ""
+    host.ui.pasteToEditor("Y")
+    assert.equal(host.ui.getEditorText(), "rowY7\nrow8")
+    assert.doesNotMatch(await host.output(), /\[Image: selected\.png/)
+    await host.key(undo)
+    assert.equal(host.ui.getEditorText(), draft)
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /\[Image: selected\.png.*2x1/),
+    )
+    await host.key(redo)
+    assert.equal(host.ui.getEditorText(), "rowY7\nrow8")
+    await host.key(undo)
+    assert.equal(host.ui.getEditorText(), draft)
+    assert.deepEqual(await readFile(path), bytes)
+    assert.equal(host.requests.length, 0)
+  })
+
   test(`page selection survives native image preview refresh and restores attachment membership in ${view} view`, async (t) => {
     const capabilities = getCapabilities()
     setCapabilities({ ...capabilities, images: null })

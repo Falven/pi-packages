@@ -61,6 +61,7 @@ type HostOptions = {
   keybindings?: KeybindingsConfig
   composer?: ExtensionFactory
   extension?: ExtensionFactory
+  extensionFactories?: ExtensionFactory[]
   extensionPaths?: string[]
   skillPaths?: string[]
   holdResponses?: boolean
@@ -189,6 +190,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
           noContextFiles: true,
           extensionFactories: [
             ...(options.composer ? [options.composer] : []),
+            ...(options.extensionFactories ?? []),
             (pi) => {
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,

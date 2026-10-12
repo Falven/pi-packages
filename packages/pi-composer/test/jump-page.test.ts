@@ -1,6 +1,7 @@
 /* eslint-disable no-await-in-loop -- Each terminal gesture precedes its observable draft edit. */
 import assert from "node:assert/strict"
 import { test } from "node:test"
+import type { KeybindingsConfig } from "@earendil-works/pi-tui"
 import { openHost } from "../fixtures/host.ts"
 
 for (const sourceView of [false, true]) {
@@ -337,7 +338,7 @@ for (const [name, keybindings, input, selected] of [
   ["remapped", { "tui.editor.pageDown": "ctrl+alt+n" }, "\x1b[110;8u", true],
   ["old remapped", { "tui.editor.pageDown": "ctrl+alt+n" }, "\x1b[6;2~", false],
   ["cleared", { "tui.editor.pageDown": [] }, "\x1b[6;2~", false],
-] as const) {
+] satisfies [string, KeybindingsConfig, string, boolean][]) {
   test(`${name} page binding controls its derived selection gesture`, async (t) => {
     const host = await openHost(t, { keybindings })
     const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"

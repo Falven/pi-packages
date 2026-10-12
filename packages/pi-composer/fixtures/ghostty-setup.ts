@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import type { TestContext } from "node:test"
+import type { ExtensionFactory } from "@earendil-works/pi-coding-agent"
 import piComposer from "../src/index.ts"
 import { openHost } from "./host.ts"
 
@@ -20,6 +21,7 @@ export async function setupHost(
   t: TestContext,
   contents: string,
   name = "config",
+  extensionFactories: ExtensionFactory[] = [],
 ) {
   const directory = await mkdtemp(join(tmpdir(), "pi-composer-ghostty-test-"))
   const previousPlatform = Object.getOwnPropertyDescriptor(process, "platform")!
@@ -50,6 +52,7 @@ export async function setupHost(
   }
   const host = await openHost(t, {
     directory,
+    extensionFactories,
     composer: (pi) =>
       piComposer({
         ...pi,
