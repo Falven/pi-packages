@@ -217,7 +217,7 @@ test("native insertion into formatted prose preserves code, references, and sour
   assert.match(output, /changed @file \/skill:check/)
   assert.match(output, /> \*\*quoted\*\*/)
   assert.match(output, /- \[ \] \*\*task\*\*/)
-  assert.match(output, /`\*\*inline\*\* \/skill:literal`/)
+  assert.match(output, /\*\*inline\*\* \/skill:literal/)
   assert.match(output, /const text = "\*\*literal\*\*";/)
   assert.match(output, /\| \*\*source\*\* \| \[ref\] \|/)
   assert.match(output, /\[ref\]: https:\/\/pi.dev/)

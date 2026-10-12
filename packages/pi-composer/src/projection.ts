@@ -1,6 +1,7 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent"
 import {
   CURSOR_MARKER,
+  sliceByColumn,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui"
@@ -16,6 +17,7 @@ type Cell = {
   display: string
   width: number
   styles: ProseStyle[]
+  highlight: { line: string; column: number; width: number } | undefined
   ranges: { from: number; to: number }[]
 }
 
@@ -33,7 +35,7 @@ export class Projection {
     this.source = source
     let row: Row = { from: 0, to: 0, cells: [] }
     let column = 0
-    const { spans, marks } = formatted
+    const { spans, marks }: ReturnType<typeof projectProse> = formatted
       ? projectProse(source)
       : { spans: [{ from: 0, to: source.length, styles: [] }], marks: [] }
     this.marks = marks
@@ -42,8 +44,10 @@ export class Projection {
       .join("")
     let spanIndex = 0
     let spanOffset = 0
+    let spanColumn = 0
     for (const { segment, index } of graphemes.segment(visible)) {
-      const styles = spans[spanIndex]!.styles
+      const currentSpan = spanIndex
+      const { styles, highlight: highlightedLine } = spans[spanIndex]!
       const ranges: { from: number; to: number }[] = []
       let offset = index
       while (offset < index + segment.length) {
@@ -62,15 +66,19 @@ export class Projection {
       }
       const from = ranges[0]!.from
       const to = ranges.at(-1)!.to
-      const display =
+      const plain =
         segment === "\n"
           ? segment
-          : truncateToWidth(
-              segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�"),
-              width,
-              "�",
-            )
+          : segment.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�")
+      const fullWidth = visibleWidth(plain)
+      const display =
+        segment === "\n" ? segment : truncateToWidth(plain, width, "�")
       const cells = visibleWidth(display)
+      const highlight =
+        highlightedLine !== undefined && segment !== "\n" && fullWidth > 0
+          ? { line: highlightedLine, column: spanColumn, width: fullWidth }
+          : undefined
+      spanColumn = spanIndex === currentSpan ? spanColumn + fullWidth : 0
       const cell = {
         from,
         to,
@@ -78,6 +86,7 @@ export class Projection {
         display,
         width: cells,
         styles,
+        highlight,
         ranges,
       }
       this.cells.push(cell)
@@ -278,8 +287,32 @@ export class Projection {
     const caretRow = focused && this.rowAt(head) === index
     const caret = row.cells.findIndex((cell) => cell.to > head)
     let output = ""
+    let highlighted:
+      | { source: string; line: string; column: number }
+      | undefined
     for (const [i, cell] of row.cells.entries()) {
       let display = cell.display
+      if (cell.highlight) {
+        const { line, column, width } = cell.highlight
+        if (highlighted?.source !== line) {
+          // Slice the row once so each cell does not rescan offscreen code.
+          const rowWidth = row.cells.reduce(
+            (sum, item) => sum + (item.highlight?.width ?? item.width),
+            0,
+          )
+          highlighted = {
+            source: line,
+            line: sliceByColumn(line, column, rowWidth),
+            column,
+          }
+        }
+        display =
+          truncateToWidth(
+            sliceByColumn(highlighted.line, column - highlighted.column, width),
+            cell.width,
+            "�",
+          ) + "\x1b[0m"
+      }
       for (const style of cell.styles) display = theme[style](display)
       if (caretRow && caret === i) output += CURSOR_MARKER
       output +=

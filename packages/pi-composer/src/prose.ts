@@ -1,4 +1,5 @@
 import { Marked, type Token } from "@earendil-works/pi-tui"
+import { projectCode, projectNestedCode } from "./code.ts"
 
 const parser = new Marked()
 
@@ -9,11 +10,14 @@ export type ProseStyle =
   | "strikethrough"
   | "link"
   | "underline"
+  | "code"
+  | "codeBlockBorder"
 
 export type ProseSpan = {
   from: number
   to: number
   styles: ProseStyle[]
+  highlight?: string
 }
 
 export type ProseMark = {
@@ -36,6 +40,13 @@ export function projectProse(source: string): {
     let offset = from
     for (const token of tokens) {
       const end = offset + token.raw.length
+      const code = projectCode(token, offset, styles)
+      if (code) {
+        spans.push(...code.spans)
+        marks.push(...code.marks)
+        offset = end
+        continue
+      }
       let contentStart = 0
       let added: ProseStyle[] = []
       let children: Token[] = "tokens" in token ? (token.tokens ?? []) : []
@@ -80,10 +91,15 @@ export function projectProse(source: string): {
           }
           break
         }
-        default:
-          append(offset, end, styles)
+        default: {
+          const nested = projectNestedCode(token, offset, styles)
+          if (nested) {
+            spans.push(...nested.spans)
+            marks.push(...nested.marks)
+          } else append(offset, end, styles)
           offset = end
           continue
+        }
       }
       const content = children.map((child) => child.raw).join("")
       const start = content ? token.raw.indexOf(content, contentStart) : -1

@@ -15,6 +15,7 @@ import {
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui"
 import type { Clipboard } from "./clipboard.ts"
+import { codeNewline } from "./code.ts"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
 
@@ -449,6 +450,13 @@ export class SourceEditor extends CustomEditor {
       keys.matches(data, "tui.input.submit") ||
       matchesKey(data, "super+enter")
     ) {
+      const newline = matchesKey(data, "super+enter")
+        ? undefined
+        : codeNewline(this.getText(), this.draft.head)
+      if (newline !== undefined) {
+        this.insertTextAtCursor(newline)
+        return
+      }
       if (this.disableSubmit || !this.getText().trim()) return
       const text = this.getText()
       this.setText("")
