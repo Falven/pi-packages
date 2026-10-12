@@ -18,7 +18,7 @@ Save failures report an error and preserve the current text and the last usable 
 
 ## Keys
 
-**Keyboard editing is implemented and verified through public Pi input.** Real Ghostty/macOS acceptance remains pending; physical delivery depends on the terminal's effective bindings. The [verification record](../../.scratch/composer-keyboard/verification.md) separates software results from physical checks.
+**Keyboard editing is implemented and verified through public Pi input.** Real Ghostty/macOS acceptance remains pending; physical delivery depends on the terminal's effective bindings. The [verification record](../../.scratch/composer-keybinds/verification.md) separates software results from physical checks.
 
 | Native action               | Default or useful delivered input               | Behavior                                                                                                            |
 | --------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |

@@ -263,7 +263,7 @@ Paste classification, attachment storage and previews, and skill expansion belon
 
 ## Further Notes
 
-Native editing actions have public Pi editor/session coverage. Ghostty setup and Shift-page selection require implementation and acceptance; the setup verification gate must establish supported configurations before installation can be declared complete. Real Ghostty/macOS acceptance remains pending. The [verification record](../../.scratch/composer-keyboard/verification.md), [keyboard implementation plan](../composer-keyboard-spec-plan.md), and [terminal procedure](../terminal-checks.md) separate those results and track the remaining checks.
+Native editing actions, Ghostty setup, and Shift-page selection are implemented with public Pi command/editor/session coverage. Automatic setup is limited to the verified single-file Ghostty 1.3.1 configuration described in the [README](../../packages/pi-composer/README.md#ghostty-keybinding-setup). Real Ghostty/macOS acceptance remains pending. The [verification record](../../.scratch/composer-keybinds/verification.md), [keyboard implementation plan](../composer-keyboard-spec-plan.md), and [terminal procedure](../terminal-checks.md) separate software results from physical checks.
 
 Ghostty evidence: [configuration include ordering](https://ghostty.org/docs/config/reference#config-file), [CSI forwarding](https://ghostty.org/docs/config/keybind/reference#csi), and the inspected [candidate validator](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/validate_config.zig), [binding inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/list_keybinds.zig), and [configuration inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/show_config.zig).
 
