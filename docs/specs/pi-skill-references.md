@@ -39,7 +39,7 @@ Users need to invoke skills while composing ordinary prose and retain native or 
 ## Implementation Decisions
 
 - The package owns inline skill completion and submission-time expansion. Pi owns effective skill discovery, resource availability, command dispatch, and base provider behavior. The active editor owns picker presentation, insertion, and undo.
-- `$` and `/` in ordinary prose are completion triggers. A selected skill inserts native `/skill:name` text. Bare shorthand remains text until selection produces a canonical reference.
+- `$` and `/` in ordinary prose are completion triggers. Inline `/` uses Tab in the native editor and opens automatically in `pi-composer`, following each editor's effective provider contract. A selected skill inserts native `/skill:name` text. Bare shorthand remains text until selection produces a canonical reference.
 - Complete canonical skill references in ordinary prose carry explicit invocation intent regardless of whether they were typed, pasted, or inserted by another extension. Editing a reference changes its meaning according to the resulting text; no hidden identity is required.
 - Use the effective native skill catalog and command/resource information exposed by public Pi interfaces. Retain native skill-command availability, filtering, and resource precedence.
 - Wrap the supplied `AutocompleteProvider` through `addAutocompleteProvider`. Delegate unrelated suggestions and edits, preserve wrapper order and later provider updates, and carry cancellation, completion ranges, and resulting cursor positions through the native contract.

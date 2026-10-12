@@ -175,7 +175,7 @@ test("an image preparation failure stops native submission and retains a readabl
   assert.equal(host.requests.length, 0)
   assert.equal(host.users.length, 0)
   assert.equal(host.ui.getEditorText(), "")
-  const recovery = await retainedRequest(host)
+  const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(draft))
   assert.deepEqual(await readFile(path), broken)
@@ -199,17 +199,15 @@ test("an image preview decode failure stays visible without removing its capture
 })
 
 test("native image delivery preserves earlier images, handler order, and unique snapshot membership", async (t) => {
-  const host = await nativePi(
-    t,
-    [inputExtension],
-    [
+  const host = await nativePi(t, [inputExtension], {
+    extensionFactories: [
       (pi) =>
         pi.on("input", (event) => ({
           action: "transform",
           text: `${event.text}\nAfter attachments`,
         })),
     ],
-  )
+  })
   const source = join(host.directory, "ordered.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
   await host.runtime.session.prompt(`/attach-file ${source}`)
@@ -267,7 +265,7 @@ test("image preparation failure retains incoming images as readable snapshots wi
   host.submit()
   await waitFor(() => assert.match(host.render(), /Image request not sent/))
   assert.equal(host.requests.length, 0)
-  const recovery = await retainedRequest(host)
+  const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(`Before attachments\n${draft}`))
   const incoming = /\[Attachment: input-image-1\]\(<([^>]+)>\)/.exec(
     recovery.text,
@@ -299,7 +297,7 @@ test("a first-turn native auth failure preserves image request files without ove
   assert.equal(host.users.length, 0)
   assert.equal(host.ui.getEditorText(), "Newer draft remains mine")
   await assert.rejects(readFile(sessionFile), { code: "ENOENT" })
-  const recovery = await retainedRequest(host)
+  const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(draft))
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })
@@ -376,10 +374,8 @@ test("delayed image delivery uses the submitted references while a newer draft i
 })
 
 test("a native session switch during image preparation retains the old request without sending into the new session", async (t) => {
-  const host = await nativePi(
-    t,
-    [],
-    [
+  const host = await nativePi(t, [], {
+    extensionFactories: [
       (pi) =>
         pi.registerCommand("new-test-session", {
           description: "Switch the native session during an image read",
@@ -388,7 +384,7 @@ test("a native session switch during image preparation retains the old request w
           },
         }),
     ],
-  )
+  })
   const source = join(host.directory, "old-session.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
   await host.runtime.session.prompt(`/attach-file ${source}`)
@@ -400,7 +396,7 @@ test("a native session switch during image preparation retains the old request w
   await host.runtime.session.prompt("/new-test-session")
   host.ui.setEditorText("New session's draft")
   held.release()
-  const recovery = await waitFor(() => retainedRequest(host))
+  const recovery = await waitFor(() => retainedRequest(host, "Delivery:"))
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(draft))
   assert.notEqual(host.runtime.session.sessionId, sessionId)
@@ -462,17 +458,15 @@ for (const behavior of ["steer", "followUp"]) {
 }
 
 test("image recovery remains writable when the native session checkpoint cannot be written", async (t) => {
-  const host = await nativePi(
-    t,
-    [],
-    [
+  const host = await nativePi(t, [], {
+    extensionFactories: [
       (pi) =>
         pi.on("input", (event) => {
           if (event.text.includes("[Attachment:")) return { action: "handled" }
           return undefined
         }),
     ],
-  )
+  })
   host.submit("Create a persisted session")
   await waitFor(() => assert.equal(host.requests.length, 1))
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
@@ -484,7 +478,7 @@ test("image recovery remains writable when the native session checkpoint cannot 
   await chmod(sessionFile, 0o400)
   try {
     host.submit()
-    const recovery = await waitFor(() => retainedRequest(host))
+    const recovery = await waitFor(() => retainedRequest(host, "Delivery:"))
     assert.ok(recovery.text.includes(draft))
     assert.equal(
       (await readFile(snapshotPath(recovery.text))).toString("base64"),
@@ -547,7 +541,7 @@ test("a provider rejection retains the image request and leaves later draft edit
   )
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   assert.equal(host.ui.getEditorText(), "Work started after submitting")
-  const recovery = await retainedRequest(host)
+  const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(draft))
   assert.equal(
     (await readFile(snapshotPath(recovery.text))).toString("base64"),
