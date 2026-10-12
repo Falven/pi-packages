@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Load pi-composer through Pi and edit one authoritative Markdown text document through the public editor contract.
 - [ ] Move by character, word, line, and document; select ranges, select all, replace selections, and delete text without splitting graphemes or corrupting wrapped wide characters.
