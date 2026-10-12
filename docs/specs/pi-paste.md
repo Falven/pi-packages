@@ -49,6 +49,7 @@ A pasted block should be visible and editable when it is small, and readable on 
 - Apply the policy to terminal paste, clipboard shortcuts, right-click paste, and native `pasteToEditor` calls, including pastes inside code blocks. Terminal bracketed paste and `pasteToEditor` supply text; process that payload without rereading the clipboard to infer images or copied files. Native clipboard actions supply the separate metadata-aware route. Ordinary typing and native text replacement do not invoke the cutoff.
 - Expose Paste Inline and Attach Text through existing Pi action/UI facilities. Paste Inline explicitly selects inline text insertion regardless of size. Attach Text explicitly selects a text attachment regardless of size.
 - File and image outcomes use attachment handling. Preserve native clipboard file identities and path validation. Text that merely resembles a resource reference keeps its text meaning unless the native clipboard identifies it as copied files or the user chooses an attachment action.
+- Give generated clipboard image files an extension matching Pi's detected image format before handing them to attachment handling. Preserve captured bytes and copied-file names; the resulting file links must select the system's associated image application.
 - Apply a successful paste at the active editor's intended caret or selection. With `pi-composer`, related text and attachment membership changes are one undoable action. Snapshot preparation must succeed before the selected content is discarded.
 - Associate the clipboard read, snapshot preparation, and resulting edit with the requesting draft. Preserve later unrelated edits; late or failed operations must leave their content recoverable.
 - Use current public Pi contracts for cooperation. Attachment-producing pastes discover the effective extension-provided `attach-file` command and dispatch the captured sources through Pi's native command path. Preserve recoverable captured contents if the command is unavailable, deferred, or fails; a void command send is not completion acknowledgement. This handoff works with the native editor and `pi-composer` without a separate integration interface.
@@ -63,6 +64,7 @@ A pasted block should be visible and editable when it is small, and readable on 
 - Test through the public Pi editor/session boundary. Drive actual host paste routes and observe inline content, attachment references, stored contents, submission payloads, and errors. A policy helper test alone cannot establish route coverage.
 - Use the shared host setup with native Pi, with `pi-composer`, and with attachment handling enabled. Verify existing input listeners and shortcuts retain their native dispatch behavior.
 - Use the existing Node test runner. Pi's clipboard file-precedence tests, editor paste tests, and interactive terminal tests provide prior art for behavior and fixture construction. Keep package implementation details out of assertions.
+- Verify generated filenames for PNG and BMP clipboard images through native paste and attachment handoff, together with unchanged captured bytes. Include a clipboard-created attachment in the real system-opener check; a named source file does not cover generated filenames.
 - Cover the following observable scenarios:
 
 | Scenario                                                                                | Required result                                                                                                                 |
@@ -95,7 +97,7 @@ Draft state and history belong to the active editor. Snapshot storage, previews,
 
 ## Further Notes
 
-The [package README](../../packages/pi-paste/README.md) documents paste actions and recovery. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/) and [native clipboard ticket](../../.scratch/composer-keyboard/issues/06-preserve-configured-clipboard-routes.md).
+The [package README](../../packages/pi-paste/README.md) documents paste actions and recovery. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/), [native clipboard ticket](../../.scratch/composer-keyboard/issues/06-preserve-configured-clipboard-routes.md), and [generated image extension ticket](../../.scratch/image-opening/issues/03-preserve-generated-image-extensions.md).
 
 See the [glossary](../../GLOSSARY.md), [composer specification](pi-composer.md), and [attachment specification](pi-attachments.md).
 
