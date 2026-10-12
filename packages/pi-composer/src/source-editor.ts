@@ -17,6 +17,8 @@ import {
 import type { Clipboard } from "./clipboard.ts"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
+import { projectProse } from "./prose.ts"
+import { continueList } from "./structures.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
@@ -26,6 +28,7 @@ type EditKind = "typing" | "backspace" | "delete"
 
 export class SourceEditor extends CustomEditor {
   onDraftChange: ((text: string) => void) | undefined
+  onDraftClear: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
@@ -140,6 +143,7 @@ export class SourceEditor extends CustomEditor {
   override setText(text: string): void {
     text = text.replace(/\r\n?/g, "\n")
     if (text === this.getText()) return
+    if (!text) this.onDraftClear?.(this.getText())
     this.commit({ text, anchor: text.length, head: text.length })
   }
 
@@ -444,6 +448,28 @@ export class SourceEditor extends CustomEditor {
     if (keys.matches(data, "tui.input.newLine")) {
       this.insertTextAtCursor("\n")
       return
+    }
+    if (matchesKey(data, "enter") && keys.matches(data, "tui.input.submit")) {
+      const { anchor, head } = this.draft
+      let edit = continueList(this.getText(), head, projectProse)
+      if (edit && anchor !== head) {
+        const selection = this.project().replace(
+          Math.min(anchor, head),
+          Math.max(anchor, head),
+          "",
+        )
+        edit =
+          continueList(selection.text, selection.position, projectProse) ??
+          selection
+      }
+      if (edit) {
+        this.commit({
+          text: edit.text,
+          anchor: edit.position,
+          head: edit.position,
+        })
+        return
+      }
     }
     if (
       keys.matches(data, "tui.input.submit") ||
