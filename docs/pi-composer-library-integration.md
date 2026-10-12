@@ -22,6 +22,8 @@ The replacement editor must execute native character, word, and line deletion, r
 
 The factory-supplied manager resolves effective bindings and exposes explicit user overrides. Changing or clearing an action's bindings suppresses the composer's extra Cmd aliases for that action, including shifted aliases. Native editing bindings and accepted extension shortcuts take priority over composer fallbacks. Native undo precedes in-editor completion; focused overlays and other host-owned routes keep their input.
 
+Page selection derives Shift gestures from the effective native page actions after checking ownership of the full chord. The existing Markdown projection maps a movement of one visible composer page to source positions, retaining the selection anchor and preferred display column. Native fullscreen scrolling, focused UI, and explicit shifted bindings keep their input.
+
 Select-all, cut, redo, and source-view toggle use documented fixed keys because Pi's current public manager has no registration API for new action IDs. Literal shortcut registration does not create a configurable native action. Pi owns terminal decoding and configuration; the composer neither reads another configuration copy nor imports macOS text-field preferences. See the [binding and dispatch contract](specs/pi-composer.md#binding-and-dispatch).
 
 Terminal text paste carries the supplied text. The effective native clipboard action can read copied-file or image metadata. A raw Cmd+V alias follows the native action's override rules, while terminal-generated bracketed paste remains an independent route. Preserve effective handlers and each route's native dispatch.

@@ -31,6 +31,7 @@ Save failures report an error and preserve the current text and the last usable 
 | Retained-text recovery      | Ctrl+Y; Option+Y                                | Yank the retained deletion; rotate the preceding yank.                                                              |
 | Character jump              | Ctrl+]; Ctrl+Alt+]                              | Await a printable target and move to its next/previous occurrence.                                                  |
 | Editor paging               | PageUp/PageDown when delivered to the editor    | Move by the visible editor page; preserve host-owned fullscreen viewport keys.                                      |
+| Page selection              | Shift+PageUp/PageDown                           | Extend or contract the selection by one visible composer page.                                                      |
 | Undo                        | Ctrl+-                                          | Undo the prior coherent edit.                                                                                       |
 | Clipboard paste             | Ctrl+V                                          | Use the effective native clipboard handler.                                                                         |
 | Submit/newline              | Enter; Shift+Enter/Ctrl+J                       | Submit prose or continue a list/code block; insert a newline.                                                       |
@@ -45,6 +46,8 @@ On a Mac keyboard, Delete means backward deletion, named `backspace` in bindings
 | Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and formatted/source-view shortcuts. |
 
 Any explicit Pi override, including an empty binding list, suppresses the aliases for that native action. Fixed composer actions have no configurable native action IDs. Both kinds of shortcut yield to effective native bindings and accepted extension shortcuts. Shift movement keeps the selection anchored. Native undo precedes in-editor completion; the picker handles its acceptance keys before ordinary contextual submission. `/hotkeys` lists native actions and registered extension shortcuts; direct composer aliases are documented here. These bindings do not import macOS text-field settings.
+
+Page selection adds Shift to the effective `tui.editor.pageUp` and `tui.editor.pageDown` bindings. With the defaults, use Shift+Fn+Up/Down on a Mac keyboard. Remapping or clearing a page action changes its selection gestures; an action explicitly bound to the full shifted chord keeps its ordinary behavior. Selection retains its anchor and preferred display column across wrapped rows, redraws, and view changes. After a resize or preview refresh, the next gesture uses the current visible composer height.
 
 Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [terminal acceptance procedure](../../docs/terminal-checks.md) records those cases separately from editor behavior. The package leaves terminal settings unchanged.
 
