@@ -150,6 +150,7 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
         noPromptTemplates: true,
         noThemes: true,
         noContextFiles: true,
+        additionalSkillPaths: state.skillPaths ?? [],
         additionalExtensionPaths: [
           ...extensionPaths,
           fileURLToPath(new URL("../src/index.ts", import.meta.url)),

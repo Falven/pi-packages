@@ -60,6 +60,7 @@ type HostOptions = {
   keybindings?: Record<string, string>
   extension?: ExtensionFactory
   extensionPaths?: string[]
+  skillPaths?: string[]
   holdResponses?: boolean
   responseStatus?: number
   noAuth?: boolean
@@ -176,6 +177,8 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
             new URL("../src/index.ts", import.meta.url).pathname,
             ...(options.extensionPaths ?? []),
           ],
+          noExtensions: true,
+          additionalSkillPaths: options.skillPaths ?? [],
           noSkills: true,
           noPromptTemplates: true,
           noThemes: true,

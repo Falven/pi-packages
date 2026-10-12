@@ -11,6 +11,7 @@ const options: {
   clearedText?: string
   clearedIndex?: number
   extensionPaths?: string[]
+  skillPaths?: string[]
   cwd?: string
   attachments?: { path: string; data: string }[]
   recoveryReadError?: boolean
