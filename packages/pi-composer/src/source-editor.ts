@@ -3,28 +3,26 @@ import {
   type KeybindingsManager,
 } from "@earendil-works/pi-coding-agent"
 import {
-  CURSOR_MARKER,
   decodeKittyPrintable,
   matchesKey,
   parseKey,
-  visibleWidth,
   type EditorTheme,
   type Keybinding,
   type KeyId,
   type TUI,
 } from "@earendil-works/pi-tui"
+import { Projection } from "./projection.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
-const words = new Intl.Segmenter(undefined, { granularity: "word" })
 
 type Draft = { text: string; anchor: number; head: number }
-type SourceRow = { from: number; to: number }
 type EditKind = "typing" | "backspace" | "delete"
 
 export class SourceEditor extends CustomEditor {
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
   private sourceWidth = 60
+  private formatted = true
   private preferredCell: number | undefined
   private past: Draft[] = []
   private future: Draft[] = []
@@ -103,8 +101,13 @@ export class SourceEditor extends CustomEditor {
   ): void {
     const current = this.getText()
     text = text.replace(/\r\n?/g, "\n")
-    const nextText = current.slice(0, from) + text + current.slice(to)
+    let nextText = current.slice(0, from) + text + current.slice(to)
     let position = from + text.length
+    if (this.formatted && from !== to) {
+      const edit = this.project().replace(from, to, text)
+      nextText = edit.text
+      position = edit.position
+    }
     const joined = graphemes.segment(nextText).containing(position)
     if (joined && joined.index < position) {
       position = joined.index + joined.segment.length
@@ -168,28 +171,11 @@ export class SourceEditor extends CustomEditor {
   }
 
   private adjacent(direction: -1 | 1): number {
-    const { text, head } = this.draft
-    const segments = graphemes.segment(text)
-    if (direction < 0) return segments.containing(head - 1)?.index ?? 0
-    const next = segments.containing(head)
-    return next ? next.index + next.segment.length : text.length
+    return this.project().adjacent(this.draft.head, direction)
   }
 
   private wordBoundary(direction: -1 | 1): number {
-    const { text, head } = this.draft
-    const segments = [...words.segment(text)]
-    if (direction < 0) {
-      return (
-        segments.findLast(
-          ({ index, segment }) => index < head && /\S/u.test(segment),
-        )?.index ?? 0
-      )
-    }
-    const next = segments.find(
-      ({ index, segment }) =>
-        index + segment.length > head && /\S/u.test(segment),
-    )
-    return next ? next.index + next.segment.length : text.length
+    return this.project().wordBoundary(this.draft.head, direction)
   }
 
   private movementMatches(data: string, action: Keybinding): boolean {
@@ -202,32 +188,13 @@ export class SourceEditor extends CustomEditor {
   }
 
   private moveVertically(direction: -1 | 1, select: boolean): void {
-    const rows = this.sourceRows()
-    const { text, head } = this.draft
-    const currentIndex = rows.findLastIndex((row) => row.from <= head)
-    const current = rows[currentIndex]!
-    const targetIndex = Math.max(
-      0,
-      Math.min(rows.length - 1, currentIndex + direction),
+    const target = this.project().vertical(
+      this.draft.head,
+      direction,
+      this.preferredCell,
     )
-    const target = rows[targetIndex]!
-    const preferred =
-      this.preferredCell ??
-      visibleWidth(this.displayGrapheme(text.slice(current.from, head)))
-    let position = target.from
-    let cells = 0
-    for (const { segment, index } of graphemes.segment(
-      text.slice(target.from, target.to),
-    )) {
-      const width = visibleWidth(this.displayGrapheme(segment))
-      if (cells + width > preferred) break
-      const next = target.from + index + segment.length
-      if (next === rows[targetIndex + 1]?.from) break
-      position = next
-      cells += width
-    }
-    this.moveTo(position, select)
-    this.preferredCell = preferred
+    this.moveTo(target.position, select)
+    this.preferredCell = target.column
   }
 
   override handleInput(data: string): void {
@@ -271,6 +238,12 @@ export class SourceEditor extends CustomEditor {
       if (rest) this.handleInput(rest)
       return
     }
+    if (matchesKey(data, "super+shift+m")) {
+      this.formatted = !this.formatted
+      this.preferredCell = undefined
+      this.tui.requestRender()
+      return
+    }
     if (matchesKey(data, "super+z") || keys.matches(data, "tui.editor.undo")) {
       this.restoreEdit(this.past, this.future)
       return
@@ -288,14 +261,14 @@ export class SourceEditor extends CustomEditor {
     }
     const select = parseKey(data)?.includes("shift+") ?? false
     if (matchesKey(data, "super+up") || matchesKey(data, "super+shift+up")) {
-      this.moveTo(0, select)
+      this.moveTo(this.project().documentBoundary(-1), select)
       return
     }
     if (
       matchesKey(data, "super+down") ||
       matchesKey(data, "super+shift+down")
     ) {
-      this.moveTo(this.getText().length, select)
+      this.moveTo(this.project().documentBoundary(1), select)
       return
     }
     if (this.movementMatches(data, "tui.editor.cursorWordLeft")) {
@@ -307,7 +280,7 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (this.movementMatches(data, "tui.editor.cursorUp")) {
-      if (!select && this.draft.head === 0) {
+      if (!select && this.draft.head <= this.project().documentBoundary(-1)) {
         this.browsePrompt(-1)
         return
       }
@@ -315,7 +288,7 @@ export class SourceEditor extends CustomEditor {
       return
     }
     if (this.movementMatches(data, "tui.editor.cursorDown")) {
-      const lastRow = this.sourceRows().at(-1)!
+      const lastRow = this.project().rows.at(-1)!
       if (!select && this.promptIndex >= 0 && this.draft.head >= lastRow.from) {
         this.browsePrompt(1)
         return
@@ -328,8 +301,7 @@ export class SourceEditor extends CustomEditor {
       matchesKey(data, "super+left") ||
       matchesKey(data, "super+shift+left")
     ) {
-      const before = this.getText().slice(0, this.draft.head)
-      this.moveTo(before.lastIndexOf("\n") + 1, select)
+      this.moveTo(this.project().lineBoundary(this.draft.head, -1), select)
       return
     }
     if (
@@ -337,8 +309,7 @@ export class SourceEditor extends CustomEditor {
       matchesKey(data, "super+right") ||
       matchesKey(data, "super+shift+right")
     ) {
-      const end = this.getText().indexOf("\n", this.draft.head)
-      this.moveTo(end < 0 ? this.getText().length : end, select)
+      this.moveTo(this.project().lineBoundary(this.draft.head, 1), select)
       return
     }
     if (this.movementMatches(data, "tui.editor.cursorLeft")) {
@@ -395,64 +366,25 @@ export class SourceEditor extends CustomEditor {
     }
   }
 
-  private displayGrapheme(text: string): string {
-    return text.replace(/\t/g, "    ").replace(/\p{Cc}/gu, "�")
-  }
-
-  private sourceRows(): SourceRow[] {
-    const rows: SourceRow[] = []
-    let from = 0
-    let cells = 0
-    for (const { segment, index } of graphemes.segment(this.getText())) {
-      if (segment === "\n") {
-        rows.push({ from, to: index })
-        from = index + 1
-        cells = 0
-        continue
-      }
-      const width = visibleWidth(this.displayGrapheme(segment))
-      if (cells > 0 && cells + width > this.sourceWidth) {
-        rows.push({ from, to: index })
-        from = index
-        cells = 0
-      }
-      cells += width
-    }
-    rows.push({ from, to: this.getText().length })
-    return rows
+  private project(): Projection {
+    return new Projection(this.getText(), this.sourceWidth, this.formatted)
   }
 
   override render(width: number): string[] {
     const padding = this.getPaddingX()
     this.sourceWidth = Math.max(1, width - padding * 2 - 1)
-    const rows = this.sourceRows()
-    const { text, anchor, head } = this.draft
+    const projection = this.project()
+    const rows = projection.rows
+    const { anchor, head } = this.draft
     const cursorRow = rows.findLastIndex((row) => row.from <= head)
     const height = Math.max(1, Math.floor(this.tui.terminal.rows * 0.3))
     const top = Math.max(0, cursorRow - height + 1)
     const visibleRows = rows.slice(top, top + height)
-    const lines = visibleRows.map((row, rowIndex) => {
-      let output = " ".repeat(padding)
-      for (const { segment, index } of graphemes.segment(
-        text.slice(row.from, row.to),
-      )) {
-        const offset = row.from + index
-        const display = this.displayGrapheme(segment)
-        const caret =
-          this.focused && offset === head && rowIndex + top === cursorRow
-        if (caret) {
-          output += CURSOR_MARKER
-        }
-        output +=
-          caret ||
-          (offset >= Math.min(anchor, head) && offset < Math.max(anchor, head))
-            ? `\x1b[7m${display}\x1b[27m`
-            : display
-      }
-      if (this.focused && head === row.to && rowIndex + top === cursorRow) {
-        output += `${CURSOR_MARKER}\x1b[7m \x1b[27m`
-      }
-      return output
+    const lines = visibleRows.map((_row, rowIndex) => {
+      return (
+        " ".repeat(padding) +
+        projection.renderRow(rowIndex + top, anchor, head, this.focused)
+      )
     })
     return [
       this.renderTopBorder(width, top),
