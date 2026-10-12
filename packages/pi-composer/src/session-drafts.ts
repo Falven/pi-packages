@@ -10,8 +10,12 @@ import {
   type DraftCheckpoint,
 } from "./session-draft-storage.ts"
 
-// shortcut: Pi clears this module on cwd changes/reload; retain history only while its loader keeps the module.
-const histories = new Map<string, DraftHistory>()
+// Pi reloads extension modules when the cwd or resources change.
+const historiesKey = Symbol.for("pi-composer:histories")
+const processState = globalThis as typeof globalThis & {
+  [historiesKey]?: Map<string, DraftHistory>
+}
+const histories = (processState[historiesKey] ??= new Map())
 
 export function sessionDrafts(pi: ExtensionAPI): void {
   const directory = join(getAgentDir(), "pi-composer", "drafts")
@@ -60,7 +64,8 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         )
       }
     }
-    const text = checkpoint?.text ?? ""
+    const history = histories.get(historyKey)
+    const text = checkpoint?.text ?? history?.draft.text ?? ""
     revision = checkpoint?.revision ?? 0
     let latest: DraftCheckpoint | undefined
     let savedRevision = revision
@@ -133,7 +138,6 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }
       return next
     })
-    const history = histories.get(historyKey)
     editor!.restoreDraft(
       text,
       history?.draft.text === text ? history : undefined,
@@ -147,13 +151,12 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   pi.on("session_before_fork", async () => ({
     cancel: (await flush?.()) === false,
   }))
-  pi.on("session_shutdown", async (event) => {
+  pi.on("session_shutdown", async () => {
     await flush?.()
     active = false
     recoveryAbort.abort()
     if (!editor || !historyKey) return
-    if (event.reason === "quit" || event.reason === "reload") histories.clear()
-    else histories.set(historyKey, editor.getDraftHistory())
+    histories.set(historyKey, editor.getDraftHistory())
     editor.onDraftChange = undefined
   })
 

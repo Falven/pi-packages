@@ -55,12 +55,14 @@ type HostOptions = {
   responseStatus?: number
   persistSession?: boolean
   directory?: string
+  cwd?: string
   sessionFile?: string
 }
 
 export async function openHost(t: TestContext, options: HostOptions = {}) {
   const directory =
     options.directory ?? (await mkdtemp(join(tmpdir(), "pi-composer-test-")))
+  const initialCwd = options.cwd ?? directory
   const previousAgentDir = process.env["PI_CODING_AGENT_DIR"]
   const previousOffline = process.env["PI_OFFLINE"]
   process.env["PI_CODING_AGENT_DIR"] = directory
@@ -139,6 +141,11 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
   const address = server.address()
   assert(address && typeof address === "object")
   let context: ExtensionContext | undefined
+  const initialSessionManager = options.sessionFile
+    ? SessionManager.open(options.sessionFile)
+    : options.persistSession
+      ? SessionManager.create(initialCwd)
+      : SessionManager.inMemory(initialCwd)
   const runtime = await createAgentSessionRuntime(
     async ({ cwd, agentDir, sessionManager, sessionStartEvent }) => {
       const services = await createAgentSessionServices({
@@ -205,13 +212,9 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
       }
     },
     {
-      cwd: directory,
+      cwd: initialSessionManager.getCwd(),
       agentDir: directory,
-      sessionManager: options.sessionFile
-        ? SessionManager.open(options.sessionFile)
-        : options.persistSession
-          ? SessionManager.create(directory)
-          : SessionManager.inMemory(directory),
+      sessionManager: initialSessionManager,
     },
   )
   activeRuntime = runtime

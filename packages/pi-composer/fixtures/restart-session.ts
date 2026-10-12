@@ -11,6 +11,7 @@ const options: {
 
 test("a fresh Pi process restores the saved draft", async (t) => {
   const host = await openHost(t, options)
+  assert.equal(host.runtime.cwd, host.session.sessionManager.getCwd())
   if (options.recover) {
     assert.equal(host.ui.getEditorText(), "")
     assert.match(await host.output(), /composer-recover/)

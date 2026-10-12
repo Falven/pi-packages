@@ -1,7 +1,13 @@
 import assert from "node:assert/strict"
 import { execFile } from "node:child_process"
 import type { PathLike } from "node:fs"
-import filesystem, { access, chmod, readFile, readdir } from "node:fs/promises"
+import filesystem, {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  readdir,
+} from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { test } from "node:test"
@@ -96,6 +102,143 @@ test("undo and redo stay in memory with their own session across replacements", 
   assert.equal(host.ui.getEditorText(), "B base")
   await host.key("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), "B base + B edit")
+})
+
+test("undo and redo survive session round trips across working directories", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session A")
+  await host.key("\r")
+  await host.settled()
+  const sessionA = host.session.sessionFile!
+
+  const cwdB = join(host.directory, "project-b")
+  await mkdir(cwdB)
+  const seed = await openHost(t, {
+    directory: host.directory,
+    cwd: cwdB,
+    persistSession: true,
+  })
+  seed.ui.setEditorText("Start session B")
+  await seed.key("\r")
+  await seed.settled()
+  const sessionB = seed.session.sessionFile!
+  await seed.close()
+
+  host.ui.setEditorText("A base @source.ts")
+  host.ui.pasteToEditor(" + A edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "A base @source.ts")
+  assert.deepEqual(await host.runtime.switchSession(sessionB), {
+    cancelled: false,
+  })
+  assert.equal(host.runtime.cwd, cwdB)
+  assert.equal(host.ui.getEditorText(), "")
+  host.ui.setEditorText("B base /skill:review")
+  host.ui.pasteToEditor(" + B edit")
+
+  assert.deepEqual(await host.runtime.switchSession(sessionA), {
+    cancelled: false,
+  })
+  assert.equal(host.runtime.cwd, host.directory)
+  assert.equal(host.ui.getEditorText(), "A base @source.ts")
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "A base @source.ts + A edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "A base @source.ts")
+  await host.runtime.switchSession(sessionB)
+  assert.equal(host.runtime.cwd, cwdB)
+  assert.equal(host.ui.getEditorText(), "B base /skill:review + B edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "B base /skill:review")
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "B base /skill:review + B edit")
+
+  await host.runtime.switchSession(sessionA)
+  await restart({
+    directory: host.directory,
+    sessionFile: sessionA,
+    text: "A base @source.ts",
+  })
+  await restart({
+    directory: host.directory,
+    sessionFile: sessionB,
+    text: "B base /skill:review + B edit",
+  })
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "A base @source.ts + A edit")
+})
+
+test("resource reload preserves the active and inactive sessions' undo and redo", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session A")
+  await host.key("\r")
+  await host.settled()
+  const sessionA = host.session.sessionFile!
+  host.ui.setEditorText("A base")
+  host.ui.pasteToEditor(" + A edit")
+  await host.key("\x1b[122;9u")
+
+  await host.runtime.newSession()
+  host.ui.setEditorText("B base")
+  host.ui.pasteToEditor(" + B edit")
+  await host.session.reload()
+  assert.equal(host.ui.getEditorText(), "B base + B edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "B base")
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "B base + B edit")
+
+  await host.runtime.switchSession(sessionA)
+  assert.equal(host.ui.getEditorText(), "A base")
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "A base + A edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "A base")
+})
+
+test("reloading and closing a concurrent host preserves the other host's session histories", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session A")
+  await host.key("\r")
+  await host.settled()
+  const sessionA = host.session.sessionFile!
+  host.ui.setEditorText("A base")
+  host.ui.pasteToEditor(" + A edit")
+  await host.key("\x1b[122;9u")
+  await host.runtime.newSession()
+  host.ui.setEditorText("A current draft")
+
+  await t.test(
+    "both live editors keep their own undo and redo",
+    async (otherTest) => {
+      const other = await openHost(otherTest, {
+        directory: host.directory,
+        persistSession: true,
+      })
+      other.ui.setEditorText("B base")
+      other.ui.pasteToEditor(" + B edit")
+      await other.key("\x1b[122;9u")
+      await other.session.reload()
+      assert.equal(other.ui.getEditorText(), "B base")
+      await other.key("\x1b[122;10u")
+      assert.equal(other.ui.getEditorText(), "B base + B edit")
+      assert.equal(host.ui.getEditorText(), "A current draft")
+
+      await host.runtime.switchSession(sessionA)
+      await host.key("\x1b[122;10u")
+      assert.equal(host.ui.getEditorText(), "A base + A edit")
+      assert.equal(other.ui.getEditorText(), "B base + B edit")
+      await host.key("\x1b[122;9u")
+      await host.runtime.newSession()
+      await other.close()
+    },
+  )
+
+  await host.runtime.switchSession(sessionA)
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), "A base + A edit")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "A base")
 })
 
 test("an unsent first draft is recoverable after restart without creating native JSONL", async (t) => {
@@ -289,11 +432,22 @@ test("clearing a saved draft persists an empty checkpoint and restart has no old
   await restart({ directory: host.directory, sessionFile, text: "" })
 })
 
-test("no-session mode never writes draft recovery files", async (t) => {
+test("no-session reload preserves draft history without writing recovery files", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("Private in-memory draft")
   host.ui.pasteToEditor(" with a reference @private.txt")
+  await host.key("\x1b[122;9u")
+  await host.session.reload()
+  assert.equal(host.ui.getEditorText(), "Private in-memory draft")
+  await host.key("\x1b[122;10u")
+  assert.equal(
+    host.ui.getEditorText(),
+    "Private in-memory draft with a reference @private.txt",
+  )
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Private in-memory draft")
   await host.runtime.newSession()
+  await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "")
   await host.close()
   await assert.rejects(access(join(host.directory, "pi-composer", "drafts")), {
