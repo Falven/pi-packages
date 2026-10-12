@@ -315,7 +315,6 @@ test("a late snapshot write error preserves saved bytes and their original draft
 test("a captured file remains recoverable when all snapshot writes fail after shutdown", async (t) => {
   const host = await nativePi(t, [
     fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
-    fileURLToPath(new URL("../../pi-paste/src/index.ts", import.meta.url)),
   ])
   const source = join(host.directory, "late.bin")
   const bytes = Buffer.from([0, 1, 255, 13, 10, 9, 128])
@@ -367,7 +366,6 @@ test("a captured file remains recoverable when all snapshot writes fail after sh
 test("a partial multi-file read retains captured members for recovery with the original group", async (t) => {
   const host = await nativePi(t, [
     fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
-    fileURLToPath(new URL("../../pi-paste/src/index.ts", import.meta.url)),
   ])
   const first = join(host.directory, "first.txt")
   const second = join(host.directory, "second.txt")

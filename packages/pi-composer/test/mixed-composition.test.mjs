@@ -30,16 +30,13 @@ import {
 } from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const composerPath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
-const pastePath = fileURLToPath(
-  new URL("../../pi-paste/src/index.ts", import.meta.url),
-)
 const attachmentsPath = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
 const skillsPath = fileURLToPath(
   new URL("../../pi-skill-references/src/index.ts", import.meta.url),
 )
-const extensions = [composerPath, pastePath, attachmentsPath, skillsPath]
+const extensions = [composerPath, attachmentsPath, skillsPath]
 const acceptancePath = fileURLToPath(
   new URL("../fixtures/mixed-acceptance.ts", import.meta.url),
 )
@@ -285,7 +282,7 @@ for (const [route, paste] of [
     },
   ],
 ]) {
-  for (const order of ["paste then attachments", "attachments then paste"]) {
+  for (const order of ["skills then attachments", "attachments then skills"]) {
     test(`all packages preserve cutoff, selection, and history through ${route}, ${order}`, async (t) => {
       const clipboard = getNativeClipboard()
       assert.ok(clipboard?.getFilePaths)
@@ -295,13 +292,9 @@ for (const [route, paste] of [
       t.mock.method(clipboard, "getText", async () => text)
       const host = await nativePi(
         t,
-        [
-          composerPath,
-          skillsPath,
-          ...(order === "paste then attachments"
-            ? [pastePath, attachmentsPath]
-            : [attachmentsPath, pastePath]),
-        ],
+        order === "skills then attachments"
+          ? [composerPath, skillsPath, attachmentsPath]
+          : [composerPath, attachmentsPath, skillsPath],
         { skillPaths: [await catalog(t)] },
       )
       const original =
@@ -574,7 +567,7 @@ test("mixed dequeue replay preserves skills, opaque text, images, and input tran
   )
   const host = await nativePi(
     t,
-    [composerPath, pastePath, imageInputPath, skillsPath, attachmentsPath],
+    [composerPath, imageInputPath, skillsPath, attachmentsPath],
     {
       skillPaths: [skills],
       extensionFactories: [
@@ -656,7 +649,7 @@ for (const delivery of ["normal", "steer", "followUp"]) {
     const observed = []
     const host = await nativePi(
       t,
-      [composerPath, pastePath, imageInputPath, skillsPath, attachmentsPath],
+      [composerPath, imageInputPath, skillsPath, attachmentsPath],
       {
         skillPaths: [await catalog(t)],
         extensionFactories: [
@@ -835,10 +828,12 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
   assert.equal(host.ui.getEditorText(), draftB)
   const lateText = "Late /skill:literal\n".repeat(300)
   read.resolve(lateText)
-  const recovery = await waitFor(() => retainedRequest(host, draftA, "Paste"))
+  const recovery = await waitFor(() => retainedRequest(host, draftA))
   assert.match(recovery.text, new RegExp(`Session: ${sessionId}`))
   assert.doesNotMatch(recovery.text, /Session B/)
-  const latePath = /^Paste: (.+)$/m.exec(recovery.text)[1]
+  const latePath = snapshotPath(
+    recovery.text.slice(recovery.text.indexOf(draftA) + draftA.length),
+  )
   assert.equal(await readFile(latePath, "utf8"), lateText)
   assert.equal(host.ui.getEditorText(), draftB)
   host.ui.pasteToEditor("B later edit")
@@ -1022,9 +1017,7 @@ test("a denied snapshot write retries a captured mixed paste as one selection ed
     await waitFor(() => assert.match(host.render(), /Retry save/))
     assert.match(host.render(), /EACCES/)
     assert.equal(host.ui.getEditorText(), draft)
-    const captured = await retainedRequest(host, draft, "Paste")
-    const capturedPath = /^Paste: (.+)$/m.exec(captured.text)[1]
-    assert.equal(await readFile(capturedPath, "utf8"), body)
+    assert.match(host.render(), /Contents retained in memory until Pi exits/)
   } finally {
     await chmod(storage, 0o700)
   }
@@ -1045,7 +1038,7 @@ test("a denied snapshot write retries a captured mixed paste as one selection ed
 })
 
 test("native editing alone combines canonical completion, paste policy, restored text, and image delivery", async (t) => {
-  const host = await nativePi(t, [pastePath, skillsPath], {
+  const host = await nativePi(t, [skillsPath], {
     skillPaths: [await catalog(t)],
   })
   host.ui.setEditorText("Apply /rev")

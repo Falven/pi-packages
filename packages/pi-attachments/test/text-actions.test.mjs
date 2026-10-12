@@ -15,9 +15,6 @@ import {
 const composerPath = fileURLToPath(
   new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
-const pastePath = fileURLToPath(
-  new URL("../../pi-paste/src/index.ts", import.meta.url),
-)
 const attachmentsPath = fileURLToPath(
   new URL("../src/index.ts", import.meta.url),
 )
@@ -81,7 +78,7 @@ test("native attachment preview shows the captured text without changing the dra
 })
 
 test("Restore Inline replaces composer selection after cleanup and keeps membership undoable", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const source = join(host.directory, "context.txt")
   const contents = `\t// ${"context ".repeat(720)}\r\nconst answer = 42;\r\n`
   await writeFile(source, contents)
@@ -128,7 +125,7 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
 
 for (const selection of ["prose", "attachment"]) {
   test(`Restore Inline across preserved Markdown delimiters from ${selection} removes original references in one edit`, async (t) => {
-    const host = await nativePi(t, [composerPath, pastePath, skillsPath])
+    const host = await nativePi(t, [composerPath, skillsPath])
     await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
       expandPromptTemplates: true,
     })
@@ -228,7 +225,7 @@ test("Remove from draft removes repeated membership in one composer edit and ret
 })
 
 test("a pending restore cannot replace a newer composer selection", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   await host.runtime.session.sendUserMessage(
     "/attach-text Captured before moving",
     { expandPromptTemplates: true },
@@ -281,7 +278,7 @@ test("a native text rendering failure leaves preview content and membership reco
 for (const view of ["formatted", "source"]) {
   for (const position of ["before", "inside", "after", "repeated"]) {
     test(`Restore Inline maps ${position} references across a ${view} code selection`, async (t) => {
-      const host = await nativePi(t, [composerPath, pastePath])
+      const host = await nativePi(t, [composerPath])
       const source = join(host.directory, "code.txt")
       const contents = `\tconst literal = \`/skill:sample @file **literal**\`;\r\n// ${"x".repeat(5001)}\r\n`
       await writeFile(source, contents)
@@ -348,7 +345,7 @@ for (const view of ["formatted", "source"]) {
 }
 
 test("native Restore Inline removes an empty captured text attachment", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const source = join(host.directory, "empty.txt")
   await writeFile(source, "")
   await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
@@ -366,10 +363,7 @@ test("native Restore Inline removes an empty captured text attachment", async (t
 
 for (const editor of ["native", "composer"]) {
   test(`${editor} Restore Inline inserts complete captured text at the caret with native whitespace rules`, async (t) => {
-    const host = await nativePi(
-      t,
-      editor === "composer" ? [composerPath, pastePath] : [pastePath],
-    )
+    const host = await nativePi(t, editor === "composer" ? [composerPath] : [])
     const source = join(host.directory, "utf8.txt")
     const contents = `\ufeff\tconst value = "😀";\r\n// ${"x".repeat(5001)}\r\n`
     await writeFile(source, contents)
@@ -462,7 +456,7 @@ test("the attachment widget exposes its shortcut and composer preview scrolls wi
 
 for (const action of ["Preview text", "Restore Inline"]) {
   test(`${action} preserves the selected draft when the snapshot is unreadable`, async (t) => {
-    const host = await nativePi(t, [composerPath, pastePath])
+    const host = await nativePi(t, [composerPath])
     await host.runtime.session.sendUserMessage(
       "/attach-text Recoverable bytes",
       { expandPromptTemplates: true },
@@ -491,7 +485,7 @@ for (const action of ["Preview text", "Restore Inline"]) {
     test(`late ${action} cannot overwrite a replacement ${change}`, async (t) => {
       const host = await nativePi(
         t,
-        change === "same-text edit" ? [composerPath, pastePath] : [],
+        change === "same-text edit" ? [composerPath] : [],
       )
       await host.runtime.session.sendUserMessage(
         "/attach-text Retained delayed bytes",
@@ -543,7 +537,7 @@ test("a changed draft cancels removal while the attachment picker is open", asyn
 })
 
 test("Remove from draft preserves a snapshot used by a submitted request and another session draft", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   await host.runtime.session.sendUserMessage(
     "/attach-text Shared captured bytes",
     { expandPromptTemplates: true },
@@ -575,13 +569,8 @@ test("Remove from draft preserves a snapshot used by a submitted request and ano
   )
 })
 
-test("all four packages preserve one native change callback, formatted selection, and other attachment membership", async (t) => {
-  const host = await nativePi(t, [
-    composerPath,
-    attachmentsPath,
-    pastePath,
-    skillsPath,
-  ])
+test("all three packages preserve one native change callback, formatted selection, and other attachment membership", async (t) => {
+  const host = await nativePi(t, [composerPath, attachmentsPath, skillsPath])
   const source = join(host.directory, "chosen.txt")
   const contents = "\tCAPTURED\n`literal code`\n"
   await writeFile(source, contents)
@@ -641,7 +630,7 @@ test("all four packages preserve one native change callback, formatted selection
   assert.equal(await readFile(snapshotPath(second), "utf8"), "Other attachment")
 })
 
-test("native Restore Inline retains expanded pastes around the caret and removes membership inside a paste", async (t) => {
+test("native Restore Inline retains pasted text around the caret and removes membership inside it", async (t) => {
   const host = await nativePi(t)
   await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
     expandPromptTemplates: true,
@@ -659,7 +648,8 @@ test("native Restore Inline retains expanded pastes around the caret and removes
     host.ui.getEditorText(),
     `Left ${first}${reference}\n middle ${second} Tail`,
   )
-  for (let i = 0; i < 6; i++) host.input("\x1b[D")
+  host.input("\x01")
+  for (let i = 0; i < " middle ".length; i++) host.input("\x1b[C")
   const { pending } = await startAction(host, "Restore Inline")
   await pending
   assert.equal(
@@ -670,7 +660,7 @@ test("native Restore Inline retains expanded pastes around the caret and removes
   assert.equal(await readFile(path, "utf8"), "CAPTURED")
 })
 
-test("native Restore Inline keeps an expanded paste when inserting inside a visible reference", async (t) => {
+test("native Restore Inline keeps pasted text when inserting inside a visible reference", async (t) => {
   const host = await nativePi(t)
   await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
     expandPromptTemplates: true,
@@ -693,7 +683,7 @@ test("native Restore Inline keeps an expanded paste when inserting inside a visi
 })
 
 test("attachment pickers and text preview honor effective native keybindings", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const contents = "First line\n" + "Middle line\n".repeat(25) + "Last line"
   await host.runtime.session.sendUserMessage(`/attach-text ${contents}`, {
     expandPromptTemplates: true,

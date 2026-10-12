@@ -1,32 +1,44 @@
 import { constants } from "node:fs"
-import { mkdir, mkdtemp, open, writeFile } from "node:fs/promises"
-import { join } from "node:path"
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  InputEvent,
+import { mkdir, mkdtemp, open, rename, writeFile } from "node:fs/promises"
+import { basename, dirname, join } from "node:path"
+import {
+  detectSupportedImageMimeTypeFromFile,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type InputEvent,
 } from "@earendil-works/pi-coding-agent"
 import { markUnused, type UnpublishedCapture } from "./cleanup.ts"
 
 const unpublishedKey = Symbol.for("pi-attachments:unpublished-captures")
 type RequestContext = {
   sessionId: string
-  sessionFile: string | undefined
-  cwd: string
+  sessionFile?: string | undefined
+  cwd?: string
   text: string
   [unpublishedKey]?: UnpublishedCapture[]
 }
 type ImageRequest = InputEvent & RequestContext
 export type Snapshot =
-  | { name: string; contents: string | Buffer }
-  | { name: string; path: string; contents?: Buffer }
+  | { name: string; contents: string | Uint8Array; image?: true }
+  | { name: string; path: string; contents?: Uint8Array | undefined }
 type SnapshotRequest = RequestContext & { snapshots: Snapshot[] }
 type RetainedRequest = ImageRequest | SnapshotRequest
+type LegacyPaste = (
+  | { text: string }
+  | {
+      files: (
+        | { path: string; contents?: Uint8Array }
+        | { name: string; contents: Uint8Array; image: true }
+      )[]
+    }
+) & { request: { sessionId: string; draft: string } }
 
 // Pi reloads extension modules when the cwd or resources change.
 const unsavedKey = Symbol.for("pi-attachments:unsaved")
+const legacyKey = Symbol.for("pi-paste:unsaved")
 const processState = globalThis as typeof globalThis & {
   [unsavedKey]?: Map<string, Set<RetainedRequest>>
+  [legacyKey]?: Map<string, LegacyPaste[]>
 }
 const unsavedByStorage = (processState[unsavedKey] ??= new Map())
 
@@ -64,6 +76,23 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
       }),
     )
     const files = captured.filter((file) => file !== undefined)
+    const images = await Promise.allSettled(
+      files.map(async (file) => {
+        if (!("image" in file && file.image)) return false
+        await writeFile(file.path, file.contents!, {
+          flag: "wx",
+          mode: 0o600,
+          flush: true,
+        })
+        const mimeType = await detectSupportedImageMimeTypeFromFile(file.path)
+        if (!mimeType) return true
+        const extension = `.${mimeType.slice("image/".length)}`
+        await rename(file.path, file.path + extension)
+        file.path += extension
+        file.name += extension
+        return false
+      }),
+    )
     const missing = request.snapshots.flatMap((snapshot) =>
       "path" in snapshot && snapshot.contents === undefined
         ? [`Uncaptured file: ${snapshot.path}`]
@@ -77,25 +106,36 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
       : join(directory, "request.draft.md")
     await writeFile(
       recovery,
-      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\n\n${request.text}\n\n${reference}\n${missing.length ? `\n${missing.join("\n")}\n` : ""}`,
+      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}${request.cwd === undefined ? "" : `Working directory: ${request.cwd}\n`}\n${request.text}\n\n${reference}\n${missing.length ? `\n${missing.join("\n")}\n` : ""}`,
       { flag: "wx", mode: 0o600, flush: true },
     )
     await Promise.all(
-      files.map(({ path, contents }) =>
-        writeFile(path, contents!, {
-          flag: "wx",
-          mode: 0o600,
-          flush: true,
-        }),
-      ),
+      files
+        .filter((file) => !("image" in file && file.image))
+        .map(({ path, contents }) =>
+          writeFile(path, contents!, {
+            flag: "wx",
+            mode: 0o600,
+            flush: true,
+          }),
+        ),
     )
-    if (failed) {
+    const imageFailure = images.find((image) => image.status === "rejected")
+    if (failed || imageFailure) {
       throw new Error(
-        `${String(failed.reason)}\nCaptured contents saved: ${recovery}`,
+        `${String((failed ?? imageFailure)!.reason)}\nCaptured contents saved: ${recovery}`,
       )
     }
     unsaved.delete(request)
-    return { reference, recovery }
+    return {
+      reference,
+      recovery,
+      problem: images.some(
+        (image) => image.status === "fulfilled" && image.value,
+      )
+        ? "Clipboard image format is unsupported"
+        : undefined,
+    }
   } catch (error) {
     unsaved.add(request)
     throw error
@@ -145,7 +185,7 @@ export async function saveRequest(
     unpublished = undefined
     await writeFile(
       path,
-      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\nDelivery: ${request.streamingBehavior ?? "normal"}\n\n${request.text}\n\n${references.join("\n")}\n`,
+      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}${request.cwd === undefined ? "" : `Working directory: ${request.cwd}\n`}Delivery: ${request.streamingBehavior ?? "normal"}\n\n${request.text}\n\n${references.join("\n")}\n`,
       { flag: "wx", mode: 0o600, flush: true },
     )
     try {
@@ -173,16 +213,63 @@ export function registerRecovery(
   storage: string,
   signal: AbortSignal,
 ): void {
-  async function retry(ctx: ExtensionContext): Promise<void> {
+  async function retry(
+    ctx: ExtensionContext,
+    reportEmpty = false,
+  ): Promise<void> {
+    const legacy = processState[legacyKey]?.get(
+      join(dirname(storage), "pi-paste"),
+    )
+    if (legacy?.length) {
+      const unsaved = unsavedByStorage.get(storage) ?? new Set()
+      unsavedByStorage.set(storage, unsaved)
+      for (const retained of legacy.splice(0)) {
+        unsaved.add({
+          sessionId: retained.request.sessionId,
+          text: retained.request.draft,
+          snapshots:
+            "text" in retained
+              ? [{ name: "paste.txt", contents: retained.text }]
+              : retained.files.map((file) =>
+                  "path" in file
+                    ? {
+                        name: basename(file.path).replaceAll(
+                          /[<>[\]\\\p{Cc}]/gu,
+                          "_",
+                        ),
+                        path: file.path,
+                        contents: file.contents,
+                      }
+                    : {
+                        name: file.name,
+                        contents: file.contents,
+                        image: true,
+                      },
+                ),
+        })
+      }
+    }
     const requests = [...(unsavedByStorage.get(storage) ?? [])]
+    if (reportEmpty && requests.length === 0) {
+      ctx.ui.notify("No unsaved attachment requests.", "info")
+      return
+    }
     await Promise.all(
       requests.map(async (request) => {
         try {
-          const path =
+          const result =
             "snapshots" in request
-              ? (await saveSnapshot(storage, request)).recovery
-              : await saveRequest(storage, request)
-          if (!signal.aborted) ctx.ui.notify(`Request saved: ${path}`, "info")
+              ? await saveSnapshot(storage, request)
+              : {
+                  recovery: await saveRequest(storage, request),
+                  problem: undefined,
+                }
+          if (!signal.aborted) {
+            ctx.ui.notify(
+              `${result.problem ? `${result.problem}. ` : ""}Request saved: ${result.recovery}`,
+              result.problem ? "error" : "info",
+            )
+          }
         } catch (error) {
           if (!signal.aborted) {
             ctx.ui.notify(
@@ -197,15 +284,11 @@ export function registerRecovery(
 
   pi.on("session_start", (_event, ctx) => retry(ctx))
   pi.on("agent_settled", (_event, ctx) => retry(ctx))
-  pi.registerCommand("attachments-recover", {
-    description:
-      "Save attachment requests retained after a read or storage failure",
-    handler: async (_args, ctx) => {
-      if (!unsavedByStorage.get(storage)?.size) {
-        ctx.ui.notify("No unsaved attachment requests.", "info")
-        return
-      }
-      return retry(ctx)
-    },
-  })
+  for (const name of ["attachments-recover", "paste-recover"]) {
+    pi.registerCommand(name, {
+      description:
+        "Save attachment requests retained after a read or storage failure",
+      handler: (_args, ctx) => retry(ctx, true),
+    })
+  }
 }

@@ -8,21 +8,16 @@ import { fileURLToPath } from "node:url"
 import { getNativeClipboard, StdinBuffer } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
-import piPaste from "../src/index.ts"
-import piAttachments from "../../pi-attachments/src/index.ts"
+import piAttachments from "../src/index.ts"
 import {
   nativePi,
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../../pi-attachments/fixtures/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
-const pastePath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const composerPath = fileURLToPath(
   new URL("../../pi-composer/src/index.ts", import.meta.url),
-)
-const attachmentsPath = fileURLToPath(
-  new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
 
 beforeEach((t) => {
@@ -34,7 +29,7 @@ beforeEach((t) => {
 })
 
 test("a 4,999-unit paste stays visibly inline through terminal and extension routes", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const text = "a".repeat(4999)
   host.input(`\x1b[200~${text}\x1b[201~`)
   assert.equal(host.ui.getEditorText(), text)
@@ -45,8 +40,8 @@ test("a 4,999-unit paste stays visibly inline through terminal and extension rou
   assert.doesNotMatch(host.render(), /\[paste #|\[Attachment:/)
 })
 
-test("a 5,000-unit paste reaches native Attach File without replacing the requesting draft", async (t) => {
-  const host = await nativePi(t, [pastePath])
+test("a 5,000-unit paste creates one snapshot without replacing the requesting draft", async (t) => {
+  const host = await nativePi(t)
   const text = `\n\t${"x".repeat(4996)}\r\n`
   assert.equal(text.length, 5000)
   host.ui.setEditorText("Keep draft")
@@ -55,11 +50,22 @@ test("a 5,000-unit paste reaches native Attach File without replacing the reques
   assert.match(host.ui.getEditorText(), /^Keep draft\n\[Attachment:/)
   assert.ok(path.startsWith(`${host.agentDir}/pi-attachments/`))
   assert.equal(await readFile(path, "utf8"), text)
-  assert.equal(host.requests.length, 0, "the handoff is a native command")
+  assert.deepEqual((await readdir(join(path, ".."))).toSorted(), [
+    "paste.txt",
+    "paste.txt.draft.md",
+  ])
+  await assert.rejects(readdir(join(host.agentDir, "pi-paste")), {
+    code: "ENOENT",
+  })
+  assert.equal(
+    host.requests.length,
+    0,
+    "capturing a paste does not submit a message",
+  )
 })
 
 test("fragmented bracketed input becomes one attachment after the closing frame", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const text = "😀".repeat(2500) + "!"
   assert.equal(text.length, 5001)
   host.input("\x1b[200~")
@@ -81,7 +87,7 @@ test("the configured native clipboard shortcut applies the attachment cutoff", a
   const text = "c".repeat(5000)
   t.mock.method(clipboard, "getImage", async () => null)
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Clipboard draft")
   host.input("\x16")
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
@@ -90,7 +96,7 @@ test("the configured native clipboard shortcut applies the attachment cutoff", a
 })
 
 test("Pi's stdin decoder assembles a split opening frame before applying the cutoff", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const stdin = new StdinBuffer()
   t.after(() => stdin.destroy())
   stdin.on("data", host.input)
@@ -110,7 +116,7 @@ test("fullscreen right-click input reaches the main editor's paste policy on mac
   const text = "r".repeat(5000)
   t.mock.method(clipboard, "getImage", async () => null)
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Mouse draft")
   host.render()
   host.input("\x1b[<2;10;27M")
@@ -119,15 +125,6 @@ test("fullscreen right-click input reaches the main editor's paste policy on mac
   assert.match(host.ui.getEditorText(), /^Mouse draft\n\[Attachment:/)
   assert.equal(await readFile(path, "utf8"), text)
 })
-
-async function retainedPaste(host) {
-  const storage = join(host.agentDir, "pi-paste")
-  const entries = await readdir(storage, { recursive: true })
-  const request = entries.find((path) => path.endsWith("/request.md"))
-  assert.ok(request, "the requesting draft must have a readable recovery file")
-  const path = join(storage, request)
-  return { path, text: await readFile(path, "utf8") }
-}
 
 test("a delayed clipboard read preserves its requesting draft and leaves later text untouched", async (t) => {
   const clipboard = getNativeClipboard()
@@ -140,23 +137,20 @@ test("a delayed clipboard read preserves its requesting draft and leaves later t
     return read.promise
   })
   t.after(() => read.resolve("Late text"))
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Requesting draft")
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   host.input("\x16")
   await started.promise
   host.ui.setEditorText("Later draft")
   read.resolve("Late text")
-  await waitFor(() => assert.match(host.render(), /Paste retained/))
+  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
   assert.equal(host.ui.getEditorText(), "Later draft")
-  const recovery = await retainedPaste(host)
+  const recovery = await retainedRequest(host)
   assert.ok(recovery.text.includes(sessionId))
   assert.match(recovery.text, /Requesting draft/)
   assert.doesNotMatch(recovery.text, /Later draft/)
-  assert.equal(
-    await readFile(join(recovery.path, "../text.txt"), "utf8"),
-    "Late text",
-  )
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), "Late text")
 })
 
 test("Paste Inline replaces a composer selection with long clipboard text in one edit", async (t) => {
@@ -165,7 +159,7 @@ test("Paste Inline replaces a composer selection with long clipboard text in one
   const text = "i".repeat(5001)
   t.mock.method(clipboard, "getImage", async () => null)
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
   host.input("\x1b[118;7u")
@@ -175,8 +169,8 @@ test("Paste Inline replaces a composer selection with long clipboard text in one
   assert.equal(host.ui.getEditorText(), "Keep draft")
 })
 
-test("a later paste decorator preserves Attach Text read observation and composer selection", async (t) => {
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+test("the paste decorator preserves Attach Text read observation and composer selection", async (t) => {
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("```text\nKeep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
   await host.runtime.session.prompt("/attach-text Small code context")
@@ -191,24 +185,8 @@ test("a later paste decorator preserves Attach Text read observation and compose
   assert.match(host.render(), /Attachments \(1\)/)
 })
 
-test("unavailable attachment handling reports an error and preserves the complete paste", async (t) => {
-  const host = await openHost(t, { extension: piPaste })
-  const agentDir = process.env.PI_CODING_AGENT_DIR
-  host.ui.setEditorText("Unchanged draft")
-  const text = "u".repeat(5000)
-  host.ui.pasteToEditor(text)
-  await waitFor(async () =>
-    assert.match(await host.output(), /Attach File is unavailable/),
-  )
-  assert.equal(host.ui.getEditorText(), "Unchanged draft")
-  assert.equal(host.requests.length, 0)
-  const recovery = await retainedPaste({ agentDir })
-  assert.match(recovery.text, /Unchanged draft/)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
-})
-
-test("a failed attachment snapshot write leaves the selection and staged bytes recoverable", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+test("a failed paste snapshot write leaves the selection and captured bytes recoverable", async (t) => {
+  const host = await nativePi(t, [composerPath])
   const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   await chmod(storage, 0o500)
@@ -219,11 +197,7 @@ test("a failed attachment snapshot write leaves the selection and staged bytes r
     host.ui.pasteToEditor(text)
     await waitFor(() => assert.match(host.render(), /Could not attach/))
     assert.equal(host.ui.getEditorText(), "Keep selected")
-    const recovery = await retainedPaste(host)
-    assert.equal(
-      await readFile(join(recovery.path, "../text.txt"), "utf8"),
-      text,
-    )
+    assert.match(host.render(), /Retry save/)
   } finally {
     await chmod(storage, 0o700)
   }
@@ -233,48 +207,52 @@ test("a failed attachment snapshot write leaves the selection and staged bytes r
     await readFile(snapshotPath(host.ui.getEditorText()), "utf8"),
     text,
   )
+  assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
+  host.input("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Keep selected")
 })
 
-test("a failed staging write keeps the payload available to the native recovery command", async (t) => {
-  const host = await nativePi(t, [pastePath])
-  const storage = join(host.agentDir, "pi-paste")
+test("a failed paste snapshot write keeps the payload available to the recovery command", async (t) => {
+  const host = await nativePi(t)
+  const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   await chmod(storage, 0o500)
   host.ui.setEditorText("Keep the requesting draft")
   const text = `\t${"p".repeat(4998)}\n`
   try {
     host.ui.pasteToEditor(text)
-    await waitFor(() => assert.match(host.render(), /Could not preserve paste/))
+    await waitFor(() => assert.match(host.render(), /Could not attach/))
     assert.equal(host.ui.getEditorText(), "Keep the requesting draft")
-    assert.match(host.render(), /\/paste-recover/)
+    assert.match(host.render(), /\/attachments-recover/)
+    host.input("\x1b")
   } finally {
     await chmod(storage, 0o700)
   }
   await host.runtime.session.prompt("/paste-recover")
-  const recovery = await retainedPaste(host)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  const recovery = await retainedRequest(host)
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text)
   assert.equal(host.ui.getEditorText(), "Keep the requesting draft")
   assert.equal(host.requests.length, 0)
 })
 
 for (const change of ["session replacement", "resource reload", "cwd reload"]) {
-  test(`a failed staging write survives ${change} and recovers its original draft`, async (t) => {
-    const host = await nativePi(t, [pastePath])
+  test(`a failed paste snapshot write survives ${change} and recovers its original draft`, async (t) => {
+    const host = await nativePi(t)
     if (change === "cwd reload")
       await host.runtime.session.prompt("Seed a persisted session")
-    const storage = join(host.agentDir, "pi-paste")
+    const storage = join(host.agentDir, "pi-attachments")
     await mkdir(storage)
     await chmod(storage, 0o500)
     const draft = "Original request\n/skill:review @notes.ts"
     const text = `\t${"😀\r\n".repeat(1250)}`
     const sessionId = host.runtime.session.sessionManager.getSessionId()
+    const sessionFile = host.runtime.session.sessionFile
     host.ui.setEditorText(draft)
     try {
       host.ui.pasteToEditor(text)
-      await waitFor(() =>
-        assert.match(host.render(), /Could not preserve paste/),
-      )
+      await waitFor(() => assert.match(host.render(), /Could not attach/))
       assert.equal(host.ui.getEditorText(), draft)
+      host.input("\x1b")
       if (change === "session replacement") {
         assert.deepEqual(await host.runtime.newSession(), { cancelled: false })
         assert.notEqual(
@@ -297,50 +275,52 @@ for (const change of ["session replacement", "resource reload", "cwd reload"]) {
       host.ui.setEditorText("Later draft")
       await host.runtime.session.prompt("/paste-recover")
       const failureOutput = host.render()
-      assert.match(failureOutput, /Could not preserve paste/)
-      assert.doesNotMatch(failureOutput, /No unsaved pastes/)
+      assert.match(failureOutput, /Attachment recovery incomplete/)
+      assert.doesNotMatch(failureOutput, /No unsaved attachment requests/)
       assert.equal(host.ui.getEditorText(), "Later draft")
     } finally {
       await chmod(storage, 0o700)
     }
     await host.runtime.session.prompt("/paste-recover")
-    assert.match(host.render(), /Recovered paste/)
-    const recovery = await retainedPaste(host)
-    const path = join(recovery.path, "../text.txt")
+    assert.match(host.render(), /Request saved:/)
+    const recovery = await retainedRequest(host)
+    const path = snapshotPath(recovery.text)
     assert.deepEqual(await readFile(path), Buffer.from(text))
     assert.equal(
       recovery.text,
-      `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+      `# Attachment request\n\nSession: ${sessionId}\nSession file: ${sessionFile}\nWorking directory: ${host.directory}\n\n${draft}\n\n[Attachment: paste.txt](<${path}>)\n`,
     )
     assert.equal(host.ui.getEditorText(), "Later draft")
     assert.equal(host.requests.length, change === "cwd reload" ? 1 : 0)
     await host.runtime.session.prompt("/paste-recover")
-    assert.match(host.render(), /No unsaved pastes/)
+    assert.match(host.render(), /No unsaved attachment requests/)
   })
 }
 
 test("unsaved pastes stay isolated by agent storage directory", async (t) => {
-  const host = await nativePi(t, [pastePath])
-  const storage = join(host.agentDir, "pi-paste")
+  const host = await nativePi(t)
+  const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   await chmod(storage, 0o500)
   const draft = "Original agent draft"
   const text = `\t${"private 😀\r\n".repeat(500)}`
   const sessionId = host.runtime.session.sessionManager.getSessionId()
+  const sessionFile = host.runtime.session.sessionFile
   host.ui.setEditorText(draft)
   try {
     host.ui.pasteToEditor(text)
-    await waitFor(() => assert.match(host.render(), /Could not preserve paste/))
+    await waitFor(() => assert.match(host.render(), /Could not attach/))
+    host.input("\x1b")
     await t.test(
       "another agent directory cannot recover this payload",
       async (otherTest) => {
-        const other = await nativePi(otherTest, [pastePath])
+        const other = await nativePi(otherTest)
         assert.notEqual(other.agentDir, host.agentDir)
         other.ui.setEditorText("Other agent draft")
         await other.runtime.session.prompt("/paste-recover")
-        assert.match(other.render(), /No unsaved pastes/)
+        assert.match(other.render(), /No unsaved attachment requests/)
         assert.equal(other.ui.getEditorText(), "Other agent draft")
-        await assert.rejects(readdir(join(other.agentDir, "pi-paste")), {
+        await assert.rejects(readdir(join(other.agentDir, "pi-attachments")), {
           code: "ENOENT",
         })
       },
@@ -351,37 +331,37 @@ test("unsaved pastes stay isolated by agent storage directory", async (t) => {
     await chmod(storage, 0o700)
   }
   await host.runtime.session.prompt("/paste-recover")
-  assert.match(host.render(), /Recovered paste/)
-  const recovery = await retainedPaste(host)
-  const path = join(recovery.path, "../text.txt")
+  assert.match(host.render(), /Request saved:/)
+  const recovery = await retainedRequest(host)
+  const path = snapshotPath(recovery.text)
   assert.deepEqual(await readFile(path), Buffer.from(text))
   assert.equal(
     recovery.text,
-    `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+    `# Attachment request\n\nSession: ${sessionId}\nSession file: ${sessionFile}\nWorking directory: ${host.directory}\n\n${draft}\n\n[Attachment: paste.txt](<${path}>)\n`,
   )
   assert.equal(host.ui.getEditorText(), "Later agent draft")
   assert.equal(host.requests.length, 0)
 })
 
-test("a staging failure arriving after outgoing shutdown remains recoverable by the live session", async (t) => {
-  const host = await nativePi(t, [pastePath])
-  const storage = join(host.agentDir, "pi-paste")
+test("a paste snapshot failure arriving after outgoing shutdown remains recoverable by the live session", async (t) => {
+  const host = await nativePi(t)
+  const storage = join(host.agentDir, "pi-attachments")
   const write = fs.writeFile
   const gate = Promise.withResolvers()
   let source
   let failure
   const mocked = t.mock.method(fs, "writeFile", async (...args) => {
-    const staging =
+    const snapshot =
       String(args[0]).startsWith(storage) &&
-      String(args[0]).endsWith("/text.txt")
-    if (staging) {
+      String(args[0]).endsWith("/paste.txt")
+    if (snapshot) {
       source = args[0]
       await gate.promise
     }
     try {
       return await write(...args)
     } catch (error) {
-      if (staging) failure = error
+      if (snapshot) failure = error
       throw error
     }
   })
@@ -394,6 +374,7 @@ test("a staging failure arriving after outgoing shutdown remains recoverable by 
   const draft = "Outgoing draft @before.ts\nKeep this association"
   const text = `\t${"late 😀\r\n".repeat(700)}`
   const sessionId = host.runtime.session.sessionManager.getSessionId()
+  const sessionFile = host.runtime.session.sessionFile
   host.ui.setEditorText(draft)
   let directory
   try {
@@ -407,7 +388,7 @@ test("a staging failure arriving after outgoing shutdown remains recoverable by 
       sessionId,
     )
     await host.runtime.session.prompt("/paste-recover")
-    assert.match(host.render(), /No unsaved pastes/)
+    assert.match(host.render(), /No unsaved attachment requests/)
     await host.runtime.session.reload()
     host.ui.setEditorText("Later session draft")
     gate.resolve()
@@ -417,20 +398,23 @@ test("a staging failure arriving after outgoing shutdown remains recoverable by 
     if (directory) await chmod(directory, 0o700)
   }
   await host.runtime.session.prompt("/paste-recover")
-  assert.match(host.render(), /Recovered paste/)
-  const recovery = await retainedPaste(host)
-  const path = join(recovery.path, "../text.txt")
+  assert.match(host.render(), /Request saved:/)
+  const files = await readdir(storage, { recursive: true })
+  const saved = files.find((path) => path.endsWith("/paste.txt"))
+  assert.ok(saved, "the retry must persist the captured paste")
+  const path = join(storage, saved)
+  const recovery = await retainedRequest(host, path)
   assert.deepEqual(await readFile(path), Buffer.from(text))
   assert.equal(
     recovery.text,
-    `# Paste request\n\nSession: ${sessionId}\n\n${draft}\n\nPaste: ${path}\n`,
+    `# Attachment request\n\nSession: ${sessionId}\nSession file: ${sessionFile}\nWorking directory: ${host.directory}\n\n${draft}\n\n[Attachment: paste.txt](<${path}>)\n`,
   )
   assert.equal(host.ui.getEditorText(), "Later session draft")
   assert.equal(host.requests.length, 0)
 })
 
 test("the cutoff measures decoded bracketed text before native whitespace formatting", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.input(`\x1b[200~\x1b[106;5u${"d".repeat(4998)}\x1b[201~`)
   assert.equal(host.ui.getEditorText(), `\n${"d".repeat(4998)}`)
   assert.doesNotMatch(host.render(), /\[paste #|\[Attachment:/)
@@ -451,10 +435,7 @@ for (const composer of [false, true]) {
         t.mock.method(clipboard, "getImage", async () => null)
         t.mock.method(clipboard, "getText", async () => contents)
       }
-      const host = await nativePi(t, [
-        ...(composer ? [composerPath] : []),
-        pastePath,
-      ])
+      const host = await nativePi(t, composer ? [composerPath] : [])
       const insert = (text) => {
         contents = text
         if (route === "terminal") host.input(`\x1b[200~${text}\x1b[201~`)
@@ -502,10 +483,7 @@ for (const composer of [false, true]) {
   }
 
   test(`${composer ? "composer" : "native"} typing and public replacement remain inline above the cutoff`, async (t) => {
-    const host = await nativePi(t, [
-      ...(composer ? [composerPath] : []),
-      pastePath,
-    ])
+    const host = await nativePi(t, composer ? [composerPath] : [])
     const text = "x".repeat(5001)
     for (const character of text) host.input(character)
     assert.equal(host.ui.getEditorText(), text)
@@ -520,10 +498,7 @@ for (const composer of [false, true]) {
     assert.ok(clipboard)
     const text = `\t${"i".repeat(4998)}\r\n`
     t.mock.method(clipboard, "getText", async () => text)
-    const host = await nativePi(t, [
-      ...(composer ? [composerPath] : []),
-      pastePath,
-    ])
+    const host = await nativePi(t, composer ? [composerPath] : [])
     for (const prefix of ["Prose ", "```text\nCode "]) {
       host.ui.setEditorText(prefix)
       await host.runtime.session.prompt("/paste-inline")
@@ -564,7 +539,7 @@ function heldClipboard(t) {
 
 test("a late clipboard result remains recoverable in its requesting session after native /new", async (t) => {
   const clipboard = heldClipboard(t)
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Original session draft")
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   host.input("\x16")
@@ -579,12 +554,14 @@ test("a late clipboard result remains recoverable in its requesting session afte
   host.ui.setEditorText("Replacement session draft")
   const text = "session ".repeat(800)
   clipboard.release(text)
-  const recovery = await waitFor(() => retainedPaste(host))
+  const recovery = await waitFor(() => retainedRequest(host))
   assert.equal(host.ui.getEditorText(), "Replacement session draft")
   assert.ok(recovery.text.includes(sessionId))
   assert.match(recovery.text, /Original session draft/)
   assert.doesNotMatch(recovery.text, /Replacement session draft/)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  await waitFor(async () =>
+    assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text),
+  )
   assert.equal(host.requests.length, 0)
 })
 
@@ -597,7 +574,7 @@ for (const change of [
 ]) {
   test(`a delayed clipboard result preserves the draft after ${change} changes its insertion target`, async (t) => {
     const clipboard = heldClipboard(t)
-    const host = await nativePi(t, [composerPath, pastePath])
+    const host = await nativePi(t, [composerPath])
     const previous = host.ui.getEditorComponent()
     let editor
     const factory = (...args) => {
@@ -618,11 +595,11 @@ for (const change of [
       host.ui.setEditorComponent(() => editor)
     else host.ui.setEditorComponent((...args) => new CustomEditor(...args))
     clipboard.release("Targeted text")
-    await waitFor(() => assert.match(host.render(), /Paste retained/))
+    await waitFor(() => assert.match(host.render(), /Snapshot retained/))
     assert.equal(host.ui.getEditorText(), "Unchanged contents")
-    const recovery = await retainedPaste(host)
+    const recovery = await retainedRequest(host)
     assert.equal(
-      await readFile(join(recovery.path, "../text.txt"), "utf8"),
+      await readFile(snapshotPath(recovery.text), "utf8"),
       "Targeted text",
     )
   })
@@ -630,7 +607,7 @@ for (const change of [
 
 test("a delayed clipboard attachment replaces the original selection and undoes with its membership", async (t) => {
   const clipboard = heldClipboard(t)
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep selected")
   for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
   host.input("\x16")
@@ -649,16 +626,16 @@ test("a delayed clipboard attachment replaces the original selection and undoes 
   assert.match(host.render(), /Attachments \(1\)/)
 })
 
-test("a staging write that finishes after edits cannot attach to the restored-looking draft", async (t) => {
-  const host = await nativePi(t, [pastePath])
+test("a paste snapshot write that finishes after edits cannot attach to the restored-looking draft", async (t) => {
+  const host = await nativePi(t)
   const write = fs.writeFile
   const gate = Promise.withResolvers()
   let started = false
   const mocked = t.mock.method(fs, "writeFile", async (...args) => {
     await write(...args)
     if (
-      String(args[0]).startsWith(join(host.agentDir, "pi-paste")) &&
-      String(args[0]).endsWith("/text.txt")
+      String(args[0]).startsWith(join(host.agentDir, "pi-attachments")) &&
+      String(args[0]).endsWith("/paste.txt")
     ) {
       started = true
       await gate.promise
@@ -677,14 +654,14 @@ test("a staging write that finishes after edits cannot attach to the restored-lo
   host.ui.setEditorText("Later edit")
   host.ui.setEditorText("Original draft")
   gate.resolve()
-  await waitFor(() => assert.match(host.render(), /Paste retained/))
+  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
   assert.equal(host.ui.getEditorText(), "Original draft")
-  const recovery = await retainedPaste(host)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  const recovery = await retainedRequest(host)
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text)
 })
 
 test("terminal listeners keep native consumption and transformation ahead of paste policy", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Draft")
   const stop = host.ui.onTerminalInput(() => ({ consume: true }))
   host.input(`\x1b[200~${"c".repeat(5000)}\x1b[201~`)
@@ -719,7 +696,7 @@ test("native extension shortcuts take priority over the clipboard action", async
           ctx.ui.setEditorText("Shortcut won")
         },
       })
-      piPaste(pi)
+      piAttachments(pi)
     },
   })
   await host.key("\x16")
@@ -735,7 +712,7 @@ test("the effective clipboard keybinding reaches paste policy", async (t) => {
   t.mock.method(clipboard, "getImage", async () => null)
   const host = await openHost(t, {
     keybindings: { "app.clipboard.pasteImage": "ctrl+alt+p" },
-    extension: piPaste,
+    extension: piAttachments,
   })
   await host.key("\x1b[112;7u")
   assert.equal(host.ui.getEditorText(), text)
@@ -769,7 +746,7 @@ test("earlier public clipboard and mouse handlers keep control of their actions"
           return editor
         })
       })
-      piPaste(pi)
+      piAttachments(pi)
     },
   })
   await host.key("\x16")
@@ -790,7 +767,7 @@ test("right-click paste leaves a separate native input UI in control", async (t)
     async () => "Unexpected paste",
   )
   t.mock.method(clipboard, "getImage", async () => null)
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Main draft")
   const dialog = host.ui.input("Separate input", "Type here")
   await waitFor(() => assert.match(host.render(), /Separate input/))
@@ -820,7 +797,7 @@ for (const failure of [
       if (failure === "unavailable text") return undefined
       return null
     })
-    const host = await nativePi(t, [pastePath])
+    const host = await nativePi(t)
     host.ui.setEditorText("Keep draft")
     host.input("\x16")
     if (failure === "empty text") {
@@ -835,7 +812,7 @@ for (const failure of [
 }
 
 test("autocomplete updates and native application actions survive the paste decorator", async (t) => {
-  const host = await nativePi(t, [attachmentsPath, pastePath])
+  const host = await nativePi(t)
   const factory = host.ui.getEditorComponent()
   host.ui.setEditorComponent((...args) => factory(...args))
   host.ui.setEditorText("!echo draft")
@@ -868,13 +845,13 @@ test("autocomplete updates and native application actions survive the paste deco
 })
 
 test("a pasted attachment submits a readable reference and Pi reads its saved body on demand", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const text = "Readable context ".repeat(320)
   host.ui.pasteToEditor(text)
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const draft = host.ui.getEditorText().trim()
-  const recovery = await retainedPaste(host)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  const recovery = await retainedRequest(host)
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text)
   host.replies.push({
     index: 0,
     delta: {
@@ -903,16 +880,13 @@ test("a pasted attachment submits a readable reference and Pi reads its saved bo
   assert.equal(read.content, text)
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   assert.equal(await readFile(path, "utf8"), text)
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text)
 })
 
-test("the native attachment command runs while a response streams and preserves the next draft", async (t) => {
+test("paste capture runs while a response streams and preserves the next draft", async (t) => {
   const host = await openHost(t, {
     holdResponses: true,
-    extension(pi) {
-      piAttachments(pi)
-      piPaste(pi)
-    },
+    extension: piAttachments,
   })
   host.ui.setEditorText("Initial request")
   await host.key("\r")
@@ -929,26 +903,20 @@ test("the native attachment command runs while a response streams and preserves 
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
 })
 
-test("an attachment read finishing after session replacement retains the requesting paste and snapshot", async (t) => {
-  const host = await nativePi(t, [attachmentsPath, pastePath])
-  const open = fs.open
+test("a snapshot write finishing after session replacement retains the requesting paste", async (t) => {
+  const host = await nativePi(t)
+  const write = fs.writeFile
   const gate = Promise.withResolvers()
   let source
-  const mocked = t.mock.method(fs, "open", async (...args) => {
-    const file = await open(...args)
+  const mocked = t.mock.method(fs, "writeFile", async (...args) => {
     if (
-      String(args[0]).startsWith(join(host.agentDir, "pi-paste")) &&
+      String(args[0]).startsWith(join(host.agentDir, "pi-attachments")) &&
       String(args[0]).endsWith("/paste.txt")
     ) {
-      const read = file.readFile.bind(file)
-      t.mock.method(file, "readFile", async (...options) => {
-        const bytes = await read(...options)
-        source = args[0]
-        await gate.promise
-        return bytes
-      })
+      source = args[0]
+      await gate.promise
     }
-    return file
+    return write(...args)
   })
   syncBuiltinESMExports()
   t.after(() => {
@@ -960,7 +928,7 @@ test("an attachment read finishing after session replacement retains the request
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const text = "late snapshot ".repeat(500)
   host.ui.pasteToEditor(text)
-  await waitFor(() => assert.ok(source, "Attach File read the preserved paste"))
+  await waitFor(() => assert.ok(source, "the snapshot write started"))
   host.submit("/new")
   await waitFor(() =>
     assert.notEqual(
@@ -978,7 +946,7 @@ test("an attachment read finishing after session replacement retains the request
   await waitFor(async () =>
     assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), text),
   )
-  assert.equal(await readFile(join(source, "../text.txt"), "utf8"), text)
+  assert.equal(snapshotPath(recovery.text), source)
 })
 
 test("overlapping clipboard reads cannot apply an older result to the newer draft", async (t) => {
@@ -995,7 +963,7 @@ test("overlapping clipboard reads cannot apply an older result to the newer draf
     first.resolve(null)
     second.resolve(null)
   })
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   host.ui.setEditorText("Draft ")
   host.input("\x16")
   await waitFor(() => assert.equal(reads, 1))
@@ -1004,17 +972,14 @@ test("overlapping clipboard reads cannot apply an older result to the newer draf
   second.resolve("second")
   await waitFor(() => assert.equal(host.ui.getEditorText(), "Draft second"))
   first.resolve("first")
-  await waitFor(() => assert.match(host.render(), /Paste retained/))
+  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
   assert.equal(host.ui.getEditorText(), "Draft second")
-  const recovery = await retainedPaste(host)
-  assert.equal(
-    await readFile(join(recovery.path, "../text.txt"), "utf8"),
-    "first",
-  )
+  const recovery = await retainedRequest(host)
+  assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), "first")
 })
 
 test("adjacent bracketed frames each receive paste policy", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const text = "z".repeat(5000)
   host.input(`\x1b[200~Prefix \x1b[201~\x1b[200~${text}\x1b[201~`)
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
@@ -1022,7 +987,7 @@ test("adjacent bracketed frames each receive paste policy", async (t) => {
   assert.equal(await readFile(path, "utf8"), text)
 })
 
-test("a native command deferred during settlement cannot attach to a later draft", async (t) => {
+test("paste capture completes while agent settlement is waiting", async (t) => {
   const gate = Promise.withResolvers()
   let settling = false
   t.after(() => gate.resolve())
@@ -1033,7 +998,6 @@ test("a native command deferred during settlement cannot attach to a later draft
         await gate.promise
       })
       piAttachments(pi)
-      piPaste(pi)
     },
   })
   const agentDir = process.env.PI_CODING_AGENT_DIR
@@ -1043,15 +1007,17 @@ test("a native command deferred during settlement cannot attach to a later draft
   host.ui.setEditorText("Requesting draft")
   const text = "deferred ".repeat(700)
   host.ui.pasteToEditor(text)
-  const recovery = await waitFor(() => retainedPaste({ agentDir }))
-  await host.output()
+  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  assert.match(host.ui.getEditorText(), /^Requesting draft\n\[Attachment:/)
+  assert.equal(await readFile(path, "utf8"), text)
+  const recovery = await waitFor(() => retainedRequest({ agentDir }))
+  assert.equal(snapshotPath(recovery.text), path)
   host.ui.setEditorText("Later draft")
   gate.resolve()
-  await waitFor(async () =>
-    assert.match(await host.output(), /Could not attach/),
-  )
+  await host.settled()
   assert.equal(host.ui.getEditorText(), "Later draft")
-  assert.equal(await readFile(join(recovery.path, "../text.txt"), "utf8"), text)
+  assert.equal(host.requests.length, 1)
+  assert.equal(await readFile(path, "utf8"), text)
 })
 
 test("the composer's Command+V action routes through native paste policy and replaces its selection", async (t) => {
@@ -1059,7 +1025,7 @@ test("the composer's Command+V action routes through native paste policy and rep
   assert.ok(clipboard)
   const text = "command ".repeat(700)
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep selected")
   for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
   host.input("\x1b[118;9u")

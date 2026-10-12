@@ -521,7 +521,8 @@ test("native callbacks, ordinary text, and autocomplete updates survive attachme
     host.ui.getEditorText(),
     `Code    before\na paste: ${"x".repeat(1100)}`,
   )
-  assert.match(host.render(), /\[paste #1/)
+  assert.doesNotMatch(host.render(), /\[paste #/)
+  assert.match(host.render(), /x{80}/)
   assert.doesNotMatch(host.render(), /Attachments \(/)
 
   host.ui.addAutocompleteProvider((current) => ({

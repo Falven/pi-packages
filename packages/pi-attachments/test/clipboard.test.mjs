@@ -1,5 +1,12 @@
 import assert from "node:assert/strict"
-import fs, { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises"
+import fs, {
+  chmod,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { basename, join } from "node:path"
 import { beforeEach, test } from "node:test"
@@ -7,16 +14,14 @@ import { fileURLToPath } from "node:url"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
 import { convertToPng, CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
-import piAttachments from "../../pi-attachments/src/index.ts"
-import piPaste from "../src/index.ts"
+import piAttachments from "../src/index.ts"
 import {
   nativePi,
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../../pi-attachments/fixtures/native-pi.mjs"
+} from "../fixtures/native-pi.mjs"
 
-const pastePath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
 const composerPath = fileURLToPath(
   new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
@@ -39,7 +44,7 @@ test("native copied files win over their icon and text as one paste with preserv
     clipboard?.getFilePaths,
     "Pi must supply native copied-file identity",
   )
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const names = ["Résumé 你好 notes.txt", "Résumé 你好 notes.txt"]
   const directories = [
     join(host.directory, "first"),
@@ -70,6 +75,18 @@ test("native copied files win over their icon and text as one paste with preserv
     await Promise.all(paths.map((path) => readFile(path, "utf8"))),
     ["Captured first file", "Captured second file"],
   )
+  const saved = await readdir(host.agentDir, {
+    recursive: true,
+    withFileTypes: true,
+  })
+  assert.deepEqual(
+    saved
+      .filter((entry) => entry.isFile() && entry.name === names[0])
+      .map((entry) => join(entry.parentPath, entry.name))
+      .toSorted(),
+    paths.toSorted(),
+    "Each copied file has one retained content copy",
+  )
   assert.match(
     host.render(),
     /Attachments \(2\): Résumé 你好 notes\.txt, Résumé 你好 notes\.txt/,
@@ -81,7 +98,7 @@ test("native copied files win over their icon and text as one paste with preserv
 test("composer Command+V reads original file identity and replaces its selection with one undoable attachment", async (t) => {
   const clipboard = getNativeClipboard()
   assert.ok(clipboard?.getFilePaths)
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const source = join(host.directory, "Command file.txt")
   await writeFile(source, "Command snapshot")
   t.mock.method(clipboard, "getFilePaths", async () => [source])
@@ -110,7 +127,7 @@ for (const [extension, contents] of [
       Buffer.from(contents, "base64"),
     )
     t.mock.method(clipboard, "getText", async () => "Ignore accompanying text")
-    const host = await nativePi(t, [pastePath])
+    const host = await nativePi(t)
     host.input("\x16")
     const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
     assert.equal(basename(path), `clipboard-image.${extension}`)
@@ -134,7 +151,7 @@ for (const [extension, contents] of [
 }
 
 test("a copied file set whose references exceed the text cutoff stays one image-bearing draft edit", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const sources = Array.from({ length: 18 }, (_, index) =>
     join(host.directory, `${index}-${"Long file name ".repeat(8)}.png`),
   )
@@ -169,7 +186,7 @@ test("a copied file set whose references exceed the text cutoff stays one image-
 })
 
 test("native copied paths preserve surrounding spaces and quotes through the attachment action", async (t) => {
-  const host = await nativePi(t, [pastePath])
+  const host = await nativePi(t)
   const directory = join(host.directory, "資料 folder")
   await mkdir(directory)
   const name = ' Résumé "quoted" notes.txt '
@@ -182,8 +199,8 @@ test("native copied paths preserve surrounding spaces and quotes through the att
   assert.equal(await readFile(path, "utf8"), "Exact path identity")
 })
 
-test("a failed staging write retains all copied bytes across reload even if the original files disappear", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+test("a failed snapshot write retains all copied bytes across reload even if the original files disappear", async (t) => {
+  const host = await nativePi(t, [composerPath])
   const sources = [
     join(host.directory, "first.txt"),
     join(host.directory, "second.png"),
@@ -191,14 +208,14 @@ test("a failed staging write retains all copied bytes across reload even if the 
   await writeFile(sources[0], "Retained copied text")
   await writeFile(sources[1], Buffer.from(PNG, "base64"))
   t.mock.method(getNativeClipboard(), "getFilePaths", async () => sources)
-  const storage = join(host.agentDir, "pi-paste")
+  const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   await chmod(storage, 0o500)
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   host.ui.setEditorText("Original file draft")
   try {
     host.input("\x1b[118;9u")
-    await waitFor(() => assert.match(host.render(), /Could not preserve paste/))
+    await waitFor(() => assert.match(host.render(), /Retry save/))
     assert.equal(host.ui.getEditorText(), "Original file draft")
     await Promise.all(sources.map((source) => rm(source)))
     await host.runtime.session.reload()
@@ -207,13 +224,13 @@ test("a failed staging write retains all copied bytes across reload even if the 
     await chmod(storage, 0o700)
   }
   await host.runtime.session.prompt("/paste-recover")
-  const recovery = await retainedRequest(host, sessionId, "Paste")
+  const recovery = await retainedRequest(host, sessionId)
   assert.match(recovery.text, /Original file draft/)
   assert.doesNotMatch(recovery.text, /Later draft/)
   const paths = recovery.text
     .split("\n")
-    .filter((line) => line.startsWith("Paste: "))
-    .map((line) => line.slice(7))
+    .filter((line) => line.startsWith("[Attachment:"))
+    .map(snapshotPath)
   assert.equal(await readFile(paths[0], "utf8"), "Retained copied text")
   assert.equal((await readFile(paths[1])).toString("base64"), PNG)
   assert.equal(host.ui.getEditorText(), "Later draft")
@@ -225,7 +242,7 @@ test("invalid native image bytes report a recoverable error without replacing th
   const clipboard = getNativeClipboard()
   t.mock.method(clipboard, "getImage", async () => bytes)
   t.mock.method(clipboard, "getText", async () => "Do not fall through")
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep selected")
   for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
   host.input("\x1b[118;9u")
@@ -233,11 +250,8 @@ test("invalid native image bytes report a recoverable error without replacing th
     assert.match(host.render(), /Clipboard image format is unsupported/),
   )
   assert.equal(host.ui.getEditorText(), "Keep selected")
-  const recovery = await retainedRequest(host, "Keep selected", "Paste")
-  const path = recovery.text
-    .split("\n")
-    .find((line) => line.startsWith("Paste: "))
-    .slice(7)
+  const recovery = await retainedRequest(host, "Keep selected")
+  const path = snapshotPath(recovery.text)
   assert.deepEqual(await readFile(path), bytes)
   host.input("!")
   assert.equal(host.ui.getEditorText(), "Keep !")
@@ -245,12 +259,54 @@ test("invalid native image bytes report a recoverable error without replacing th
 })
 
 for (const composer of [false, true]) {
+  test(`${composer ? "composer" : "native"} clipboard action distinguishes a copied image file from the same path as text`, async (t) => {
+    const host = await nativePi(t, composer ? [composerPath] : [])
+    const source = join(host.directory, "Clipboard image 你好.png")
+    await writeFile(source, Buffer.from(PNG, "base64"))
+    const clipboard = getNativeClipboard()
+    t.mock.method(clipboard, "getText", async () => source)
+    host.ui.setEditorText("Path ")
+    host.input("\x16")
+    await waitFor(() => assert.equal(host.ui.getEditorText(), `Path ${source}`))
+    assert.doesNotMatch(host.render(), /Attachments \(/)
+
+    t.mock.method(clipboard, "getFilePaths", async () => [source])
+    host.ui.setEditorText("Image ")
+    host.input("\x16")
+    const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+    assert.equal(basename(path), basename(source))
+    assert.equal((await readFile(path)).toString("base64"), PNG)
+    await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
+    assert.equal(host.requests.length, 0)
+  })
+
+  for (const route of ["terminal", "extension"]) {
+    test(`${composer ? "composer" : "native"} ${route} paste keeps existing image paths literal without reading clipboard metadata`, async (t) => {
+      const host = await nativePi(t, composer ? [composerPath] : [])
+      const source = join(host.directory, "Literal image 你好.png")
+      await writeFile(source, Buffer.from(PNG, "base64"))
+      let reads = 0
+      for (const method of ["getFilePaths", "getImage", "getText"]) {
+        t.mock.method(getNativeClipboard(), method, async () => {
+          reads++
+          throw new Error("Text paste must not read the clipboard")
+        })
+      }
+      host.ui.setEditorText("Path ")
+      if (route === "terminal") host.input(`\x1b[200~${source}\x1b[201~`)
+      else host.ui.pasteToEditor(source)
+      await waitFor(() =>
+        assert.equal(host.ui.getEditorText(), `Path ${source}`),
+      )
+      assert.equal(reads, 0)
+      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.equal(host.requests.length, 0)
+    })
+  }
+
   for (const kind of ["files", "image", "text"]) {
     test(`${composer ? "composer" : "native"} fullscreen right-click preserves clipboard ${kind} identity`, async (t) => {
-      const host = await nativePi(t, [
-        ...(composer ? [composerPath] : []),
-        pastePath,
-      ])
+      const host = await nativePi(t, composer ? [composerPath] : [])
       const source = join(host.directory, "Clipboard path 你好.txt")
       await writeFile(source, "Copied file body")
       const clipboard = getNativeClipboard()
@@ -298,10 +354,7 @@ for (const composer of [false, true]) {
       t.mock.method(clipboard, method, async () => {
         throw new Error(`${method} transfer failed`)
       })
-      const host = await nativePi(t, [
-        ...(composer ? [composerPath] : []),
-        pastePath,
-      ])
+      const host = await nativePi(t, composer ? [composerPath] : [])
       host.ui.setEditorText("Keep selected")
       if (composer)
         for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
@@ -326,7 +379,7 @@ for (const target of [
   "control character",
 ]) {
   test(`a copied ${target} target preserves the whole draft and reports the error`, async (t) => {
-    const host = await nativePi(t, [composerPath, pastePath])
+    const host = await nativePi(t, [composerPath])
     const first = join(host.directory, "Retained file.txt")
     let second = join(host.directory, "Invalid target")
     await writeFile(first, "Recoverable first file")
@@ -344,7 +397,7 @@ for (const target of [
     for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
     host.input("\x1b[118;9u")
     await waitFor(() =>
-      assert.match(host.render(), /Could not (?:paste|preserve paste)/),
+      assert.match(host.render(), /Could not (?:paste|attach)/),
     )
     assert.equal(host.ui.getEditorText(), "Keep selected")
     assert.doesNotMatch(host.render(), /Attachments \(/)
@@ -391,7 +444,7 @@ for (const kind of ["files", "image"]) {
           return gate.promise
         },
       )
-      const host = await nativePi(t, [composerPath, pastePath])
+      const host = await nativePi(t, [composerPath])
       const sources = [
         join(host.directory, "first.txt"),
         join(host.directory, "second.png"),
@@ -408,19 +461,19 @@ for (const kind of ["files", "image"]) {
       if (change === "selection") host.input("\x1b[1;2C")
       else host.ui.setEditorText("Later draft")
       gate.resolve(kind === "files" ? sources : Buffer.from(PNG, "base64"))
-      const recovery = await waitFor(() =>
-        retainedRequest(host, sessionId, "Paste"),
-      )
-      assert.match(recovery.text, /Keep selected/)
-      assert.doesNotMatch(recovery.text, /Later draft/)
-      const paths = recovery.text
-        .split("\n")
-        .filter((line) => line.startsWith("Paste: "))
-        .map((line) => line.slice(7))
-      assert.equal(paths.length, kind === "files" ? 2 : 1)
-      if (kind === "files")
-        assert.equal(await readFile(paths[0], "utf8"), "Original copied file")
-      assert.equal((await readFile(paths.at(-1))).toString("base64"), PNG)
+      await waitFor(async () => {
+        const recovery = await retainedRequest(host, sessionId)
+        assert.match(recovery.text, /Keep selected/)
+        assert.doesNotMatch(recovery.text, /Later draft/)
+        const paths = recovery.text
+          .split("\n")
+          .filter((line) => line.startsWith("[Attachment:"))
+          .map(snapshotPath)
+        assert.equal(paths.length, kind === "files" ? 2 : 1)
+        if (kind === "files")
+          assert.equal(await readFile(paths[0], "utf8"), "Original copied file")
+        assert.equal((await readFile(paths.at(-1))).toString("base64"), PNG)
+      })
       assert.equal(
         host.ui.getEditorText(),
         change === "selection" ? "Keep selected" : "Later draft",
@@ -440,10 +493,10 @@ for (const behavior of ["steer", "followUp"]) {
     test(`${kind} paste follows native ${behavior} delivery and leaves the later draft intact`, async (t) => {
       const response = Promise.withResolvers()
       t.after(() => response.resolve())
-      const host = await nativePi(t, [
-        ...(behavior === "followUp" ? [composerPath] : []),
-        pastePath,
-      ])
+      const host = await nativePi(
+        t,
+        behavior === "followUp" ? [composerPath] : [],
+      )
       const sources = [
         join(host.directory, "Context notes.txt"),
         join(host.directory, "Visual context.png"),
@@ -501,7 +554,7 @@ for (const behavior of ["steer", "followUp"]) {
   }
 }
 
-test("a copied file set deferred during settlement cannot attach any part to a later draft", async (t) => {
+test("a copied file set attaches directly while agent settlement is pending", async (t) => {
   const gate = Promise.withResolvers()
   let settling = false
   t.after(() => gate.resolve())
@@ -512,14 +565,13 @@ test("a copied file set deferred during settlement cannot attach any part to a l
         await gate.promise
       })
       piAttachments(pi)
-      piPaste(pi)
     },
   })
   const sources = [
-    join(host.directory, "First deferred.txt"),
-    join(host.directory, "Second deferred.png"),
+    join(host.directory, "First captured.txt"),
+    join(host.directory, "Second captured.png"),
   ]
-  await writeFile(sources[0], "Deferred file set")
+  await writeFile(sources[0], "Captured file set")
   await writeFile(sources[1], Buffer.from(PNG, "base64"))
   t.mock.method(getNativeClipboard(), "getFilePaths", async () => sources)
   host.ui.setEditorText("Initial prompt")
@@ -527,27 +579,26 @@ test("a copied file set deferred during settlement cannot attach any part to a l
   await waitFor(() => assert.ok(settling))
   host.ui.setEditorText("Requesting file draft")
   await host.key("\x1b[118;9u")
-  const recovery = await waitFor(() =>
-    retainedRequest(
-      { agentDir: host.directory },
-      "Requesting file draft",
-      "Paste",
-    ),
+  const paths = await waitFor(() => {
+    const references = host.ui
+      .getEditorText()
+      .split("\n")
+      .filter((line) => line.startsWith("[Attachment:"))
+    assert.equal(references.length, 2)
+    return references.map(snapshotPath)
+  })
+  const recovery = await retainedRequest(
+    { agentDir: host.directory },
+    "Requesting file draft",
   )
-  await host.output()
+  assert.ok(paths.every((path) => recovery.text.includes(path)))
+  assert.equal(await readFile(paths[0], "utf8"), "Captured file set")
+  assert.equal((await readFile(paths[1])).toString("base64"), PNG)
   host.ui.setEditorText("Later draft")
   gate.resolve()
-  await waitFor(async () =>
-    assert.match(await host.output(), /Could not attach/),
-  )
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  assert.doesNotMatch(await host.output(), /Could not attach/)
   assert.equal(host.ui.getEditorText(), "Later draft")
-  const paths = recovery.text
-    .split("\n")
-    .filter((line) => line.startsWith("Paste: "))
-    .map((line) => line.slice(7))
-  assert.equal(paths.length, 2)
-  assert.equal(await readFile(paths[0], "utf8"), "Deferred file set")
-  assert.equal((await readFile(paths[1])).toString("base64"), PNG)
   assert.equal(host.requests.length, 1)
 })
 
@@ -585,7 +636,7 @@ for (const priority of [
               return editor
             })
         })
-        piPaste(pi)
+        piAttachments(pi)
       },
     })
     host.ui.setEditorText("Original draft")
@@ -608,7 +659,7 @@ test("Paste Inline bypasses file/image classification and measures no attachment
   })
   const text = "\t".repeat(5001)
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep selected")
   for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
   host.input("\x1b[118;7u")
@@ -618,41 +669,8 @@ test("Paste Inline bypasses file/image classification and measures no attachment
   assert.equal(host.ui.getEditorText(), "Keep selected")
 })
 
-for (const kind of ["files", "image"]) {
-  test(`unavailable attachment handling retains the ${kind} paste without changing its selection`, async (t) => {
-    const host = await openHost(t, { extension: piPaste })
-    const source = join(host.directory, "Copied context.png")
-    await writeFile(source, Buffer.from(PNG, "base64"))
-    const clipboard = getNativeClipboard()
-    t.mock.method(clipboard, "getFilePaths", async () =>
-      kind === "files" ? [source] : null,
-    )
-    t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
-    host.ui.setEditorText("Keep selected")
-    await host.key("\x1b[1;4D")
-    await host.key("\x1b[118;9u")
-    await waitFor(async () =>
-      assert.match(await host.output(), /Attach File is unavailable/),
-    )
-    assert.equal(host.ui.getEditorText(), "Keep selected")
-    const recovery = await retainedRequest(
-      { agentDir: host.directory },
-      "Keep selected",
-      "Paste",
-    )
-    const path = recovery.text
-      .split("\n")
-      .find((line) => line.startsWith("Paste: "))
-      .slice(7)
-    assert.equal((await readFile(path)).toString("base64"), PNG)
-    await host.type("!")
-    assert.equal(host.ui.getEditorText(), "Keep !")
-    assert.equal(host.requests.length, 0)
-  })
-}
-
 test("a failed snapshot save retries the whole copied set from captured bytes in one edit", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const sources = [
     join(host.directory, "Retry text.txt"),
     join(host.directory, "Retry image.png"),
@@ -669,8 +687,6 @@ test("a failed snapshot save retries the whole copied set from captured bytes in
     host.input("\x1b[118;9u")
     await waitFor(() => assert.match(host.render(), /Retry save/))
     assert.equal(host.ui.getEditorText(), "Keep selected")
-    const recovery = await retainedRequest(host, "Keep selected", "Paste")
-    assert.equal(recovery.text.match(/^Paste: /gm)?.length, 2)
     await Promise.all(sources.map((source) => rm(source)))
   } finally {
     await chmod(storage, 0o700)
@@ -699,8 +715,8 @@ test("image recovery remains available when its read and storage failure arrive 
     started.resolve()
     return gate.promise
   })
-  const host = await nativePi(t, [composerPath, pastePath])
-  const storage = join(host.agentDir, "pi-paste")
+  const host = await nativePi(t, [composerPath])
+  const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   await chmod(storage, 0o500)
   const sessionId = host.runtime.session.sessionManager.getSessionId()
@@ -712,23 +728,20 @@ test("image recovery remains available when its read and storage failure arrive 
     await host.runtime.session.reload()
     host.ui.setEditorText("Live session draft")
     await host.runtime.session.prompt("/paste-recover")
-    assert.match(host.render(), /No unsaved pastes/)
+    assert.match(host.render(), /No unsaved attachment requests/)
     gate.resolve(Buffer.from(PNG, "base64"))
     await waitFor(async () => {
       await host.runtime.session.prompt("/paste-recover")
-      assert.match(host.render(), /Could not preserve paste/)
+      assert.match(host.render(), /Attachment recovery incomplete/)
     })
   } finally {
     await chmod(storage, 0o700)
   }
   await host.runtime.session.prompt("/paste-recover")
-  const recovery = await retainedRequest(host, sessionId, "Paste")
+  const recovery = await retainedRequest(host, sessionId)
   assert.match(recovery.text, /Outgoing image draft/)
   assert.doesNotMatch(recovery.text, /Live session draft/)
-  const path = recovery.text
-    .split("\n")
-    .find((line) => line.startsWith("Paste: "))
-    .slice(7)
+  const path = snapshotPath(recovery.text)
   assert.equal((await readFile(path)).toString("base64"), PNG)
   assert.equal(host.ui.getEditorText(), "Live session draft")
 })
@@ -746,7 +759,7 @@ test("an older copied-file read cannot replace a newer image paste", async (t) =
     return gate.promise
   })
   t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const source = join(host.directory, "Older file.txt")
   await writeFile(source, "Older copied file")
   host.ui.setEditorText("Original draft")
@@ -756,14 +769,11 @@ test("an older copied-file read cannot replace a newer image paste", async (t) =
   const newerImage = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const newerDraft = host.ui.getEditorText()
   gate.resolve([source])
-  await waitFor(() => assert.match(host.render(), /Paste retained/))
-  const recovery = await retainedRequest(host, "Older file.txt", "Paste")
+  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
+  const recovery = await retainedRequest(host, "Older file.txt")
   assert.match(recovery.text, /Original draft/)
   assert.ok(!recovery.text.includes(newerImage))
-  const path = recovery.text
-    .split("\n")
-    .find((line) => line.startsWith("Paste: "))
-    .slice(7)
+  const path = snapshotPath(recovery.text)
   assert.equal(await readFile(path, "utf8"), "Older copied file")
   assert.equal(host.ui.getEditorText(), newerDraft)
   assert.equal((await readFile(newerImage)).toString("base64"), PNG)
@@ -775,7 +785,7 @@ for (const files of [null, undefined, []]) {
     t.mock.method(clipboard, "getFilePaths", async () => files)
     t.mock.method(clipboard, "getImage", async () => undefined)
     t.mock.method(clipboard, "getText", async () => "/tmp/Plain path 你好.txt")
-    const host = await nativePi(t, [pastePath])
+    const host = await nativePi(t)
     host.ui.setEditorText("Draft ")
     host.input("\x16")
     await waitFor(() =>
@@ -785,98 +795,83 @@ for (const files of [null, undefined, []]) {
   })
 }
 
-for (const phase of ["staging", "snapshot"]) {
-  for (const change of ["none", "selection", "edit", "session"]) {
-    test(`a delayed ${phase} write keeps the entire copied set with its target (${change})`, async (t) => {
-      const gate = Promise.withResolvers()
-      let started = false
-      t.after(() => gate.resolve())
-      const host = await nativePi(t, [composerPath, pastePath])
-      const sources = [
-        join(host.directory, "first.txt"),
-        join(host.directory, "second.png"),
-      ]
-      await writeFile(sources[0], "Whole copied set")
-      await writeFile(sources[1], Buffer.from(PNG, "base64"))
-      t.mock.method(getNativeClipboard(), "getFilePaths", async () => sources)
-      const storage = join(
-        host.agentDir,
-        phase === "staging" ? "pi-paste" : "pi-attachments",
-      )
-      const write = fs.writeFile
-      const mocked = t.mock.method(fs, "writeFile", async (...args) => {
-        await write(...args)
-        if (
-          String(args[0]).startsWith(storage) &&
-          String(args[0]).endsWith("/second.png")
-        ) {
-          started = true
-          await gate.promise
-        }
-      })
+for (const change of ["none", "selection", "edit", "session"]) {
+  test(`a delayed snapshot write keeps the entire copied set with its target (${change})`, async (t) => {
+    const gate = Promise.withResolvers()
+    let started = false
+    t.after(() => gate.resolve())
+    const host = await nativePi(t, [composerPath])
+    const sources = [
+      join(host.directory, "first.txt"),
+      join(host.directory, "second.png"),
+    ]
+    await writeFile(sources[0], "Whole copied set")
+    await writeFile(sources[1], Buffer.from(PNG, "base64"))
+    t.mock.method(getNativeClipboard(), "getFilePaths", async () => sources)
+    const storage = join(host.agentDir, "pi-attachments")
+    const write = fs.writeFile
+    const mocked = t.mock.method(fs, "writeFile", async (...args) => {
+      await write(...args)
+      if (
+        String(args[0]).startsWith(storage) &&
+        String(args[0]).endsWith("/second.png")
+      ) {
+        started = true
+        await gate.promise
+      }
+    })
+    syncBuiltinESMExports()
+    t.after(() => {
+      mocked.mock.restore()
       syncBuiltinESMExports()
-      t.after(() => {
-        mocked.mock.restore()
-        syncBuiltinESMExports()
-      })
-      const sessionId = host.runtime.session.sessionManager.getSessionId()
-      host.ui.setEditorText("Keep selected")
-      for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
-      host.input("\x1b[118;9u")
-      await waitFor(() => assert.ok(started))
+    })
+    const sessionId = host.runtime.session.sessionManager.getSessionId()
+    host.ui.setEditorText("Keep selected")
+    for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
+    host.input("\x1b[118;9u")
+    await waitFor(() => assert.ok(started))
+    assert.equal(host.ui.getEditorText(), "Keep selected")
+    assert.doesNotMatch(host.render(), /Attachments \(/)
+    if (change === "session") await host.runtime.newSession()
+    if (change === "selection") host.input("\x1b[1;2C")
+    else if (change !== "none") host.ui.setEditorText("Later draft")
+    gate.resolve()
+    if (change === "none") {
+      await waitFor(() =>
+        assert.equal(
+          host.ui.getEditorText().match(/\[Attachment:/g)?.length,
+          2,
+        ),
+      )
+      const draft = host.ui.getEditorText()
+      assert.match(draft, /^Keep \n\[Attachment:/)
+      host.input("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), "Keep selected")
       assert.doesNotMatch(host.render(), /Attachments \(/)
-      if (change === "session") await host.runtime.newSession()
-      if (change === "selection") host.input("\x1b[1;2C")
-      else if (change !== "none") host.ui.setEditorText("Later draft")
-      gate.resolve()
-      if (change === "none") {
-        await waitFor(() =>
-          assert.equal(
-            host.ui.getEditorText().match(/\[Attachment:/g)?.length,
-            2,
-          ),
-        )
-        const draft = host.ui.getEditorText()
-        assert.match(draft, /^Keep \n\[Attachment:/)
-        host.input("\x1b[122;9u")
-        assert.equal(host.ui.getEditorText(), "Keep selected")
-        assert.doesNotMatch(host.render(), /Attachments \(/)
-        host.input("\x1b[122;10u")
-        assert.equal(host.ui.getEditorText(), draft)
-      } else {
-        const recovery = await waitFor(() =>
-          retainedRequest(
-            host,
-            sessionId,
-            phase === "staging" ? "Paste" : "Attachment",
-          ),
-        )
+      host.input("\x1b[122;10u")
+      assert.equal(host.ui.getEditorText(), draft)
+    } else {
+      await waitFor(async () => {
+        const recovery = await retainedRequest(host, sessionId)
         assert.match(recovery.text, /Keep selected/)
         assert.doesNotMatch(recovery.text, /Later draft/)
-        const paths =
-          phase === "staging"
-            ? recovery.text
-                .split("\n")
-                .filter((line) => line.startsWith("Paste: "))
-                .map((line) => line.slice(7))
-            : recovery.text
-                .split("\n")
-                .filter((line) => line.startsWith("[Attachment:"))
-                .map(snapshotPath)
+        const paths = recovery.text
+          .split("\n")
+          .filter((line) => line.startsWith("[Attachment:"))
+          .map(snapshotPath)
         assert.equal(paths.length, 2)
         assert.equal(await readFile(paths[0], "utf8"), "Whole copied set")
         assert.equal((await readFile(paths[1])).toString("base64"), PNG)
-        assert.equal(
-          host.ui.getEditorText(),
-          change === "selection" ? "Keep selected" : "Later draft",
-        )
-        if (change === "selection") {
-          host.input("!")
-          assert.equal(host.ui.getEditorText(), "Keep s!")
-        }
+      })
+      assert.equal(
+        host.ui.getEditorText(),
+        change === "selection" ? "Keep selected" : "Later draft",
+      )
+      if (change === "selection") {
+        host.input("!")
+        assert.equal(host.ui.getEditorText(), "Keep s!")
       }
-      assert.equal(host.requests.length, 0)
-    })
-  }
+    }
+    assert.equal(host.requests.length, 0)
+  })
 }

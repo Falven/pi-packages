@@ -158,8 +158,10 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
         noContextFiles: true,
         additionalSkillPaths: state.skillPaths ?? [],
         additionalExtensionPaths: [
-          ...extensionPaths,
-          fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+          ...new Set([
+            ...extensionPaths,
+            fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+          ]),
         ],
         extensionFactories: [observer, ...(state.extensionFactories ?? [])],
       },

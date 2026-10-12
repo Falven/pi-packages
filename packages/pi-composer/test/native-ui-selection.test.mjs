@@ -14,7 +14,6 @@ import { getSelectListTheme } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../fixtures/host.ts"
 import { setupHost, forwarding } from "../fixtures/ghostty-setup.ts"
 import piAttachments from "../../pi-attachments/src/index.ts"
-import piPaste from "../../pi-paste/src/index.ts"
 import piSkillReferences from "../../pi-skill-references/src/index.ts"
 import {
   holdFileRead,
@@ -23,9 +22,6 @@ import {
 
 const attachments = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),
-)
-const paste = fileURLToPath(
-  new URL("../../pi-paste/src/index.ts", import.meta.url),
 )
 const skills = fileURLToPath(
   new URL("../../pi-skill-references/src/index.ts", import.meta.url),
@@ -55,7 +51,7 @@ for (const view of ["formatted", "source"]) {
     setCapabilities({ ...capabilities, images: null })
     t.after(() => setCapabilities(capabilities))
     const host = await openHost(t, {
-      extensionPaths: [attachments, paste, skills],
+      extensionPaths: [attachments, skills],
       extension: (pi) => {
         pi.registerShortcut("ctrl+shift+p", {
           description: "Choose a skill",
@@ -169,7 +165,7 @@ for (const view of ["formatted", "source"]) {
     setCapabilities({ ...capabilities, images: null })
     t.after(() => setCapabilities(capabilities))
     const host = await openHost(t, {
-      extensionPaths: [attachments, paste, skills],
+      extensionPaths: [attachments, skills],
     })
     host.ui.setWidget("other", ["Other native widget"])
     const contents =
@@ -323,7 +319,6 @@ for (const view of ["formatted", "source"]) {
     t.after(() => setCapabilities(capabilities))
     const originalConfig = "font-size = 14\n"
     const { host, file } = await setupHost(t, originalConfig, "config", [
-      piPaste,
       piAttachments,
       piSkillReferences,
     ])

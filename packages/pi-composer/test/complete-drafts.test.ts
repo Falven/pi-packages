@@ -16,7 +16,6 @@ import { snapshotPath } from "../../pi-attachments/fixtures/native-pi.mjs"
 import { openHost } from "../fixtures/host.ts"
 
 const extensions = [
-  new URL("../../pi-paste/src/index.ts", import.meta.url).pathname,
   new URL("../../pi-attachments/src/index.ts", import.meta.url).pathname,
 ]
 const imageData =

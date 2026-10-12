@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { readFileSync } from "node:fs"
-import fs, { readFile, readdir, stat, writeFile } from "node:fs/promises"
+import fs, { readFile, stat, writeFile } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { beforeEach, test } from "node:test"
@@ -15,9 +15,6 @@ import {
 } from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const composerPath = fileURLToPath(new URL("../src/index.ts", import.meta.url))
-const pastePath = fileURLToPath(
-  new URL("../../pi-paste/src/index.ts", import.meta.url),
-)
 const attachmentsPath = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
@@ -63,7 +60,7 @@ function holdSnapshotWrite(t, host) {
 }
 
 test("snapshot failure preserves the selected draft and captured bytes for one undoable retry", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const capture = holdSnapshotWrite(t, host)
   await host.runtime.session.sendUserMessage("/attach-text Existing context", {
     expandPromptTemplates: true,
@@ -82,18 +79,10 @@ test("snapshot failure preserves the selected draft and captured bytes for one u
   assert.equal(host.ui.getEditorText(), before)
   await assert.rejects(stat(failedPath), { code: "ENOENT" })
   assert.equal(await readFile(originalPath, "utf8"), "Existing context")
-  const staging = join(host.agentDir, "pi-paste")
-  const staged = (await readdir(staging, { recursive: true })).filter((path) =>
-    path.endsWith("/text.txt"),
-  )
-  assert.equal(staged.length, 1)
-  assert.equal(await readFile(join(staging, staged[0]), "utf8"), text)
-  const request = await readFile(
-    join(staging, staged[0], "../request.md"),
-    "utf8",
-  )
-  assert.ok(request.includes(sessionId))
-  assert.ok(request.includes(before))
+  const request = await retainedRequest(host, before)
+  assert.match(request.text, /^# Attachment request\n/)
+  assert.ok(request.text.includes(sessionId))
+  assert.ok(request.text.includes(failedPath))
 
   host.input("\r")
   const reference = await waitFor(() => {
@@ -115,9 +104,9 @@ test("snapshot failure preserves the selected draft and captured bytes for one u
 })
 
 for (const [route, extensions] of [
-  ["extension", [composerPath, pastePath]],
-  ["terminal", [composerPath, attachmentsPath, pastePath]],
-  ["Command+V", [composerPath, pastePath]],
+  ["extension", [composerPath]],
+  ["terminal", [composerPath, attachmentsPath]],
+  ["Command+V", [composerPath]],
 ]) {
   for (const view of ["source", "formatted"]) {
     test(`${route} attachment paste replaces ${view} text and membership in one captured edit`, async (t) => {
@@ -223,7 +212,7 @@ for (const [route, extensions] of [
 }
 
 test("a paste over a complete formatted attachment replaces its reference without nesting links", async (t) => {
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath, attachmentsPath])
   await host.runtime.session.sendUserMessage("/attach-text Original context", {
     expandPromptTemplates: true,
   })
@@ -259,7 +248,7 @@ for (const change of [
   "reverted edit",
 ]) {
   test(`a snapshot finishing after a ${change} preserves the target and requested text`, async (t) => {
-    const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+    const host = await nativePi(t, [composerPath, attachmentsPath])
     const capture = holdSnapshotWrite(t, host)
     await host.runtime.session.sendUserMessage(
       "/attach-text Existing context",
@@ -316,7 +305,7 @@ for (const change of [
 
 for (const replacement of ["recreated", "reused", "replaced"]) {
   test(`a snapshot prepared for a ${replacement} editor retains its original target`, async (t) => {
-    const host = await nativePi(t, [composerPath, pastePath])
+    const host = await nativePi(t, [composerPath])
     const capture = holdSnapshotWrite(t, host)
     const previous = host.ui.getEditorComponent()
     let editor
@@ -348,7 +337,7 @@ for (const replacement of ["recreated", "reused", "replaced"]) {
 }
 
 test("a capture finishing across a native session switch preserves both drafts and the requesting snapshot", async (t) => {
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath, attachmentsPath])
   const capture = holdSnapshotWrite(t, host)
   host.submit("Persist this session")
   await waitFor(() => {
@@ -393,7 +382,7 @@ test("a capture finishing across a native session switch preserves both drafts a
 })
 
 test("submission during snapshot preparation sends the old membership and preserves the next draft", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const capture = holdSnapshotWrite(t, host)
   await host.runtime.session.sendUserMessage("/attach-text Submitted context", {
     expandPromptTemplates: true,
@@ -433,7 +422,7 @@ test("Paste Inline replaces formatted attachment membership without retaining it
   assert.ok(clipboard)
   const text = "inline ".repeat(750).trimEnd()
   t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath, attachmentsPath])
   await host.runtime.session.sendUserMessage("/attach-text Original context", {
     expandPromptTemplates: true,
   })
@@ -459,7 +448,7 @@ test("Paste Inline replaces formatted attachment membership without retaining it
 })
 
 test("Attach Text replaces a formatted attachment selection with short captured text in one edit", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   await host.runtime.session.sendUserMessage("/attach-text Original context", {
     expandPromptTemplates: true,
   })
@@ -490,11 +479,11 @@ test("Attach Text replaces a formatted attachment selection with short captured 
   assert.equal(await readFile(originalPath, "utf8"), "Original context")
 })
 
-test("a deferred native attachment command cannot commit after its selected target moves", async (t) => {
+test("an attachment paste commits during native settlement as one undoable selection edit", async (t) => {
   const gate = Promise.withResolvers()
   let settling = false
   t.after(() => gate.resolve())
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath], {
+  const host = await nativePi(t, [composerPath, attachmentsPath], {
     extensionFactories: [
       (pi) => {
         pi.on("agent_settled", async () => {
@@ -514,38 +503,35 @@ test("a deferred native attachment command cannot commit after its selected targ
   const before = `Keep\n${originalReference}\nselected`
   host.ui.setEditorText(before)
   host.input("\x1b[1;10D")
-  const text = "Deferred captured text\n".repeat(240)
+  const text = "Captured during settlement\n".repeat(240)
   host.ui.pasteToEditor(text)
-  const storage = join(host.agentDir, "pi-paste")
-  const source = await waitFor(async () => {
-    const entries = await readdir(storage, { recursive: true })
-    const entry = entries.find((path) => path.endsWith("/paste.txt"))
-    assert.ok(entry, "the native command must have its source ready")
-    return join(storage, entry)
+  const path = await waitFor(() => {
+    const draft = host.ui.getEditorText()
+    assert.notEqual(draft, before)
+    return snapshotPath(draft.slice(`Keep\n${originalReference}\n`.length))
   })
-  assert.equal(await readFile(source, "utf8"), text)
-  assert.equal(host.ui.getEditorText(), before)
-  host.input("\x1b[D")
-  await assert.rejects(stat(source), { code: "ENOENT" })
-  gate.resolve()
-  await waitFor(() => assert.match(host.render(), /Could not attach/))
-  assert.equal(host.ui.getEditorText(), before)
-  assert.equal(await readFile(join(source, "../text.txt"), "utf8"), text)
-  const request = await readFile(join(source, "../request.md"), "utf8")
-  assert.ok(request.includes(before))
+  const after = `Keep\n${originalReference}\n\n[Attachment: paste.txt](<${path}>)\n`
+  assert.equal(host.ui.getEditorText(), after)
+  assert.equal(await readFile(path, "utf8"), text)
   assert.equal(await readFile(originalPath, "utf8"), "Existing context")
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
-  host.input("placed")
-  assert.equal(
-    host.ui.getEditorText(),
-    `Keep\n${originalReference}\nplacedselected`,
-  )
+  assert.match(host.render(), /Attachments \(2\): text\.txt, paste\.txt/)
+  assert.equal(host.requests.length, 1)
+  host.input("later")
+  assert.equal(host.ui.getEditorText(), `${after}later`)
+  host.input("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), after)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
+  gate.resolve()
+  await host.runtime.session.waitForIdle()
+  assert.equal(host.ui.getEditorText(), before)
+  host.input("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), after)
+  assert.equal(await readFile(path, "utf8"), text)
 })
 
 test("effective completion providers keep their edits and caret across attachment decorators", async (t) => {
-  const host = await nativePi(t, [composerPath, attachmentsPath, pastePath])
+  const host = await nativePi(t, [composerPath, attachmentsPath])
   host.ui.addAutocompleteProvider((current) => ({
     getSuggestions(...args) {
       if (args[0][args[1]] === "probe")
@@ -604,7 +590,7 @@ test("effective completion providers keep their edits and caret across attachmen
 })
 
 test("native listeners retain consumption and transformation order before a selected attachment paste", async (t) => {
-  const host = await nativePi(t, [composerPath, pastePath])
+  const host = await nativePi(t, [composerPath])
   const captured = "Earlier listener context\n".repeat(230)
   const text = `${captured}Later listener context\n`
   host.ui.onTerminalInput((data) => {

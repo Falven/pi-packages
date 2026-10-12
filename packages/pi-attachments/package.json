@@ -1,9 +1,10 @@
 {
   "name": "pi-attachments",
   "version": "0.1.0",
-  "description": "Preserved text, file, and image attachments for Pi.",
+  "description": "Clipboard paste and preserved text, file, and image attachments for Pi.",
   "keywords": [
     "attachments",
+    "paste",
     "pi",
     "pi-extension",
     "pi-package"
@@ -22,8 +23,8 @@
     "@earendil-works/pi-tui": "1.0.2"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
+    "@earendil-works/pi-coding-agent": "^1.0.2",
+    "@earendil-works/pi-tui": "^1.0.2"
   },
   "engines": {
     "node": ">=24"

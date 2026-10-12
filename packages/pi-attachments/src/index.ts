@@ -11,7 +11,12 @@ import {
   keyHint,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
-import { type Editor, ScrollView, Text } from "@earendil-works/pi-tui"
+import {
+  type Editor,
+  type TuiMouseEvent,
+  ScrollView,
+  Text,
+} from "@earendil-works/pi-tui"
 import {
   attachmentPaths,
   attachmentReferences,
@@ -20,16 +25,21 @@ import {
 } from "./images.ts"
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
+import { registerPaste } from "./paste.ts"
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
   let submissions = 0
   let terminalInputs = 0
   let revision = 0
+  let focusRevision = 0
   let readObserved = false
   let restoreInline: ((path: string, contents: string) => void) | undefined
   let insertText: ((text: string) => void) | undefined
   const lifetime = new AbortController()
+  const withPaste = registerPaste(pi, attach, lifetime.signal, () => {
+    revision++
+  })
   registerImages(pi, storage, lifetime.signal)
   registerCleanup(pi, storage)
 
@@ -49,11 +59,17 @@ export default function piAttachments(pi: ExtensionAPI): void {
   })
 
   pi.on("session_start", (_event, ctx) => {
+    if (ctx.mode !== "tui") return
     const previous = ctx.ui.getEditorComponent()
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-      const editor = previous
-        ? previous(tui, theme, keybindings)
-        : new CustomEditor(tui, theme, keybindings)
+      const editor = withPaste(
+        previous
+          ? previous(tui, theme, keybindings)
+          : new CustomEditor(tui, theme, keybindings),
+        ctx,
+        tui,
+        keybindings,
+      )
       insertText = editor.insertTextAtCursor?.bind(editor)
       let restoration: ((text: string) => void) | undefined
       let removingReferences = false
@@ -176,8 +192,16 @@ export default function piAttachments(pi: ExtensionAPI): void {
               return value.call(target)
             }
           }
+          if (property === "handleMouse") {
+            return (event: TuiMouseEvent) => {
+              if (event.button !== "right" || event.type === "press") revision++
+              return target.handleMouse?.(event)
+            }
+          }
           if (
-            (property === "handleInput" || property === "handleMouse") &&
+            (property === "handleInput" ||
+              property === "setText" ||
+              property === "insertTextAtCursor") &&
             typeof value === "function"
           ) {
             return (...args: unknown[]) => {
@@ -209,6 +233,11 @@ export default function piAttachments(pi: ExtensionAPI): void {
             }
             return true
           }
+          if (
+            property === "focused" &&
+            value !== Reflect.get(target, property, target)
+          )
+            focusRevision++
           return Reflect.set(target, property, value, target)
         },
       })
@@ -221,7 +250,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
 
   async function attach(
     ctx: ExtensionContext,
-    capture: () => Promise<Snapshot[] | undefined>,
+    capture: () => Promise<Snapshot[] | string | undefined>,
+    interactive = true,
   ): Promise<void> {
     readObserved = false
     const draft = ctx.ui.getEditorText()
@@ -231,17 +261,45 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const cwd = ctx.cwd
     const submission = submissions
     const draftRevision = revision
+    let draftFocus = focusRevision
     const insert = insertText
     let inputs = terminalInputs
     let changedDuringOperation = false
     let snapshots: Snapshot[]
+    function unchanged(): boolean {
+      readObserved = false
+      return (
+        !lifetime.signal.aborted &&
+        !changedDuringOperation &&
+        terminalInputs === inputs &&
+        observedDraft &&
+        submissions === submission &&
+        ctx.sessionManager.getSessionId() === sessionId &&
+        ctx.ui.getEditorText() === draft &&
+        readObserved &&
+        revision === draftRevision &&
+        (interactive || focusRevision === draftFocus) &&
+        insert !== undefined &&
+        insertText === insert
+      )
+    }
     try {
       const sources = await capture()
-      if (!sources) return
-      inputs = terminalInputs
-      snapshots = sources
+      if (sources === undefined) return
+      if (interactive) inputs = terminalInputs
+      if (typeof sources === "string" && unchanged()) {
+        insert!(sources)
+        return
+      }
+      snapshots =
+        typeof sources === "string"
+          ? [{ name: "paste.txt", contents: Buffer.from(sources) }]
+          : sources
     } catch (error) {
-      if (lifetime.signal.aborted) throw error
+      if (lifetime.signal.aborted) {
+        if (interactive) throw error
+        return
+      }
       ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
       return
     }
@@ -249,21 +307,21 @@ export default function piAttachments(pi: ExtensionAPI): void {
     /* eslint-disable no-await-in-loop -- A retry follows the failed save and the user's recovery action. */
     while (true) {
       try {
-        const { reference, recovery } = await saveSnapshot(storage, request)
-        changedDuringOperation ||= terminalInputs !== inputs
-        readObserved = false
-        if (
-          !lifetime.signal.aborted &&
-          !changedDuringOperation &&
-          observedDraft &&
-          submissions === submission &&
-          ctx.sessionManager.getSessionId() === sessionId &&
-          ctx.ui.getEditorText() === draft &&
-          readObserved &&
-          revision === draftRevision &&
-          insert
-        ) {
-          insert(`\n${reference}\n`)
+        const { reference, recovery, problem } = await saveSnapshot(
+          storage,
+          request,
+        )
+        changedDuringOperation ||=
+          terminalInputs !== inputs ||
+          (!interactive && focusRevision !== draftFocus)
+        if (problem) {
+          if (!lifetime.signal.aborted)
+            ctx.ui.notify(
+              `${problem}. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,
+              "error",
+            )
+        } else if (unchanged()) {
+          insert!(`\n${reference}\n`)
         } else {
           if (!lifetime.signal.aborted) {
             ctx.ui.notify(
@@ -274,12 +332,17 @@ export default function piAttachments(pi: ExtensionAPI): void {
         }
         return
       } catch (error) {
-        if (lifetime.signal.aborted) throw error
+        if (lifetime.signal.aborted) {
+          if (interactive) throw error
+          return
+        }
         ctx.ui.notify(
           `Could not attach: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`,
           "error",
         )
-        changedDuringOperation ||= terminalInputs !== inputs
+        changedDuringOperation ||=
+          terminalInputs !== inputs ||
+          (!interactive && focusRevision !== draftFocus)
         if (snapshots.some((snapshot) => snapshot.contents === undefined))
           return
         if (
@@ -301,6 +364,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
           if (retry !== "Retry save") return
         }
         inputs = terminalInputs
+        draftFocus = focusRevision
       }
     }
     /* eslint-enable no-await-in-loop */
