@@ -51,7 +51,7 @@ Sources: [text and paste routes](https://github.com/earendil-works/pi/blob/6fb2e
 
 - Paste, attachment, and skill-reference extensions provide useful behavior with native Pi while `pi-composer` is absent.
 - Each extension retains native provider overrides, commands, shortcuts, and UI registrations.
-- Paste routes apply the same policy, including extension insertion and direct clipboard handling.
+- Paste routes apply the same policy, including extension paste and direct clipboard handling.
 - With `pi-composer`, replacing selected text with an attachment is one undoable edit.
 - Session switches and late asynchronous results preserve the correct draft and attachment associations.
 - Submission, steer/follow-up, failures, and restoration preserve readable attachment contents.

@@ -19,7 +19,7 @@
     "provenance": true
   },
   "devDependencies": {
-    "@earendil-works/pi-tui": "0.87.1"
+    "@earendil-works/pi-tui": "1.0.2"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",
