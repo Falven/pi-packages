@@ -1,14 +1,14 @@
 # Composer specification
 
-**Triage:** `acceptance-pending`
+**Triage:** `ready-for-agent`
 
 ## Problem Statement
 
-Preparing a prompt with Markdown, references, and attachments requires reliable selection, correction, and recovery. Users need familiar editing in Pi's terminal interface, and they need other extensions' commands, pickers, and text operations to keep working with that editor. Replacing the editor must preserve configured native operations, including word and line deletion, without losing selections during redraws or treating a terminal-intercepted shortcut as an editor failure.
+Preparing a prompt with Markdown, references, and attachments requires reliable selection, correction, and recovery. Users need familiar editing in Pi's terminal interface, and they need other extensions' commands, pickers, and text operations to keep working with that editor. Replacing the editor must preserve configured native operations, including word and line deletion, without losing selections during redraws or treating a terminal-intercepted shortcut as an editor failure. Ghostty can consume otherwise supported Command shortcuts, and selecting a page of a long draft requires editor behavior beyond terminal forwarding.
 
 ## Solution
 
-`pi-composer` provides an editable, formatted Markdown draft with a source view, shared undo/redo, ordinary text references, and persistent session drafts. It executes Pi's effective editing actions against that draft and supplies documented convenience shortcuts where input reaches the editor. Other composition packages supply paste policy, attachment handling, and inline skill behavior. The initial target is Ghostty on local macOS in Pi's fullscreen mode; physical shortcut delivery requires separate acceptance evidence.
+`pi-composer` provides an editable, formatted Markdown draft with a source view, shared undo/redo, ordinary text references, and persistent session drafts. It executes Pi's effective editing actions against that draft and supplies documented convenience shortcuts where input reaches the editor. It extends selection by a visible composer page and offers `/setup-keybinds ghostty` to install eight persistent forwarding rules in one removable configuration block after review and verification. Other composition packages supply paste policy, attachment handling, and inline skill behavior. The initial target is Ghostty on local macOS in Pi's fullscreen mode; physical shortcut delivery requires separate acceptance evidence.
 
 ## User Stories
 
@@ -63,6 +63,25 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 49. As a Pi user, I want native undo to keep its priority while completion is open, so that remapping it to a picker key still recovers my edit.
 50. As a Pi user, I want Option+Up/Down and host-owned viewport keys to retain Pi's behavior, so that editing does not take over application navigation.
 51. As a Pi user, I want fixed composer shortcuts and terminal delivery limits documented, so that I know which behavior Pi can configure and which keys actually reach it.
+52. As a Ghostty user, I want `/setup-keybinds ghostty` to configure the eight affected shortcuts, so that I can use them in the composer through an ordinary Pi command.
+53. As a Ghostty user, I want to review the target configuration, affected shortcuts, and persistent effects outside Pi before installation, so that I can make an informed choice.
+54. As a Ghostty user, I want cancelling setup to leave my settings unchanged, so that inspecting the proposed changes does not apply them.
+55. As a Ghostty user, I want the bindings kept in one marked block while existing settings remain intact, so that I can understand and maintain the change.
+56. As a Ghostty user, I want repeated setup to make no write when the block is already installed, so that it cannot duplicate rules or overwrite my edits.
+57. As a Ghostty user, I want `/setup-keybinds ghostty remove` to remove only the unmodified block, so that I can reverse setup while retaining unrelated configuration changes.
+58. As a Ghostty user, I want a changed or malformed managed block reported for manual resolution, so that removal does not delete settings I edited.
+59. As a Ghostty user, I want invalid configuration or a conflicting include reported before any live write, so that setup cannot leave my terminal misconfigured.
+60. As a Ghostty user, I want setup to distinguish an identified conflict from unavailable verification, so that I know why it left my configuration unchanged.
+61. As a Ghostty user, I want settings changed during review to remain untouched, so that setup cannot overwrite concurrent edits.
+62. As a Ghostty user, I want installation and removal to explain the required configuration reload, so that I know when the new bindings take effect.
+63. As a Pi user, I want forwarded shortcuts to retain their identities and configured native owners, so that terminal setup does not bypass my Pi bindings or other extensions.
+64. As a Pi user, I want the setup dialog to preserve my draft, selection, and history, so that changing terminal settings does not disrupt a request I am composing.
+65. As a Pi user, I want Shift+Fn+Up/Down to extend selection by one visible composer page in either view, so that I can select a large portion of a draft efficiently.
+66. As a Pi user, I want repeated page selection to keep its anchor and reverse direction predictably, so that I can expand or contract the intended range.
+67. As a Pi user, I want page selection to preserve the preferred display column across short, wrapped, and Unicode rows, so that visual movement reaches valid text positions.
+68. As a Pi user, I want page selection to stay inside the draft and survive redraw, resize, and view changes, so that my next edit replaces the intended range.
+69. As a Pi user, I want remapping or clearing a native page action to control its derived selection shortcuts, so that defaults cannot bypass my configuration.
+70. As a Pi user, I want focused native UI and fullscreen viewport actions to retain their page keys, so that composer selection does not take input from another component.
 
 ## Implementation Decisions
 
@@ -81,7 +100,7 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 - Autosave each session's draft text and attachment references with native session identity and persistence facilities. Restore those drafts across switches and restarts. Keep undo/redo in memory and isolated by session; a restarted process begins with a fresh history.
 - Retain the association between an asynchronous operation and its requesting draft. Later results must preserve unrelated edits and remain recoverable when the original insertion can no longer be applied safely.
 - Use Pi's host submission path, input transformations, commands, and steer/follow-up behavior. Draft clearing and recovery must follow actual host lifecycle outcomes. The text-only submission callback and void-returning send API do not constitute acknowledgement.
-- Use Pi's fullscreen layout, mouse routing, terminal decoding, and extension UI facilities. Respect Pi's single active editor and existing override behavior. Document physical delivery separately from editor actions. These editing changes leave terminal settings unchanged; a terminal-consumed key cannot be recovered by the composer or shell.
+- Use Pi's fullscreen layout, mouse routing, terminal decoding, and extension UI facilities. Respect Pi's single active editor and existing override behavior. Document physical delivery separately from editor actions. Loading the package and ordinary editing leave terminal settings unchanged; explicit setup follows the configuration contract below. A terminal-consumed key cannot be recovered by the composer or shell.
 
 ### Native editing behavior
 
@@ -98,7 +117,7 @@ A line is a logical line separated by a newline. A visual row is a displayed row
 | `tui.editor.cursorUp` / `cursorDown`                                          | Move through visual rows. In an ordinary draft, an extra Up on the first row reaches its beginning; an extra Down on the last row reaches its end.                                                                                                                                                     |
 | `tui.editor.historyPrevious` / `historyNext`                                  | Browse native prompt history through the shared draft. Preserve explicit history bindings, empty-editor behavior, and active history browsing. Unmodified Up can enter history once the caret is already at the draft's beginning; Shift movement never does.                                          |
 | `tui.editor.jumpForward` / `jumpBackward`                                     | Await a printable target and move to its next/previous occurrence, searching across logical lines; no match leaves the caret unchanged. A repeated jump key cancels, and other control input cancels then follows native dispatch. Keep grapheme boundaries and map visible targets in formatted view. |
-| `tui.editor.pageUp` / `pageDown`                                              | When delivered to the editor, move by its visible page and keep the preferred column where possible. Pi's fullscreen viewport retains keys it handles before the editor.                                                                                                                               |
+| `tui.editor.pageUp` / `pageDown`                                              | When delivered, move by one visible composer page and retain the preferred column. Shift selection derived from the effective binding keeps its anchor and extends the source range. Pi's fullscreen viewport retains keys it handles before the editor.                                               |
 | `tui.editor.undo`                                                             | Restore the prior coherent draft edit and selection, including attachment membership, before in-editor autocomplete handling.                                                                                                                                                                          |
 
 All deletion actions consume a nonempty selection before computing an unselected range. A deletion at an outer boundary with no text to remove is a no-op. Consecutive native word/line deletions accumulate retained text in source order: backward deletions prepend and forward deletions append. An intervening edit or movement ends accumulation. Yank and yank-pop use the composer's same document and undo history.
@@ -131,11 +150,51 @@ Existing native movement, deletion, history, recovery, newline, and submit actio
 
 Fixed shortcuts are package behavior. Pi's current public manager cannot register new configurable action IDs; literal extension shortcut registration does not change that. Native `/hotkeys` describes host actions and registered extension shortcuts, while this specification documents the direct composer aliases. Neither Pi nor the composer automatically imports macOS text-field settings.
 
+### Page selection
+
+Derive selection gestures by adding Shift to each effective native page-movement binding after resolving any action that owns the full chord. With default bindings, Shift+PageUp/PageDown extend selection; on the target Mac keyboard these are Shift+Fn+Up/Down. Explicit remapping or clearing changes the available derived gestures. A chord explicitly assigned to a native action executes that action with its ordinary behavior, even when the chord contains Shift.
+
+Move the selection head by the number of visual rows in the current visible composer page, retaining the original anchor and preferred display column. Count editable composer rows rather than the terminal's total height or scrollback. Use the existing projection for wrapped rows, hidden Markdown syntax, tabs, and whole graphemes. Clamp to an available row and valid position when a full page is unavailable; never browse prompt history from a selection gesture.
+
+Repeated gestures extend the same range and opposite gestures contract it before extending in the other direction. Redraw, resize, source/formatted view changes, and attachment-preview refresh preserve the source selection. Paging alone creates no content edit; replacement, cut, paste, and undo continue through the existing draft history. Pi's fullscreen viewport, focused native UI, and accepted extension shortcuts retain their earlier dispatch priority.
+
+### Ghostty keybinding setup
+
+Register `setup-keybinds` through Pi's public command API. `/setup-keybinds ghostty` reviews and installs the block; `/setup-keybinds ghostty remove` reviews and removes it. Missing or unsupported arguments produce usage information without a write. Use native confirmation and notification facilities; without interactive confirmation the command cannot modify configuration. Pi retains normal command dispatch. From the start of its handler, setup preserves the draft, selection, history, and editor ownership; closing its native dialog restores editor focus without an additional edit or model submission.
+
+Before confirmation, show the resolved target file, the eight affected shortcuts, and the fact that forwarding remains active outside Pi until removal and configuration reload. Existing Pi overrides still determine which action receives each chord. Installation leaves working Cmd+C and Cmd+Shift+Up/Down bindings intact and does not edit Pi's keybinding configuration.
+
+The block contains exactly these forwarding rules. CSI payloads omit the escape-plus-left-bracket prefix, which Ghostty's native CSI action supplies.
+
+| Physical gesture | Ghostty trigger    | CSI payload | Default composer behavior after delivery             |
+| ---------------- | ------------------ | ----------- | ---------------------------------------------------- |
+| Cmd+A            | `super+a`          | `97;9u`     | Select the entire draft and retain the selection.    |
+| Cmd+Enter        | `super+enter`      | `13;9u`     | Submit explicitly after higher-priority handlers.    |
+| Cmd+Up           | `super+arrow_up`   | `1;9A`      | Move to the current logical line's start.            |
+| Cmd+Down         | `super+arrow_down` | `1;9B`      | Move to the current logical line's end.              |
+| Cmd+Z            | `super+z`          | `122;9u`    | Undo a draft edit.                                   |
+| Cmd+Shift+Z      | `super+shift+z`    | `122;10u`   | Redo an undone edit.                                 |
+| Shift+Fn+Up      | `shift+page_up`    | `5;2~`      | Extend selection one visible composer page upward.   |
+| Shift+Fn+Down    | `shift+page_down`  | `6;2~`      | Extend selection one visible composer page downward. |
+
+Use one block delimited by the comments `BEGIN pi-composer keybindings` and `END pi-composer keybindings`, appended to the existing configuration. Preserve surrounding contents and file permissions. Create no backups. Repeated setup with the intact block performs no write; report an ineffective block instead of duplicating it. An edited, incomplete, or duplicated block requires manual resolution. Removing an absent block is a no-op; removing an intact block deletes only its managed contents and preserves unrelated later edits. Appending and removing the block must preserve the original surrounding bytes, including existing line endings and the final-newline state.
+
+Resolve the configuration Ghostty actually loads, accounting for its macOS Application Support and XDG roots, modern and legacy filenames, and include ordering. Read every configuration source needed to establish the result. A missing or ambiguous target, invalid configuration, conflicting include, unavailable Ghostty verification, or unsupported configuration leaves live settings unchanged. Report the conflicting shortcut and source when established; report an inability to verify when that is the actual limitation.
+
+Before installation, use Ghostty to validate the proposed configuration and establish the eight resulting effective bindings without changing live settings. Removal validates the remaining configuration. Confirm that the reviewed file and relevant loaded configuration sources have not changed before writing, preserve permissions, and avoid partial-file writes. Success is reported only after the intended contents have been written; give the native reload instruction after installation or removal. Package reload, Pi exit, and returning to the shell do not remove an explicitly installed block.
+
+#### Verification boundary
+
+Automatic installation is permitted only for a configuration whose complete loading order and proposed effective bindings can be established before writing. A conflicting include or an unverifiable configuration requires manual resolution and no live write. This condition applies to ordinary configurations as well as those with includes; an include-free file by itself does not prove which other sources Ghostty loads.
+
+The inspected Ghostty 1.3.1 CLI validates a supplied candidate and its includes, while its binding inspection commands report the current configuration and cannot accept a candidate. Candidate syntax validation plus inspection of current bindings is insufficient to claim the proposed result across all loaded roots. Demonstrating a supported pre-write verification method and recording the configuration shapes it covers is the first setup implementation gate. Until that gate passes for a configuration, the command reports verification unavailable and does not install the block. A temporary live write followed by rollback does not satisfy this contract.
+
 ## Testing Decisions
 
 - Test external behavior at the public Pi editor/session boundary. Load the package through Pi, drive host editing and session actions, and assert visible content, exported Markdown, submission content, and retained draft state. Private state layout and helper call counts are not acceptance criteria.
 - Use the shared host boundary for the composer alone and in combination with paste, attachments, and skill references. Exercise native and custom completion providers registered before and after composer installation.
 - Use the workspace's existing Node test runner for new automated checks. Pi's editor and virtual-terminal suites provide prior art for input, wrapping, and visible output; its extension input-event suite provides prior art for chained transformations. Those upstream helpers are reference material, not public runtime dependencies.
+- Exercise setup through registered Pi commands and native confirmation at the same public host boundary. Use temporary configuration fixtures and observe command results, file contents, effective bindings, and draft state. Existing command/UI and page-action checks provide prior art; tests must not depend on private configuration-helper calls or editor state layouts.
 - Cover the following observable scenarios:
 
 | Scenario                                                                                     | Required result                                                                                                                                    |
@@ -172,8 +231,31 @@ Exercise the following formatted selections with a native word/line deletion act
 For each case, undo immediately after deletion restores the original source and selection. Undo after a yank restores the destination before insertion. Yanking `ha` back before the surviving closing delimiter restores `**alpha**`; yanking it into unformatted prose inserts plain `ha`. For native accumulation, start with `one two three` at its end and delete backward by word twice without intervening input: the draft becomes `one `, retained text is `two three`, and yank restores the original. Verify forward accumulation too, along with source-view deletion retaining literal syntax.
 
 - Run real Ghostty/macOS checks for Command shortcuts, clipboard copy/cut/paste, mouse selection, fullscreen layout, and image-preview coexistence, starting with the user's effective terminal settings unchanged. Record the host and terminal versions, gesture, observed route, configuration, and result. Check Cmd+C with and without terminal selection and Cmd+Z/Cmd+Shift+Z with and without an available terminal undo action. Synthetic events prove delivered-input behavior only; record blocked or unobserved physical delivery separately.
-- Verify Cmd+Delete and Cmd+Left/Right translations, Option+Delete and Option+Left/Right, Cmd+Up/Down, shifted movement, and boundary arrows. A terminal-consumed key is a delivery limitation; an incorrect edit after delivery is an editor failure. Keep terminal behavior intact across pane switches, external-editor use, suspension/resumption, resource reload, terminal reload, and exit.
+- Verify Cmd+Delete and Cmd+Left/Right translations, Option+Delete and Option+Left/Right, Cmd+Up/Down, shifted movement, and boundary arrows. A terminal-consumed key is a delivery limitation; an incorrect edit after delivery is an editor failure. Across pane switches, external-editor use, suspension/resumption, resource reload, terminal reload, and exit, verify behavior against the recorded configuration phase: unchanged baseline, persistent forwarding installed, or forwarding explicitly removed.
 - Demonstrate the native attachment handoff and submission-recovery scenarios before declaring those capabilities complete. Record any failing host contract precisely rather than adding an unapproved runtime interface.
+
+### Setup and page-selection acceptance
+
+| Scenario                                                                                                                          | Required result                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Review installation, then cancel or invoke it without an interactive confirmation surface                                         | No configuration write, additional draft edit, or model submission occurs; the handler preserves the draft state it received.                                                  |
+| Install into a configuration whose prospective effective bindings have been verified                                              | Exactly one marked block is appended; the eight identities match the table; surrounding bytes, permissions, and draft state survive; the user receives the reload instruction. |
+| Repeat setup with an intact block, including after an external include change                                                     | No write or duplicate block occurs. Report a proven conflict or unavailable verification instead of an unqualified success.                                                    |
+| Remove an intact block after unrelated settings were edited                                                                       | Only the managed block is removed; later edits and original surrounding formatting remain; repeat removal makes no write.                                                      |
+| Encounter an edited, missing-boundary, duplicated, or otherwise malformed managed block                                           | Explain the need for manual resolution; preserve the complete file.                                                                                                            |
+| Validate a candidate with an overriding include, an unrelated include, both default roots, or modern/legacy filename combinations | A write is allowed only for a demonstrated verification case with the intended effective bindings. Proven conflicts and unsupported cases leave all live files unchanged.      |
+| Encounter invalid configuration, unavailable Ghostty, or a source changed after review                                            | Return a clear failure without overwriting configuration or leaving a partially written file.                                                                                  |
+| Compare command completion, package reload, and Pi exit with the installed configuration                                          | Only explicit reviewed setup/removal changes the managed block; lifecycle events leave it intact.                                                                              |
+| Deliver each forwarded sequence with default and explicitly overridden Pi bindings                                                | The configured owner acts exactly once, with composer aliases suppressed as specified.                                                                                         |
+| Extend a selection by a page in both views, then reverse direction or hit a draft boundary                                        | The anchor remains fixed, the head follows visual rows, the preferred column is retained, and prompt history does not replace the draft.                                       |
+| Page-select across wrapped Markdown, tabs, emoji, combining characters, and wide characters                                       | The selected source range follows visible cells and whole graphemes; typing replaces that range and undo restores source and selection.                                        |
+| Resize, redraw, switch views, or refresh attachment previews after page selection                                                 | The source range and anchor remain selected; the next page gesture uses the current visible composer height.                                                                   |
+| Remap or clear native page actions, or bind a native action to the full shifted chord                                             | Only effective derived selection gestures extend; explicit native actions keep their ordinary behavior and old gestures have no fallback.                                      |
+| Use page gestures in a focused picker or with an accepted extension shortcut                                                      | The native owner handles the input once; the background draft and its selection do not change.                                                                                 |
+
+Include a concrete delivered-input regression: in a seven-row composer viewport, start at column three of `row0` in the plain nine-line draft `row0` through `row8`. Shift+PageDown followed by typing `X` must produce `rowX7` followed by `row8`, not an insertion within `row0`. Undo restores the original draft and selected range. Exercise upward movement and both source and formatted views through the same public boundary.
+
+For terminal acceptance, record an unchanged-configuration baseline first, then explicitly install and reload, exercise all eight physical gestures, remove the block, and reload again. Record every phase separately. Recheck Cmd+C, Cmd+Shift+Up/Down, useful native translations, focused native UI, and companion-package interactions. Confirm that forwarding persists in other programs while installed and that removal restores the pre-existing binding configuration. Syntax validation, decoded synthetic input, and successful file writes do not establish physical forwarding. If pre-write verification is unavailable, record setup as unavailable and leave installation-dependent checks pending.
 
 ## Out of Scope
 
@@ -181,7 +263,9 @@ Paste classification, attachment storage and previews, and skill expansion belon
 
 ## Further Notes
 
-The revised keyboard behavior is implemented and verified at the public Pi editor/session boundary. Real Ghostty/macOS acceptance remains pending. The [verification record](../../.scratch/composer-keyboard/verification.md), [keyboard implementation plan](../composer-keyboard-spec-plan.md), and [terminal procedure](../terminal-checks.md) separate those results and track the remaining checks.
+Native editing actions have public Pi editor/session coverage. Ghostty setup and Shift-page selection require implementation and acceptance; the setup verification gate must establish supported configurations before installation can be declared complete. Real Ghostty/macOS acceptance remains pending. The [verification record](../../.scratch/composer-keyboard/verification.md), [keyboard implementation plan](../composer-keyboard-spec-plan.md), and [terminal procedure](../terminal-checks.md) separate those results and track the remaining checks.
+
+Ghostty evidence: [configuration include ordering](https://ghostty.org/docs/config/reference#config-file), [CSI forwarding](https://ghostty.org/docs/config/keybind/reference#csi), and the inspected [candidate validator](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/validate_config.zig), [binding inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/list_keybinds.zig), and [configuration inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/show_config.zig).
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), and [library integration notes](../pi-composer-library-integration.md). Related behavior is specified by [pi-paste](pi-paste.md), [pi-attachments](pi-attachments.md), and [pi-skill-references](pi-skill-references.md).
 

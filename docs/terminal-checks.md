@@ -1,8 +1,8 @@
 # Terminal acceptance
 
-**Status: public-host keyboard checks pass; real Ghostty/macOS fullscreen acceptance remains pending.** The [verification record](../.scratch/composer-keyboard/verification.md) records software results and physical access limitations. The [composer specification](specs/pi-composer.md) defines the required results. Record each observed physical result below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; physical gestures, clipboard formats, layout, and graphics need this run.
+**Status: existing public-host keyboard checks pass; Ghostty setup and Shift-page selection await implementation, and real Ghostty/macOS fullscreen acceptance remains pending.** The [verification record](../.scratch/composer-keyboard/verification.md) records software results and physical access limitations. The [composer specification](specs/pi-composer.md) defines the required results. Record each observed physical result below. Automated terminal input, clipboard substitutes, and captured ANSI output establish software behavior; physical gestures, clipboard formats, layout, and graphics need this run.
 
-Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg`. The workspace lockfile supplies Pi and pi-tui 1.0.2, including the native clipboard backend. Finder and Preview supply actual copied-file and image clipboard data. All state, fixtures, model requests, and session files go into the temporary directory created below.
+Use a local macOS account, Ghostty, Node 24 or newer, pnpm 12.7.0, `fd`, and `rg`. The workspace lockfile supplies Pi and pi-tui 1.0.2, including the native clipboard backend. Finder and Preview supply actual copied-file and image clipboard data. Pi state, fixtures, model requests, and session files go into the temporary directory created below. The explicit setup phase also changes the reviewed Ghostty configuration until removal and reload.
 
 ## Prepare the isolated run
 
@@ -99,9 +99,24 @@ Begin with Ghostty's effective settings unchanged. Record macOS and Ghostty vers
 | Cmd+Delete; Cmd+Left/Right                | Check the useful native Ctrl+U and Ctrl+A/E translations against the same native actions directly.                                          |
 | Option+Delete; Option+Left/Right          | Check native backward-word deletion and word movement; record any missing or different input.                                               |
 | Cmd+X; shifted movement; extra Up/Down    | Verify the draft result and stable selection when the input reaches Pi.                                                                     |
+| Shift+Fn+Up/Down                          | Record whether Shift+PageUp/PageDown reaches Pi and whether it extends a selection by one visible composer page.                            |
 | Cmd+V; menu paste; right-click            | Record terminal text versus native clipboard behavior using sections 3 and 4.                                                               |
 
-Do not change Ghostty settings to turn a blocked physical case into an unqualified pass. Continue other editing checks using delivered native keys, such as Ctrl+- for undo and Ctrl+V for clipboard paste, or keyboard/mouse range selection. Those results establish their own routes. Direct-input host tests cover composer aliases that the physical terminal consumes; they do not establish shortcut forwarding.
+Keep this baseline unchanged. Continue other editing checks using delivered native keys, such as Ctrl+- for undo and Ctrl+V for clipboard paste, or keyboard/mouse range selection. Those results establish their own routes. Direct-input host tests cover composer aliases that the physical terminal consumes; they do not establish shortcut forwarding. Record explicit setup separately in the following phase.
+
+### Explicit setup and removal
+
+These checks require the setup command and page-selection implementation. Until they are available, leave the corresponding results pending. Use the [setup contract](specs/pi-composer.md#ghostty-keybinding-setup) and its pre-write verification gate as the pass criteria.
+
+1. Record the configuration target and existing effective bindings. Invoke `/setup-keybinds ghostty`, inspect the eight proposed rules and the persistent effect outside Pi, and cancel. Pass: no configuration change or extra draft edit occurs.
+2. Invoke the command again and confirm installation. If verification is unavailable or an include conflicts, pass the no-write check and leave installation-dependent checks pending. Do not count a refusal as a successful installation.
+3. For a verified installation, inspect the single marked block and reload Ghostty through its native reload action. Repeat setup. Pass: the block remains unchanged and is not duplicated; no backup is created.
+4. Exercise Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down in formatted and source views. Verify persistent draft selection, explicit submission, logical-line boundaries, undo/redo, and one-page selection. For page selection, repeat and reverse the gesture, use wrapped and Unicode text, resize, then type and undo to check the selected range.
+5. Recheck Cmd+C, Cmd+Shift+Up/Down, useful native translations, focused pickers, and effective native/extension overrides. Record each input route. Terminal forwarding cannot bypass a Pi action that owns the chord.
+6. Enter the external editor, suspend/resume Pi, change panes, reload resources, and exit to the shell. Pass: the installed configuration persists and its eight bindings apply wherever that configuration is used. Check another terminal program too; do not expect automatic restoration when Pi exits.
+7. Relaunch the same isolated Pi, run `/setup-keybinds ghostty remove`, review and confirm removal, then reload Ghostty. Pass: only the intact managed block is removed, unrelated settings remain, and the pre-existing bindings are effective again. Repeat removal to verify a no-op. An edited or malformed block requires manual resolution and must remain untouched.
+
+Record baseline, installation, physical verification, and removal as separate results, including any supported-configuration limits. Syntax validation and successful configuration writes do not establish physical forwarding.
 
 ## 1. Command forwarding and formatted editing
 
@@ -293,7 +308,7 @@ For a run with composition extensions disabled, launch the local Pi binary with 
 
 ## Record and retain evidence
 
-Before finishing, switch panes, enter and return from Pi's external editor, suspend/resume Pi, reload resources and Ghostty configuration, and exit. Pass: native terminal behavior outside Pi is preserved. The packages install no terminal override to restore; these checks do not establish an automatic key-table integration.
+Before finishing, switch panes, enter and return from Pi's external editor, suspend/resume Pi, reload resources and Ghostty configuration, and exit. In the baseline and after explicit removal/reload, verify the pre-existing terminal behavior. While the setup block is installed, verify its documented persistent forwarding outside Pi. Record the configuration phase for every result; Pi lifecycle events do not remove that block.
 
 For each numbered check, record pass/fail/pending, the checkout commit, Pi and macOS/Ghostty versions, relevant bindings, the load order, the actual physical gesture, observed input route, and any error. Record editor correctness separately from physical delivery; keep an unknown route unknown. Retain the temporary directory, relevant `request-N.json` files, session paths, snapshot hashes, and screenshots of graphics/layout failures. A native clipboard result identifies whether Pi received clipboard metadata or terminal text. Keep unexercised physical routes and terminal undo states pending.
 
