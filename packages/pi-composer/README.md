@@ -4,6 +4,8 @@ A Markdown composer for the [pi coding agent](https://pi.dev).
 
 Edit paragraphs, headings, emphasis, strikethrough, links, quotes, lists, tasks, rules, and inline or fenced code with Pi's native styles and highlighting. Cmd+Shift+M switches between formatted and source views of the same Markdown draft, preserving selection and grouped undo/redo. Native text replacement and insertion reach that draft and history. Movement and deletion preserve graphemes, including combining characters, emoji, and wide text across wrapped lines.
 
+Deletion uses the underlying Markdown in both views, including hidden syntax. Backspace after `**bold**` leaves `**bold*`; word deletion follows Pi's ordinary punctuation and word boundaries. The remaining source renders immediately through Pi's Markdown parser, and repairing valid syntax restores its formatting. Undo and yank retain the actual source text.
+
 In fullscreen mode, mouse dragging and keyboard selection address the same Markdown text. Wheel scrolling preserves the selection; editing brings the caret back into view. Resizing keeps the selection usable, and native widgets, overlays, and completion pickers retain their focus and mouse routing.
 
 For a blinking caret, enable **Show hardware cursor** in Pi's `/settings`. The composer then uses the terminal cursor in both views, following the terminal's shape and blinking preferences. Disabling the setting restores the drawn caret. Selection highlighting remains visible in either mode.

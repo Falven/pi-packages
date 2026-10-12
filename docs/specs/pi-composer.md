@@ -50,7 +50,7 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 38. As a Pi user, I want deletion toward either line boundary and newline joining at that boundary, so that line editing keeps its native behavior.
 39. As a Pi user, I want deletion to remove an existing selection first, so that a word or line shortcut cannot remove additional unselected text.
 40. As a Pi user, I want native yank and yank-pop to recover word and line deletions, so that replacing the editor preserves retained-text recovery.
-41. As a Pi user, I want formatted deletions to retain the Markdown needed for recovery, so that hidden delimiters do not cause lost or duplicated content.
+41. As a Pi user, I want formatted deletions to remove and retain the actual Markdown source range, so that hidden syntax follows the same editing and recovery rules as visible text.
 42. As a Pi user, I want Cmd+Up/Down to reach the draft's beginning/end and Cmd+Left/Right to reach the current logical line's boundaries, so that I can navigate the whole draft or one line in either view.
 43. As a Pi user, I want an extra Up on the first visual row or Down on the last visual row to reach that line's boundary, so that the caret does not remain stranded in the middle of the row.
 44. As a Pi user, I want shifted movement to keep its original selection anchor and stay in the draft at its boundaries, so that extending a selection cannot browse prompt history.
@@ -88,6 +88,8 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 76. As a Pi user, I want unsupported hyperlink capabilities to retain readable, editable text, so that terminal differences do not hide or damage my draft.
 77. As a Pi user, I want an image attachment reference to open its retained file in my default associated application, so that I can inspect the full image while composing.
 78. As a Pi user, I want spaces, Unicode, and URL punctuation in local file names handled correctly, so that the displayed reference opens the intended file without changing its Markdown.
+79. As a Pi user, I want ordinary deletion to include hidden Markdown characters, so that I can edit formatting and link syntax using the same character, word, and line actions as other text.
+80. As a Pi user, I want formatting to follow the remaining Markdown immediately after every edit, so that repairing valid syntax restores its rendered presentation without another action.
 
 ## Implementation Decisions
 
@@ -117,7 +119,7 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 
 ### Native editing behavior
 
-A line is a logical line separated by a newline. A visual row is a displayed row after wrapping. Line actions target logical boundaries; vertical movement follows visual rows and preserves the preferred display column where possible. Formatted view maps these positions to the Markdown source without making hidden delimiters stray caret stops.
+A line is a logical line separated by a newline. A visual row is a displayed row after wrapping. Line actions target logical source boundaries, including leading and trailing Markdown syntax; document boundaries are the beginning and end of the source. Vertical movement follows visual rows and preserves the preferred display column where possible. Formatted view maps source positions to terminal cells.
 
 | Native action                                                                 | Required behavior                                                                                                                                                                                                                                                                                      |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -135,7 +137,9 @@ A line is a logical line separated by a newline. A visual row is a displayed row
 
 All deletion actions consume a nonempty selection before computing an unselected range. A deletion at an outer boundary with no text to remove is a no-op. Consecutive native word/line deletions accumulate retained text in source order: backward deletions prepend and forward deletions append. An intervening edit or movement ends accumulation. Yank and yank-pop use the composer's same document and undo history.
 
-In formatted view, retained text includes the removed Markdown and any enclosing delimiters removed with it. Delimiters still needed by surviving text stay in the draft and are not duplicated in retained text. A partial formatted span therefore contributes its removed text without inventing new wrappers. Yank inserts that plain Markdown into its destination context; undo restores the exact prior text, selection, and membership. Source view deletes and retains the literal selected source. The examples in Testing Decisions define whole-span, partial-span, and cross-span results.
+Both views delete the same literal source range for a given caret or selection. Character, word, and line deletion include hidden Markdown characters and follow Pi's ordinary grapheme, punctuation, whitespace, and newline boundaries. Selection deletion removes exactly the selected source, including any syntax inside that range. Retained text is exactly the deleted source; yank restores it in source order, and undo restores the prior text, selection, and attachment membership.
+
+After each edit, the existing Markdown parser determines the presentation from the resulting source. Valid syntax renders immediately, and incomplete syntax follows the parser's normal handling of literal text and any remaining valid formatting. This applies to every rendered construct, including nested formatting, links, attachment references, lists, and code. An attachment reference remains active only while the resulting text is recognized by the attachment package; editing does not change its retained file contents.
 
 ### Binding and dispatch
 
@@ -246,15 +250,21 @@ Within that verified single-source context, Ghostty validates the exact staged c
 | Disable native hyperlink capability or render a destination containing a control character           | The draft remains readable and editable without emitting that hyperlink or its control characters.                                                 |
 | Render an absolute file destination or local file URL with spaces, Unicode, percent signs, or hashes | Both views link the correct local file; existing URL escapes remain intact, and the source destination is unchanged.                               |
 
-Exercise the following formatted selections with a native word/line deletion action. The retained column is the Markdown inserted by yank into an unformatted destination in the same editor; no intervening deletion replaces the retained entry. Spaces shown inside inline-code values are significant.
+Exercise deletion in both views through Pi's public editor/session boundary, comparing native character, word, and line behavior at the same source positions. The following unselected examples start at the source's end. Spaces shown inside inline-code values are significant; `\n` denotes a newline.
 
-| Draft source before deletion | Selected visible text | Draft source after deletion | Retained Markdown  |
-| ---------------------------- | --------------------- | --------------------------- | ------------------ |
-| `red **blue** green`         | `blue`                | `red  green`                | `**blue**`         |
-| `**alpha**`                  | `ha`                  | `**alp**`                   | `ha`               |
-| `**blue** and _green_`       | `blue and gre`        | `_en_`                      | `**blue** and gre` |
+| Draft source before deletion | Action                 | Draft source after deletion |
+| ---------------------------- | ---------------------- | --------------------------- |
+| `**bold**`                   | Backspace              | `**bold*`                   |
+| `**one two**`                | Backward word deletion | `**one two`                 |
+| `**one two`                  | Backward word deletion | `**one `                    |
+| `[Pi](https://pi.dev)`       | Backspace              | `[Pi](https://pi.dev`       |
+| `keep\n**one two**`          | Delete to line start   | `keep\n`                    |
 
-For each case, undo immediately after deletion restores the original source and selection. Undo after a yank restores the destination before insertion. Yanking `ha` back before the surviving closing delimiter restores `**alpha**`; yanking it into unformatted prose inserts plain `ha`. For native accumulation, start with `one two three` at its end and delete backward by word twice without intervening input: the draft becomes `one `, retained text is `two three`, and yank restores the original. Verify forward accumulation too, along with source-view deletion retaining literal syntax.
+Check forward deletion and deletion after logical-line and document-boundary movement too. Native word deletion consumes a trailing punctuation group before the preceding word. Assert the resulting source and ordinary parser output, including partial syntax that still contains valid formatting. Restoring valid syntax immediately restores its rendering. A change inside a nested element leaves unaffected surrounding formatting intact.
+
+For a selected source range, every deletion action removes that exact range before considering its own unselected behavior. Deleting `blue` from `red **blue** green` leaves `red **** green` and retains `blue`; selecting `**blue**` instead leaves `red  green` and retains `**blue**`. Deleting `ha` from `**alpha**` leaves `**alp**` and retains `ha`. Deleting the contiguous source `blue** and _gre` from `**blue** and _green_` leaves `**en_` and retains `blue** and _gre`. These source ranges also define selection behavior when the selection crosses a view change.
+
+For each case, undo restores the original source and selection, and redo restores the edit. Yank restores the exact removed text; undo after a yank restores the destination before insertion. For native accumulation, start with `one two three` at its end and delete backward by word twice without intervening input: the draft becomes `one `, retained text is `two three`, and yank restores the original. Verify forward accumulation, cut/copy consistency, and attachment-reference deletion and recovery without changing snapshot bytes.
 
 - Run real Ghostty/macOS checks for Command shortcuts, clipboard copy/cut/paste, mouse selection, fullscreen layout, and image-preview coexistence, starting with the user's effective terminal settings unchanged. Record the host and terminal versions, gesture, observed route, configuration, and result. Check Cmd+C with and without terminal selection and Cmd+Z/Cmd+Shift+Z with and without an available terminal undo action. Synthetic events prove delivered-input behavior only; record blocked or unobserved physical delivery separately.
 - Verify Cmd+Delete and Cmd+Left/Right translations, Option+Delete and Option+Left/Right, Cmd+Up/Down, shifted movement, and boundary arrows. A terminal-consumed key is a delivery limitation; an incorrect edit after delivery is an editor failure. Across pane switches, external-editor use, suspension/resumption, resource reload, terminal reload, and exit, verify behavior against the recorded configuration phase: unchanged baseline, persistent forwarding installed, or forwarding explicitly removed.
@@ -294,7 +304,7 @@ Paste classification, attachment storage and previews, and skill expansion belon
 
 ## Further Notes
 
-The [package README](../../packages/pi-composer/README.md) documents installation, shortcuts, recovery, and terminal setup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/), [native editing tickets](../../.scratch/composer-keyboard/issues/), [terminal setup tickets](../../.scratch/composer-keybinds/issues/), [cursor and hyperlink tickets](../../.scratch/composer-rendering/issues/), and [image-opening tickets](../../.scratch/image-opening/issues/).
+The [package README](../../packages/pi-composer/README.md) documents installation, shortcuts, recovery, and terminal setup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/), [native editing tickets](../../.scratch/composer-keyboard/issues/), [Markdown deletion ticket](../../.scratch/markdown-deletion/issues/01-delete-markdown-source.md), [terminal setup tickets](../../.scratch/composer-keybinds/issues/), [cursor and hyperlink tickets](../../.scratch/composer-rendering/issues/), and [image-opening tickets](../../.scratch/image-opening/issues/).
 
 Ghostty evidence: [configuration include ordering](https://ghostty.org/docs/config/reference#config-file), [CSI forwarding](https://ghostty.org/docs/config/keybind/reference#csi), and the inspected [candidate validator](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/validate_config.zig), [binding inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/list_keybinds.zig), and [configuration inspector](https://github.com/ghostty-org/ghostty/blob/v1.3.1/src/cli/show_config.zig).
 

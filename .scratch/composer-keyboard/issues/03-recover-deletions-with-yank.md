@@ -8,8 +8,8 @@
 
 **Specifications:** [pi-composer](../../../docs/specs/pi-composer.md).
 
-- [x] Retain deleted source and delimiters removed by formatted projection without copying delimiters still needed by surviving text. Source view retains literal deleted syntax.
+- [x] Retain exactly the deleted source, including Markdown syntax within the deleted range, in both views.
 - [x] Consecutive backward deletions prepend and forward deletions append using native accumulation semantics. Intervening editing or movement ends accumulation.
 - [x] Yank inserts the current retained entry at the caret or over the selection. Yank-pop rotates entries by replacing the immediately preceding yank or yank-pop and becomes inactive after unrelated editing or movement.
-- [x] Exercise the specified whole-span, partial-span, and cross-span examples, insertion into another formatting context, consecutive deletions, newline joins, and Unicode content.
+- [x] Exercise the specified literal source ranges, insertion into another formatting context, consecutive deletions, newline joins, and Unicode content.
 - [x] Yank and yank-pop share the draft's history, selection, and attachment-membership behavior. Verify through public Pi input and observed source/undo results, using effective native bindings.
