@@ -1,6 +1,13 @@
 import assert from "node:assert/strict"
 import { execFile } from "node:child_process"
-import fs, { readFile, rm, utimes, writeFile } from "node:fs/promises"
+import fs, {
+  chmod,
+  mkdir,
+  readFile,
+  rm,
+  utimes,
+  writeFile,
+} from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import test from "node:test"
@@ -297,4 +304,56 @@ test("a late snapshot write error preserves saved bytes and their original draft
     await readFile(path, "utf8"),
     "Bytes saved before the write reported failure.\n",
   )
+})
+
+test("a captured file remains recoverable when all snapshot writes fail after shutdown", async (t) => {
+  const host = await nativePi(t, [
+    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../pi-paste/src/index.ts", import.meta.url)),
+  ])
+  const source = join(host.directory, "late.bin")
+  const bytes = Buffer.from([0, 1, 255, 13, 10, 9, 128])
+  await writeFile(source, bytes)
+  const draft = "**Requesting draft** /skill:review @source.ts"
+  host.ui.setEditorText(draft)
+  host.input("\x1b[97;9u")
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
+  const sessionFile = host.runtime.session.sessionFile
+  const storage = join(host.agentDir, "pi-attachments")
+  await mkdir(storage)
+  const held = holdFileRead(t, source)
+  const pending = host.runtime.session.sendUserMessage(
+    `/attach-file ${source}`,
+    {
+      expandPromptTemplates: true,
+    },
+  )
+  await held.started()
+  await rm(source)
+  await host.runtime.newSession()
+  host.ui.setEditorText("Unrelated current draft")
+  await chmod(storage, 0o500)
+  try {
+    held.release()
+    await pending
+    assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+    await host.runtime.session.reload()
+    assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+  } finally {
+    await chmod(storage, 0o700)
+  }
+
+  host.input("\x1b[1;4D")
+  await host.runtime.session.sendUserMessage("/attachments-recover", {
+    expandPromptTemplates: true,
+  })
+  const recovery = await retainedRequest(host, draft)
+  assert.ok(recovery.text.includes(sessionId))
+  assert.ok(recovery.text.includes(sessionFile))
+  assert.ok(recovery.text.includes(host.directory))
+  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes)
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+  host.input("kept")
+  assert.equal(host.ui.getEditorText(), "Unrelated current kept")
+  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes)
 })

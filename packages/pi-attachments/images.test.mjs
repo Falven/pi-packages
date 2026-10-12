@@ -523,6 +523,60 @@ test("a failed image recovery write stops delivery and preserves incoming images
   )
 })
 
+test("failed image recovery and native append are durably retried in an already-written session", async (t) => {
+  const host = await nativePi(t, [inputExtension])
+  host.submit("Start a persisted session")
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
+  const sessionFile = host.runtime.session.sessionFile
+  await readFile(sessionFile)
+
+  const source = join(host.directory, "retry.bmp")
+  await writeFile(source, Buffer.from(BMP, "base64"))
+  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
+    expandPromptTemplates: true,
+  })
+  const draft = host.ui.getEditorText()
+  const snapshot = snapshotPath(draft)
+  const storage = join(host.agentDir, "pi-attachments")
+  await chmod(storage, 0o500)
+  await chmod(sessionFile, 0o400)
+  try {
+    host.submit()
+    host.ui.setEditorText("Later work after both writes failed")
+    await waitFor(() =>
+      assert.match(host.render(), /Could not checkpoint the request/),
+    )
+    assert.equal(host.requests.length, 1)
+    assert.equal(host.ui.getEditorText(), "Later work after both writes failed")
+    assert.equal((await readFile(snapshot)).toString("base64"), BMP)
+    assert.ok(!(await readFile(sessionFile, "utf8")).includes(PNG))
+  } finally {
+    await chmod(storage, 0o700)
+    await chmod(sessionFile, 0o600)
+  }
+
+  host.submit("A later ordinary request")
+  host.ui.setEditorText("Unrelated current draft")
+  await waitFor(() => assert.equal(host.requests.length, 2))
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  const recovery = await waitFor(() => retainedRequest(host, "Delivery:"))
+  assert.ok(recovery.text.includes(sessionId))
+  assert.ok(recovery.text.includes(sessionFile))
+  assert.ok(recovery.text.includes(`Before attachments\n${draft.trim()}`))
+  const incoming = recovery.text.match(
+    /\[Attachment: input-image-1\]\(<([^>]+)>\)/,
+  )?.[1]
+  assert.ok(incoming, "The retried request must expose its incoming image")
+  assert.equal((await readFile(incoming)).toString("base64"), PNG)
+  assert.equal((await readFile(snapshot)).toString("base64"), BMP)
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+  await host.runtime.session.reload()
+  assert.equal(await readFile(recovery.path, "utf8"), recovery.text)
+  assert.equal((await readFile(incoming)).toString("base64"), PNG)
+})
+
 test("a provider rejection retains the image request and leaves later draft edits intact", async (t) => {
   const response = Promise.withResolvers()
   t.after(() => response.resolve())

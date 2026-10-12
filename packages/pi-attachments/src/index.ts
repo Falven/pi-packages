@@ -1,5 +1,5 @@
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
-import { basename, join, resolve } from "node:path"
+import { readFile } from "node:fs/promises"
+import { basename, resolve } from "node:path"
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -10,8 +10,8 @@ import {
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
 import { registerImages } from "./images.ts"
+import { saveSnapshot, type Snapshot } from "./recovery.ts"
 
-type Snapshot = { name: string; contents: string | Buffer }
 type AttachmentSource = Snapshot | { name: string; path: string }
 
 export default function piAttachments(pi: ExtensionAPI): void {
@@ -79,11 +79,12 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const observedDraft = readObserved
     const sessionId = ctx.sessionManager.getSessionId()
     const sessionFile = ctx.sessionManager.getSessionFile()
+    const cwd = ctx.cwd
     const submission = submissions
     const draftRevision = revision
     let inputs = terminalInputs
     let changedDuringOperation = false
-    let snapshot: Snapshot | undefined
+    let snapshot: Snapshot
     try {
       const source = await capture()
       if (!source) return
@@ -97,21 +98,11 @@ export default function piAttachments(pi: ExtensionAPI): void {
       ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
       return
     }
+    let request = { sessionId, sessionFile, cwd, text: draft, snapshot }
     /* eslint-disable no-await-in-loop -- A retry follows the failed save and the user's recovery action. */
-    while (snapshot) {
+    while (true) {
       try {
-        await mkdir(storage, { recursive: true, mode: 0o700 })
-        const directory = await mkdtemp(join(storage, "snapshot-"))
-        const path = join(directory, snapshot.name)
-        const reference = `[Attachment: ${snapshot.name}](<${path}>)`
-        const recovery = `${path}.draft.md`
-        // New native sessions can remain memory-only until the first assistant reply.
-        await writeFile(
-          recovery,
-          `# Attachment request\n\nSession: ${sessionId}\n${sessionFile ? `\nSession file: ${sessionFile}\n` : ""}\n${draft}\n\n${reference}\n`,
-          { flag: "wx", mode: 0o600 },
-        )
-        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
+        const { reference, recovery } = await saveSnapshot(storage, request)
         changedDuringOperation ||= terminalInputs !== inputs
         readObserved = false
         if (
@@ -136,12 +127,18 @@ export default function piAttachments(pi: ExtensionAPI): void {
         return
       } catch (error) {
         if (lifetime.signal.aborted) throw error
-        ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
+        ctx.ui.notify(
+          `Could not attach: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`,
+          "error",
+        )
         changedDuringOperation ||= terminalInputs !== inputs
         if (typeof snapshot.contents === "string") {
           const contents = await editText(ctx, snapshot.contents)
-          snapshot =
-            contents === undefined ? undefined : { ...snapshot, contents }
+          if (contents === undefined) return
+          if (contents !== snapshot.contents) {
+            snapshot = { name: snapshot.name, contents }
+            request = { sessionId, sessionFile, cwd, text: draft, snapshot }
+          }
         } else {
           const retry = await ctx.ui.select(
             `Save ${snapshot.name}`,
@@ -221,6 +218,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   }
 
   function attachFile(path: string, ctx: ExtensionContext): Promise<void> {
+    const cwd = ctx.cwd
     return attach(ctx, async () => {
       const selected =
         path ||
@@ -229,7 +227,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
         }))
       if (selected === undefined) return undefined
       if (!selected) throw new Error("A file path is required")
-      const source = resolve(ctx.cwd, selected)
+      const source = resolve(cwd, selected)
       return {
         name: basename(source).replaceAll(/[^\w.-]/g, "_"),
         path: source,
