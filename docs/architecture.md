@@ -17,6 +17,8 @@ The active editor owns draft mutations. With `pi-composer`, text, selection, and
 
 A large paste replacing selected text illustrates the cooperation: paste policy selects attachment handling, attachment handling prepares the snapshot, and the editor commits the text replacement and attachment membership together. An asynchronous result must remain associated with the draft that requested it.
 
+Every snapshot added to a draft remains retained. Explicit attachment cleanup reclaims only proven-unused capture or staging data; hidden editor histories and arbitrary session locations make broader deletion unsafe through current public Pi contracts.
+
 `pi-paste` uses attachment handling for file/image outcomes. That collaboration must work with the native editor and with `pi-composer`; storage behavior belongs to `pi-attachments`. Native skill and path discovery remain Pi's responsibility.
 
 ## Native integration

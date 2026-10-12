@@ -27,8 +27,8 @@ Users need to attach text, files, and images without losing the contents when an
 15. As a Pi user, I want attachments restored with the correct session draft, so that switching sessions cannot mix requests.
 16. As a Pi user, I want saved attachment references to remain readable after restarting Pi, so that unfinished and older work remains usable.
 17. As a Pi user, I want resumed sessions and forks to retain readable attachments, so that I can continue prior work.
-18. As a Pi user, I want submitted snapshots retained until explicit cleanup, so that elapsed time alone cannot invalidate my requests.
-19. As a Pi user, I want cleanup to preserve contents still needed by drafts, undo, and retained submissions, so that reclaiming unused storage is safe.
+18. As a Pi user, I want every snapshot added to a draft retained, so that older requests and undo remain usable.
+19. As a Pi user, I want explicit cleanup to reclaim proven-unused capture or staging data while preserving added snapshots, so that reclaiming storage cannot break drafts, undo, or retained submissions.
 20. As a Pi user, I want text and file attachments read on demand, so that their full contents do not enter the prompt automatically.
 21. As a Pi user, I want images delivered through Pi's image support, so that the agent receives image content.
 22. As a Pi user, I want attachments included with native submission and steer/follow-up actions, so that they remain associated with the intended message.
@@ -49,7 +49,7 @@ Users need to attach text, files, and images without losing the contents when an
 - With `pi-composer`, restoration, removal, or attachment insertion and its related text changes form one undoable action. Undo/redo must restore membership without losing the required stored contents.
 - Removing an item from the draft changes membership. Preserve stored contents needed by another saved draft, in-memory undo, or a retained submission. A preview failure must not imply that the stored attachment has been removed.
 - Associate saved attachment references with native session identity. Restore readable references with session drafts and preserve the contents needed by resumed sessions and forks.
-- Retain submitted snapshots until explicit cleanup. Cleanup accounts for saved drafts, in-memory undo, and retained submissions and preserves referenced contents. Retained storage must remain usable across application restarts.
+- Retain every snapshot that has entered a draft, including contents reachable through hidden editor history, saved sessions, submissions, or forks. Explicit cleanup reclaims only proven-unused capture or staging data; pending writes, recoverable contents, and data with uncertain eligibility remain retained. Pi's public contracts cannot enumerate every live undo history or session-file location. Retained storage remains usable across application restarts.
 - Text and file attachments contribute readable snapshot references to the submitted prompt; their full bodies remain available on demand. Images use native image content. Existing images and other input transformations must survive composition with attachment delivery.
 - Preserve native submission, command dispatch, and steer/follow-up behavior. Deliver the attachments associated with the submitted draft, including requests whose supporting material is entirely attached. Draft clearing is not evidence that delivery succeeded.
 - Bind asynchronous reads, writes, previews, and delivery preparation to the requesting draft and attachment. Preserve later unrelated edits and report failures with enough context for recovery.
@@ -62,20 +62,20 @@ Users need to attach text, files, and images without losing the contents when an
 - Use the existing Node test runner. Pi's clipboard/image tests, virtual-terminal tests, and extension input-event tests provide prior art for content fixtures, native rendering, and transformation chaining. The current package has no feature-test suite to preserve.
 - Cover the following observable scenarios:
 
-| Scenario                                                                                    | Required result                                                                            |
-| ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Attach text, a file, or an image; then change or remove its original source                 | The retained attachment still exposes the contents captured when added.                    |
-| Reference a working file normally, then change it                                           | The reference continues to identify the current source file.                               |
-| Preview attached text or display a small image preview                                      | The preview identifies the selected attachment without altering stored contents.           |
-| Restore text at a caret or over a selection, including code and text above the paste cutoff | Complete preserved text appears inline and the attachment leaves draft membership.         |
-| Undo and redo restoration, removal, or selection replacement in `pi-composer`               | Text and membership return together; required snapshots remain available.                  |
-| Remove an attachment used by another draft or retained submission                           | The other reference remains readable.                                                      |
-| Switch sessions, restart, resume, or fork                                                   | The correct draft references and submitted snapshots remain usable.                        |
-| Request explicit cleanup while snapshots remain referenced                                  | Needed contents survive; only eligible unused storage is reclaimed.                        |
-| Submit text/files and images through normal, steer, and follow-up paths                     | Text/files remain readable on demand; image content and message association are preserved. |
-| Another input transformation has already supplied images or changed text                    | Attachment delivery composes with that result through native dispatch.                     |
-| A source is unreadable, a write fails, or a preview cannot render                           | The error is visible; existing draft content and retained assets remain recoverable.       |
-| A session changes or the host clears the editor during pending work or failed submission    | No unrelated draft is overwritten and required contents remain recoverable.                |
+| Scenario                                                                                    | Required result                                                                                            |
+| ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Attach text, a file, or an image; then change or remove its original source                 | The retained attachment still exposes the contents captured when added.                                    |
+| Reference a working file normally, then change it                                           | The reference continues to identify the current source file.                                               |
+| Preview attached text or display a small image preview                                      | The preview identifies the selected attachment without altering stored contents.                           |
+| Restore text at a caret or over a selection, including code and text above the paste cutoff | Complete preserved text appears inline and the attachment leaves draft membership.                         |
+| Undo and redo restoration, removal, or selection replacement in `pi-composer`               | Text and membership return together; required snapshots remain available.                                  |
+| Remove an attachment used by another draft or retained submission                           | The other reference remains readable.                                                                      |
+| Switch sessions, restart, resume, or fork                                                   | The correct draft references and submitted snapshots remain usable.                                        |
+| Request explicit cleanup while snapshots remain referenced                                  | Added snapshots and recoverable contents survive; only proven-unused capture or staging data is reclaimed. |
+| Submit text/files and images through normal, steer, and follow-up paths                     | Text/files remain readable on demand; image content and message association are preserved.                 |
+| Another input transformation has already supplied images or changed text                    | Attachment delivery composes with that result through native dispatch.                                     |
+| A source is unreadable, a write fails, or a preview cannot render                           | The error is visible; existing draft content and retained assets remain recoverable.                       |
+| A session changes or the host clears the editor during pending work or failed submission    | No unrelated draft is overwritten and required contents remain recoverable.                                |
 
 - Run real Ghostty/macOS checks for image graphics, attachment placement, keyboard access to preview/restoration, clipboard images, and fullscreen coexistence with native widgets.
 - Require successful native handoff, atomic composer history, and submission-recovery checks before declaring integration complete. A stored file alone does not establish correct attachment delivery.

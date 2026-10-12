@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: pi-paste: route text pastes and explicit overrides; 14: pi-attachments: preview and submit image snapshots.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Native copied-file information takes precedence over an accompanying icon image, followed by image data, then plain text.
 - [ ] Copied file paths with spaces and Unicode retain native identity and validation; text resembling a path stays text unless explicitly attached.
