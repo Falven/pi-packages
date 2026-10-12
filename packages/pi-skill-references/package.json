@@ -1,7 +1,7 @@
 {
   "name": "pi-skill-references",
   "version": "0.1.0",
-  "description": "Canonical inline skill invocation for Pi.",
+  "description": "Inline skill completion and invocation for Pi.",
   "keywords": [
     "pi",
     "pi-extension",
