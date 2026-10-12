@@ -196,6 +196,10 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: '*'
         version: 0.87.1(ws@8.22.0)
+    devDependencies:
+      '@earendil-works/pi-tui':
+        specifier: 0.87.1
+        version: 0.87.1
 
   packages/pi-composer:
     dependencies:
