@@ -1,0 +1,3 @@
+# Resolve native editing actions before composer shortcuts
+
+`pi-composer` resolves native editing actions through the keybinding manager supplied by Pi and executes them against its authoritative draft, because the inherited editor maintains a separate text state. Pi's native dispatch and effective editing bindings take priority over composer aliases, and an explicit binding override, including an empty binding list, suppresses aliases for that native action. Actions without native action IDs use documented fixed composer shortcuts, making their configuration limits explicit within Pi's existing contracts.
