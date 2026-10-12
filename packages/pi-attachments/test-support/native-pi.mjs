@@ -36,7 +36,7 @@ export async function waitFor(check) {
   /* eslint-enable no-await-in-loop */
 }
 
-export async function nativePi(t) {
+export async function nativePi(t, extensionPaths = []) {
   const directory = await mkdtemp(join(tmpdir(), "pi-attachments-test-"))
   const agentDir = join(directory, "agent")
   await mkdir(agentDir)
@@ -127,6 +127,7 @@ export async function nativePi(t) {
         noThemes: true,
         noContextFiles: true,
         additionalExtensionPaths: [
+          ...extensionPaths,
           fileURLToPath(new URL("../src/index.ts", import.meta.url)),
         ],
         extensionFactories: [observer],

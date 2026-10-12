@@ -17,6 +17,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
   let submissions = 0
   let terminalInputs = 0
+  let revision = 0
+  let editorFactory: ReturnType<ExtensionContext["ui"]["getEditorComponent"]>
   const lifetime = new AbortController()
 
   pi.on("input", () => {
@@ -27,6 +29,30 @@ export default function piAttachments(pi: ExtensionAPI): void {
   })
 
   pi.on("session_start", (_event, ctx) => {
+    const previous = ctx.ui.getEditorComponent()
+    editorFactory = (tui, theme, keybindings) => {
+      const editor = previous
+        ? previous(tui, theme, keybindings)
+        : new CustomEditor(tui, theme, keybindings)
+      return new Proxy(editor, {
+        get(target, property) {
+          const value = Reflect.get(target, property, target)
+          return typeof value === "function" ? value.bind(target) : value
+        },
+        set(target, property, value) {
+          if (property === "onChange") {
+            // Pi assigns callbacks after the factory returns.
+            target.onChange = (text) => {
+              revision++
+              value?.(text)
+            }
+            return true
+          }
+          return Reflect.set(target, property, value, target)
+        },
+      })
+    }
+    ctx.ui.setEditorComponent(editorFactory)
     ctx.ui.onTerminalInput(() => {
       terminalInputs++
       return undefined
@@ -59,6 +85,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const draft = ctx.ui.getEditorText()
     const sessionId = ctx.sessionManager.getSessionId()
     const submission = submissions
+    const draftRevision = revision
     let inputs = terminalInputs
     let changedDuringOperation = false
     let snapshot: Snapshot | undefined
@@ -84,10 +111,12 @@ export default function piAttachments(pi: ExtensionAPI): void {
         await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         const reference = `[Attachment: ${snapshot.name}](<${path}>)`
         changedDuringOperation ||= terminalInputs !== inputs
-        // shortcut: text changes can return to the same value unseen, revisit when Pi exposes draft revisions.
         if (
           !lifetime.signal.aborted &&
           !changedDuringOperation &&
+          editorFactory !== undefined &&
+          ctx.ui.getEditorComponent() === editorFactory &&
+          revision === draftRevision &&
           submissions === submission &&
           ctx.sessionManager.getSessionId() === sessionId &&
           ctx.ui.getEditorText() === draft
@@ -102,7 +131,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
           )
           if (!lifetime.signal.aborted) {
             ctx.ui.notify(
-              `Draft changed. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,
+              `Could not confirm the requesting draft. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,
               "warning",
             )
           }

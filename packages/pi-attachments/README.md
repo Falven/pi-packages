@@ -31,4 +31,6 @@ Attachments are saved under `pi-attachments/` in Pi's agent directory before the
 
 Read and write errors leave the main draft intact. Failed text saves reopen the text dialog with its contents. Failed file saves offer **Retry save**, using the already captured bytes even if the source has changed or disappeared.
 
-Terminal activity, another submission, draft text that no longer matches the original, or session replacement during storage work keeps the result out of the newer draft. The saved snapshot gets an adjacent `.draft.md` recovery file containing the requesting session ID, original draft, and attachment reference. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
+Text changes, terminal activity, another submission, or session replacement during preparation keep the result out of the newer draft. Text changes are observed through the effective editor's native callback, including changes that return to the original text. The saved snapshot gets an adjacent `.draft.md` recovery file containing the requesting session ID, original draft, and attachment reference. A notification gives its location when the requesting session is still active. The recovery file remains readable after a session switch.
+
+If another extension replaces the editor factory after this package installs its observer, attachment actions save recovery files instead of inserting into an unverified draft. The replacement editor stays active.

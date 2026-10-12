@@ -2,6 +2,8 @@ import assert from "node:assert/strict"
 import { chmod, readFile, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
+import { fileURLToPath } from "node:url"
+import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
   holdFileRead,
   nativePi,
@@ -344,22 +346,125 @@ test("finishing the text dialog preserves subsequent edits to the main draft", a
   )
 })
 
-test(
-  "a programmatic clear to the original text cancels pending automatic attachment insertion",
-  {
-    todo: "Pi 0.87.1 exposes no native draft revision or subscription to programmatic text changes",
-  },
-  async (t) => {
+test("a programmatic clear to the original text cancels pending automatic attachment insertion", async (t) => {
+  const host = await nativePi(t)
+  const source = join(host.directory, "cleared-draft.txt")
+  await writeFile(source, "Captured before the programmatic clear")
+  const held = holdFileRead(t, source)
+  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  await held.started()
+  host.ui.setEditorText("A different draft")
+  host.ui.setEditorText("")
+  held.release()
+  await pending
+  assert.equal(host.ui.getEditorText(), "")
+  const recovery = await retainedRequest(host)
+  assert.equal(
+    await readFile(snapshotPath(recovery.text), "utf8"),
+    "Captured before the programmatic clear",
+  )
+})
+
+for (const replacement of ["before", "during"]) {
+  test(`an editor factory replaced ${replacement} attachment preparation preserves the request for recovery`, async (t) => {
     const host = await nativePi(t)
-    const source = join(host.directory, "unobservable-clear.txt")
-    await writeFile(source, "Captured before the programmatic clear")
+    const replace = () =>
+      host.ui.setEditorComponent(
+        (tui, theme, keybindings) => new CustomEditor(tui, theme, keybindings),
+      )
+    if (replacement === "before") replace()
+    const source = join(host.directory, "replaced-editor.txt")
+    await writeFile(source, "Captured for the requesting editor")
     const held = holdFileRead(t, source)
     const pending = host.runtime.session.prompt(`/attach-file ${source}`)
     await held.started()
-    host.ui.setEditorText("A different draft")
+    if (replacement === "during") replace()
+    host.ui.setEditorText("A different draft in the replacement editor")
     host.ui.setEditorText("")
     held.release()
     await pending
     assert.equal(host.ui.getEditorText(), "")
-  },
-)
+    const recovery = await retainedRequest(host)
+    assert.equal(
+      await readFile(snapshotPath(recovery.text), "utf8"),
+      "Captured for the requesting editor",
+    )
+    assert.match(host.render(), /Snapshot retained/)
+  })
+}
+
+test("an existing composer keeps selection replacement and undo when attaching a snapshot", async (t) => {
+  const host = await nativePi(t, [
+    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+  ])
+  host.ui.setEditorText("Keep draft")
+  for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
+  await host.runtime.session.prompt("/attach-text Selected snapshot")
+  const path = snapshotPath(host.ui.getEditorText())
+  assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
+  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+
+  host.input("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Keep draft")
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+  host.input("source")
+  assert.equal(host.ui.getEditorText(), "Keep source")
+  assert.equal(await readFile(path, "utf8"), "Selected snapshot")
+})
+
+test("native callbacks, ordinary text, and autocomplete updates survive attachment observation", async (t) => {
+  const host = await nativePi(t)
+  host.ui.setEditorText("!echo draft")
+  host.input("\x1b")
+  assert.equal(
+    host.ui.getEditorText(),
+    "",
+    "Escape cancels the native bash draft",
+  )
+
+  host.ui.setEditorText("Code\tbefore\r\na paste: ")
+  host.ui.pasteToEditor("x".repeat(1100))
+  assert.equal(
+    host.ui.getEditorText(),
+    `Code    before\na paste: ${"x".repeat(1100)}`,
+  )
+  assert.match(host.render(), /\[paste #1/)
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+
+  host.ui.addAutocompleteProvider((current) => ({
+    async getSuggestions(...args) {
+      if (args[0][args[1]] === "probe") {
+        return {
+          prefix: "probe",
+          items: [
+            { value: "kept", label: "Updated provider completion" },
+            { value: "other", label: "Other completion" },
+          ],
+        }
+      }
+      return current.getSuggestions(...args)
+    },
+    applyCompletion(...args) {
+      if (args[3].value === "kept") {
+        return { lines: ["Keep suffix"], cursorLine: 0, cursorCol: 5 }
+      }
+      return current.applyCompletion(...args)
+    },
+  }))
+  host.ui.setEditorText("probe")
+  host.input("\t")
+  await waitFor(() =>
+    assert.match(host.render(), /Updated provider completion/),
+  )
+  host.input("\r")
+  host.input("inserted ")
+  assert.equal(host.ui.getEditorText(), "Keep inserted suffix")
+  host.ui.setEditorText("/oth")
+  host.input("\t")
+  await waitFor(() => assert.match(host.render(), /other-action/))
+  host.input("\r")
+  await waitFor(() =>
+    assert.equal(host.ui.getEditorText(), "Other action worked"),
+  )
+  assert.equal(host.requests.length, 0)
+})
