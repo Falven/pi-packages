@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path"
+import { pathToFileURL } from "node:url"
 import { Marked, type Token } from "@earendil-works/pi-tui"
 import { projectCode } from "./code.ts"
 import { projectStructure } from "./structures.ts"
@@ -151,8 +153,13 @@ export function projectProse(
           token.href &&
           !/\p{Cc}/u.test(token.href)
         ) {
+          const target = isAbsolute(token.href)
+            ? pathToFileURL(token.href).href
+            : token.href
+          // Ghostty requires an explicit host even for local file hyperlinks.
+          const href = target.replace(/^file:\/\/\//i, "file://localhost/")
           for (let index = firstSpan; index < spans.length; index++) {
-            spans[index]!.href = token.href
+            spans[index]!.href = href
           }
         }
         append(end - newlines, end, styles)

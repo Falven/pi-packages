@@ -10,6 +10,8 @@ For a blinking caret, enable **Show hardware cursor** in Pi's `/settings`. The c
 
 Recognized URLs and Markdown link labels use Pi's native terminal hyperlinks. Formatted links open their destinations while source view retains literal Markdown. In fullscreen Ghostty on macOS, use **Shift+Cmd+click** to open a link; ordinary clicks and dragging still position the caret and select text. Hover feedback follows Ghostty's mouse-capture behavior. Copying and submitting preserve the Markdown text.
 
+Absolute file links, including image attachment references, open in the system's associated application. Spaces, Unicode, and URL punctuation in captured filenames are encoded only for display links; the draft keeps its original path. Attachment links open the retained full-resolution file. Saving changes from the external application can modify that retained attachment.
+
 The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
 
 Native `@` path completion, command completion, provider updates, and custom pickers continue through Pi's existing interfaces. File and skill references remain editable text.

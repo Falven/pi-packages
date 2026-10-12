@@ -83,6 +83,21 @@ test("native hyperlinks cover recognized link text in both views without changin
       href: "https://pi.dev/inline",
     },
     {
+      source: "[Attachment: image % # 界.png](</tmp/image % # 界.png>) tail",
+      label: "Attachment: image % # 界.png",
+      href: "file://localhost/tmp/image%20%25%20%23%20%E7%95%8C.png",
+    },
+    {
+      source: "[image](file:///tmp/image%20%2520%23.png)",
+      label: "image",
+      href: "file://localhost/tmp/image%20%2520%23.png",
+    },
+    {
+      source: "[remote image](file://server/share/image.png)",
+      label: "remote image",
+      href: "file://server/share/image.png",
+    },
+    {
       source: "> - [e\u0301👩‍💻界 label][ref]\n\n[ref]: https://pi.dev/reference",
       label: "e\u0301👩‍💻界 label",
       href: "https://pi.dev/reference",

@@ -4,13 +4,15 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** implemented; manual acceptance pending
 
 **Specification:** [pi-composer](../../../docs/specs/pi-composer.md); [native contracts](../../../docs/adr/0001-preserve-pi-extension-contracts.md); [live Markdown editing](../../../docs/adr/0004-pi-composer-live-markdown-editing.md).
 
-- [ ] Encode absolute local file destinations as file URLs with an explicit localhost authority, preserving existing URL escapes and nonlocal authorities.
-- [ ] Keep original Markdown, clipboard text, selection, undo, and submission unchanged in both views; ordinary clicks continue to edit.
-- [ ] Preserve native hyperlink capability handling, Unicode wrapping, and link boundaries.
-- [ ] Verify file destinations containing spaces, Unicode, percent signs, and hashes through the existing public Pi host.
-- [ ] Document file-opening gestures and ordinary external-save semantics.
+- [x] Encode absolute local file destinations as file URLs with an explicit localhost authority, preserving existing URL escapes and nonlocal authorities.
+- [x] Keep original Markdown, clipboard text, selection, undo, and submission unchanged in both views; ordinary clicks continue to edit.
+- [x] Preserve native hyperlink capability handling, Unicode wrapping, and link boundaries.
+- [x] Verify file destinations containing spaces, Unicode, percent signs, and hashes through the existing public Pi host.
+- [x] Document file-opening gestures and ordinary external-save semantics.
 - [ ] Manually open an image reference in both views in Ghostty and verify the associated application receives the retained image.
+
+**Automated validation:** On 2026-10-12, all 16 public-host selection and hyperlink tests passed on Node 24.13.1, including local path encoding in both views, existing file-URL escapes, remote authorities, capability changes, ordinary mouse editing, clipboard, undo, and unchanged submission. Typechecking passed. Physical link activation awaits user testing.
