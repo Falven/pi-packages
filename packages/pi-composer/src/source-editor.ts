@@ -16,6 +16,8 @@ import {
 } from "@earendil-works/pi-tui"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
+import { projectProse } from "./prose.ts"
+import { continueList } from "./structures.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
@@ -379,6 +381,28 @@ export class SourceEditor extends CustomEditor {
     if (keys.matches(data, "tui.input.newLine")) {
       this.insertTextAtCursor("\n")
       return
+    }
+    if (matchesKey(data, "enter") && keys.matches(data, "tui.input.submit")) {
+      const { anchor, head } = this.draft
+      let edit = continueList(this.getText(), head, projectProse)
+      if (edit && anchor !== head) {
+        const selection = this.project().replace(
+          Math.min(anchor, head),
+          Math.max(anchor, head),
+          "",
+        )
+        edit =
+          continueList(selection.text, selection.position, projectProse) ??
+          selection
+      }
+      if (edit) {
+        this.commit({
+          text: edit.text,
+          anchor: edit.position,
+          head: edit.position,
+        })
+        return
+      }
     }
     if (
       keys.matches(data, "tui.input.submit") ||
