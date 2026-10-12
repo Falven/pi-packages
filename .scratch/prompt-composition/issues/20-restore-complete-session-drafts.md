@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Compose attachment pastes as one undoable edit; 18: pi-composer: autosave session text drafts; 19: pi-attachments: retain snapshots across sessions.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Switch sessions or restart and restore matching text, reference text, attachment membership, and readable retained snapshots.
 - [ ] Keep session undo histories isolated; restarting clears history without deleting attachment contents.
