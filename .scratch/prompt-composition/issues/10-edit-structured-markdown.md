@@ -4,7 +4,7 @@
 
 **Blocked by:** 09: pi-composer: edit formatted prose and source.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Quotes, lists, task lists, and horizontal rules display their structure while their source remains editable.
 - [ ] Nested and wrapped structures preserve correct caret/selection mapping and surrounding Markdown.
