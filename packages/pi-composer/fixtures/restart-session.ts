@@ -13,10 +13,14 @@ const options: {
   extensionPaths?: string[]
   cwd?: string
   attachments?: { path: string; data: string }[]
+  recoveryReadError?: boolean
 } = JSON.parse(process.argv[2]!)
 
 test("a fresh Pi process restores the saved draft", async (t) => {
   const host = await openHost(t, options)
+  if (options.recoveryReadError) {
+    assert.match(await host.output(), /EACCES/)
+  }
   assert.equal(host.runtime.cwd, host.session.sessionManager.getCwd())
   if (options.cwd) assert.equal(host.runtime.cwd, options.cwd)
   if (options.recover) {

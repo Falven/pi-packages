@@ -357,3 +357,82 @@ test("a captured file remains recoverable when all snapshot writes fail after sh
   assert.equal(host.ui.getEditorText(), "Unrelated current kept")
   assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes)
 })
+
+test("a partial multi-file read retains captured members for recovery with the original group", async (t) => {
+  const host = await nativePi(t, [
+    fileURLToPath(new URL("../pi-composer/src/index.ts", import.meta.url)),
+    fileURLToPath(new URL("../pi-paste/src/index.ts", import.meta.url)),
+  ])
+  const first = join(host.directory, "first.txt")
+  const second = join(host.directory, "second.txt")
+  const contents = "Captured first member\r\n\t界\0\n"
+  await writeFile(first, contents)
+  await writeFile(second, "Second member after repair")
+  host.ui.setEditorText("**Original group draft** /skill:review @source.ts")
+  const original = host.ui.getEditorText()
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
+  const sessionFile = host.runtime.session.sessionFile
+  const captured = Promise.withResolvers()
+  const read = fs.readFile
+  let failing = true
+  const mocked = t.mock.method(fs, "readFile", async (...args) => {
+    if (args[0] === first) {
+      const bytes = await read(...args)
+      await rm(first)
+      captured.resolve()
+      return bytes
+    }
+    if (args[0] === second && failing) {
+      await captured.promise
+      throw new Error("Second member became unreadable")
+    }
+    return read(...args)
+  })
+  syncBuiltinESMExports()
+  t.after(() => {
+    mocked.mock.restore()
+    syncBuiltinESMExports()
+  })
+  await host.runtime.session.sendUserMessage(
+    `/attach-file ${first}\n${second}`,
+    {
+      expandPromptTemplates: true,
+    },
+  )
+  assert.equal(host.ui.getEditorText(), original)
+  assert.match(host.render(), /Second member became unreadable/)
+  const partial = await retainedRequest(host, original)
+  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
+  assert.ok(
+    partial.text.includes(second),
+    "The partial request must identify the missing group member",
+  )
+  await host.runtime.newSession()
+  await host.runtime.session.reload()
+  host.ui.setEditorText("Unrelated current draft")
+  failing = false
+  await host.runtime.session.sendUserMessage("/attachments-recover", {
+    expandPromptTemplates: true,
+  })
+  assert.match(host.render(), /Request saved:/)
+  const recovery = await retainedRequest(host, "[Attachment: second.txt]")
+  assert.ok(recovery.text.includes(sessionId))
+  assert.ok(recovery.text.includes(sessionFile))
+  const references = recovery.text.match(/\[Attachment: [^\]]+\]\(<[^>]+>\)/g)
+  assert.equal(references?.length, 2)
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
+  assert.equal(
+    await readFile(snapshotPath(references[1]), "utf8"),
+    "Second member after repair",
+  )
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+  host.ui.pasteToEditor(`\n${references.join("\n")}\n`)
+  assert.match(host.render(), /Attachments \(2\): first.txt, second.txt/)
+  host.input("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
+  await host.runtime.session.sendUserMessage("/attachments-recover", {
+    expandPromptTemplates: true,
+  })
+  assert.match(host.render(), /No unsaved attachment requests/)
+})

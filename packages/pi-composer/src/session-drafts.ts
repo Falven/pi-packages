@@ -208,7 +208,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   })
 
   pi.registerCommand("composer-recover", {
-    description: "Recover a cleared draft or a draft from an unsaved session",
+    description: "Recover cleared or unsaved drafts and clipboard captures",
     handler: async (_args, ctx) => {
       if (!active || !editor) return
       const requestedRevision = revision

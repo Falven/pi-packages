@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import type {
   ExtensionAPI,
@@ -13,7 +13,9 @@ type RequestContext = {
   text: string
 }
 type ImageRequest = InputEvent & RequestContext
-export type Snapshot = { name: string; contents: string | Buffer }
+export type Snapshot =
+  | { name: string; contents: string | Buffer }
+  | { name: string; path: string; contents?: Buffer }
 type SnapshotRequest = RequestContext & { snapshots: Snapshot[] }
 type RetainedRequest = ImageRequest | SnapshotRequest
 
@@ -28,34 +30,56 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
   const unsaved = unsavedByStorage.get(storage) ?? new Set()
   unsavedByStorage.set(storage, unsaved)
   try {
+    const reads = await Promise.allSettled(
+      request.snapshots.map(async (snapshot) => {
+        if ("path" in snapshot && snapshot.contents === undefined) {
+          snapshot.contents = await readFile(snapshot.path)
+        }
+      }),
+    )
+    const failed = reads.find((read) => read.status === "rejected")
     await mkdir(storage, { recursive: true, mode: 0o700 })
     const directory = await mkdtemp(join(storage, "snapshot-"))
-    const files = await Promise.all(
+    const captured = await Promise.all(
       request.snapshots.map(async (snapshot, index, all) => {
+        if (snapshot.contents === undefined) return undefined
         const parent =
           all.length === 1 ? directory : join(directory, String(index + 1))
         await mkdir(parent, { recursive: true, mode: 0o700 })
         return { ...snapshot, path: join(parent, snapshot.name) }
       }),
     )
+    const files = captured.filter((file) => file !== undefined)
+    const missing = request.snapshots.flatMap((snapshot) =>
+      "path" in snapshot && snapshot.contents === undefined
+        ? [`Uncaptured file: ${snapshot.path}`]
+        : [],
+    )
     const reference = files
       .map(({ name, path }) => `[Attachment: ${name}](<${path}>)`)
       .join("\n")
-    const recovery = `${files[0]!.path}.draft.md`
+    const recovery = files[0]
+      ? `${files[0].path}.draft.md`
+      : join(directory, "request.draft.md")
     await writeFile(
       recovery,
-      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\n\n${request.text}\n\n${reference}\n`,
+      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}Working directory: ${request.cwd}\n\n${request.text}\n\n${reference}\n${missing.length ? `\n${missing.join("\n")}\n` : ""}`,
       { flag: "wx", mode: 0o600, flush: true },
     )
     await Promise.all(
       files.map(({ path, contents }) =>
-        writeFile(path, contents, {
+        writeFile(path, contents!, {
           flag: "wx",
           mode: 0o600,
           flush: true,
         }),
       ),
     )
+    if (failed) {
+      throw new Error(
+        `${String(failed.reason)}\nCaptured contents saved: ${recovery}`,
+      )
+    }
     unsaved.delete(request)
     return { reference, recovery }
   } catch (error) {
@@ -129,7 +153,14 @@ export function registerRecovery(
   pi.on("session_start", (_event, ctx) => retry(ctx))
   pi.on("agent_settled", (_event, ctx) => retry(ctx))
   pi.registerCommand("attachments-recover", {
-    description: "Save attachment requests retained after a storage failure",
-    handler: (_args, ctx) => retry(ctx),
+    description:
+      "Save attachment requests retained after a read or storage failure",
+    handler: async (_args, ctx) => {
+      if (!unsavedByStorage.get(storage)?.size) {
+        ctx.ui.notify("No unsaved attachment requests.", "info")
+        return
+      }
+      return retry(ctx)
+    },
   })
 }

@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises"
 import { basename, resolve } from "node:path"
 import {
   type ExtensionAPI,
@@ -11,8 +10,6 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import { registerImages } from "./images.ts"
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
-
-type AttachmentSource = Snapshot | { name: string; path: string }
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
@@ -74,7 +71,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
 
   async function attach(
     ctx: ExtensionContext,
-    capture: () => Promise<AttachmentSource[] | undefined>,
+    capture: () => Promise<Snapshot[] | undefined>,
   ): Promise<void> {
     readObserved = false
     const draft = ctx.ui.getEditorText()
@@ -92,13 +89,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
       const sources = await capture()
       if (!sources) return
       inputs = terminalInputs
-      snapshots = await Promise.all(
-        sources.map(async (source) =>
-          "path" in source
-            ? { name: source.name, contents: await readFile(source.path) }
-            : source,
-        ),
-      )
+      snapshots = sources
     } catch (error) {
       if (lifetime.signal.aborted) throw error
       ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
@@ -139,6 +130,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
           "error",
         )
         changedDuringOperation ||= terminalInputs !== inputs
+        if (snapshots.some((snapshot) => snapshot.contents === undefined))
+          return
         if (
           snapshots.length === 1 &&
           typeof snapshots[0]!.contents === "string"

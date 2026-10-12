@@ -574,11 +574,15 @@ test("native compaction queues preserve draft attachments through compaction and
   )
   host.reply(400)
   await host.settled()
-  assert.deepEqual(inputs, [
-    "Seed native compaction",
-    normal.text.trim(),
-    followUp.text.trim(),
-  ])
+  // Pi may transform queued inputs concurrently; model delivery order is checked above.
+  assert.deepEqual(
+    inputs.toSorted(),
+    [
+      "Seed native compaction",
+      normal.text.trim(),
+      followUp.text.trim(),
+    ].toSorted(),
+  )
   assert((await host.output()).includes("Controlled model failure"))
   assert.equal(host.ui.getEditorText(), "Later draft during compaction")
   const recovery = host.session.sendUserMessage("/composer-recover", {
