@@ -14,6 +14,6 @@
 - [x] Pending image work stays with its requesting draft and cannot overwrite newer work.
 - [ ] Use public-boundary tests for bytes, membership, and submitted image content, plus real Ghostty/macOS graphics and widget-coexistence checks.
 
-Integration evidence: `c087d06` and `07f426d`; 181 combined tests, formatting, lint, and root/composer typechecks pass. Public-host probes confirm image delivery and retained original bytes. Ticket20 must close the failed recovery-file plus failed native-append persistence gap; real terminal graphics remain pending.
+Integration evidence: `c087d06` and `07f426d`; 181 combined tests, formatting, lint, and root/composer typechecks pass. Public-host probes confirm image delivery and retained original bytes. Real terminal graphics remain pending.
 
 Recovery verification: `11c623c`; clipboard/checkpoint/image write failures, partial captures, late shutdown work, reload and fresh-process restoration pass. The full 393-test suite and all required checks pass; actual model delivery ordering remains asserted.

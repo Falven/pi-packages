@@ -4,7 +4,7 @@
 
 **Blocked by:** 06: Recover drafts after native submission failures; 07: pi-composer: preserve native completions and editor actions; 08: pi-composer: copy, cut, and paste selections; 12: pi-composer: select and scroll formatted drafts; 13: pi-attachments: preview, restore, and remove text; 15: pi-paste: classify copied files and images; 16: pi-skill-references: complete inline skill references; 17: pi-skill-references: expand each skill once; 21: pi-attachments: clean up unused snapshots safely.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] In Ghostty/macOS fullscreen mode, edit formatted prose/code, use native and custom completions, copy/cut/paste selections, and include text and image attachments in one draft.
 - [ ] Exercise every actual native paste route with all packages loaded and confirm the same cutoff, overrides, content precedence, selection behavior, and single-action history.
