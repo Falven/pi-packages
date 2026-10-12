@@ -17,7 +17,7 @@ Paste, attachment, and skill-reference functionality is designed for Pi's native
 
 ## Load local packages
 
-From the repository root, install the packages you want to work on:
+Use Node.js 24 or later. The four-package setup requires Pi and `pi-tui` 1.x at version 1.0.2 or later. Load `pi-composer` before editor decorators; paste and attachment extensions support either order. From the repository root:
 
 ```bash
 pi install ./packages/pi-composer
@@ -35,5 +35,6 @@ pnpm install --frozen-lockfile --ignore-scripts
 pnpm run format:check
 pnpm run lint
 pnpm run typecheck
+pnpm exec tsc --noEmit -p packages/pi-composer/tsconfig.json
 pnpm test
 ```
