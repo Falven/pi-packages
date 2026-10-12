@@ -331,6 +331,9 @@ export default function piPaste(pi: ExtensionAPI): void {
         }
       }
       pasteInline = () => clipboardPaste(true)
+      if (!Reflect.get(editor, "onPasteImage", editor)) {
+        Reflect.set(editor, "onPasteImage", () => void clipboardPaste(), editor)
+      }
 
       return new Proxy(editor, {
         get(target, property) {
@@ -395,6 +398,10 @@ export default function piPaste(pi: ExtensionAPI): void {
                 )
                 if (
                   matchesKey(data, "super+v") &&
+                  !Object.hasOwn(
+                    keybindings.getUserBindings(),
+                    "app.clipboard.pasteImage",
+                  ) &&
                   typeof clipboardAction === "function" &&
                   !Object.values(keybindings.getEffectiveConfig())
                     .flat()
@@ -441,18 +448,6 @@ export default function piPaste(pi: ExtensionAPI): void {
             value !== Reflect.get(target, property, target)
           )
             changed()
-          if (
-            property === "onPasteImage" &&
-            !Reflect.get(target, property, target) &&
-            typeof value === "function"
-          ) {
-            return Reflect.set(
-              target,
-              property,
-              () => void clipboardPaste(),
-              target,
-            )
-          }
           return Reflect.set(target, property, value, target)
         },
       })

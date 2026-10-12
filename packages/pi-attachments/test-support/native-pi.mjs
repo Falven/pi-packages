@@ -43,6 +43,12 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
     state.directory ?? (await mkdtemp(join(tmpdir(), "pi-attachments-test-")))
   const agentDir = join(directory, "agent")
   await mkdir(agentDir, { recursive: true })
+  if (state.keybindings) {
+    await writeFile(
+      join(agentDir, "keybindings.json"),
+      JSON.stringify(state.keybindings),
+    )
+  }
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR
   const previousOffline = process.env.PI_OFFLINE
   process.env.PI_CODING_AGENT_DIR = agentDir

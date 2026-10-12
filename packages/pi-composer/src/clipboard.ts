@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks"
 import { randomUUID } from "node:crypto"
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
@@ -7,7 +8,6 @@ import {
   type ExtensionContext,
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent"
-import { getNativeClipboard } from "@earendil-works/pi-tui"
 
 type ClipboardDraft = { text: string; anchor: number; head: number }
 type ClipboardRecovery = {
@@ -25,6 +25,14 @@ const processState = globalThis as typeof globalThis & {
   [unsavedKey]?: Map<string, Set<ClipboardRecovery>>
 }
 const unsavedByStorage = (processState[unsavedKey] ??= new Map())
+type PendingPaste = (text: string, insert: () => void) => void
+// Pi's void clipboard callback can deliver to a replacement editor after reload.
+const pendingKey = Symbol.for("pi-composer:pending-clipboard")
+const pendingState = globalThis as typeof globalThis & {
+  [pendingKey]?: AsyncLocalStorage<PendingPaste>
+}
+const pendingPaste = (pendingState[pendingKey] ??=
+  new AsyncLocalStorage<PendingPaste>())
 
 export class Clipboard {
   private ui: ExtensionUIContext | undefined
@@ -64,11 +72,20 @@ export class Clipboard {
     }
   }
 
-  async paste(
+  static insert(text: string, insert: () => void): boolean {
+    // shortcut: guard composer insertions until Pi exposes request-scoped clipboard delivery.
+    const pending = pendingPaste.getStore()
+    if (!pending) return false
+    pending(text, insert)
+    return true
+  }
+
+  paste(
     draft: ClipboardDraft,
     revision: number,
-    isCurrent: () => boolean,
-  ): Promise<void> {
+    applyToRequest: (insert: () => void) => boolean,
+    handler: () => void,
+  ): void {
     const original = {
       sessionId: this.sessionId,
       sessionFile: this.sessionFile,
@@ -76,25 +93,22 @@ export class Clipboard {
       revision,
       draft: { ...draft },
     }
-    let text: string | null | undefined
+    const receive: PendingPaste = (text, insert) => {
+      let reason = "Draft changed."
+      if (this.ui) {
+        try {
+          if (pendingPaste.exit(() => applyToRequest(insert))) return
+        } catch (error) {
+          reason = `Paste failed: ${String(error)}`
+        }
+      }
+      void this.preserve({ ...original, clipboard: text }, reason)
+    }
     try {
-      text = await getNativeClipboard()?.getText()
-      if (text === undefined) throw new Error("Text clipboard unavailable")
+      pendingPaste.run(receive, handler)
     } catch (error) {
       this.notify(`Paste failed: ${String(error)}`, "error")
-      return
     }
-    if (!text) return
-    let reason = "Draft changed."
-    if (this.ui && isCurrent()) {
-      try {
-        this.ui.pasteToEditor(text)
-        return
-      } catch (error) {
-        reason = `Paste failed: ${String(error)}`
-      }
-    }
-    await this.preserve({ ...original, clipboard: text }, reason)
   }
 
   async retry(): Promise<void> {

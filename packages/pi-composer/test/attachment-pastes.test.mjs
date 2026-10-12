@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs"
 import fs, { readFile, readdir, stat, writeFile } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
-import { test } from "node:test"
+import { beforeEach, test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { getNativeClipboard, StdinBuffer } from "@earendil-works/pi-tui"
@@ -21,6 +21,14 @@ const pastePath = fileURLToPath(
 const attachmentsPath = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),
 )
+
+beforeEach((t) => {
+  const clipboard = getNativeClipboard()
+  assert.ok(clipboard?.getFilePaths)
+  t.mock.method(clipboard, "getFilePaths", async () => null)
+  t.mock.method(clipboard, "getImage", async () => null)
+  t.mock.method(clipboard, "getText", async () => null)
+})
 
 function holdSnapshotWrite(t, host) {
   const write = fs.writeFile

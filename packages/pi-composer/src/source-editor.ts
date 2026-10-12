@@ -15,7 +15,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui"
-import type { Clipboard } from "./clipboard.ts"
+import { Clipboard } from "./clipboard.ts"
 import { codeNewline } from "./code.ts"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
@@ -241,8 +241,35 @@ export class SourceEditor extends CustomEditor {
   }
 
   override insertTextAtCursor(text: string): void {
-    const { anchor, head } = this.draft
-    this.replaceRange(Math.min(anchor, head), Math.max(anchor, head), text)
+    const insert = () => {
+      const { anchor, head } = this.draft
+      this.replaceRange(Math.min(anchor, head), Math.max(anchor, head), text)
+    }
+    if (!Clipboard.insert(text, insert)) insert()
+  }
+
+  private pasteClipboard(): void {
+    const handler = this.onPasteImage
+    if (!handler) return
+    let selection = this.draft
+    let revision = this.revision
+    this.clipboard.paste(
+      selection,
+      revision,
+      (insert) => {
+        if (
+          !this.focused ||
+          this.draft !== selection ||
+          this.revision !== revision
+        )
+          return false
+        insert()
+        selection = this.draft
+        revision = this.revision
+        return true
+      },
+      () => handler.call(this),
+    )
   }
 
   private replaceRange(
@@ -419,7 +446,7 @@ export class SourceEditor extends CustomEditor {
     const previousPrompt = keys.matches(data, "tui.editor.historyPrevious")
     const nextPrompt = keys.matches(data, "tui.editor.historyNext")
     if (keys.matches(data, "app.clipboard.pasteImage")) {
-      this.onPasteImage?.()
+      this.pasteClipboard()
       return
     }
     const interrupt = keys.matches(data, "app.interrupt")
@@ -526,16 +553,7 @@ export class SourceEditor extends CustomEditor {
     }
 
     if (aliasMatches("app.clipboard.pasteImage", "super+v")) {
-      const selection = this.draft
-      const revision = this.revision
-      void this.clipboard.paste(
-        selection,
-        revision,
-        () =>
-          this.focused &&
-          this.draft === selection &&
-          this.revision === revision,
-      )
+      this.pasteClipboard()
       return
     }
 

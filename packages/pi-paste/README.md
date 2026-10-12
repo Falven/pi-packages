@@ -33,7 +33,7 @@ Attach Text is the existing `pi-attachments` action and accepts short text too. 
 
 Inline text retains the active editor's whitespace behavior: native Pi expands tabs to four spaces and normalizes line endings to LF; the composer preserves tabs. Attachment files preserve the captured text, including tabs and original line endings.
 
-Native terminal listeners, extension shortcuts, earlier clipboard handlers, mouse handlers, and autocomplete updates retain their priority. Command+V delegates to the native clipboard action when no effective native binding claims that key. An earlier custom clipboard handler keeps control of its action. Right-click handling stays within the main editor and leaves other native input UIs in control. Composer's standalone clipboard and history behavior remain available without this package.
+Native terminal listeners, extension shortcuts, clipboard handlers, mouse handlers, and autocomplete updates retain their priority. Command+V delegates to the supplied clipboard handler when no effective native binding claims that key. Any explicit override of `app.clipboard.pasteImage`, including an empty binding list or a repeated default, suppresses this extra alias. The package supplies its handler only when one is absent; earlier and later custom handlers keep their chosen insertion behavior. Right-click handling stays within the main editor and leaves other native input UIs in control. Composer's standalone clipboard and history behavior remain available without this package.
 
 ## Handoff and recovery
 

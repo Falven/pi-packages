@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { describe, test } from "node:test"
+import { beforeEach, describe, test } from "node:test"
 import {
   getAgentDir,
   type ExtensionUIContext,
@@ -25,6 +25,15 @@ describe(
   "clipboard at the native macOS host boundary",
   { skip: process.platform !== "darwin" },
   () => {
+    beforeEach((t) => {
+      assert("mock" in t)
+      const clipboard = getNativeClipboard()
+      assertWritableClipboard(clipboard)
+      t.mock.method(clipboard, "getFilePaths", async () => null)
+      t.mock.method(clipboard, "getImage", async () => null)
+      t.mock.method(clipboard, "getText", async () => null)
+    })
+
     test("Command C exports the selected source Markdown and leaves its selection editable", async (t) => {
       const clipboard = getNativeClipboard()
       assertWritableClipboard(clipboard)
@@ -130,10 +139,7 @@ describe(
       assert.equal(host.ui.getEditorText(), "Changed selection")
     })
 
-    test("Command V preserves native paste decoration and history across editor and session replacement", async (t) => {
-      const clipboard = getNativeClipboard()
-      assert(clipboard)
-      t.mock.method(clipboard, "getText", async () => "/skill:review\nsource")
+    test("public paste preserves decoration and history across editor and session replacement", async (t) => {
       const host = await openHost(t, {
         extension: (pi) => {
           pi.on("session_start", (_event, ctx) => {
@@ -163,7 +169,7 @@ describe(
       })
       host.ui.setEditorText("Keep old")
       await host.key("\x1b[1;4D")
-      await host.key("\x1b[118;9u")
+      host.ui.pasteToEditor("/skill:review\nsource")
       assert.equal(
         host.ui.getEditorText(),
         "Keep Policy: /skill:review\nsource",
@@ -175,7 +181,7 @@ describe(
         host.ui.getEditorText(),
         "Keep Policy: /skill:review\nsource",
       )
-      await host.key("\x1b[118;9u")
+      host.ui.pasteToEditor("/skill:review\nsource")
       assert.equal(
         host.ui.getEditorText(),
         "Keep Policy: /skill:review\nsourcePolicy: /skill:review\nsource",
@@ -195,7 +201,7 @@ describe(
       host.ui.setEditorComponent(factory)
       await host.key("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), "Keep old")
-      await host.key("\x1b[118;9u")
+      host.ui.pasteToEditor("/skill:review\nsource")
       assert.equal(
         host.ui.getEditorText(),
         "Keep Policy: /skill:review\nsource",
@@ -203,7 +209,7 @@ describe(
       await host.runtime.newSession()
       host.ui.setEditorText("Fresh old")
       await host.key("\x1b[1;4D")
-      await host.key("\x1b[118;9u")
+      host.ui.pasteToEditor("/skill:review\nsource")
       assert.equal(
         host.ui.getEditorText(),
         "Fresh Policy: /skill:review\nsource",
@@ -246,14 +252,7 @@ describe(
       assert.equal(host.ui.getEditorText(), "Keep original and later work")
     })
 
-    test("a failing native paste decorator preserves the selection and a recovery copy", async (t) => {
-      const clipboard = getNativeClipboard()
-      assert(clipboard)
-      t.mock.method(
-        clipboard,
-        "getText",
-        async () => "Recover this /skill:review",
-      )
+    test("a failing public paste decorator reports its error and preserves the selection", async (t) => {
       const host = await openHost(t, {
         columns: 240,
         extension: (pi) => {
@@ -284,17 +283,9 @@ describe(
       })
       host.ui.setEditorText("Keep original")
       await host.key("\x1b[1;4D")
-      await host.key("\x1b[118;9u")
-      await t.waitFor(() =>
-        assert(host.terminal.output.includes("Clipboard paste saved to ")),
-      )
-      const output = await host.output()
-      assert.match(output, /Paste policy failed/)
-      const path = output.match(/Clipboard paste saved to (.+?\.json)/)?.[1]
-      assert(path)
-      assert.equal(
-        JSON.parse(await readFile(path, "utf8")).clipboard,
-        "Recover this /skill:review",
+      assert.throws(
+        () => host.ui.pasteToEditor("Recover this /skill:review"),
+        /Paste policy failed/,
       )
       assert.equal(host.ui.getEditorText(), "Keep original")
       await host.type("Replacement")
@@ -414,9 +405,8 @@ describe(
       await host.key("\x1b[118;9u")
       await host.type("Later work")
       read.reject(new Error("Clipboard permission denied"))
-      await t.waitFor(() =>
-        assert(host.terminal.output.includes("Clipboard permission denied")),
-      )
+      // Pi reports text-read failures as empty results through its supplied handler.
+      await host.output()
       assert.equal(host.ui.getEditorText(), "Keep Later work")
       await host.key("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), "Keep original")
@@ -594,9 +584,6 @@ describe(
       assert.equal(host.ui.getEditorText(), "Original")
       await host.key("\x1b[97;9u")
       await host.key("\x1b[118;9u")
-      await t.waitFor(() =>
-        assert(host.terminal.output.includes("Text clipboard unavailable")),
-      )
       assert.equal(host.ui.getEditorText(), "Original")
       await host.type("Selection survived")
       assert.equal(host.ui.getEditorText(), "Selection survived")
