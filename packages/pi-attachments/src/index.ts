@@ -1,5 +1,231 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
+import { basename, join, resolve, sep } from "node:path"
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  CustomEditor,
+  getAgentDir,
+  getSelectListTheme,
+  keyHint,
+  truncateToVisualLines,
+} from "@earendil-works/pi-coding-agent"
 
-export default function piAttachments(_pi: ExtensionAPI): void {
-  // Scaffold; see ../README.md for the specification.
+type Snapshot = { name: string; contents: string | Buffer }
+type AttachmentSource = Snapshot | { name: string; path: string }
+
+export default function piAttachments(pi: ExtensionAPI): void {
+  const storage = resolve(getAgentDir(), "pi-attachments")
+  let submissions = 0
+  let terminalInputs = 0
+  const lifetime = new AbortController()
+
+  pi.on("input", () => {
+    submissions++
+  })
+  pi.on("session_shutdown", () => {
+    lifetime.abort()
+  })
+
+  pi.on("session_start", (_event, ctx) => {
+    ctx.ui.onTerminalInput(() => {
+      terminalInputs++
+      return undefined
+    })
+    ctx.ui.setWidget("pi-attachments", () => ({
+      render(width) {
+        const paths = new Set<string>()
+        for (const match of ctx.ui
+          .getEditorText()
+          .matchAll(/\[Attachment: [^\]]+\]\(<([^>]+)>\)/g)) {
+          const path = match[1]
+          if (path?.startsWith(storage + sep)) paths.add(path)
+        }
+        if (paths.size === 0) return []
+        const names = [...paths].map((path) => basename(path)).join(", ")
+        return truncateToVisualLines(
+          `Attachments (${paths.size}): ${names}`,
+          5,
+          width,
+        ).visualLines
+      },
+      invalidate() {},
+    }))
+  })
+
+  async function attach(
+    ctx: ExtensionContext,
+    capture: () => Promise<AttachmentSource | undefined>,
+  ): Promise<void> {
+    const draft = ctx.ui.getEditorText()
+    const sessionId = ctx.sessionManager.getSessionId()
+    const submission = submissions
+    let inputs = terminalInputs
+    let changedDuringOperation = false
+    let snapshot: Snapshot | undefined
+    try {
+      const source = await capture()
+      if (!source) return
+      inputs = terminalInputs
+      snapshot =
+        "path" in source
+          ? { name: source.name, contents: await readFile(source.path) }
+          : source
+    } catch (error) {
+      if (lifetime.signal.aborted) throw error
+      ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
+      return
+    }
+    /* eslint-disable no-await-in-loop -- A retry follows the failed save and the user's recovery action. */
+    while (snapshot) {
+      try {
+        await mkdir(storage, { recursive: true, mode: 0o700 })
+        const directory = await mkdtemp(join(storage, "snapshot-"))
+        const path = join(directory, snapshot.name)
+        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
+        const reference = `[Attachment: ${snapshot.name}](<${path}>)`
+        changedDuringOperation ||= terminalInputs !== inputs
+        // shortcut: text changes can return to the same value unseen, revisit when Pi exposes draft revisions.
+        if (
+          !lifetime.signal.aborted &&
+          !changedDuringOperation &&
+          submissions === submission &&
+          ctx.sessionManager.getSessionId() === sessionId &&
+          ctx.ui.getEditorText() === draft
+        ) {
+          ctx.ui.pasteToEditor(`\n${reference}\n`)
+        } else {
+          const recovery = `${path}.draft.md`
+          await writeFile(
+            recovery,
+            `# Attachment request\n\nSession: ${sessionId}\n\n${draft}\n\n${reference}\n`,
+            { flag: "wx", mode: 0o600 },
+          )
+          if (!lifetime.signal.aborted) {
+            ctx.ui.notify(
+              `Draft changed. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,
+              "warning",
+            )
+          }
+        }
+        return
+      } catch (error) {
+        if (lifetime.signal.aborted) throw error
+        ctx.ui.notify(`Could not attach: ${String(error)}`, "error")
+        changedDuringOperation ||= terminalInputs !== inputs
+        if (typeof snapshot.contents === "string") {
+          const contents = await editText(ctx, snapshot.contents)
+          snapshot =
+            contents === undefined ? undefined : { ...snapshot, contents }
+        } else {
+          const retry = await ctx.ui.select(
+            `Save ${snapshot.name}`,
+            ["Retry save", "Cancel"],
+            { signal: lifetime.signal },
+          )
+          if (retry !== "Retry save") return
+        }
+        inputs = terminalInputs
+      }
+    }
+    /* eslint-enable no-await-in-loop */
+  }
+
+  function editText(
+    ctx: ExtensionContext,
+    prefill = "",
+  ): Promise<string | undefined> {
+    return ctx.ui.custom<string | undefined>(
+      (tui, theme, keybindings, done) => {
+        const cancel = () => done(undefined)
+        lifetime.signal.addEventListener("abort", cancel, { once: true })
+        const editor = new CustomEditor(
+          tui,
+          {
+            borderColor: (value) => theme.fg("border", value),
+            selectList: getSelectListTheme(),
+          },
+          keybindings,
+        )
+        editor.setText(prefill)
+        return {
+          get focused() {
+            return editor.focused
+          },
+          set focused(value) {
+            editor.focused = value
+          },
+          render(width) {
+            return [
+              theme.fg("accent", "Attach text"),
+              ...editor.render(width),
+              ...truncateToVisualLines(
+                `${keyHint("tui.input.submit", "attach")}  ${keyHint("tui.select.cancel", "cancel")}`,
+                2,
+                width,
+              ).visualLines,
+            ]
+          },
+          handleInput(data) {
+            if (keybindings.matches(data, "tui.select.cancel")) {
+              done(undefined)
+            } else if (keybindings.matches(data, "tui.input.submit")) {
+              // Native dialog submission trims text; snapshot the editor before it clears.
+              done(editor.getExpandedText())
+            } else {
+              editor.handleInput(data)
+            }
+          },
+          invalidate() {
+            editor.invalidate()
+          },
+          dispose() {
+            lifetime.signal.removeEventListener("abort", cancel)
+          },
+        }
+      },
+      { overlay: true },
+    )
+  }
+
+  function attachText(text: string, ctx: ExtensionContext): Promise<void> {
+    return attach(ctx, async () => {
+      const contents = text || (await editText(ctx))
+      return contents === undefined ? undefined : { name: "text.txt", contents }
+    })
+  }
+
+  function attachFile(path: string, ctx: ExtensionContext): Promise<void> {
+    return attach(ctx, async () => {
+      const selected =
+        path ||
+        (await ctx.ui.input("Attach file", "File path", {
+          signal: lifetime.signal,
+        }))
+      if (selected === undefined) return undefined
+      if (!selected) throw new Error("A file path is required")
+      const source = resolve(ctx.cwd, selected)
+      return {
+        name: basename(source).replaceAll(/[^\w.-]/g, "_"),
+        path: source,
+      }
+    })
+  }
+
+  pi.registerCommand("attach-text", {
+    description: "Attach text as a preserved file",
+    handler: attachText,
+  })
+
+  pi.registerCommand("attach-file", {
+    description: "Attach a snapshot of an existing file",
+    handler: attachFile,
+  })
+  pi.registerShortcut("ctrl+alt+t", {
+    description: "Attach text",
+    handler: (ctx) => attachText("", ctx),
+  })
+  pi.registerShortcut("ctrl+alt+f", {
+    description: "Attach file",
+    handler: (ctx) => attachFile("", ctx),
+  })
 }
