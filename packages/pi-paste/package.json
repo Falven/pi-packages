@@ -1,7 +1,7 @@
 {
   "name": "pi-paste",
   "version": "0.1.0",
-  "description": "Paste policy extension scaffold for Pi.",
+  "description": "Consistent text paste routing for Pi.",
   "keywords": [
     "paste",
     "pi",
@@ -18,8 +18,12 @@
     "access": "public",
     "provenance": true
   },
+  "devDependencies": {
+    "@earendil-works/pi-tui": "0.87.1"
+  },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "engines": {
     "node": ">=24"
