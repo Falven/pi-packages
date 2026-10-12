@@ -22,6 +22,7 @@ export type ProseSpan = {
   from: number
   to: number
   styles: ProseStyle[]
+  href?: string
   code?: { language: string | undefined }
   text?: string
 }
@@ -143,7 +144,17 @@ export function projectProse(
             contentTo: offset + start + content.length,
           })
         }
+        const firstSpan = spans.length
         visit(children, offset + start, [...styles, ...added])
+        if (
+          token.type === "link" &&
+          token.href &&
+          !/\p{Cc}/u.test(token.href)
+        ) {
+          for (let index = firstSpan; index < spans.length; index++) {
+            spans[index]!.href = token.href
+          }
+        }
         append(end - newlines, end, styles)
       }
       offset = end

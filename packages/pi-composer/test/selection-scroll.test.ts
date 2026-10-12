@@ -7,8 +7,17 @@ import type { NativeClipboard } from "@earendil-works/pi-tui"
 const previousColor = process.env["FORCE_COLOR"]
 process.env["FORCE_COLOR"] = "3"
 const { openHost } = await import("../fixtures/host.ts")
-const { getNativeClipboard, MouseRegion, SelectList, sliceByColumn, Text } =
-  await import("@earendil-works/pi-tui")
+const {
+  getCapabilities,
+  getNativeClipboard,
+  getOsc8LinkAtColumn,
+  MouseRegion,
+  SelectList,
+  setCapabilities,
+  sliceByColumn,
+  Text,
+  visibleWidth,
+} = await import("@earendil-works/pi-tui")
 const { getMarkdownTheme, getSelectListTheme } =
   await import("@earendil-works/pi-coding-agent")
 if (previousColor === undefined) delete process.env["FORCE_COLOR"]
@@ -52,6 +61,149 @@ function reversedText(line: string): string {
   }
   return text
 }
+
+test("native hyperlinks cover recognized link text in both views without changing submitted Markdown", async (t) => {
+  const host = await openHost(t, { columns: 100 })
+  const capabilities = getCapabilities()
+  t.after(() => setCapabilities(capabilities))
+  const examples = [
+    {
+      source: "Before https://pi.dev/a?x=1&y=2 after",
+      label: "https://pi.dev/a?x=1&y=2",
+      href: "https://pi.dev/a?x=1&y=2",
+    },
+    {
+      source: "Use <https://pi.dev/auto> now",
+      label: "https://pi.dev/auto",
+      href: "https://pi.dev/auto",
+    },
+    {
+      source: "[**label** and `code`](https://pi.dev/inline) tail",
+      label: "code",
+      href: "https://pi.dev/inline",
+    },
+    {
+      source: "> - [e\u0301👩‍💻界 label][ref]\n\n[ref]: https://pi.dev/reference",
+      label: "e\u0301👩‍💻界 label",
+      href: "https://pi.dev/reference",
+    },
+  ]
+  for (const sourceView of [false, true]) {
+    if (sourceView) await host.key("\x1b[109;10u")
+    setCapabilities({ ...capabilities, hyperlinks: true })
+    for (const { source, label, href } of examples) {
+      host.ui.setEditorText(source)
+      await host.output()
+      const line = screen(host).get(rowContaining(host, label))!
+      const text = stripVTControlCharacters(line)
+      const column = visibleWidth(text.slice(0, text.indexOf(label)))
+      for (let offset = 0; offset < visibleWidth(label); offset++) {
+        assert.equal(getOsc8LinkAtColumn(line, column + offset), href)
+      }
+      assert.equal(host.ui.getEditorText(), source)
+      if (sourceView) assert(text.includes(source.split("\n")[0]!))
+    }
+    setCapabilities({ ...capabilities, hyperlinks: false })
+    host.terminal.resize(sourceView ? 102 : 101, 24)
+    await host.output()
+    const line = screen(host).get(rowContaining(host, "e\u0301👩‍💻界 label"))!
+    for (let column = 0; column < visibleWidth(line); column++)
+      assert.equal(getOsc8LinkAtColumn(line, column), undefined)
+  }
+  await host.key("\x1b[13;9u")
+  await host.settled()
+  assert.deepEqual(
+    host.requests[0]?.messages.filter((message) => message.role === "user"),
+    [
+      {
+        role: "user",
+        content: [{ type: "text", text: examples.at(-1)!.source }],
+      },
+    ],
+  )
+})
+
+test("wrapped hyperlinks preserve mouse selection, clipboard text, destination edits, and undo", async (t) => {
+  const host = await openHost(t, { columns: 12 })
+  const capabilities = getCapabilities()
+  setCapabilities({ ...capabilities, hyperlinks: true })
+  t.after(() => setCapabilities(capabilities))
+  const source = "See [**ab界e\u0301👩‍💻cd**](https://pi.dev/wrap) end"
+  host.ui.setEditorText(source)
+  await host.output()
+  const first = rowContaining(host, "See ab界e\u0301👩‍💻")
+  const last = rowContaining(host, "cd end")
+  const rows = screen(host)
+  assert.equal(getOsc8LinkAtColumn(rows.get(first)!, 3), undefined)
+  for (let column = 4; column < 11; column++)
+    assert.equal(
+      getOsc8LinkAtColumn(rows.get(first)!, column),
+      "https://pi.dev/wrap",
+    )
+  assert.equal(getOsc8LinkAtColumn(rows.get(first)!, 11), undefined)
+  assert.equal(getOsc8LinkAtColumn(rows.get(last)!, 1), "https://pi.dev/wrap")
+  assert.equal(getOsc8LinkAtColumn(rows.get(last)!, 2), undefined)
+  assert.equal(getOsc8LinkAtColumn(rows.get(last)!, 6), undefined)
+
+  await host.key(`\x1b[<0;1;${last}M`)
+  await host.key(`\x1b[<32;3;${last}M`)
+  await host.key(`\x1b[<0;3;${last}m`)
+  await host.type("X")
+  assert.equal(host.ui.getEditorText(), source.replace("cd", "X"))
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), source)
+
+  const changed = source.replace("/wrap", "/changed")
+  host.ui.setEditorText(changed)
+  await host.output()
+  assert.equal(
+    getOsc8LinkAtColumn(screen(host).get(last)!, 0),
+    "https://pi.dev/changed",
+  )
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  await host.key("\x1b[97;9u")
+  await host.key("\x1b[99;9u")
+  assert.equal(copied, changed)
+  await host.key("\x1b[122;9u")
+  await host.output()
+  assert.equal(
+    getOsc8LinkAtColumn(screen(host).get(last)!, 0),
+    "https://pi.dev/wrap",
+  )
+  assert.equal(host.ui.getEditorText(), source)
+})
+
+test("code and empty or control-bearing destinations remain literal without hyperlink output", async (t) => {
+  const host = await openHost(t, { columns: 120 })
+  const capabilities = getCapabilities()
+  setCapabilities({ ...capabilities, hyperlinks: true })
+  t.after(() => setCapabilities(capabilities))
+  const examples = [
+    "`literal https://pi.dev/code`",
+    "```text\nliteral https://pi.dev/code\n```",
+    "[literal]()",
+    "[literal](https://pi.dev/\u0007)",
+    "[literal](https://pi.dev/\u001b]52;c;payload)",
+    "[literal](https://pi.dev/\u009c)",
+  ]
+  for (const sourceView of [false, true]) {
+    if (sourceView) await host.key("\x1b[109;10u")
+    for (const source of examples) {
+      host.ui.setEditorText(source)
+      await host.output()
+      const line = screen(host).get(rowContaining(host, "literal"))!
+      for (let column = 0; column < visibleWidth(line); column++)
+        assert.equal(getOsc8LinkAtColumn(line, column), undefined)
+      assert.doesNotMatch(line, /\x1b\]52;/)
+      assert.equal(host.ui.getEditorText(), source)
+    }
+  }
+})
 
 test("mouse and keyboard replace the same wrapped Unicode prose in either drag direction", async (t) => {
   const clipboard = getNativeClipboard()

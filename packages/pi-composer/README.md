@@ -8,6 +8,8 @@ In fullscreen mode, mouse dragging and keyboard selection address the same Markd
 
 For a blinking caret, enable **Show hardware cursor** in Pi's `/settings`. The composer then uses the terminal cursor in both views, following the terminal's shape and blinking preferences. Disabling the setting restores the drawn caret. Selection highlighting remains visible in either mode.
 
+Recognized URLs and Markdown link labels use Pi's native terminal hyperlinks. Formatted links open their destinations while source view retains literal Markdown. In fullscreen Ghostty on macOS, use **Shift+Cmd+click** to open a link; ordinary clicks and dragging still position the caret and select text. Hover feedback follows Ghostty's mouse-capture behavior. Copying and submitting preserve the Markdown text.
+
 The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
 
 Native `@` path completion, command completion, provider updates, and custom pickers continue through Pi's existing interfaces. File and skill references remain editable text.

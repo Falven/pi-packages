@@ -1,12 +1,19 @@
 import { getMarkdownTheme } from "@earendil-works/pi-coding-agent"
 import {
   CURSOR_MARKER,
+  getCapabilities,
+  hyperlink,
   sliceByColumn,
   truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui"
 import { highlightCodeSpans } from "./code.ts"
-import { projectProse, type ProseMark, type ProseStyle } from "./prose.ts"
+import {
+  projectProse,
+  type ProseMark,
+  type ProseSpan,
+  type ProseStyle,
+} from "./prose.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 const words = new Intl.Segmenter(undefined, { granularity: "word" })
@@ -20,6 +27,7 @@ type Cell = {
   display: string
   width: number
   styles: ProseStyle[]
+  href: string | undefined
   highlight: { line: string; column: number; width: number } | undefined
   ranges: SourceRange[]
 }
@@ -40,10 +48,25 @@ export class Projection {
     let column = 0
     let prefix: Cell[] = []
     let inPrefix = true
-    const { spans, marks }: ReturnType<typeof projectProse> = formatted
-      ? projectProse(source)
-      : { spans: [{ from: 0, to: source.length, styles: [] }], marks: [] }
-    this.marks = marks
+    const prose = projectProse(source)
+    const spans: ProseSpan[] = formatted ? prose.spans : []
+    this.marks = formatted ? prose.marks : []
+    if (!formatted) {
+      let from = 0
+      for (const span of prose.spans) {
+        if (!span.href) continue
+        if (from < span.from) spans.push({ from, to: span.from, styles: [] })
+        spans.push({
+          from: span.from,
+          to: span.to,
+          styles: [],
+          href: span.href,
+        })
+        from = span.to
+      }
+      if (from < source.length)
+        spans.push({ from, to: source.length, styles: [] })
+    }
     const highlights = highlightCodeSpans(source, spans)
     const visible = spans
       .map((span) => span.text ?? source.slice(span.from, span.to))
@@ -53,7 +76,7 @@ export class Projection {
     let spanColumn = 0
     for (const { segment, index } of graphemes.segment(visible)) {
       const currentSpan = spanIndex
-      const { styles } = spans[spanIndex]!
+      const { styles, href } = spans[spanIndex]!
       const color = highlights.get(spans[spanIndex]!)
       const ranges: SourceRange[] = []
       let offset = index
@@ -104,6 +127,7 @@ export class Projection {
         display,
         width: cells,
         styles,
+        href,
         highlight,
         ranges,
       }
@@ -377,6 +401,7 @@ export class Projection {
     showHardwareCursor: boolean,
   ): string {
     const theme = getMarkdownTheme()
+    const hyperlinks = getCapabilities().hyperlinks
     const row = this.rows[index]!
     const caretRow = focused && this.rowAt(head) === index
     const caret = row.cells.findIndex((cell) => cell.to > head)
@@ -389,6 +414,12 @@ export class Projection {
         return display
       })
       .join("")
+    let href: string | undefined
+    let content = ""
+    const flush = () => {
+      output += href ? hyperlink(content, href) : content
+      content = ""
+    }
     let highlighted:
       | { source: string; line: string; column: number }
       | undefined
@@ -418,13 +449,19 @@ export class Projection {
           ) + "\x1b[0m"
       }
       for (const style of cell.styles) display = theme[style](display)
-      if (caretRow && caret === i) output += CURSOR_MARKER
-      output +=
+      const target = hyperlinks ? cell.href : undefined
+      if (target !== href) {
+        flush()
+        href = target
+      }
+      if (caretRow && caret === i) content += CURSOR_MARKER
+      content +=
         (caretRow && caret === i && !showHardwareCursor) ||
         (cell.to > Math.min(anchor, head) && cell.from < Math.max(anchor, head))
           ? `\x1b[7m${display}\x1b[27m`
           : display
     }
+    flush()
     if (caretRow && caret < 0) {
       output += CURSOR_MARKER + (showHardwareCursor ? " " : "\x1b[7m \x1b[27m")
     }

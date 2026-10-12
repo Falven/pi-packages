@@ -13,3 +13,5 @@
 - [x] Preserve native focus ownership and keep a background composer from drawing an active caret.
 - [x] Verify emitted cursor positioning, selection, and editing through the existing public Pi host boundary.
 - [ ] Manually verify blinking and terminal cursor shape in real Ghostty, including line ends, both views, resizing, and focus returning from native UI.
+
+**Automated validation:** On 2026-10-12, all 687 workspace tests passed on Node 24.13.1, together with formatting, lint, and typechecking. The public-host checks cover native cursor display, Unicode positioning, selection, view changes, resizing, and undo. Physical blinking and cursor appearance await user testing.
