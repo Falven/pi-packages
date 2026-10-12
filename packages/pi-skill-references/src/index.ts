@@ -5,8 +5,12 @@ import {
   type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent"
 import { Marked } from "@earendil-works/pi-tui"
+import { withInlineSkills } from "./completion.ts"
 
 export default function piSkillReferences(pi: ExtensionAPI): void {
+  pi.on("session_start", (_event, ctx) => {
+    ctx.ui.addAutocompleteProvider(withInlineSkills)
+  })
   const markdown = new Marked({
     extensions: [
       {
