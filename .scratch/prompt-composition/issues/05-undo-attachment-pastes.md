@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: pi-composer: edit and submit source drafts; 04: pi-paste: route text pastes and explicit overrides.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Load pi-composer, pi-paste, and pi-attachments as separate extensions and paste large text over a selected range.
 - [ ] Preserve the snapshot before discarding selected text; text replacement and attachment membership commit as one edit.

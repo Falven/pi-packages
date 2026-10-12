@@ -4,14 +4,16 @@
 
 **Blocked by:** 02: pi-attachments: attach text and file snapshots.
 
-**Status:** in-progress
+**Status:** implemented; final acceptance pending
 
-- [ ] In native Pi, decoded text below 5,000 UTF-16 units appears inline; text at or above 5,000 units becomes a readable text attachment.
-- [ ] Demonstrate the policy through actual terminal, clipboard-shortcut, right-click, and native extension paste routes; one route's handler test is insufficient.
-- [ ] Assemble fragmented bracketed input into one payload and classify it once. Preserve snapshot contents; inline text retains the native editor's tab expansion and LF normalization, while pi-composer preserves tabs.
-- [ ] Test 4,999/5,000/5,001-unit boundaries including supplementary characters, short multiline text, and small pastes into long drafts.
-- [ ] Paste Inline bypasses conversion; Attach Text attaches even short text. Both work in prose and code. Typing and ordinary native text replacement do not invoke paste policy.
-- [ ] Successful insertion uses the active editor; unavailable attachment handling or write failures preserve the draft and recoverable payload without silent rerouting.
-- [ ] Late clipboard/snapshot results stay with their requesting draft. Preserve native shortcut priority and input listeners that consume or transform events.
-- [ ] Use only existing public Pi contracts. Record an exact unsupported route as a blocker rather than claiming complete coverage or introducing a new integration protocol.
+- [x] In native Pi, decoded text below 5,000 UTF-16 units appears inline; text at or above 5,000 units becomes a readable text attachment.
+- [x] Demonstrate the policy through actual terminal, clipboard-shortcut, right-click, and native extension paste routes; one route's handler test is insufficient.
+- [x] Assemble fragmented bracketed input into one payload and classify it once. Preserve snapshot contents; inline text retains the native editor's tab expansion and LF normalization, while pi-composer preserves tabs.
+- [x] Test 4,999/5,000/5,001-unit boundaries including supplementary characters, short multiline text, and small pastes into long drafts.
+- [x] Paste Inline bypasses conversion; Attach Text attaches even short text. Both work in prose and code. Typing and ordinary native text replacement do not invoke paste policy.
+- [x] Successful insertion uses the active editor; unavailable attachment handling or write failures preserve the draft and recoverable payload without silent rerouting.
+- [x] Late clipboard/snapshot results stay with their requesting draft. Preserve native shortcut priority and input listeners that consume or transform events.
+- [x] Use only existing public Pi contracts. Record an exact unsupported route as a blocker rather than claiming complete coverage or introducing a new integration protocol.
 - [ ] Run public-boundary automated checks and real Ghostty/macOS clipboard, shortcut, and right-click checks.
+
+Integration evidence: `54000e0`; 56 paste tests and all 237 combined tests pass, along with formatting, lint, and root/composer typechecks. Public-host coverage includes route priority, deferred command guards, cutoff/overrides, and recovery across session/cwd/reload. Real terminal paste and clipboard checks remain pending.

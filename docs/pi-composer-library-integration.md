@@ -1,49 +1,39 @@
 # Composer library integration
 
-Pi's current public services and extension contracts are the baseline. An external dependency must supply substantial missing editing behavior while preserving those contracts. The [composer specification](specs/pi-composer.md) defines the required behavior.
+The composer uses Pi's public editor, parser, rendering, and lifecycle services. Its text state and source-to-cell mapping keep those services working with formatted editing and one undo history. The [composer specification](specs/pi-composer.md) defines the behavior.
 
-## Native reuse
+## Native services
 
-| Need                 | Existing implementation                                                                                          | Composer responsibility                                                        |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Completion           | Supplied `AutocompleteProvider` and native `SelectList`                                                          | Apply completion edits through the shared state and preserve provider updates. |
-| Markdown recognition | Public `Marked`, `Token`, and `Tokens` exports                                                                   | Editable formatting and source-to-cell position mapping.                       |
-| Rendering and input  | Pi themes, highlighting, width/slicing/wrapping, scrolling, mouse routing, key decoding, and keybinding managers | Editable selection, formatted movement, and Command-key handling.              |
-| Unicode segmentation | Public Pi utilities and standard `Intl.Segmenter`                                                                | Map grapheme boundaries to source offsets and terminal cell widths.            |
-| Copy and cut         | Pi's `copyToClipboard` helper                                                                                    | Export selected text and apply cutting through the editor history.             |
-| Draft lifecycle      | Session APIs, events, and state-directory helpers                                                                | Persist and restore the session draft and its attachment references.           |
+| Need                 | Existing implementation                                                               | Composer responsibility                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Completion           | Effective `AutocompleteProvider` and native `SelectList`                              | Apply returned edits and cursor positions, preserve provider updates and cancellation.                   |
+| Markdown recognition | Pi's exported `Marked`, `Token`, and `Tokens`                                         | Map parsed structures to the editable Markdown source.                                                   |
+| Terminal rendering   | Pi themes, code highlighting, width/slicing/wrapping and cursor utilities             | Render formatted text and selections at source-mapped cell positions.                                    |
+| Input                | Native key decoding, keybinding managers, editor actions and fullscreen mouse routing | Apply movement and edits to the shared selection and history.                                            |
+| Unicode              | Standard `Intl.Segmenter` and Pi cell-width utilities                                 | Preserve grapheme boundaries across movement, wrapping and deletion.                                     |
+| Clipboard            | Pi's native clipboard and copy helpers                                                | Preserve selection until copying succeeds and route pasted content through the active native paste path. |
+| Session drafts       | Public session events, custom entries and state-directory helpers                     | Save recoverable drafts and isolate in-memory histories by session.                                      |
 
-Consume the effective services supplied by Pi, including registered overrides. Paste policy, attachment storage and previews, and inline skill expansion follow the [shared package ownership](architecture.md).
+Consume the effective services Pi supplies, including registered overrides. Paste policy, attachment storage and previews, and skill expansion follow the [shared package ownership](architecture.md).
 
-Sources: [Pi TUI exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/index.ts), [coding-agent exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/index.ts#L478), and [autocomplete composition](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/modes/interactive/interactive-mode.ts#L825).
+## Text and history
 
-## State and history evaluation
+One Markdown string is the authoritative draft. Selection offsets and before/after text states belong to the editor. Formatted and source views share that state, so switching views does not serialize a second document or replace the draft.
 
-The editor needs persistent Markdown text, selections, mapped changes, transactions, and grouped undo/redo. Formatted and source views must share that state. Draft attachment membership changes must participate in the same undo event as related text edits; attachment contents remain owned by attachment handling.
+Typing and deletion group into coherent undo events. Completion, native text replacement, clipboard insertion and attachment reference changes enter the same history. Attachment membership follows ordinary reference text; the attachment package retains the referenced bytes independently of undo.
 
-`@codemirror/state` and the state-oriented history APIs from `@codemirror/commands` are the candidate for runtime validation. No editor-state dependency has been selected or installed.
+Public editor callbacks remain connected to the host when factories are decorated or reinstalled. Session histories contain plain editor data and remain isolated across session switches and resource reloads. A process restart restores saved text with fresh history.
 
-CodeMirror's `undo` and `redo` are state commands accepting state and dispatch. Its `invertedEffects` API can associate inverse attachment-membership changes with a text edit. This needs verification against the combined history requirements.
+## Markdown projection
 
-The standard `history()` extension also includes an `EditorView` event handler. Verify that the public state/history APIs run inside Pi without constructing a DOM view. Pi remains responsible for terminal input and rendering.
+Pi's Marked parser identifies Markdown structures. The composer maps visible graphemes, hidden delimiters, styles and terminal cells back to source offsets, allowing formatted selection and replacement to edit the same Markdown text. Pi supplies the theme, code highlighter and terminal utilities.
 
-Sources: [CodeMirror system guide](https://codemirror.net/docs/guide/) and [history implementation](https://github.com/codemirror/commands/blob/main/src/history.ts).
+Equivalent Markdown normalization is allowed while preserving meaning, code contents, references, attachments and unsupported syntax. Source view exposes the Markdown directly. Native parsing and rendering services remain the dependency baseline; the editor adds only the state and mapping needed for editing.
 
-## Markdown integration
+## Verification
 
-Use Pi's exported Marked parser with its public terminal styling and layout utilities. The existing Markdown renderer produces display lines; editable formatting additionally needs source-to-cell mapping and structural editing commands.
+Public-host tests load the extensions and drive native editor/session routes. They check source and formatted editing, Unicode selection, grouped history, effective completion providers, clipboard behavior, attachment references and recovery. Combined scenarios verify that independently loaded packages cooperate through those routes.
 
-Equivalent Markdown normalization is allowed while preserving meaning, code contents, references, attachments, and syntax outside the formatting subset. View changes must retain the same draft and history.
+Real Ghostty/macOS checks remain necessary for Command-key forwarding, clipboard formats, mouse behavior and image graphics. Synthetic input and captured terminal output establish automated behavior, without proving the physical terminal integration.
 
-Source: [Pi Markdown renderer](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/components/markdown.ts#L301).
-
-## Validation requirements
-
-- Native text APIs, completion edits, paste results, and external-editor actions update one state and history.
-- Formatted/source changes preserve selection and undo groups.
-- Text replacement and attachment membership undo and redo together.
-- Terminal edits respect graphemes, wrapping, and mouse selection.
-- State/history APIs operate within Pi's runtime through their public interfaces.
-- Native provider overrides remain effective before and after composer installation.
-
-These findings come from local Pi source at `6fb2e7815` and upstream source inspection. Dependency integration and terminal behavior remain unverified.
+Native source references: [TUI exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/index.ts), [coding-agent exports](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/coding-agent/src/index.ts), [editor contract](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/editor-component.ts), and [Markdown renderer](https://github.com/earendil-works/pi/blob/6fb2e7815/packages/tui/src/components/markdown.ts).

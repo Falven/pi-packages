@@ -10,7 +10,7 @@
 - [ ] Exercise every actual native paste route with all packages loaded and confirm the same cutoff, overrides, content precedence, selection behavior, and single-action history.
 - [ ] Attachment text containing canonical skill references remains opaque; Restore Inline enables prose invocation while restored code remains literal.
 - [ ] Submit normally, steer, and follow up; preserve intended images, once-per-skill instructions, readable snapshot references, and native transformation order.
-- [ ] Switch sessions or restart during pending work, recover the intended draft, and safely clean up only unused contents.
+- [ ] Switch sessions or restart during pending work, recover the intended draft, and safely clean up only proven-unused capture or staging data while retaining added snapshots.
 - [ ] Keep effective providers, custom pickers, native input listeners, shortcuts, widgets, and overlays working in supported registration orders.
 - [ ] Demonstrate paste, attachment, and skill behavior with the native editor when pi-composer is absent; disabling/replacing an extension preserves saved text and retained files.
 - [ ] Run public-boundary automated scenarios and real terminal checks; retain exact evidence for any unresolved public Pi contract instead of declaring full compatibility.
