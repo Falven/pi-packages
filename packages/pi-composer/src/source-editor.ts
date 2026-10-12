@@ -14,6 +14,7 @@ import {
   type TuiMouseEvent,
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui"
+import type { Clipboard } from "./clipboard.ts"
 import { createCompletions } from "./completions.ts"
 import { Projection } from "./projection.ts"
 import { projectProse } from "./prose.ts"
@@ -22,12 +23,16 @@ import { continueList } from "./structures.ts"
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 type Draft = { text: string; anchor: number; head: number }
+export type DraftHistory = { draft: Draft; past: Draft[]; future: Draft[] }
 type EditKind = "typing" | "backspace" | "delete"
 
 export class SourceEditor extends CustomEditor {
+  onDraftChange: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
+  private readonly clipboard: Clipboard
+  private revision = 0
   private sourceWidth = 60
   private formatted = true
   private preferredCell: number | undefined
@@ -39,9 +44,15 @@ export class SourceEditor extends CustomEditor {
   private promptIndex = -1
   private promptDraft: Draft | undefined
 
-  constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    keybindings: KeybindingsManager,
+    clipboard: Clipboard,
+  ) {
     super(tui, theme, keybindings)
     this.nativeKeys = keybindings
+    this.clipboard = clipboard
     this.completions = createCompletions(
       tui,
       theme,
@@ -67,6 +78,24 @@ export class SourceEditor extends CustomEditor {
 
   override getText(): string {
     return this.draft.text
+  }
+
+  getDraftHistory(): DraftHistory {
+    return { draft: this.draft, past: [...this.past], future: [...this.future] }
+  }
+
+  restoreDraft(text: string, history?: DraftHistory): void {
+    this.draft = history?.draft ?? {
+      text,
+      anchor: text.length,
+      head: text.length,
+    }
+    this.past = [...(history?.past ?? [])]
+    this.future = [...(history?.future ?? [])]
+    this.editGroup = undefined
+    this.promptIndex = -1
+    this.promptDraft = undefined
+    this.changed()
   }
 
   override getExpandedText(): string {
@@ -182,9 +211,11 @@ export class SourceEditor extends CustomEditor {
   }
 
   private changed(autocomplete = false): void {
+    this.revision++
     this.preferredCell = undefined
     this.completions.update(autocomplete)
     this.onChange?.(this.getText())
+    this.onDraftChange?.(this.getText())
     this.tui.requestRender()
   }
 
@@ -259,6 +290,40 @@ export class SourceEditor extends CustomEditor {
       return
     if (previousPrompt || nextPrompt) {
       this.browsePrompt(previousPrompt ? -1 : 1)
+      return
+    }
+
+    const cut = matchesKey(data, "super+x")
+    if (matchesKey(data, "super+c") || cut) {
+      const selection = this.draft
+      const revision = this.revision
+      const { text, anchor, head } = selection
+      void this.clipboard
+        .copy(text.slice(Math.min(anchor, head), Math.max(anchor, head)))
+        .then((copied) => {
+          if (
+            copied &&
+            cut &&
+            this.focused &&
+            this.draft === selection &&
+            this.revision === revision
+          ) {
+            this.insertTextAtCursor("")
+          }
+        })
+      return
+    }
+
+    if (matchesKey(data, "super+v")) {
+      const selection = this.draft
+      const revision = this.revision
+      void this.clipboard.paste(
+        selection,
+        () =>
+          this.focused &&
+          this.draft === selection &&
+          this.revision === revision,
+      )
       return
     }
 

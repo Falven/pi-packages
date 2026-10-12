@@ -91,7 +91,7 @@ Preparing a prompt with Markdown, references, and attachments requires reliable 
 
 ## Further Notes
 
-The package currently contains a loadable scaffold. These requirements define implementation acceptance; feature behavior has not been implemented or verified.
+The local implementation tickets track verification of these requirements through public Pi host tests and real terminal acceptance.
 
 See the [shared architecture and testing boundary](../architecture.md), [glossary](../../GLOSSARY.md), and [library integration notes](../pi-composer-library-integration.md). Related behavior is specified by [pi-paste](pi-paste.md), [pi-attachments](pi-attachments.md), and [pi-skill-references](pi-skill-references.md).
 

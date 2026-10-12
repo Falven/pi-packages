@@ -4,11 +4,13 @@
 
 **Blocked by:** 03: pi-skill-references: invoke canonical inline skills.
 
-**Status:** in-progress
+**Status:** implemented; final acceptance pending
 
-- [ ] Prose-position triggers offer skills from Pi's effective catalog; inline / uses Tab in the native editor and opens automatically in pi-composer. Accepting a suggestion inserts canonical native skill text at the correct range and caret.
-- [ ] Unaccepted shorthand stays literal and completed references remain character-editable and copyable.
-- [ ] Reuse effective native provider/picker services and preserve custom picker text insertion, wrapper order, later updates, cancellation, and stale-result handling.
-- [ ] A selected skill sharing a display name with a command retains its qualified skill identity; leading commands and argument completion retain native dispatch.
-- [ ] Native file/directory completion remains effective, and catalog filtering, availability, and resource precedence stay native.
+- [x] Prose-position triggers offer skills from Pi's effective catalog; inline / uses Tab in the native editor and opens automatically in pi-composer. Accepting a suggestion inserts canonical native skill text at the correct range and caret.
+- [x] Unaccepted shorthand stays literal and completed references remain character-editable and copyable.
+- [x] Reuse effective native provider/picker services and preserve custom picker text insertion, wrapper order, later updates, cancellation, and stale-result handling.
+- [x] A selected skill sharing a display name with a command retains its qualified skill identity; leading commands and argument completion retain native dispatch.
+- [x] Native file/directory completion remains effective, and catalog filtering, availability, and resource precedence stay native.
 - [ ] Verify completion through submission with the native editor, including providers installed before and after the extension; use real Ghostty checks for picker and custom-insertion interaction.
+
+Integration evidence: `07f426d`; 181 combined tests, formatting, lint, and root/composer typechecks pass. Public-host probes cover effective providers, formatted edits, clipboard history, expansion, and image delivery. Real terminal picker checks remain pending.

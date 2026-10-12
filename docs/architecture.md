@@ -1,6 +1,6 @@
 # Composition extensions
 
-The workspace separates prompt editing, paste policy, attachment handling, and skill references into four independently loadable Pi packages. Each package currently contains an extension scaffold; its specification defines the behavior to implement.
+The workspace separates prompt editing, paste policy, attachment handling, and skill references into four independently loadable Pi packages. Each package has a public extension entry point and a specification defining its behavior.
 
 The initial supported environment is Ghostty on local macOS, using Pi's fullscreen mode. Paste, attachment, and skill-reference functionality must remain useful with Pi's native editor as well as `pi-composer`.
 
@@ -16,6 +16,8 @@ The initial supported environment is Ghostty on local macOS, using Pi's fullscre
 The active editor owns draft mutations. With `pi-composer`, text, selection, and draft attachment membership share one undo history. `pi-paste` chooses the paste outcome, while `pi-attachments` owns stored contents and their lifetime.
 
 A large paste replacing selected text illustrates the cooperation: paste policy selects attachment handling, attachment handling prepares the snapshot, and the editor commits the text replacement and attachment membership together. An asynchronous result must remain associated with the draft that requested it.
+
+Every snapshot added to a draft remains retained. Explicit attachment cleanup reclaims only proven-unused capture or staging data; hidden editor histories and arbitrary session locations make broader deletion unsafe through current public Pi contracts.
 
 `pi-paste` uses attachment handling for file/image outcomes. That collaboration must work with the native editor and with `pi-composer`; storage behavior belongs to `pi-attachments`. Native skill and path discovery remain Pi's responsibility.
 
@@ -55,7 +57,7 @@ Sources: [text and paste routes](https://github.com/earendil-works/pi/blob/6fb2e
 - Submission, steer/follow-up, failures, and restoration preserve readable attachment contents.
 - Disabling or replacing an extension preserves saved text and retained attachment files.
 
-These are behavioral requirements for implementation. Runtime interoperability and terminal behavior remain unverified.
+These requirements are exercised through public-host tests. Real terminal behavior remains a separate acceptance check.
 
 ## Testing boundary
 
@@ -63,7 +65,7 @@ Use Pi's public editor/session boundary as the shared behavioral testing seam. L
 
 Exercise each package with its required capabilities, with Pi's native editor where applicable, and in the combined four-package setup. Include native overrides and provider updates. A package tested in isolation does not establish behavior through a host route that bypasses its handler.
 
-Use the workspace's existing Node test runner. The repository currently contains extension scaffolds and no feature-test suite. Pi's editor/virtual-terminal and extension input-event tests provide prior art for fixtures and behavioral assertions; use public interfaces when constructing the workspace's test setup. Package-specific acceptance scenarios live in the [specifications](specs/).
+Use the workspace's Node test runner and existing public-host fixtures. Pi's editor/virtual-terminal and extension input-event tests provide prior art for behavioral assertions. Package-specific acceptance scenarios live in the [specifications](specs/).
 
 Use temporary session and attachment data and controlled model responses for automated submission checks. Keep assertions on text, visible output, instruction/image content, and retained files. Real Ghostty/macOS checks establish Command-key forwarding, clipboard formats, mouse behavior, fullscreen layout, and image graphics.
 

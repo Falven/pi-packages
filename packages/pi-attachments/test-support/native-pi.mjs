@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { realpathSync } from "node:fs"
 import fs, {
   mkdir,
   mkdtemp,
@@ -36,20 +37,23 @@ export async function waitFor(check) {
   /* eslint-enable no-await-in-loop */
 }
 
-export async function nativePi(t, extensionPaths = []) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-attachments-test-"))
+export async function nativePi(t, extensionPaths = [], state = {}) {
+  const directory =
+    state.directory ?? (await mkdtemp(join(tmpdir(), "pi-attachments-test-")))
   const agentDir = join(directory, "agent")
-  await mkdir(agentDir)
+  await mkdir(agentDir, { recursive: true })
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR
   const previousOffline = process.env.PI_OFFLINE
   process.env.PI_CODING_AGENT_DIR = agentDir
   process.env.PI_OFFLINE = "1"
+  let close
   t.after(async () => {
+    await close?.()
     if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR
     else process.env.PI_CODING_AGENT_DIR = previousAgentDir
     if (previousOffline === undefined) delete process.env.PI_OFFLINE
     else process.env.PI_OFFLINE = previousOffline
-    await rm(directory, { recursive: true, force: true })
+    if (!state.directory) await rm(directory, { recursive: true, force: true })
   })
 
   const requests = []
@@ -58,6 +62,12 @@ export async function nativePi(t, extensionPaths = []) {
     const chunks = []
     for await (const chunk of request) chunks.push(chunk)
     requests.push(JSON.parse(Buffer.concat(chunks).toString()))
+    const reply = await replies.shift()
+    if (reply instanceof Error) {
+      response.writeHead(500, { "content-type": "application/json" })
+      response.end(JSON.stringify({ error: { message: reply.message } }))
+      return
+    }
     response.writeHead(200, { "content-type": "text/event-stream" })
     response.end(
       `data: ${JSON.stringify({
@@ -66,7 +76,7 @@ export async function nativePi(t, extensionPaths = []) {
         created: 1,
         model: "snapshot-model",
         choices: [
-          replies.shift() ?? {
+          reply ?? {
             index: 0,
             delta: { role: "assistant", content: "Received." },
             finish_reason: "stop",
@@ -86,7 +96,12 @@ export async function nativePi(t, extensionPaths = []) {
           api: "openai-completions",
           apiKey: "local-test-only",
           models: [
-            { id: "snapshot-model", contextWindow: 100000, maxTokens: 100 },
+            {
+              id: "snapshot-model",
+              input: ["text", "image"],
+              contextWindow: 100000,
+              maxTokens: 100,
+            },
           ],
         },
       },
@@ -95,7 +110,15 @@ export async function nativePi(t, extensionPaths = []) {
 
   let ui
   let tui
+  const inputs = []
+  const users = []
   const observer = (pi) => {
+    pi.on("input", (event) => {
+      inputs.push(event)
+    })
+    pi.on("message_end", (event) => {
+      if (event.message.role === "user") users.push(event.message)
+    })
     pi.on("session_start", (_event, ctx) => {
       ui = ctx.ui
       ctx.ui.setWidget("test-other-widget", (nativeTui) => {
@@ -130,7 +153,7 @@ export async function nativePi(t, extensionPaths = []) {
           ...extensionPaths,
           fileURLToPath(new URL("../src/index.ts", import.meta.url)),
         ],
-        extensionFactories: [observer],
+        extensionFactories: [observer, ...(state.extensionFactories ?? [])],
       },
     })
     assert.deepEqual(services.resourceLoader.getExtensions().errors, [])
@@ -151,10 +174,9 @@ export async function nativePi(t, extensionPaths = []) {
   const runtime = await createAgentSessionRuntime(createRuntime, {
     cwd: directory,
     agentDir,
-    sessionManager: SessionManager.create(
-      directory,
-      join(agentDir, "sessions"),
-    ),
+    sessionManager: state.sessionFile
+      ? SessionManager.open(state.sessionFile, undefined, directory)
+      : SessionManager.create(directory, join(agentDir, "sessions")),
   })
   let input
   let output = ""
@@ -181,10 +203,13 @@ export async function nativePi(t, extensionPaths = []) {
     setProgramStatus() {},
   }
   const mode = new InteractiveMode(runtime, { terminal, tuiMode: "fullscreen" })
-  t.after(async () => {
+  let closed = false
+  close = async () => {
+    if (closed) return
+    closed = true
     mode.stop()
     await runtime.dispose()
-  })
+  }
   await mode.init()
   void mode.run()
   await delay(0)
@@ -192,10 +217,16 @@ export async function nativePi(t, extensionPaths = []) {
     directory,
     agentDir,
     runtime,
+    close,
     requests,
     replies,
+    inputs,
+    users,
     get ui() {
       return ui
+    },
+    get output() {
+      return output
     },
     input: (data) => input(data),
     submit(text) {
@@ -222,11 +253,12 @@ export function snapshotPath(text) {
 
 export function holdFileRead(t, source) {
   const read = fs.readFile
+  const canonicalSource = realpathSync(source)
   const gate = Promise.withResolvers()
   let started = false
   const mocked = t.mock.method(fs, "readFile", async (...args) => {
     const contents = await read(...args)
-    if (args[0] === source) {
+    if (args[0] === source || args[0] === canonicalSource) {
       started = true
       await gate.promise
     }
@@ -245,7 +277,7 @@ export function holdFileRead(t, source) {
   }
 }
 
-export async function retainedRequest(host) {
+export async function retainedRequest(host, contains = "") {
   const entries = await readdir(host.agentDir, {
     recursive: true,
     withFileTypes: true,
@@ -258,8 +290,9 @@ export async function retainedRequest(host) {
         return { path, text: await readFile(path, "utf8") }
       }),
   )
-  const request = files.find(({ text }) =>
-    text.startsWith("# Attachment request\n"),
+  const request = files.find(
+    ({ text }) =>
+      text.startsWith("# Attachment request\n") && text.includes(contains),
   )
   assert.ok(request, "No readable attachment request was retained")
   return request

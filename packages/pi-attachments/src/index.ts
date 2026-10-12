@@ -1,5 +1,5 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises"
-import { basename, join, resolve, sep } from "node:path"
+import { basename, join, resolve } from "node:path"
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -9,6 +9,7 @@ import {
   keyHint,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
+import { registerImages } from "./images.ts"
 
 type Snapshot = { name: string; contents: string | Buffer }
 type AttachmentSource = Snapshot | { name: string; path: string }
@@ -20,6 +21,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   let revision = 0
   let readObserved = false
   const lifetime = new AbortController()
+  registerImages(pi, storage, lifetime.signal)
 
   pi.on("input", () => {
     submissions++
@@ -66,25 +68,6 @@ export default function piAttachments(pi: ExtensionAPI): void {
       terminalInputs++
       return undefined
     })
-    ctx.ui.setWidget("pi-attachments", () => ({
-      render(width) {
-        const paths = new Set<string>()
-        for (const match of ctx.ui
-          .getEditorText()
-          .matchAll(/\[Attachment: [^\]]+\]\(<([^>]+)>\)/g)) {
-          const path = match[1]
-          if (path?.startsWith(storage + sep)) paths.add(path)
-        }
-        if (paths.size === 0) return []
-        const names = [...paths].map((path) => basename(path)).join(", ")
-        return truncateToVisualLines(
-          `Attachments (${paths.size}): ${names}`,
-          5,
-          width,
-        ).visualLines
-      },
-      invalidate() {},
-    }))
   })
 
   async function attach(
@@ -95,6 +78,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const draft = ctx.ui.getEditorText()
     const observedDraft = readObserved
     const sessionId = ctx.sessionManager.getSessionId()
+    const sessionFile = ctx.sessionManager.getSessionFile()
     const submission = submissions
     const draftRevision = revision
     let inputs = terminalInputs
@@ -119,8 +103,15 @@ export default function piAttachments(pi: ExtensionAPI): void {
         await mkdir(storage, { recursive: true, mode: 0o700 })
         const directory = await mkdtemp(join(storage, "snapshot-"))
         const path = join(directory, snapshot.name)
-        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         const reference = `[Attachment: ${snapshot.name}](<${path}>)`
+        const recovery = `${path}.draft.md`
+        // New native sessions can remain memory-only until the first assistant reply.
+        await writeFile(
+          recovery,
+          `# Attachment request\n\nSession: ${sessionId}\n${sessionFile ? `\nSession file: ${sessionFile}\n` : ""}\n${draft}\n\n${reference}\n`,
+          { flag: "wx", mode: 0o600 },
+        )
+        await writeFile(path, snapshot.contents, { flag: "wx", mode: 0o600 })
         changedDuringOperation ||= terminalInputs !== inputs
         readObserved = false
         if (
@@ -135,12 +126,6 @@ export default function piAttachments(pi: ExtensionAPI): void {
         ) {
           ctx.ui.pasteToEditor(`\n${reference}\n`)
         } else {
-          const recovery = `${path}.draft.md`
-          await writeFile(
-            recovery,
-            `# Attachment request\n\nSession: ${sessionId}\n\n${draft}\n\n${reference}\n`,
-            { flag: "wx", mode: 0o600 },
-          )
           if (!lifetime.signal.aborted) {
             ctx.ui.notify(
               `Could not confirm the requesting draft. Snapshot retained: ${reference}\nRequest saved: ${recovery}`,

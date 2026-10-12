@@ -1,7 +1,7 @@
 {
   "name": "pi-attachments",
   "version": "0.1.0",
-  "description": "Preserved text and file attachments for Pi.",
+  "description": "Preserved text, file, and image attachments for Pi.",
   "keywords": [
     "attachments",
     "pi",
@@ -18,8 +18,12 @@
     "access": "public",
     "provenance": true
   },
+  "devDependencies": {
+    "@earendil-works/pi-tui": "0.87.1"
+  },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
   },
   "engines": {
     "node": ">=24"
