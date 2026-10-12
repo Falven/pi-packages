@@ -16,6 +16,8 @@ The composer uses Pi's application actions, commands, input transformations, and
 | Cmd+Up/Down               | Move to the start/end of the document    |
 | Shift with a movement key | Extend the selection                     |
 | Cmd+A                     | Select the whole draft                   |
+| Cmd+C / Cmd+X             | Copy / cut selected Markdown             |
+| Cmd+V                     | Paste text through native paste policy   |
 | Backspace/Delete          | Delete a grapheme or the selection       |
 | Cmd+Z / Cmd+Shift+Z       | Undo / redo                              |
 | Enter / Cmd+Enter         | Submit                                   |
@@ -23,6 +25,10 @@ The composer uses Pi's application actions, commands, input transformations, and
 | Option+Enter              | Native follow-up submission              |
 
 Pi's configured movement keys remain effective. Native extension and application shortcuts retain their priority. Continuous typing and deletion group until movement, another kind of edit, or a pause of more than 500 ms. Native replacements and pastes each form one undoable edit. A fresh edit after undo discards the old redo branch.
+
+Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V reads Pi's native text clipboard and enters `pasteToEditor`, preserving installed paste decorators.
+
+If a clipboard read finishes after its draft or selection changes, or paste dispatch fails, the original session, draft, selection offsets, and clipboard text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. The recovery path is reported in Pi, or on stderr after that session closes. Later work and undo history stay intact. If saving fails, the error and recovery contents are reported together.
 
 ## Load
 

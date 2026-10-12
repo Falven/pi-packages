@@ -13,6 +13,7 @@ import {
   type KeyId,
   type TUI,
 } from "@earendil-works/pi-tui"
+import type { Clipboard } from "./clipboard.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 const words = new Intl.Segmenter(undefined, { granularity: "word" })
@@ -24,6 +25,8 @@ type EditKind = "typing" | "backspace" | "delete"
 export class SourceEditor extends CustomEditor {
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private readonly nativeKeys: KeybindingsManager
+  private readonly clipboard: Clipboard
+  private revision = 0
   private sourceWidth = 60
   private preferredCell: number | undefined
   private past: Draft[] = []
@@ -34,9 +37,15 @@ export class SourceEditor extends CustomEditor {
   private promptIndex = -1
   private promptDraft: Draft | undefined
 
-  constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
+  constructor(
+    tui: TUI,
+    theme: EditorTheme,
+    keybindings: KeybindingsManager,
+    clipboard: Clipboard,
+  ) {
     super(tui, theme, keybindings)
     this.nativeKeys = keybindings
+    this.clipboard = clipboard
   }
 
   override getText(): string {
@@ -151,6 +160,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   private changed(): void {
+    this.revision++
     this.preferredCell = undefined
     this.onChange?.(this.getText())
     this.tui.requestRender()
@@ -255,6 +265,40 @@ export class SourceEditor extends CustomEditor {
     if (this.onExtensionShortcut?.(data)) return
     if (previousPrompt || nextPrompt) {
       this.browsePrompt(previousPrompt ? -1 : 1)
+      return
+    }
+
+    const cut = matchesKey(data, "super+x")
+    if (matchesKey(data, "super+c") || cut) {
+      const selection = this.draft
+      const revision = this.revision
+      const { text, anchor, head } = selection
+      void this.clipboard
+        .copy(text.slice(Math.min(anchor, head), Math.max(anchor, head)))
+        .then((copied) => {
+          if (
+            copied &&
+            cut &&
+            this.focused &&
+            this.draft === selection &&
+            this.revision === revision
+          ) {
+            this.insertTextAtCursor("")
+          }
+        })
+      return
+    }
+
+    if (matchesKey(data, "super+v")) {
+      const selection = this.draft
+      const revision = this.revision
+      void this.clipboard.paste(
+        selection,
+        () =>
+          this.focused &&
+          this.draft === selection &&
+          this.revision === revision,
+      )
       return
     }
 
