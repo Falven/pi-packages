@@ -53,16 +53,26 @@ type HostOptions = {
   extension?: ExtensionFactory
   holdResponses?: boolean
   responseStatus?: number
+  persistSession?: boolean
+  directory?: string
+  sessionFile?: string
 }
 
 export async function openHost(t: TestContext, options: HostOptions = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-composer-test-"))
+  const directory =
+    options.directory ?? (await mkdtemp(join(tmpdir(), "pi-composer-test-")))
   const previousAgentDir = process.env["PI_CODING_AGENT_DIR"]
   const previousOffline = process.env["PI_OFFLINE"]
   process.env["PI_CODING_AGENT_DIR"] = directory
   process.env["PI_OFFLINE"] = "1"
   let activeRuntime: AgentSessionRuntime | undefined
   let activeMode: InteractiveMode | undefined
+  const close = async () => {
+    await activeRuntime?.dispose()
+    activeRuntime = undefined
+    activeMode?.stop()
+    activeMode = undefined
+  }
 
   const requests: { messages: { role: string; content: unknown }[] }[] = []
   const pendingResponses: ServerResponse[] = []
@@ -105,8 +115,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
   })
   t.after(async () => {
     try {
-      activeMode?.stop()
-      await activeRuntime?.dispose()
+      await close()
     } finally {
       server.closeAllConnections()
       server.close()
@@ -115,7 +124,8 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
       else process.env["PI_CODING_AGENT_DIR"] = previousAgentDir
       if (previousOffline === undefined) delete process.env["PI_OFFLINE"]
       else process.env["PI_OFFLINE"] = previousOffline
-      await rm(directory, { recursive: true, force: true })
+      if (!options.directory)
+        await rm(directory, { recursive: true, force: true })
     }
   })
   if (options.keybindings) {
@@ -130,7 +140,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
   assert(address && typeof address === "object")
   let context: ExtensionContext | undefined
   const runtime = await createAgentSessionRuntime(
-    async ({ cwd, agentDir, sessionManager }) => {
+    async ({ cwd, agentDir, sessionManager, sessionStartEvent }) => {
       const services = await createAgentSessionServices({
         cwd,
         agentDir,
@@ -186,6 +196,7 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
         ...(await createAgentSessionFromServices({
           services,
           sessionManager,
+          ...(sessionStartEvent ? { sessionStartEvent } : {}),
           model,
           noTools: "all",
         })),
@@ -196,7 +207,11 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
     {
       cwd: directory,
       agentDir: directory,
-      sessionManager: SessionManager.inMemory(directory),
+      sessionManager: options.sessionFile
+        ? SessionManager.open(options.sessionFile)
+        : options.persistSession
+          ? SessionManager.create(directory)
+          : SessionManager.inMemory(directory),
     },
   )
   activeRuntime = runtime
@@ -213,8 +228,15 @@ export async function openHost(t: TestContext, options: HostOptions = {}) {
   await setTimeout(0)
 
   return {
-    ui: context.ui,
-    session: runtime.session,
+    get ui() {
+      return context!.ui
+    },
+    get session() {
+      return runtime.session
+    },
+    runtime,
+    directory,
+    close,
     requests,
     terminal,
     reply() {
