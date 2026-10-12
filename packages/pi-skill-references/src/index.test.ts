@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import { once } from "node:events"
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
-import { createServer } from "node:http"
+import { createServer, type ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test, type TestContext } from "node:test"
@@ -20,8 +20,9 @@ import {
   VERSION,
   type ExtensionAPI,
   type ExtensionUIContext,
+  type InputEvent,
 } from "@earendil-works/pi-coding-agent"
-import { Marked, type Terminal } from "@earendil-works/pi-tui"
+import type { Terminal } from "@earendil-works/pi-tui"
 
 class TestTerminal implements Terminal {
   columns = 120
@@ -49,12 +50,22 @@ class TestTerminal implements Terminal {
   setProgramStatus(): void {}
 }
 
+function finishResponse(response: ServerResponse) {
+  response.writeHead(200, { "content-type": "text/event-stream" })
+  response.end(
+    'data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"Done."},"finish_reason":null}]}\n\n' +
+      'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n",
+  )
+}
+
 async function createHost(
   t: TestContext,
   setupExtension?: (
     pi: ExtensionAPI,
     directory: string,
   ) => void | Promise<void>,
+  holdResponses = false,
 ) {
   const root = await mkdtemp(join(tmpdir(), "pi-inline-skills-"))
   const agentDir = join(root, "agent")
@@ -82,14 +93,11 @@ async function createHost(
     await rm(root, { recursive: true, force: true })
   })
 
+  const pendingResponses: ServerResponse[] = []
   const server = createServer((request, response) => {
     request.resume()
-    response.writeHead(200, { "content-type": "text/event-stream" })
-    response.end(
-      'data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"Done."},"finish_reason":null}]}\n\n' +
-        'data: {"choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n' +
-        "data: [DONE]\n\n",
-    )
+    if (holdResponses) pendingResponses.push(response)
+    else finishResponse(response)
   })
   server.listen(0, "127.0.0.1")
   await once(server, "listening")
@@ -194,6 +202,12 @@ async function createHost(
     skillDir,
     skillPath,
     session: runtime.session,
+    pendingResponses,
+    reply() {
+      const response = pendingResponses.shift()
+      assert(response, "The controlled model must have a pending request")
+      finishResponse(response)
+    },
     async submit() {
       const ended = new Promise<void>((resolve) => {
         const unsubscribe = runtime.session.subscribe((event) => {
@@ -342,7 +356,7 @@ test(
 )
 
 test(
-  "a first-line indented code reference remains literal in the native editor",
+  "native first-line trimming invokes the reference and preserves native history",
   { timeout: 15000 },
   async (t) => {
     const host = await createHost(t)
@@ -350,20 +364,94 @@ test(
     host.ui.setEditorText(draft)
     assert.equal(host.ui.getEditorText(), draft)
     const submitted = await host.submit()
-    host.terminal.input("\x1b[A")
-    // Pending acceptance: native trimming loses the code boundary and saved source.
-    assert.deepEqual(
-      {
-        rendered: await new Marked().parse(submitted),
-        history: host.ui.getEditorText(),
-      },
-      {
-        rendered: "<pre><code>/skill:review\n</code></pre>\n",
-        history: draft,
-      },
+    assert.deepEqual(host.inputs, [{ text: "/skill:review", draft: "" }])
+    assert.equal(
+      submitted,
+      `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n/skill:review`,
     )
+
+    host.terminal.input("\x1b[A")
+    assert.equal(host.ui.getEditorText(), "/skill:review")
   },
 )
+
+test(
+  "a fenced leading reference remains literal in native submission and history",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t)
+    const draft = "```text\n/skill:review\n```"
+    host.ui.setEditorText(draft)
+    assert.equal(await host.submit(), draft)
+    assert.deepEqual(host.inputs, [{ text: draft, draft: "" }])
+
+    host.terminal.input("\x1b[A")
+    assert.equal(host.ui.getEditorText(), draft)
+  },
+)
+
+for (const route of ["steer", "followUp"] as const) {
+  test(
+    `native ${route} retains trimming and fenced leading examples through delivery`,
+    { timeout: 15000 },
+    async (t) => {
+      const deliveries: InputEvent[] = []
+      const host = await createHost(
+        t,
+        (pi) => {
+          pi.on("input", (event) => {
+            deliveries.push(event)
+          })
+        },
+        true,
+      )
+      const expanded = `<skill name="review" location="${host.skillPath}">\nReferences are relative to ${host.skillDir}.\n\nReview the actual behavior.\n</skill>\n\n/skill:review`
+      const fenced = "```text\n/skill:review\n```"
+      for (const [draft, nativeDraft, expected] of [
+        ["    /skill:review", "/skill:review", expanded],
+        [fenced, fenced, fenced],
+      ] as const) {
+        host.ui.setEditorText("First request")
+        host.terminal.input("\r")
+        await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+        assert(host.session.isStreaming)
+
+        host.ui.setEditorText(draft)
+        assert.equal(host.ui.getEditorText(), draft)
+        host.terminal.input(route === "steer" ? "\r" : "\x1b\r")
+        await t.waitFor(() =>
+          assert.deepEqual(
+            route === "steer"
+              ? host.session.getSteeringMessages()
+              : host.session.getFollowUpMessages(),
+            [expected],
+          ),
+        )
+        assert.equal(deliveries.at(-1)?.streamingBehavior, route)
+        assert.equal(deliveries.at(-1)?.source, "interactive")
+        assert.deepEqual(host.inputs.at(-1), { text: nativeDraft, draft: "" })
+        assert.equal(host.ui.getEditorText(), "")
+
+        host.reply()
+        await t.waitFor(() => assert.equal(host.pendingResponses.length, 1))
+        host.reply()
+        await host.session.waitForIdle()
+        const message = host.session.messages.findLast(
+          (item) => item.role === "user",
+        )
+        assert.deepEqual(message?.content, [{ type: "text", text: expected }])
+        const answer = host.session.messages.findLast(
+          (item) => item.role === "assistant",
+        )
+        assert(answer?.role === "assistant")
+        assert.equal(answer.stopReason, "stop", answer.errorMessage)
+
+        host.terminal.input("\x1b[A")
+        assert.equal(host.ui.getEditorText(), nativeDraft)
+      }
+    },
+  )
+}
 
 test(
   "native paste and another extension's insertion remain character-editable references",

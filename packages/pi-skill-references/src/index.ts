@@ -39,7 +39,7 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
       return { action: "continue" }
     }
     const references: string[] = []
-    // shortcut: native input loses leading indentation; preserve it when Pi supplies raw submitted text.
+    // Pi owns submission trimming; literal boundaries follow the delivered Markdown.
     markdown.walkTokens(markdown.lexer(event.text), (token) => {
       if (token.type === "skillReference") references.push(token.raw.slice(1))
     })
