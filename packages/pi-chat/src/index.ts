@@ -7,12 +7,40 @@ import {
   captureHost,
   NativeChatHost,
 } from "./native-host.ts"
+import { thoughtPresentation } from "./thought.ts"
 
 const relationshipRenderer = () => undefined
 
 export default function piChat(pi: ExtensionAPI) {
   pi.registerEntryRenderer("pi-chat.relationship", relationshipRenderer)
   let adapter: NativeChatHost | undefined
+  let workingHeading: string | undefined
+  const setHeading = (
+    heading: string | undefined,
+    context: ExtensionContext,
+  ) => {
+    if (heading === workingHeading) return
+    workingHeading = heading
+    context.ui.setWorkingMessage(heading)
+  }
+  const clearHeading = (_event: unknown, context: ExtensionContext) =>
+    setHeading(undefined, context)
+  pi.registerMarkdownTransformer((markdown, context) =>
+    context.messageType === "assistant-thinking"
+      ? thoughtPresentation(markdown).body
+      : markdown,
+  )
+  pi.on("message_update", ({ assistantMessageEvent: event }, context) => {
+    if (event.type === "thinking_start" || event.type === "thinking_delta") {
+      const block = event.partial.content[event.contentIndex]
+      if (block?.type === "thinking")
+        setHeading(thoughtPresentation(block.thinking.trim()).heading, context)
+    } else if (event.type === "thinking_end") clearHeading(event, context)
+  })
+  pi.on("message_end", (event, context) => {
+    if (event.message.role === "assistant") clearHeading(event, context)
+  })
+  pi.on("agent_end", clearHeading)
   const install = (host: Parameters<typeof NativeChatHost.install>[0]) => {
     adapter?.dispose()
     adapter = undefined
@@ -27,6 +55,7 @@ export default function piChat(pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, context: ExtensionContext) => {
     disarm()
+    clearHeading(_event, context)
     try {
       const host = captureHost(context)
       if (!adapter || NativeChatHost.current(host) !== adapter) install(host)
@@ -39,8 +68,9 @@ export default function piChat(pi: ExtensionAPI) {
       )
     }
   })
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", (event, context) => {
     disarm()
+    clearHeading(event, context)
     adapter?.dispose()
     adapter = undefined
   })

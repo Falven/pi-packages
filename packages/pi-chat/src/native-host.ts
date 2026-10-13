@@ -11,6 +11,7 @@ import {
 import {
   Container,
   ScrollView,
+  Spacer,
   Text,
   TuiAltScreen,
   VStack,
@@ -289,6 +290,7 @@ type ToolPresenter = Component & {
 
 class GroupHeader extends Text {
   focused = false
+  readonly spacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,
@@ -310,7 +312,7 @@ class GroupHeader extends Text {
     const count = this.group.calls.length
     this.setText(
       truncateToWidth(
-        `${this.focused ? "→" : this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
+        `${this.focused ? "→ " : ""}${this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
         Math.max(1, width - 2),
       ),
     )
@@ -435,14 +437,8 @@ export class NativeChatHost {
   private readonly groups = new Map<Occurrence, ToolGroup>()
   private readonly toolFocus = new Map<Component, ToolFocus>()
   private readonly thoughts = new Map<Occurrence, Thought>()
-  private readonly thinkingParts = new Map<Occurrence, Set<number>>()
   private readonly answerParts = new WeakMap<Component, Container>()
-  private visibleDisclosures: (
-    | GroupHeader
-    | ToolFocus
-    | WorkHeader
-    | Thought
-  )[] = []
+  private visibleDisclosures: (GroupHeader | ToolFocus | WorkHeader)[] = []
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -644,34 +640,36 @@ export class NativeChatHost {
         this.groups.set(first, group)
       }
       group.calls = calls
-      const unfinished = calls.some(
-        ({ component }) => "isPartial" in component && component.isPartial,
-      )
-      const groupActive =
-        index === activities.length && this.host.session.isStreaming
-      if (calls.length === 1 && !unfinished && !groupActive) {
-        composed.push(this.focusableTool(calls[0]!))
-      } else {
-        composed.push({
-          component: group.header!,
-          tool: false,
-          work: this.work.find(first),
-        })
-        if (group.expanded) {
-          for (const call of calls) {
-            const focused = this.focusableTool(call)
-            focused.body = group.viewport
-            composed.push(focused)
-          }
+      composed.push({
+        component: group.header!,
+        tool: false,
+        work: this.work.find(first),
+      })
+      if (group.expanded) {
+        for (const call of calls) {
+          const focused = this.focusableTool(call)
+          focused.body = group.viewport
+          composed.push(focused)
         }
       }
     }
-    composed = this.composeWork(composed)
+    composed = this.composeWork(composed).flatMap((activity, index, all) => {
+      const { component } = activity
+      const spacing =
+        component instanceof GroupHeader
+          ? component.spacing
+          : activity.occurrence &&
+            this.thoughts.get(activity.occurrence)?.spacing
+      return index > 0 &&
+        spacing &&
+        !(all[index - 1]!.component instanceof Spacer)
+        ? [{ component: spacing, tool: false }, activity]
+        : [activity]
+    })
     this.visibleDisclosures = composed.flatMap(({ component }) =>
       component instanceof WorkHeader ||
       component instanceof GroupHeader ||
-      component instanceof ToolFocus ||
-      component instanceof Thought
+      component instanceof ToolFocus
         ? [component]
         : [],
     )
@@ -760,14 +758,9 @@ export class NativeChatHost {
     if (
       (renderer.getFocusedComponent() instanceof GroupHeader ||
         renderer.getFocusedComponent() instanceof ToolFocus ||
-        renderer.getFocusedComponent() instanceof Thought ||
         renderer.getFocusedComponent() instanceof WorkHeader) &&
       !this.visibleDisclosures.includes(
-        renderer.getFocusedComponent() as
-          | GroupHeader
-          | ToolFocus
-          | WorkHeader
-          | Thought,
+        renderer.getFocusedComponent() as GroupHeader | ToolFocus | WorkHeader,
       )
     )
       this.returnToComposer()
@@ -967,18 +960,11 @@ export class NativeChatHost {
           if (children[position] === occurrence.component) position++
           const thought = this.thoughts.get(occurrence)
           if (thought) {
-            activities.push({
-              component: thought,
-              owner,
-              tool: false,
-              work: this.work.find(owner),
-            })
-            if (thought.expanded && thought.body)
+            if (thought.body)
               activities.push({
                 component: thought.body,
                 occurrence,
                 tool: false,
-                body: thought.viewport,
               })
           } else
             activities.push({
@@ -1036,10 +1022,6 @@ export class NativeChatHost {
     return activities
   }
 
-  requestRender() {
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
-  }
-
   handleDisclosureInput(data: string, toggle: () => void) {
     const keys = getKeybindings()
     if (keys.matches(data, "tui.select.up")) this.moveDisclosure(-1)
@@ -1086,9 +1068,7 @@ export class NativeChatHost {
     this.revealDisclosure(next)
   }
 
-  private revealDisclosure(
-    component: GroupHeader | ToolFocus | WorkHeader | Thought,
-  ) {
+  private revealDisclosure(component: GroupHeader | ToolFocus | WorkHeader) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
     if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
@@ -1499,11 +1479,6 @@ export class NativeChatHost {
     if (work && !this.work.expanded(work)) {
       work.manualExpanded = true
       work.keepOpen = true
-      changed = true
-    }
-    const thought = this.thoughts.get(owner)
-    if (thought && !thought.expanded) {
-      thought.ensureOpen()
       changed = true
     }
     if (
@@ -2302,9 +2277,6 @@ export class NativeChatHost {
       thought = new Thought(this, part)
       this.thoughts.set(part, thought)
     }
-    thought.live = part.contentIndices.some((index) =>
-      this.thinkingParts.get(owner)?.has(index),
-    )
     thought.bind(
       component,
       Boolean((owner.component as NativeAssistant | undefined)?.isStreaming),
@@ -2531,7 +2503,6 @@ export class NativeChatHost {
             this.lastSourceZone = 0
             this.byComponent.clear()
             this.thoughts.clear()
-            this.thinkingParts.clear()
             this.groups.clear()
             this.toolFocus.clear()
             this.visibleDisclosures = []
@@ -2704,24 +2675,6 @@ export class NativeChatHost {
             )
             if (settled) this.recordRelationship(settled)
             ;(host.renderer as unknown as TuiAltScreen).requestRender()
-          }
-          if (owner && event.message?.role === "assistant") {
-            const update = event.assistantMessageEvent
-            if (event.type === "message_end") this.thinkingParts.delete(owner)
-            else if (update?.contentIndex !== undefined) {
-              let parts = this.thinkingParts.get(owner)
-              if (!parts) {
-                parts = new Set()
-                this.thinkingParts.set(owner, parts)
-              }
-              if (
-                update.type === "thinking_start" ||
-                update.type === "thinking_delta"
-              )
-                parts.add(update.contentIndex)
-              else if (update.type === "thinking_end")
-                parts.delete(update.contentIndex)
-            }
           }
           const result = this.withSource(owner, () =>
             original.call(host, event as never),
@@ -2996,7 +2949,6 @@ export class NativeChatHost {
     this.byEntryId.clear()
     this.byComponent.clear()
     this.thoughts.clear()
-    this.thinkingParts.clear()
     this.groups.clear()
     this.toolFocus.clear()
     this.visibleDisclosures = []

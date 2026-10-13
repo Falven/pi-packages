@@ -479,16 +479,16 @@ test("native image crops combine logical clips once and retain their identity an
   const first = kittyPlacements(host.terminal.output).at(-1)
   assert(first, host.terminal.output)
   assert.equal(first["y"], "360")
-  assert.equal(first["h"], "360")
-  assert.equal(first["r"], "8")
+  assert.equal(first["h"], "315")
+  assert.equal(first["r"], "7")
   await host.key("\x1b[6~")
   await host.frame()
   const second = kittyPlacements(host.terminal.output).at(-1)
   assert(second)
   assert.equal(second["i"], first["i"])
-  assert.equal(second["y"], "540")
-  assert.equal(second["h"], "540")
-  assert.equal(second["r"], "12")
+  assert.equal(second["y"], "495")
+  assert.equal(second["h"], "585")
+  assert.equal(second["r"], "13")
   const imageRow = host
     .screenLines()
     .findIndex((line) => kittyPlacements(line).length)
@@ -496,11 +496,11 @@ test("native image crops combine logical clips once and retain their identity an
   assert(
     host
       .screenLines()
-      .slice(imageRow + 1, imageRow + 12)
+      .slice(imageRow + 1, imageRow + 13)
       .every((line) => stripTerminalSequences(line).trim() === ""),
   )
   assert.match(
-    stripTerminalSequences(host.screenLines()[imageRow + 13] ?? ""),
+    stripTerminalSequences(host.screenLines()[imageRow + 14] ?? ""),
     /Received\./,
   )
   host.terminal.resize(60, 28)

@@ -84,19 +84,28 @@ function writableClipboard(
   assert(clipboard?.setText)
 }
 
-test("a native hidden thought previews inline, collapses when thinking ends, and reopens in place", async (t) => {
+test("a native hidden thought keeps prose inline and routes bold activity headings to the working indicator", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
     settings: { hideThinkingBlock: true },
   })
+  const initial =
+    "**Analyzing the `tools` schema**\n\nOriginal thought with **inline emphasis**.\n\n```text\n**Code sample**\n```"
+  const continuation =
+    "\n\n**Considering documentation needs**\n\nMore thought prose."
+  const full = initial + continuation
   host.queueResponse(
     start,
     thoughtStart(0),
-    thoughtDelta(0, "Original thought"),
+    thoughtDelta(0, "**Analyzing the "),
     { pause: true },
-    thoughtEnd(0, "Original thought"),
+    thoughtDelta(0, initial.slice("**Analyzing the ".length)),
+    { pause: true },
+    thoughtDelta(0, continuation),
+    { pause: true },
+    thoughtEnd(0, full),
     answerStart,
     answerDelta("Answer in progress"),
     { pause: true },
@@ -106,32 +115,60 @@ test("a native hidden thought previews inline, collapses when thinking ends, and
   )
   await host.type("Think here")
   await host.key("\r")
-  await t.waitFor(() =>
-    assert.match(host.screenLines().join("\n"), /Original thought/),
-  )
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen(), /Think here[\s\S]*▾ Thought[\s\S]*Original thought/)
+  await t.waitFor(() => assert.match(screen(), /Analyzing the/))
+  assert.match(screen(), /Working/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /Original thought/))
+  assert.match(
+    screen(),
+    /Think here[\s\S]*Original thought with inline emphasis/,
+  )
+  assert.match(screen(), /\*\*Code sample\*\*/)
+  assert.equal(screen().match(/Analyzing the tools schema/g)?.length, 1)
+  assert.doesNotMatch(screen(), /Thought/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /More thought prose/))
+  assert.doesNotMatch(screen(), /Analyzing the tools schema/)
+  assert.equal(screen().match(/Considering documentation needs/g)?.length, 1)
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Answer in progress/))
   assert.equal(host.session.isStreaming, true)
-  assert.match(screen(), /▸ Thought[\s\S]*Answer in progress/)
-  assert.doesNotMatch(screen(), /Original thought/)
+  assert.match(screen(), /Original thought[\s\S]*Answer in progress/)
+  assert.match(screen(), /Working/)
+  assert.doesNotMatch(
+    screen(),
+    /Analyzing the tools schema|Considering documentation needs/,
+  )
+  const thoughtRow = host
+    .screenLines()
+    .findIndex((row) => row.includes("Original thought"))
+  assert(thoughtRow >= 0)
+  await host.key(`\x1b[<0;3;${thoughtRow + 1}M`)
+  await host.key(`\x1b[<0;3;${thoughtRow + 1}m`)
+  assert.match(await host.frame(), /Original thought/)
+  host.resumeResponse()
+  await host.settled()
+  assert.match(await host.frame(), /▸ Worked/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(
-    screen(),
-    /Thought[\s\S]*Original thought[\s\S]*Answer in progress/,
-  )
-  host.resumeResponse()
-  await host.settled()
-  await host.frame()
   assert.match(screen(), /Original thought/)
-  assert.match(JSON.stringify(host.session.messages.at(-1)), /Original thought/)
+  assert.doesNotMatch(
+    screen(),
+    /Thought|Analyzing the tools schema|Considering documentation needs/,
+  )
+  const message = host.session.messages.at(-1)
+  assert.equal(message?.role, "assistant")
+  if (message?.role === "assistant")
+    assert.equal(
+      message.content.find((block) => block.type === "thinking")?.thinking,
+      full,
+    )
   assert.doesNotMatch(JSON.stringify(host.session.messages.at(-1)), /▾|▸/)
 })
 
-test("a bounded thought follows growth, preserves a scrolled anchor, and keeps native Markdown caches", async (t) => {
+test("a full inline thought follows chat scrolling, preserves an anchor, and keeps native Markdown caches", async (t) => {
   let transformations = 0
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -171,11 +208,11 @@ test("a bounded thought follows growth, preserves a scrolled anchor, and keeps n
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("shown-39"))),
   )
-  assert(screen().some((row) => row.includes("A thought in this position")))
+  assert(!screen().some((row) => row.includes("A thought in this position")))
   assert(!screen().some((row) => row.includes("shown-0")))
-  const header = screen().findIndex((row) => row.includes("Thought"))
+  assert(!screen().some((row) => row.includes("Thought")))
+  assert(screen().filter((row) => /shown-\d/.test(row)).length > 16)
   const last = screen().findIndex((row) => row.includes("shown-39"))
-  assert(header >= 0 && last - header <= 16)
   const cached = transformations
   await host.key(`\x1b[<64;3;${last + 1}M`)
   await host.output()
@@ -184,10 +221,6 @@ test("a bounded thought follows growth, preserves a scrolled anchor, and keeps n
     ?.trim()
   assert(anchor)
   assert.equal(transformations, cached)
-  assert.equal(
-    screen().findIndex((row) => row.includes("Thought")),
-    header,
-  )
   host.resumeResponse()
   await host.output()
   assert.equal(
@@ -217,26 +250,28 @@ test("a bounded thought follows growth, preserves a scrolled anchor, and keeps n
     assert(screen().some((row) => row.includes("shown-41"))),
   )
   host.resumeResponse()
-  await t.waitFor(() => assert(!screen().some((row) => /shown-\d/.test(row))))
+  await host.output()
   assert.equal(host.session.isStreaming, true)
-  assert(screen().some((row) => row.includes("▸ Thought")))
-  await host.key("\x1bg")
-  await host.key("\r")
-  await host.frame()
   assert(screen().some((row) => row.includes("shown-41")))
+  assert(!screen().some((row) => row.includes("Thought")))
+  host.terminal.resize(52, 70)
+  await host.output()
+  assert(screen().some((row) => row.includes("A thought in this position")))
+  assert.equal(screen().filter((row) => /shown-\d/.test(row)).length, 42)
   host.resumeResponse()
   await host.settled()
   assert.match(JSON.stringify(host.session.messages.at(-1)), /source-41/)
   assert.doesNotMatch(JSON.stringify(host.session.messages.at(-1)), /shown-/)
 })
 
-test("adjacent thinking blocks share a disclosure while later thought occurrences remain independent", async (t) => {
+test("adjacent thinking blocks share one body and every thought stays visible through cancellation and reload", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 40,
     settings: { hideThinkingBlock: true },
   })
+  const later = "**Figuring out file processing**\n\nLater thought"
   host.queueResponse(
     start,
     thoughtStart(0),
@@ -249,9 +284,9 @@ test("adjacent thinking blocks share a disclosure while later thought occurrence
     answerStart,
     answerDelta("Boundary between thoughts"),
     thoughtStart(7),
-    thoughtDelta(7, "Later thought"),
+    thoughtDelta(7, later),
     { pause: true },
-    thoughtEnd(7, "Later thought"),
+    thoughtEnd(7, later),
     done,
     end,
   )
@@ -261,7 +296,7 @@ test("adjacent thinking blocks share a disclosure while later thought occurrence
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Second adjacent block"))),
   )
-  assert.equal(screen().filter((row) => row.includes("Thought")).length, 1)
+  assert(!screen().some((row) => row.includes("Thought")))
   assert.match(
     screen().join("\n"),
     /First adjacent block[\s\S]*Second adjacent block/,
@@ -270,36 +305,44 @@ test("adjacent thinking blocks share a disclosure while later thought occurrence
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Later thought"))),
   )
-  assert.equal(screen().filter((row) => row.includes("Thought")).length, 2)
-  assert(!screen().some((row) => row.includes("adjacent block")))
-  const first = screen().findIndex((row) => row.includes("Thought"))
+  assert.equal(
+    screen().filter((row) => row.includes("Figuring out file processing"))
+      .length,
+    1,
+  )
+  assert(!screen().some((row) => row.includes("Thought")))
+  assert(screen().some((row) => row.includes("First adjacent block")))
+  assert(screen().some((row) => row.includes("Second adjacent block")))
+  const first = screen().findIndex((row) =>
+    row.includes("First adjacent block"),
+  )
   await host.key(`\x1b[<0;3;${first + 1}M`)
   await host.key(`\x1b[<0;3;${first + 1}m`)
   await host.frame()
   assert.match(
     screen().join("\n"),
-    /First adjacent block[\s\S]*Second adjacent block[\s\S]*Boundary between thoughts[\s\S]*Thought[\s\S]*Later thought/,
+    /First adjacent block[\s\S]*Second adjacent block[\s\S]*Boundary between thoughts[\s\S]*Later thought/,
   )
   await host.key("\x1b")
   await host.session.abort()
   await host.settled()
   await host.frame()
   assert(screen().some((row) => row.includes("First adjacent block")))
-  assert(!screen().some((row) => row.includes("Later thought")))
+  assert(screen().some((row) => row.includes("Later thought")))
+  assert(!screen().some((row) => row.includes("Figuring out file processing")))
   const stored = JSON.stringify(host.session.messages)
   await host.reload()
   await host.frame()
-  assert.equal(screen().filter((row) => row.includes("Thought")).length, 2)
-  assert(!screen().some((row) => /adjacent block|Later thought/.test(row)))
+  assert(!screen().some((row) => row.includes("Thought")))
+  assert(!screen().some((row) => row.includes("Figuring out file processing")))
+  assert.match(
+    screen().join("\n"),
+    /First adjacent block[\s\S]*Second adjacent block[\s\S]*Boundary between thoughts[\s\S]*Later thought/,
+  )
   assert.equal(JSON.stringify(host.session.messages), stored)
-  await host.key("\x1bg")
-  await host.key("\r")
-  await host.frame()
-  assert(screen().some((row) => row.includes("Later thought")))
-  assert(!screen().some((row) => row.includes("adjacent block")))
 })
 
-test("native copy includes expanded offscreen thought rows and automatic collapse clears the selection", async (t) => {
+test("native copy includes offscreen thought rows and whole-work collapse clears the selection", async (t) => {
   const clipboard = getNativeClipboard()
   writableClipboard(clipboard)
   let copied = ""
@@ -335,10 +378,17 @@ test("native copy includes expanded offscreen thought rows and automatic collaps
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("thought-29"))),
   )
+  await host.key("\x1b[H")
+  await host.frame()
   const first = screen().findIndex((row) => row.includes("Copy thought body"))
+  assert(first >= 0)
+  const column = screen()[first]!.indexOf("Copy thought body") + 1
+  await host.key(`\x1b[<0;${column};${first + 1}M`)
+  // oxlint-disable-next-line eslint/no-await-in-loop -- Deliver the selection's wheel events in order.
+  for (let n = 0; n < 18; n++) await host.key(`\x1b[<65;3;${first + 1}M`)
+  await host.frame()
   const last = screen().findIndex((row) => row.includes("thought-29"))
-  assert(first >= 0 && last > first)
-  await host.key(`\x1b[<0;2;${first + 1}M`)
+  assert(last >= 0)
   await host.key(`\x1b[<32;30;${last + 1}M`)
   await host.key(`\x1b[<0;30;${last + 1}m`)
   await host.key("\x18")
@@ -354,7 +404,7 @@ test("native copy includes expanded offscreen thought rows and automatic collaps
   await t.waitFor(() => assert.equal(copied, "Visible answer"))
 })
 
-test("the live preview leaves the screen with its source row during chat scrollback", async (t) => {
+test("a live thought leaves the screen with its source row during chat scrollback", async (t) => {
   let appendTail: (() => void) | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -402,7 +452,7 @@ test("the live preview leaves the screen with its source row during chat scrollb
   await host.frame()
   assert.match(
     screen(),
-    /later-row-49[\s\S]*Original thought position[\s\S]*Thought[\s\S]*Inline thought body/,
+    /later-row-49[\s\S]*Original thought position[\s\S]*Inline thought body/,
   )
   host.resumeResponse()
   await host.settled()
@@ -436,7 +486,7 @@ test("native prompt navigation reaches a split assistant while its answer is sti
   await t.waitFor(() => assert.match(screen(), /answer-39/))
   await host.key("\x1b[1;5A")
   await host.frame()
-  assert.match(screen(), /Thought[\s\S]*answer-0/)
+  assert.match(screen(), /Complete thought[\s\S]*answer-0/)
   assert.doesNotMatch(screen(), /Prompt before the thought/)
   host.resumeResponse()
   await host.settled()
@@ -491,12 +541,9 @@ test("native message replacement can split an earlier thinking run without steal
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  await host.key("\x1b[B")
-  await host.key("\r")
-  await host.frame()
   assert.match(
     screen(),
-    /Thought[\s\S]*Retained first thought[\s\S]*Visible replacement answer/,
+    /Retained first thought[\s\S]*Visible replacement answer/,
   )
 })
 
@@ -519,7 +566,7 @@ test("interleaved Completions text does not end a thought before Pi reports comp
   await t.waitFor(() => assert.match(screen(), /Thinking before/))
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Visible text/))
-  assert.match(screen(), /▾ Thought[\s\S]*Thinking before/)
+  assert.match(screen(), /Thinking before/)
   host.resumeResponse()
   await t.waitFor(() =>
     assert.match(screen(), /Thinking before and after text/),

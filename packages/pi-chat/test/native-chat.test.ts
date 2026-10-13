@@ -407,6 +407,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
+  assert.match(screen(), /▾ 2 tool calls: read/)
   assert.match(screen(), /read one\.txt/)
   assert.match(screen(), /read two\.txt/)
   await host.key("\u000f")
@@ -414,6 +415,7 @@ test("consecutive native calls start as one closed group and open from the compo
   assert.match(screen(), /FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
+  assert.match(screen(), /▸ 2 tool calls: read/)
   assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
@@ -463,7 +465,7 @@ test("a finished call stays grouped while another iteration may join it", async 
   assert.match(screen(), /read two\.txt/)
 })
 
-test("a settled finished singleton displays its native call directly", async (t) => {
+test("a single tool call stays grouped and collapsed after completion", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
   await writeFile(join(host.directory, "one.txt"), "only")
   host.queueResponse(readDelta("only", "one.txt"), toolFinish, done, end)
@@ -495,9 +497,14 @@ test("a settled finished singleton displays its native call directly", async (t)
   await host.settled()
   await openWork(host)
   await host.frame()
-  assert.doesNotMatch(screen(), /1 tool call: read/)
-  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /▸ 1 tool call: read/)
+  assert.doesNotMatch(screen(), /read one\.txt/)
   await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /▾ 1 tool call: read/)
+  assert.match(screen(), /read one\.txt/)
+  await host.key("\x1b[B")
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /only/)
@@ -533,9 +540,9 @@ test("commentary between model iterations separates tool groups in source order"
   await host.frame()
   assert.match(
     screen(),
-    /read one\.txt[\s\S]*Between calls[\s\S]*1 tool call: read/,
+    /1 tool call: read[\s\S]*Between calls[\s\S]*1 tool call: read/,
   )
-  assert.doesNotMatch(screen(), /2 tool calls/)
+  assert.doesNotMatch(screen(), /2 tool calls|read one\.txt|read two\.txt/)
   host.resumeResponse()
   await host.settled()
 })
@@ -603,12 +610,16 @@ test("thinking between calls separates their groups", async (t) => {
   await host.key("\r")
   await host.settled()
   await openWork(host)
-  const screen = (await host.frame())
-    .split("\n")
-    .map(stripTerminalSequences)
-    .join("\n")
-  assert.match(screen, /read one\.txt[\s\S]*Thought[\s\S]*read two\.txt/)
-  assert.doesNotMatch(screen, /2 tool calls/)
+  await host.frame()
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.match(
+    screen,
+    /▸ 1 tool call: read[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*▸ 1 tool call: read/,
+  )
+  assert.doesNotMatch(
+    screen,
+    /2 tool calls|read one\.txt|read two\.txt|Thought/,
+  )
 })
 
 test("remapped selector keys navigate groups and cancel returns to the composer", async (t) => {
@@ -758,6 +769,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   assert(header >= 0)
   await click(header)
   await host.frame()
+  assert.match(lines()[header] ?? "", /→ ▾ 2 tool calls/)
   assert.match(lines().join("\n"), /read one\.txt/)
   const call = lines().findIndex((line) => line.includes("read one.txt"))
   assert(call >= 0)
@@ -778,6 +790,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   overlay.hide()
   await host.key("\r")
   await host.frame()
+  assert.match(lines()[header] ?? "", /→ ▸ 2 tool calls/)
   assert.doesNotMatch(lines().join("\n"), /read one\.txt|FIRST TOOL BODY/)
 })
 

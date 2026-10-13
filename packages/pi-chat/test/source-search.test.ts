@@ -381,7 +381,7 @@ test("Find highlights the owning call when a custom renderer omits source text",
   )
 })
 
-test("Find opens a closed thought at its source occurrence", async (t) => {
+test("Find opens work history for a thought body or an extracted activity heading", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -389,6 +389,7 @@ test("Find opens a closed thought at its source occurrence", async (t) => {
     settings: { hideThinkingBlock: true },
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
+  const reasoning = "**Investigating optics**\n\nThe hidden telescope"
   host.queueResponse(
     { event: { type: "response.created", response: { id: "reply" } } },
     {
@@ -402,7 +403,7 @@ test("Find opens a closed thought at its source occurrence", async (t) => {
       event: {
         type: "response.reasoning_summary_text.delta",
         output_index: 0,
-        delta: "The hidden telescope",
+        delta: reasoning,
       },
     },
     {
@@ -412,7 +413,7 @@ test("Find opens a closed thought at its source occurrence", async (t) => {
         item: {
           type: "reasoning",
           id: "thought",
-          summary: [{ type: "summary_text", text: "The hidden telescope" }],
+          summary: [{ type: "summary_text", text: reasoning }],
         },
       },
     },
@@ -458,13 +459,21 @@ test("Find opens a closed thought at its source occurrence", async (t) => {
   assert.match(before, /▸ Worked/)
   assert.doesNotMatch(before, /The hidden telescope/)
   await host.key("\x06")
+  await host.type("optics")
+  await host.frame()
+  const headingHit = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.match(headingHit, /1\/1/)
+  assert.match(headingHit, /▾ Worked[\s\S]*The hidden telescope/)
+  assert.doesNotMatch(headingHit, /Investigating optics/)
+  await host.key("\x1b")
+  await host.key("\x06")
   await host.type("telescope")
   await host.frame()
   const lines = host.screenLines()
   assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/)
   assert.match(
     lines.map(stripTerminalSequences).join("\n"),
-    /▾ Worked[\s\S]*▾ Thought[\s\S]*The hidden telescope/,
+    /▾ Worked[\s\S]*The hidden telescope/,
   )
   const thought = lines.find((line) =>
     stripTerminalSequences(line).includes("The hidden telescope"),
@@ -773,7 +782,7 @@ test("Find reopens a hidden retained thought using the native Markdown environme
   const lines = host.screenLines()
   const screen = lines.map(stripTerminalSequences).join("\n")
   assert.match(screen, /1\/1/)
-  assert.match(screen, /▾ Thought[\s\S]*shown-historical/)
+  assert.match(screen, /shown-historical/)
   const thought = lines.find((line) =>
     stripTerminalSequences(line).includes("shown-historical"),
   )

@@ -309,7 +309,7 @@ export class WorkHeader extends Text {
 
   override render(width: number) {
     this.setText(
-      `${this.focused ? "→" : this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`,
+      `${this.focused ? "→ " : ""}${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`,
     )
     return super.render(width)
   }

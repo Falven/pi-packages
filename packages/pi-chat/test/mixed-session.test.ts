@@ -314,12 +314,6 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
   await host.key(`\x1b[<0;2;${row + 1}M`)
   await host.key(`\x1b[<0;2;${row + 1}m`)
   await host.frame()
-  const thoughtRow = host
-    .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("▸ Thought"))
-  assert(thoughtRow >= 0)
-  await host.key(`\x1b[<0;2;${thoughtRow + 1}M`)
-  await host.key(`\x1b[<0;2;${thoughtRow + 1}m`)
   assert.match(await host.frame(), /Mixed thought preview/)
   const groupRow = host
     .screenLines()

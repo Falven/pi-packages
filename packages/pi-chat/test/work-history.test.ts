@@ -81,7 +81,8 @@ test("settled work hides the earlier identical text and retains the final occurr
   const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(expanded, /▾ Worked/)
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
-  assert.match(expanded, /read one\.txt/)
+  assert.match(expanded, /▸ 1 tool call: read/)
+  assert.doesNotMatch(expanded, /read one\.txt/)
 })
 
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
@@ -276,12 +277,6 @@ test("a settled terminal assistant keeps its native thoughts in work and its tex
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  const thoughtRow = host
-    .screenLines()
-    .findIndex((row) => stripTerminalSequences(row).includes("Thought"))
-  assert(thoughtRow >= 0)
-  await host.key(`\x1b[<0;3;${thoughtRow + 1}M`)
-  await host.key(`\x1b[<0;3;${thoughtRow + 1}m`)
   const expanded = await host.frame()
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
   assert.match(expanded, /Private thought body/)
@@ -335,9 +330,6 @@ test("all terminal text parts share one answer when a native extension interleav
   assert.doesNotMatch(frame, /Interleaved native thought/)
   await host.key("\x1bg")
   await host.key("\r")
-  await host.frame()
-  await host.key("\x1b[B")
-  await host.key("\r")
   const expanded = await host.frame()
   assert.equal((expanded.match(/Worked/g) ?? []).length, 1)
   assert.match(
@@ -365,6 +357,8 @@ test("native tool inspection keeps work open and work toggles preserve tool deta
   await host.type("Inspect the tool")
   await host.key("\r")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
+  await host.key("\x1bg")
+  await host.key("\r")
   await host.frame()
   const call = host
     .screenLines()
@@ -596,7 +590,8 @@ test("a terminal response without answer text leaves work expanded", async (t) =
   await host.settled()
   const frame = await host.frame()
   assert.match(frame, /Visible work without answer/)
-  assert.match(frame, /read one\.txt/)
+  assert.match(frame, /▸ 1 tool call: read/)
+  assert.doesNotMatch(frame, /read one\.txt/)
   assert.doesNotMatch(frame, /Worked/)
 })
 
