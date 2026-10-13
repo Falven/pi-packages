@@ -75,9 +75,19 @@ test("settled work hides the earlier identical text and retains the final occurr
   assert.doesNotMatch(source, /Worked|pi-chat/)
 
   await host.key("\x1bg")
+  await host.frame()
+  const workRow = () =>
+    host.screenLines().find((line) => line.includes("Worked")) ?? ""
+  const selectedBg = host.ui.theme.getBgAnsi("selectedBg")
+  assert.match(stripTerminalSequences(workRow()), /^ ▸ Worked/)
+  assert(workRow().includes(selectedBg))
   await host.key("\r")
+  await host.frame()
+  assert.match(stripTerminalSequences(workRow()), /^ ▾ Worked/)
+  assert(workRow().includes(selectedBg))
   await host.key("\x1b")
   await host.frame()
+  assert(!workRow().includes(selectedBg))
   const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(expanded, /▾ Worked/)
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)

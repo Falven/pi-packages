@@ -315,9 +315,14 @@ class GroupHeader extends Text {
     const count = this.group.calls.length
     this.setText(
       truncateToWidth(
-        `${this.focused ? "→ " : ""}${this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
+        `${this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
         Math.max(1, width - 2),
       ),
+    )
+    this.setCustomBgFn(
+      this.focused
+        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
+        : undefined,
     )
     return super.render(width)
   }
@@ -377,6 +382,7 @@ class ToolFocus extends Container {
 
 export class NativeChatHost {
   readonly host: NativeMode
+  readonly extensionUI: ExtensionContext["ui"]
   readonly work = new WorkIndex()
   private readonly providerPhases = new ProviderPhaseIndex()
   readonly relationships: RelationshipJournal
@@ -469,6 +475,7 @@ export class NativeChatHost {
 
   private constructor(host: NativeMode) {
     this.host = host
+    this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
     this.imageSettings = {
       show: host.settingsManager.getShowImages(),
       width: host.settingsManager.getImageWidthCells(),

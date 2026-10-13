@@ -308,8 +308,11 @@ export class WorkHeader extends Text {
   }
 
   override render(width: number) {
-    this.setText(
-      `${this.focused ? "→ " : ""}${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`,
+    this.setText(`${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`)
+    this.setCustomBgFn(
+      this.focused
+        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
+        : undefined,
     )
     return super.render(width)
   }
