@@ -15,7 +15,7 @@ import { registerRecovery, saveRequest } from "./recovery.ts"
 
 export function attachmentReferences(text: string, storage: string) {
   const references: { path: string; from: number; to: number }[] = []
-  for (const match of text.matchAll(/\[Attachment: [^\]]+\]\(<([^>]+)>\)/g)) {
+  for (const match of text.matchAll(/\[Attachment: [^[\]]+\]\(<([^<>]+)>\)/g)) {
     const path = match[1] && resolve(match[1])
     if (path?.startsWith(storage + sep))
       references.push({

@@ -224,6 +224,40 @@ test("Remove from draft removes repeated membership in one composer edit and ret
   assert.equal(await readFile(secondPath, "utf8"), "Keep this membership")
 })
 
+for (const unfinished of [
+  "[Attachment: unfinished and ",
+  "[Attachment: unfinished](<missing ",
+]) {
+  test(`Remove from draft preserves prose before an ${unfinished.includes("(<") ? "incomplete destination" : "incomplete label"}`, async (t) => {
+    const host = await nativePi(t)
+    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
+      expandPromptTemplates: true,
+    })
+    const reference = host.ui.getEditorText().trim()
+    const path = snapshotPath(reference)
+    const before = `Keep ${unfinished}${reference}\nTail`
+    host.ui.setEditorText(before)
+    const { pending } = await startAction(host, "Remove from draft")
+    await pending
+    assert.equal(host.ui.getEditorText(), `Keep ${unfinished}\nTail`)
+    assert.equal(await readFile(path, "utf8"), "CAPTURED")
+  })
+  test(`Restore Inline preserves prose before an ${unfinished.includes("(<") ? "incomplete destination" : "incomplete label"}`, async (t) => {
+    const host = await nativePi(t)
+    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
+      expandPromptTemplates: true,
+    })
+    const reference = host.ui.getEditorText().trim()
+    const path = snapshotPath(reference)
+    const before = `Keep ${unfinished}${reference}\nTail`
+    host.ui.setEditorText(before)
+    const { pending } = await startAction(host, "Restore Inline")
+    await pending
+    assert.equal(host.ui.getEditorText(), `Keep ${unfinished}\nTailCAPTURED`)
+    assert.equal(await readFile(path, "utf8"), "CAPTURED")
+  })
+}
+
 test("a pending restore cannot replace a newer composer selection", async (t) => {
   const host = await nativePi(t, [composerPath])
   await host.runtime.session.sendUserMessage(
@@ -452,6 +486,78 @@ test("the attachment widget exposes its shortcut and composer preview scrolls wi
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
   assert.equal(await readFile(path, "utf8"), contents)
+})
+
+test("preview reaches the end of a long Unicode line and stays navigable through resize", async (t) => {
+  const host = await nativePi(t)
+  const source = join(host.directory, "very-long.txt")
+  const contents =
+    `BEGIN ${"a".repeat(4200)}界🙂\tMID ` + "b".repeat(40000) + " END界🙂"
+  await writeFile(source, contents)
+  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
+    expandPromptTemplates: true,
+  })
+  const before = host.ui.getEditorText()
+  const path = snapshotPath(before)
+  const { pending } = await startAction(host, "Preview text")
+  await waitFor(() => assert.match(host.render(), /BEGIN/))
+  let endVisible = false
+  for (let page = 0; page < 100; page++) {
+    if (host.render().includes("END界🙂")) {
+      endVisible = true
+      break
+    }
+    host.input("\x1b[6~")
+  }
+  assert.ok(endVisible, "the end of the long line is reachable")
+  host.input("\x1b[6~")
+  host.input("\x1b[6~")
+  host.resize(45, 30)
+  assert.match(host.render(), /END界🙂/)
+  host.resize(100, 30)
+  assert.match(host.render(), /END界🙂/)
+  let middleVisible = false
+  for (let page = 0; page < 40; page++) {
+    const frame = host.render()
+    if (frame.includes("界🙂   MID")) {
+      middleVisible = true
+      break
+    }
+    host.input("\x1b[5~")
+  }
+  assert.ok(middleVisible, "Unicode and expanded tab remain reachable")
+  host.input("\x1b")
+  await pending
+  assert.equal(host.ui.getEditorText(), before)
+  assert.equal(await readFile(path, "utf8"), contents)
+})
+
+test("preview keeps the final logical line visible when width and height change", async (t) => {
+  const host = await nativePi(t)
+  const source = join(host.directory, "many-lines.txt")
+  const contents = Array.from(
+    { length: 50 },
+    (_, index) => `line ${index} ${"x".repeat(30)}`,
+  ).join("\n")
+  await writeFile(source, contents)
+  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
+    expandPromptTemplates: true,
+  })
+  const before = host.ui.getEditorText()
+  host.resize(80, 30)
+  const { pending } = await startAction(host, "Preview text")
+  await waitFor(() => assert.match(host.render(), /line 0/))
+  for (let page = 0; page < 10; page++) host.input("\x1b[6~")
+  assert.match(host.render(), /line 49/)
+  host.resize(45, 30)
+  assert.match(host.render(), /line 49/)
+  host.resize(45, 25)
+  assert.match(host.render(), /line 49/)
+  host.resize(45, 35)
+  assert.match(host.render(), /line 49/)
+  host.input("\x1b")
+  await pending
+  assert.equal(host.ui.getEditorText(), before)
 })
 
 for (const action of ["Preview text", "Restore Inline"]) {

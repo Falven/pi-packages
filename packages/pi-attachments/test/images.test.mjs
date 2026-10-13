@@ -599,6 +599,7 @@ test("a failed image recovery write stops delivery and preserves incoming images
   host.submit("Persist the recovered session")
   await waitFor(() => assert.equal(host.requests.length, 1))
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  await waitFor(() => assert.match(host.render(), /Request saved:/))
   const saved = await readFile(host.runtime.session.sessionFile, "utf8")
   assert.ok(saved.includes(draft))
   assert.ok(

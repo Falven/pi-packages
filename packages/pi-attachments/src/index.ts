@@ -11,12 +11,7 @@ import {
   keyHint,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
-import {
-  type Editor,
-  type TuiMouseEvent,
-  ScrollView,
-  Text,
-} from "@earendil-works/pi-tui"
+import { type Editor, type TuiMouseEvent } from "@earendil-works/pi-tui"
 import {
   attachmentPaths,
   attachmentReferences,
@@ -26,6 +21,7 @@ import {
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
 import { registerPaste } from "./paste.ts"
+import { TextPreview } from "./preview.ts"
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
@@ -535,20 +531,15 @@ export default function piAttachments(pi: ExtensionAPI): void {
         (tui, theme, keybindings, done) => {
           const close = () => done()
           lifetime.signal.addEventListener("abort", close, { once: true })
-          const body = new Text(
+          const preview = new TextPreview(
             stripVTControlCharacters(contents.replace(/\r\n?/g, "\n")),
-            0,
-            0,
           )
-          const scroll = new ScrollView(body, { scrollbar: "hidden" })
           return {
             render(width) {
               try {
-                const lines = scroll.render(width)
-                scroll.updateLayout(
-                  lines.length,
+                const lines = preview.render(
+                  width,
                   Math.max(1, tui.terminal.rows - 8),
-                  () => tui.requestRender(),
                 )
                 return [
                   ...truncateToVisualLines(
@@ -556,10 +547,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
                     2,
                     width,
                   ).visualLines,
-                  ...lines.slice(
-                    scroll.scrollTop,
-                    scroll.scrollTop + scroll.viewportHeight,
-                  ),
+                  ...lines,
                   ...truncateToVisualLines(
                     `${keyHint("tui.select.pageUp", "previous page")}  ${keyHint("tui.select.pageDown", "next page")}  ${keyHint("tui.select.cancel", "close")}`,
                     2,
@@ -576,18 +564,21 @@ export default function piAttachments(pi: ExtensionAPI): void {
             },
             handleInput(data) {
               if (keybindings.matches(data, "tui.select.cancel")) close()
-              else if (keybindings.matches(data, "tui.select.up"))
-                scroll.scrollBy(-1)
-              else if (keybindings.matches(data, "tui.select.down"))
-                scroll.scrollBy(1)
-              else if (keybindings.matches(data, "tui.select.pageUp"))
-                scroll.scrollBy(-scroll.viewportHeight)
-              else if (keybindings.matches(data, "tui.select.pageDown"))
-                scroll.scrollBy(scroll.viewportHeight)
+              else if (keybindings.matches(data, "tui.select.up")) {
+                preview.scrollBy(-1)
+                tui.requestRender()
+              } else if (keybindings.matches(data, "tui.select.down")) {
+                preview.scrollBy(1)
+                tui.requestRender()
+              } else if (keybindings.matches(data, "tui.select.pageUp")) {
+                preview.scrollBy(-preview.viewportHeight)
+                tui.requestRender()
+              } else if (keybindings.matches(data, "tui.select.pageDown")) {
+                preview.scrollBy(preview.viewportHeight)
+                tui.requestRender()
+              }
             },
-            invalidate() {
-              body.invalidate()
-            },
+            invalidate() {},
             dispose() {
               lifetime.signal.removeEventListener("abort", close)
             },
