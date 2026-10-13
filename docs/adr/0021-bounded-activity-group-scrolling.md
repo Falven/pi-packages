@@ -1,0 +1,9 @@
+# Bound expanded activity groups within the chat view
+
+An expanded activity group uses a bounded inline viewport with its disclosure header outside the scrolling body, while the enclosing work history expands in normal chat flow and tools retain their native presentation and detail controls. The viewport composes Pi's `ScrollView` for scroll state and reuses native content-renderer instances, supplying available height, visible-range clipping, and child input and coordinate routing through the [owned chat-view adapter](0022-native-rows-in-an-owned-transcript.md). Scrolling requests a redraw without invalidating unchanged content or scanning history; additional caches require reliable invalidation and measured need.
+
+## Consequences
+
+Manual clipping does not register an inner viewport with native selection, and Pi's plain chat containers prevent the existing layout traversal from reaching nested scroll regions. Source inspection of Pi 1.0.2 and checkout 1.1.0 found counterexamples in which [repeated Kitty cropping](/Users/fran/Source/pi-packages/packages/pi-composer/node_modules/@earendil-works/pi-tui/dist/terminal-image.js:339) loses the source offset, [nested image-tail recovery](/Users/fran/Source/pi-packages/packages/pi-composer/node_modules/@earendil-works/pi-tui/dist/layout.js:255) exceeds ancestor clipping, or selection starting outside a registered inner viewport copies its unscrolled content.
+
+The adopted layout resolves nested logical clips before painting, then presents each visible interval through one non-nested native scroll window over the original uncropped rows. Pi performs one image crop and retains image ownership; extension-owned selection maps through the same logical occurrence geometry. Page Up and Page Down remain assigned to the primary chat viewport. These mechanisms are supported by source inspection, but terminal rendering, selection, resize behavior, and performance remain unvalidated.

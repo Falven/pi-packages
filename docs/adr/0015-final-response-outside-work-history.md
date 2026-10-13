@@ -1,0 +1,9 @@
+# Keep the final response outside folded work history
+
+The final response remains visible outside the work-history fold, including when its text exactly matches earlier progress. `pi-chat` therefore requires occurrence-specific visibility at content-block granularity within Pi's [native-content boundary](0012-transcript-preserves-native-content.md); ambiguous text matching cannot substitute for that behavior by hiding the final response or exposing collapsed work. Work becomes eligible to collapse as a qualifying final response starts, subject to explicit expansion choices; cancellation or the absence of such a response keeps work expanded, while completion, text selection, and scroll position do not postpone collapse.
+
+## Consequences
+
+Pi can put several provider message items into one assistant message, so acquiring its whole native component does not establish separate commentary and final-response visibility. The public [`provider_stream_event` hook](/Users/fran/Source/pi-packages/node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts:690) can expose an early OpenAI Responses `final_answer` phase before normalized text starts when the provider supplies it; the [runtime adapter](0022-native-rows-in-an-owned-transcript.md) associates normalized content occurrences with native child components. Provider phase, selected final response, and settled work outcome remain distinct facts.
+
+When the provider supplies no final-phase evidence, a qualifying terminal assistant message's text becomes one final response only after work settles. This accepted Pi policy does not infer an internal commentary/answer boundary from prose or claim early collapse without provider evidence; cancellation and missing qualifying responses retain the expanded-work behavior above.

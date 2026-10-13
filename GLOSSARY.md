@@ -1,6 +1,6 @@
-# Prompt composition
+# Pi interaction
 
-The language used to describe composing prompts in Pi. These user-facing concepts are shared across the three composition packages.
+The language used to describe composing prompts and reading conversation history in Pi. These user-facing concepts are shared across the packages.
 
 ## Language
 
@@ -49,3 +49,42 @@ _Avoid_: Attachment, when referring to the action
 
 **Paste policy**:
 The rules that determine how pasted content enters a draft, including whether text appears inline or becomes an attachment.
+
+**Chat view**:
+The primary display of conversation messages and current activity alongside the composer.
+_Avoid_: Transcript, when referring to the main chat surface
+
+**Transcript**:
+A separate overlay for reading and navigating conversation history over the chat view.
+_Avoid_: Chat view, when referring to the history-reading overlay
+
+**Active branch**:
+The conversation path from the beginning of a session to its currently selected point in history.
+
+**Retained history**:
+Recorded conversation content still available in a session, including original content summarized during compaction.
+_Avoid_: Visible history, when content may be folded or absent from the current chat view
+
+**Fold**:
+A display state that replaces displayed conversation content with a summary or disclosure header while preserving the underlying content.
+_Avoid_: Compaction, when only the presentation changes
+
+**Activity group**:
+Consecutive tool calls presented together within a work history. Standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
+_Avoid_: Nested tool call, unless one tool actually called another
+
+**Work history**:
+The ordered commentary, thoughts, and tool activity associated with answering a request, distinct from its final response.
+_Avoid_: Thought, when referring to all of the work preceding an answer
+
+**Steering message**:
+A user message delivered during ongoing work to redirect the current request.
+
+**Queued follow-up**:
+A user request held until the current request finishes, with its own work history and final response.
+
+**Final response**:
+The assistant's answer to a request, presented separately from the work history leading to it. It can still be streaming or remain partial after interruption.
+
+**Thought preview**:
+A bounded, scrolling view of a thought while it is being produced, shown at that thought's position in the chat view.

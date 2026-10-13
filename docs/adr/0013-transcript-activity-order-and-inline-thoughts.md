@@ -1,0 +1,7 @@
+# Preserve activity order and inline thought placement
+
+`pi-chat` groups consecutive top-level tool calls within a work history across assistant messages, ending groups at standalone non-tool items or explicit boundaries. Steering continues the current work history and appears as a user message that separates activity groups; a queued follow-up starts a new work history with its own final response. A temporary thought preview stays at the thought's position in the chat view and collapses there to its disclosure when thinking completes, retaining [native content ownership](0012-transcript-preserves-native-content.md).
+
+## Consequences
+
+Pi exposes requested delivery mode at input submission, but later handlers and expansion can change or consume the input before both queues construct ordinary user messages without a delivery identifier. The [runtime adapter](0022-native-rows-in-an-owned-transcript.md) observes the actual message objects passed to the initial prompt and returned by each queue's drain, recording delivery only when that user message starts and joining it to its persisted entry afterward. [Relationship metadata](0017-native-transcript-relationship-metadata.md) preserves these established boundaries; where historical delivery provenance is missing, only the uncertain work relationships remain unfolded, without inventing boundaries or disabling tool/thought disclosures and search.

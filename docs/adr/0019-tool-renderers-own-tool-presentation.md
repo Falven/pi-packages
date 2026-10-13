@@ -1,0 +1,3 @@
+# Tool renderers own tool presentation
+
+`pi-chat` groups [consecutive tool calls](0013-transcript-activity-order-and-inline-thoughts.md) without assigning semantic categories or inferring behavior from tool names, while Pi and each tool's existing renderer own call and result presentation. Every top-level tool call in the chat view is eligible; standalone non-tool items and explicit activity boundaries separate groups, and collapsed summaries use observable call counts and actual tool names. This preserves compatibility with replacement and custom tools without standalone-tool exceptions, exclusion lists, a new tool protocol, or extracted renderer text.
