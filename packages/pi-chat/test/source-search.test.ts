@@ -697,7 +697,8 @@ test("revealing a retained user row does not add it to native editor history", a
   assert(original?.type === "message" && original.message.role === "user")
   host.session.sessionManager.appendMessage({
     ...original.message,
-    content: "history-needle request",
+    // Keep the match below Pi's search overlay in the recording terminal.
+    content: "Earlier context\n\nMore context\n\nhistory-needle request",
   })
   const file = host.session.sessionFile!
   host.session.sessionManager.appendCompaction("Compressed context", null, 100)
@@ -707,6 +708,17 @@ test("revealing a retained user row does not add it to native editor history", a
   await host.key("\x06")
   await host.type("history-needle")
   assert.match(await host.frame(), /1\/1/)
+  const matched = host
+    .screenLines()
+    .find((line) =>
+      stripTerminalSequences(line).includes("history-needle request"),
+    )
+  assert(matched, host.screenLines().map(stripTerminalSequences).join("\n"))
+  assert.equal(
+    stripTerminalSequences(matched).indexOf("history-needle request"),
+    host.terminal.columns - "history-needle request".length - 1,
+  )
+  assert.match(matched, /\x1b\[48;5;52m[^\n]*history-needle/)
   await host.key("\x1b")
   await host.key("\x1b[A")
   await host.frame()

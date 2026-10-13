@@ -8,7 +8,9 @@ import {
   MouseRegion,
   Text,
   TuiAltScreen,
+  sliceByColumn,
   stripTerminalSequences,
+  visibleWidth,
   type NativeClipboard,
 } from "@earendil-works/pi-tui"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
@@ -104,8 +106,17 @@ function assertWritableClipboard(
   assert(clipboard?.setText)
 }
 
-test("native chat keeps the live answer, composer, and provider content", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat] })
+test("native chat right-aligns user messages and keeps the answer, composer, and source content", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    settings: { fullscreenCopyOnSelect: false },
+  })
   await host.type("Hello")
   await host.key("\r")
   await host.settled()
@@ -120,16 +131,48 @@ test("native chat keeps the live answer, composer, and provider content", async 
     /Hello/,
   )
   assert.doesNotMatch(frame, /pi-chat requires|pi-chat cannot/)
+  const lines = host.screenLines().map(stripTerminalSequences)
+  const row = lines.findIndex((line) => line.trim() === "Hello")
+  assert(row >= 0)
+  const column = lines[row]!.indexOf("Hello")
+  assert.equal(column, host.terminal.columns - "Hello".length - 1)
+  // oxlint-disable-next-line eslint/no-control-regex -- The native background still spans the first cell.
+  assert.match(sliceByColumn(host.screenLines()[row]!, 0, 1, true), /\x1b\[48;/)
+  assert.equal(
+    lines.find((line) => line.includes("Received."))?.indexOf("Received."),
+    1,
+  )
+  await host.key(`\x1b[<0;${column + 1};${row + 1}M`)
+  await host.key(`\x1b[<32;${column + 5};${row + 1}M`)
+  await host.key(`\x1b[<0;${column + 5};${row + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "Hello"))
 })
 
 test("native Markdown transforms still apply without changing stored or requested text", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const widths: number[] = []
+  const prose =
+    "Aligned **界** content retains the full native wrapping width and Markdown layout while the user text moves to the right within its bar."
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
+    rows: 34,
+    settings: { fullscreenCopyOnSelect: false },
+    keybindings: { "tui.altScreen.previousPrompt": "alt+up" },
     extensionFactories: [
       (pi) =>
-        pi.registerMarkdownTransformer((markdown) =>
-          markdown.replace("Received.", "Rendered by extension"),
-        ),
+        pi.registerMarkdownTransformer((markdown, context) => {
+          if (markdown === "Transform") {
+            widths.push(context.availableWidth)
+            return prose
+          }
+          return markdown.replace("Received.", "Rendered by extension")
+        }),
     ],
   })
   await host.type("Transform")
@@ -144,6 +187,39 @@ test("native Markdown transforms still apply without changing stored or requeste
   )
   assert.match(JSON.stringify(host.session.messages.at(-1)), /Received\./)
   assert.doesNotMatch(JSON.stringify(host.requests[0]), /Rendered by extension/)
+  assert.doesNotMatch(JSON.stringify(host.requests[0]), /Aligned/)
+  assert.equal(widths.at(-1), 58)
+  let lines = host.screenLines().map(stripTerminalSequences)
+  let first = lines.findIndex((line) => line.includes("Aligned 界"))
+  assert(first >= 0)
+  const column = lines[first]!.indexOf("Aligned")
+  assert(column >= 1)
+  assert.equal(lines[first + 1]!.search(/\S/), column)
+  const last = lines.findIndex((line, row) => row > first && !line.trim()) - 1
+  assert(last > first)
+  const lastColumn = visibleWidth(lines[last]!.trimEnd())
+  await host.key(`\x1b[<0;${column + 1};${first + 1}M`)
+  await host.key(`\x1b[<32;${lastColumn};${last + 1}M`)
+  await host.key(`\x1b[<0;${lastColumn};${last + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert(copied))
+  assert.equal(copied.replace(/\s+/g, " "), prose.replaceAll("**", ""))
+  assert(copied.split("\n").every((line) => line.search(/\S/) <= 1))
+  host.terminal.resize(32, 34)
+  await host.frame()
+  assert.equal(widths.at(-1), 30)
+  lines = host.screenLines().map(stripTerminalSequences)
+  first = lines.findIndex((line) => line.includes("Aligned 界"))
+  assert(first >= 0)
+  const narrowColumn = lines[first]!.indexOf("Aligned")
+  assert(narrowColumn >= 1)
+  assert.equal(lines[first + 1]!.search(/\S/), narrowColumn)
+  host.terminal.resize(32, 10)
+  await host.frame()
+  await host.key("\x1b[1;3A")
+  await host.frame()
+  await host.key("\x1b[1;3A")
+  assert.match(await host.frame(), /Aligned/)
 })
 
 test("switching sessions rebuilds the visible native conversation", async (t) => {

@@ -151,7 +151,8 @@ test("selection copies every expanded body row between visible endpoints", async
   const first = lines.findIndex((line) => line.includes("Copy expanded"))
   const last = lines.findIndex((line) => line.includes("Received."))
   assert(first >= 0 && last > first)
-  await host.key(`\x1b[<0;2;${first + 1}M`)
+  const column = lines[first]!.indexOf("Copy expanded") + 1
+  await host.key(`\x1b[<0;${column};${first + 1}M`)
   await host.key(`\x1b[<32;10;${last + 1}M`)
   await host.key(`\x1b[<0;10;${last + 1}m`)
   await host.key("\x18")
@@ -170,12 +171,18 @@ test("selection copies every expanded body row between visible endpoints", async
   await t.waitFor(() => assert.equal(copied, expandedText))
   await host.key("\u000f")
   await host.frame()
+  // Native copy flashes briefly cover the right-aligned user text.
+  await t.waitFor(
+    () =>
+      assert(host.screenLines().some((line) => line.includes("Copy expanded"))),
+    { timeout: 2000 },
+  )
   const folded = host.screenLines().map(stripTerminalSequences)
   const foldedFirst = folded.findIndex((line) => line.includes("Copy expanded"))
   const foldedLast = folded.findIndex((line) => line.includes("Received."))
-  assert(foldedFirst >= 0 && foldedLast > foldedFirst)
+  assert(foldedFirst >= 0 && foldedLast > foldedFirst, folded.join("\n"))
   copied = ""
-  await host.key(`\x1b[<0;2;${foldedFirst + 1}M`)
+  await host.key(`\x1b[<0;${column};${foldedFirst + 1}M`)
   await host.key(`\x1b[<32;10;${foldedLast + 1}M`)
   await host.key(`\x1b[<0;10;${foldedLast + 1}m`)
   await host.key("\x18")

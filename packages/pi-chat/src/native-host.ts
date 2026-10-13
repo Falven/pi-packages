@@ -1,6 +1,7 @@
 import {
   InteractiveMode,
   ToolExecutionComponent,
+  UserMessageComponent,
   sessionEntryToContextMessages,
   type AgentSession,
   type AgentSessionRuntime,
@@ -13,6 +14,7 @@ import {
   Text,
   TuiAltScreen,
   VStack,
+  compositeTuiLine,
   getKeybindings,
   type Component,
   sliceByColumn,
@@ -187,6 +189,7 @@ type Leaf = {
   component: Component
   occurrence: Occurrence | undefined
   rows: string[]
+  left: number
   start: number
   top: number
   offset: number
@@ -238,6 +241,7 @@ class RawLeaf extends Container {
   constructor(
     readonly component: Component,
     readonly rows: string[],
+    readonly left: number,
   ) {
     super()
     this.children.push(component)
@@ -252,7 +256,11 @@ class RawLeaf extends Container {
   override handleMouse(
     event: Parameters<NonNullable<Component["handleMouse"]>>[0],
   ) {
-    return dispatchMouseEvent(this.component, event)
+    if (event.x < this.left) return
+    return dispatchMouseEvent(this.component, {
+      ...event,
+      x: event.x - this.left,
+    })
   }
 }
 
@@ -670,6 +678,41 @@ export class NativeChatHost {
     const leaves = composed.map(
       ({ component, occurrence, body, zoneStart, zoneEnd }) => {
         let rows = component.render(contentWidth)
+        let left = 0
+        if (component instanceof UserMessageComponent) {
+          const textWidth = Math.min(
+            contentWidth,
+            rows.reduce(
+              (max, line) =>
+                Math.max(
+                  max,
+                  visibleWidth(stripTerminalSequences(line).trimEnd()) +
+                    this.host.outputPad,
+                ),
+              1,
+            ),
+          )
+          left = contentWidth - textWidth
+          if (left) {
+            // Keep native prompt markers at column zero for prompt navigation.
+            // oxlint-disable-next-line eslint/no-control-regex -- Pi's native semantic markers.
+            const marker = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/
+            const background = rows[0]?.replace(marker, "") ?? ""
+            rows = rows.map((line) => {
+              const markers = line.match(marker)?.[0] ?? ""
+              return (
+                markers +
+                compositeTuiLine(
+                  background,
+                  line.slice(markers.length),
+                  left,
+                  textWidth,
+                  contentWidth,
+                )
+              )
+            })
+          }
+        }
         if (rows.length && (zoneStart || zoneEnd)) {
           rows = [...rows]
           // Split native assistants retain the same semantic navigation zones.
@@ -681,6 +724,7 @@ export class NativeChatHost {
           component,
           occurrence,
           rows,
+          left,
           start,
           top: 0,
           offset: 0,
@@ -807,7 +851,7 @@ export class NativeChatHost {
           : leaf.rows.length,
       )
       if (sourceEnd <= sourceStart) continue
-      const raw = new RawLeaf(leaf.component, leaf.rows)
+      const raw = new RawLeaf(leaf.component, leaf.rows, leaf.left)
       const window = new ScrollView(raw, {
         follow: "none",
         scrollbar: "hidden",
@@ -1703,14 +1747,10 @@ export class NativeChatHost {
       for (let row = first; row <= last; row++) {
         const line = leaf.rows[row - leaf.start]!
         const range = columns.call(renderer, line, row, bounds)
+        const start = Math.max(leaf.left, range.start)
         lines.push(
           stripTerminalSequences(
-            sliceByColumn(
-              line,
-              range.start,
-              Math.max(0, range.end - range.start),
-              true,
-            ),
+            sliceByColumn(line, start, Math.max(0, range.end - start), true),
           ).trimEnd(),
         )
       }
