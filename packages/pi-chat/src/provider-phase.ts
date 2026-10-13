@@ -1,0 +1,132 @@
+export type MessagePhase = "commentary" | "final_answer"
+
+type ItemKind = "reasoning" | "message" | "function_call" | "custom_tool_call"
+type ProviderItem = {
+  type?: unknown
+  id?: unknown
+  phase?: unknown
+}
+type ProviderEvent = {
+  type?: unknown
+  output_index?: unknown
+  item?: unknown
+}
+type Creation = Readonly<{
+  contentIndex: number
+  outputIndex: number
+  kind: ItemKind
+  itemId?: string
+}>
+type Evidence = {
+  creation: Creation
+  phase?: MessagePhase
+  doneId?: string
+}
+
+const phaseOf = (value: unknown): MessagePhase | undefined =>
+  value === "commentary" || value === "final_answer" ? value : undefined
+
+function itemOf(value: unknown): ProviderItem | undefined {
+  return value && typeof value === "object"
+    ? (value as ProviderItem)
+    : undefined
+}
+
+// Mirror only the slot-creation rules in Pi 1.0.2's Responses parser.
+export class ProviderPhaseIndex {
+  private nextContentIndex = 0
+  private readonly active = new Map<number, Creation>()
+  private readonly evidence = new Map<number, Evidence>()
+
+  beginRequest() {
+    this.nextContentIndex = 0
+    this.active.clear()
+    this.evidence.clear()
+  }
+
+  observe(value: unknown) {
+    if (!value || typeof value !== "object") return
+    const event = value as ProviderEvent
+    if (
+      (event.type !== "response.output_item.added" &&
+        event.type !== "response.output_item.done") ||
+      !Number.isInteger(event.output_index) ||
+      (event.output_index as number) < 0
+    )
+      return
+    const item = itemOf(event.item)
+    if (!item) return
+    const outputIndex = event.output_index as number
+    const creation =
+      event.type === "response.output_item.added"
+        ? this.create(outputIndex, item)
+        : (this.active.get(outputIndex) ?? this.create(outputIndex, item))
+    if (!creation) return
+    const evidence = this.evidence.get(creation.contentIndex)!
+    if (creation.kind === "message" && item.type === "message") {
+      const phase = phaseOf(item.phase)
+      if (phase) evidence.phase = phase
+      if (
+        event.type === "response.output_item.done" &&
+        typeof item.id === "string"
+      )
+        evidence.doneId = item.id
+    }
+    if (
+      event.type === "response.output_item.done" &&
+      creation.kind === item.type
+    )
+      this.active.delete(outputIndex)
+  }
+
+  phaseFor(
+    contentIndex: number,
+    textSignature?: string,
+  ): MessagePhase | undefined {
+    const evidence = this.evidence.get(contentIndex)
+    if (evidence?.creation.kind !== "message") return
+    if (textSignature?.startsWith("{")) {
+      try {
+        const signature: unknown = JSON.parse(textSignature)
+        if (signature && typeof signature === "object") {
+          const native = signature as {
+            v?: unknown
+            id?: unknown
+            phase?: unknown
+          }
+          if (native.v === 1 && typeof native.id === "string") {
+            if (native.id !== (evidence.doneId ?? evidence.creation.itemId))
+              return
+            const nativePhase = phaseOf(native.phase)
+            if (nativePhase && nativePhase !== evidence.phase) return
+          }
+        }
+      } catch {
+        return
+      }
+    }
+    return evidence.phase
+  }
+
+  private create(
+    outputIndex: number,
+    item: ProviderItem,
+  ): Creation | undefined {
+    if (
+      item.type !== "reasoning" &&
+      item.type !== "message" &&
+      item.type !== "function_call" &&
+      item.type !== "custom_tool_call"
+    )
+      return
+    const creation: Creation = {
+      contentIndex: this.nextContentIndex++,
+      outputIndex,
+      kind: item.type,
+      ...(typeof item.id === "string" ? { itemId: item.id } : {}),
+    }
+    this.active.set(outputIndex, creation)
+    this.evidence.set(creation.contentIndex, { creation })
+    return creation
+  }
+}

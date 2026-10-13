@@ -45,4 +45,8 @@ export default function piChat(pi: ExtensionAPI) {
     adapter = undefined
   })
   pi.on("session_tree", () => adapter?.rebaseRelationships())
+  pi.on("turn_start", () => adapter?.beginProviderRequest())
+  pi.on("provider_stream_event", (event) =>
+    adapter?.observeProviderEvent(event.data),
+  )
 }

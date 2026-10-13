@@ -29,6 +29,7 @@ import { InlineViewport } from "./inline-viewport.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
+import { ProviderPhaseIndex } from "./provider-phase.ts"
 const { allocateStackSizes } = (await import(
   new URL(
     "./components/stack.js",
@@ -344,6 +345,7 @@ class ToolFocus extends Container {
 export class NativeChatHost {
   readonly host: NativeMode
   readonly work = new WorkIndex()
+  private readonly providerPhases = new ProviderPhaseIndex()
   readonly relationships: RelationshipJournal
   private readonly deliveryCleanup: (() => void)[] = []
   private forkCleanup?: () => void
@@ -774,9 +776,10 @@ export class NativeChatHost {
       if (
         owner?.message?.role !== "assistant" ||
         !("contentContainer" in component) ||
-        !owner.message.content.some(
-          (part) => part.type === "toolCall" || part.type === "thinking",
-        )
+        (!this.work.needsParts(owner) &&
+          !owner.message.content.some(
+            (part) => part.type === "toolCall" || part.type === "thinking",
+          ))
       ) {
         activities.push({
           component,
@@ -1394,6 +1397,24 @@ export class NativeChatHost {
     this.clearChatSelection()
   }
 
+  beginProviderRequest() {
+    this.providerPhases.beginRequest()
+  }
+
+  observeProviderEvent(event: unknown) {
+    this.providerPhases.observe(event)
+  }
+
+  private applyProviderPhases(owner: Occurrence) {
+    if (owner.message?.role !== "assistant") return
+    for (let index = 0; index < owner.message.content.length; index++) {
+      const part = owner.message.content[index]
+      if (part?.type !== "text") continue
+      const phase = this.providerPhases.phaseFor(index, part.textSignature)
+      if (phase) this.work.notePhase(owner, index, phase)
+    }
+  }
+
   private restoreRelationships() {
     this.work.restore(
       this.relationships.active(this.host.sessionManager.getBranch()),
@@ -1940,6 +1961,8 @@ export class NativeChatHost {
             if (event.message?.role === "user") this.deliveringUser = owner
             if (event.message?.role === "assistant") this.streaming = owner
           }
+          if (owner && event.message?.role === "assistant")
+            this.applyProviderPhases(owner)
           if (event.type === "agent_settled") {
             const settled = this.work.settle(
               host.session._agentRunAbortRequested,
@@ -2111,6 +2134,29 @@ export class NativeChatHost {
       for (const part of occurrence.parts.values()) part.entry = entry
       const relationship = this.work.committed(occurrence)
       if (relationship) this.recordRelationship(relationship)
+      if (message.role === "assistant") {
+        this.applyProviderPhases(occurrence)
+        const work = this.work.find(occurrence)
+        if (work?.request.entry) {
+          for (let index = 0; index < message.content.length; index++) {
+            const part = message.content[index]
+            if (part?.type !== "text") continue
+            const phase = this.providerPhases.phaseFor(
+              index,
+              part.textSignature,
+            )
+            if (phase)
+              this.recordRelationship({
+                version: 1,
+                kind: "phase",
+                requestId: work.request.entry.id,
+                sourceId: id,
+                contentIndex: index,
+                phase,
+              })
+          }
+        }
+      }
     }
     const bash = this.bashMessages.get(message)
     if (bash) this.byComponent.set(bash, this.forEntry(entry))

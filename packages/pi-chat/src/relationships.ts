@@ -4,6 +4,7 @@ import type {
   SessionManager,
 } from "@earendil-works/pi-coding-agent"
 import type { DeliveryKind } from "./work-history.ts"
+import type { MessagePhase } from "./provider-phase.ts"
 
 const customType = "pi-chat.relationship"
 
@@ -21,7 +22,16 @@ export type RelationshipFact =
       requestId: string
       sourceId: string
       finalId?: string
+      finalParts?: number[]
       cancelled: boolean
+    }
+  | {
+      version: 1
+      kind: "phase"
+      requestId: string
+      sourceId: string
+      contentIndex: number
+      phase: MessagePhase
     }
 
 type Recorded = { id: string; fact: RelationshipFact }
@@ -50,7 +60,19 @@ function certified(entry: SessionEntry): Recorded | undefined {
   if (
     fact.kind === "settled" &&
     typeof fact.cancelled === "boolean" &&
-    (fact.finalId === undefined || typeof fact.finalId === "string")
+    (fact.finalId === undefined || typeof fact.finalId === "string") &&
+    (fact.finalParts === undefined ||
+      (Array.isArray(fact.finalParts) &&
+        fact.finalParts.every(
+          (index) => Number.isInteger(index) && index >= 0,
+        )))
+  )
+    return { id: entry.id, fact: fact as RelationshipFact }
+  if (
+    fact.kind === "phase" &&
+    Number.isInteger(fact.contentIndex) &&
+    (fact.contentIndex as number) >= 0 &&
+    (fact.phase === "commentary" || fact.phase === "final_answer")
   )
     return { id: entry.id, fact: fact as RelationshipFact }
   return undefined
@@ -122,8 +144,20 @@ export class RelationshipJournal {
       return source.type === "message" && source.message.role === "user"
     if (fact.kind === "settled" && fact.finalId) {
       const final = sources.get(fact.finalId)
-      return final?.type === "message" && final.message.role === "assistant"
+      if (final?.type !== "message" || final.message.role !== "assistant")
+        return false
+      const content = final.message.content
+      return (
+        !fact.finalParts ||
+        fact.finalParts.every((index) => content[index]?.type === "text")
+      )
     }
+    if (fact.kind === "phase")
+      return (
+        source.type === "message" &&
+        source.message.role === "assistant" &&
+        source.message.content[fact.contentIndex]?.type === "text"
+      )
     return true
   }
 }

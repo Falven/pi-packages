@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { createServer, type ServerResponse } from "node:http"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { zstdDecompressSync } from "node:zlib"
 import { stripVTControlCharacters } from "node:util"
 import { setTimeout } from "node:timers/promises"
 import type { TestContext } from "node:test"
@@ -17,6 +18,7 @@ import {
   type AgentSessionRuntime,
   type ExtensionContext,
   type ExtensionFactory,
+  type ProviderConfig,
 } from "@earendil-works/pi-coding-agent"
 
 // Pi owns host routes; fixtures substitute the terminal, model server, and optional public OS boundary.
@@ -56,7 +58,7 @@ class RecordingTerminal {
 }
 
 export type NativeHostOptions = {
-  providerApi?: "openai-completions" | "openai-responses"
+  providerApi?: ProviderConfig["api"]
   tuiMode?: "regular" | "fullscreen"
   onMount?: (host: InteractiveMode) => void
   columns?: number
@@ -171,8 +173,13 @@ export async function openNativeHost(
     response.end()
   }
   const server = createServer(async (request, response) => {
-    let body = ""
-    for await (const chunk of request) body += chunk
+    const chunks: Buffer[] = []
+    for await (const chunk of request) chunks.push(Buffer.from(chunk))
+    const payload = Buffer.concat(chunks)
+    const body =
+      request.headers["content-encoding"] === "zstd"
+        ? zstdDecompressSync(payload).toString()
+        : payload.toString()
     requests.push(JSON.parse(body))
     const script = scriptedResponses.shift()
     if (script) playResponse(response, script)
@@ -237,7 +244,11 @@ export async function openNativeHost(
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,
                 api: options.providerApi ?? "openai-completions",
-                ...(options.noAuth ? {} : { apiKey: "test-only" }),
+                ...(options.noAuth
+                  ? {}
+                  : {
+                      apiKey: `test.${Buffer.from(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } })).toString("base64url")}.test`,
+                    }),
                 models: [
                   {
                     id: "draft-test",
