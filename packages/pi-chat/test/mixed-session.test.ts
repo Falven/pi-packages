@@ -170,7 +170,7 @@ for (const [name, paths] of [
     await host.key("\r")
     await t.waitFor(() => assert.equal(host.requests.length, 1))
     const streaming = await host.frame()
-    assert.match(streaming, /Worked for \d+m \d+s ▸/)
+    assert.match(streaming, /Worked for \d+m \d+s ▶/)
     assert.match(streaming, /Mixed answer/)
     assert.doesNotMatch(streaming, /Mixed progress/)
     assert.match(streaming, /Mixed acceptance fixture ready/)
@@ -303,7 +303,7 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
   assert.equal(host.requests.length, 5)
   assert.match(frame, /First answer/)
   assert.match(frame, /Second answer/)
-  assert.equal((frame.match(/Worked for \d+m \d+s ▸/g) ?? []).length, 2)
+  assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
   assert.equal((frame.match(/Same queued text/g) ?? []).length, 2)
   assert.doesNotMatch(frame, /Before steering|After steering|Followup work/)
   assert.equal(
@@ -315,7 +315,7 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
   const row = host
     .screenLines()
     .findIndex((line) =>
-      /Worked for \d+m \d+s ▸/.test(stripTerminalSequences(line)),
+      /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
     )
   assert(row >= 0)
   await host.key(`\x1b[<0;2;${row + 1}M`)

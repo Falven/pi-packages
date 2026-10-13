@@ -322,7 +322,7 @@ class GroupHeader implements Component {
   render(width: number) {
     return new Text(
       truncateToWidth(
-        `${this.group.expanded ? "▾" : "▸"} ${this.adapter.actionLabels.summary(this.group)}`,
+        `${this.group.expanded ? "▼" : "▶"} ${this.adapter.actionLabels.summary(this.group)}`,
         Math.max(1, width - this.adapter.host.outputPad * 2),
       ),
       this.adapter.host.outputPad,

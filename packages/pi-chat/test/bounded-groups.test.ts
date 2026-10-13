@@ -48,7 +48,7 @@ async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
   const row = host
     .screenLines()
     .findIndex((line) =>
-      /Worked for \d+m \d+s ▸/.test(stripTerminalSequences(line)),
+      /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
     )
   assert(row >= 0)
   await host.key(`\x1b[<0;2;${row + 1}M`)
@@ -230,7 +230,7 @@ test("action summaries combine native categories and distinct paths while execut
   try {
     await host.key("\r")
     await t.waitFor(() => assert(waiting))
-    assert.match(await host.frame(), /▸ Running printf first-command/)
+    assert.match(await host.frame(), /▶ Running printf first-command/)
   } finally {
     gate.resolve()
   }
@@ -242,11 +242,11 @@ test("action summaries combine native categories and distinct paths while execut
     .map(stripTerminalSequences)
     .find((line) => line.includes("Edited a file"))
   assert(header)
-  assert.match(header.trimEnd(), /▸ Edited a file, read files, ran commands$/)
+  assert.match(header.trimEnd(), /▶ Edited a file, read files, ran commands$/)
   host.terminal.resize(50, 24)
   await host.frame()
   host.terminal.resize(100, 24)
-  assert.match(await host.frame(), /▸ Edited a file, read files, ran commands/)
+  assert.match(await host.frame(), /▶ Edited a file, read files, ran commands/)
 })
 
 test("native children receive source coordinates before inner wheel movement bubbles outward", async (t) => {

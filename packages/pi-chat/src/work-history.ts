@@ -320,7 +320,7 @@ export class WorkHeader implements Component {
       ),
     )
     const theme = this.adapter.extensionUI.theme
-    const label = `Worked for ${Math.floor(seconds / 60)}m ${seconds % 60}s ${this.adapter.work.expanded(this.work) ? "▾" : "▸"}`
+    const label = `Worked for ${Math.floor(seconds / 60)}m ${seconds % 60}s ${this.adapter.work.expanded(this.work) ? "▼" : "▶"}`
     const header = new Box(this.adapter.host.outputPad, 0)
     header.addChild(
       new Text(

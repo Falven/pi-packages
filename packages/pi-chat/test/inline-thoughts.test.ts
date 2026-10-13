@@ -162,7 +162,7 @@ test("native Hide thinking controls prose while activity headings keep updating 
   assert.match(await host.frame(), /Original thought/)
   host.resumeResponse()
   await host.settled()
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▸/)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
@@ -178,7 +178,7 @@ test("native Hide thinking controls prose while activity headings keep updating 
       message.content.find((block) => block.type === "thinking")?.thinking,
       full,
     )
-  assert.doesNotMatch(JSON.stringify(host.session.messages.at(-1)), /▾|▸/)
+  assert.doesNotMatch(JSON.stringify(host.session.messages.at(-1)), /▼|▶/)
 })
 
 test("a full inline thought follows chat scrolling, preserves an anchor, and keeps native Markdown caches", async (t) => {
@@ -556,7 +556,7 @@ test("native message replacement can split an earlier thinking run without steal
   await host.frame()
   assert.match(
     screen(),
-    /Worked for \d+m \d+s ▸[\s\S]*Visible replacement answer/,
+    /Worked for \d+m \d+s ▶[\s\S]*Visible replacement answer/,
   )
   assert.doesNotMatch(
     screen(),
@@ -598,6 +598,6 @@ test("interleaved Completions text does not end a thought before Pi reports comp
   host.resumeResponse()
   await host.settled()
   await host.frame()
-  assert.match(screen(), /Worked for \d+m \d+s ▸[\s\S]*Visible text/)
+  assert.match(screen(), /Worked for \d+m \d+s ▶[\s\S]*Visible text/)
   assert.doesNotMatch(screen(), /Thinking before/)
 })
