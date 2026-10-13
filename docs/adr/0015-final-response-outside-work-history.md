@@ -4,7 +4,7 @@ The final response remains visible outside the work-history fold, including when
 
 ## Consequences
 
-Closing work history hides the agent's activity while keeping every user message visible, including steering messages delivered during that work. These messages keep their native rendering and source order; opening the fold restores the agent's activity around them without duplicating or moving the user occurrences. Steering retains its existing work relationship, and a delivered follow-up still starts separate work.
+Closing work history hides the agent's activity while keeping every user message visible, including steering messages delivered during that work. These messages keep their native rendering and source order; opening the fold restores the agent's activity around them without duplicating or moving the user occurrences. Keep one neutral blank line between the last retained user-message bar and the final response, preserving native spacing when already present. Steering retains its existing work relationship, and a delivered follow-up still starts separate work.
 
 Pi can put several provider message items into one assistant message, so acquiring its whole native component does not establish separate commentary and final-response visibility. The public [`provider_stream_event` hook](/Users/fran/Source/pi-packages/node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/types.d.ts:690) can expose an early OpenAI Responses `final_answer` phase before normalized text starts when the provider supplies it; the [runtime adapter](0022-native-rows-in-an-owned-transcript.md) associates normalized content occurrences with native child components. Provider phase, selected final response, and settled work outcome remain distinct facts.
 
