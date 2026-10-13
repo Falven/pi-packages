@@ -1,4 +1,4 @@
-import { Text, getKeybindings, type Component } from "@earendil-works/pi-tui"
+import { Text, type Component } from "@earendil-works/pi-tui"
 import type { NativeChatHost, Occurrence } from "./native-host.ts"
 import type { RelationshipFact } from "./relationships.ts"
 
@@ -250,25 +250,9 @@ export class WorkHeader extends Text {
   }
 
   handleInput(data: string) {
-    const keys = getKeybindings()
-    if (keys.matches(data, "tui.select.up")) this.adapter.moveDisclosure(-1)
-    else if (keys.matches(data, "tui.select.down"))
-      this.adapter.moveDisclosure(1)
-    else if (keys.matches(data, "tui.select.confirm"))
-      this.adapter.toggleWork(this.work)
-    else if (keys.matches(data, "tui.select.cancel"))
-      this.adapter.returnToComposer()
-    else if (this.adapter.host.keybindings.matches(data, "app.tools.expand"))
-      this.adapter.host.toggleToolOutputExpansion()
-    else if (this.adapter.host.keybindings.matches(data, "app.message.copy"))
-      void this.adapter.host.handleCopyCommand({
-        flashConfirmation: true,
-        preferSelection: true,
-      })
-    else if (keys.matches(data, "tui.altScreen.pageUp"))
-      this.adapter.scrollChat(-1)
-    else if (keys.matches(data, "tui.altScreen.pageDown"))
-      this.adapter.scrollChat(1)
+    this.adapter.handleDisclosureInput(data, () =>
+      this.adapter.toggleWork(this.work),
+    )
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {

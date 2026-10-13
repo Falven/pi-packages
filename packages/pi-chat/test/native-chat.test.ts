@@ -517,10 +517,7 @@ test("thinking between calls separates their groups", async (t) => {
     .split("\n")
     .map(stripTerminalSequences)
     .join("\n")
-  assert.match(
-    screen,
-    /read one\.txt[\s\S]*Considering next call[\s\S]*read two\.txt/,
-  )
+  assert.match(screen, /read one\.txt[\s\S]*Thought[\s\S]*read two\.txt/)
   assert.doesNotMatch(screen, /2 tool calls/)
 })
 
