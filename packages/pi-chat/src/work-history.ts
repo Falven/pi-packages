@@ -1,4 +1,5 @@
-import { Text, type Component } from "@earendil-works/pi-tui"
+import { DynamicBorder } from "@earendil-works/pi-coding-agent"
+import { Box, Spacer, Text, type Component } from "@earendil-works/pi-tui"
 import type { NativeChatHost, Occurrence } from "./native-host.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import type { MessagePhase } from "./provider-phase.ts"
@@ -299,6 +300,7 @@ export class WorkIndex {
 
 export class WorkHeader implements Component {
   focused = false
+  readonly spacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,
@@ -308,14 +310,27 @@ export class WorkHeader implements Component {
   invalidate() {}
 
   render(width: number) {
-    return new Text(
-      `${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`,
-      this.adapter.host.outputPad,
+    const end = this.work.settled
+      ? Date.parse(this.work.lastCommitted!.entry!.timestamp)
+      : Date.now()
+    const seconds = Math.max(
       0,
-      this.focused
-        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
-        : undefined,
-    ).render(width)
+      Math.floor(
+        (end - Date.parse(this.work.request.entry!.timestamp)) / 1_000,
+      ),
+    )
+    const theme = this.adapter.extensionUI.theme
+    const label = `Worked for ${Math.floor(seconds / 60)}m ${seconds % 60}s ${this.adapter.work.expanded(this.work) ? "▾" : "▸"}`
+    const header = new Box(this.adapter.host.outputPad, 0)
+    header.addChild(
+      new Text(
+        theme.fg("muted", this.focused ? theme.underline(label) : label),
+        0,
+        0,
+      ),
+    )
+    header.addChild(new DynamicBorder((line) => theme.fg("borderMuted", line)))
+    return header.render(width)
   }
 
   handleInput(data: string) {

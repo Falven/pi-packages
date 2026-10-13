@@ -62,7 +62,7 @@ test("settled work hides the earlier identical text and retains the final occurr
   await host.settled()
 
   const collapsed = await host.frame()
-  assert.match(collapsed, /▸ Worked/)
+  assert.match(collapsed, /Worked for \d+m \d+s ▸/)
   assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1)
   assert.doesNotMatch(collapsed, /read one\.txt/)
   assert.match(collapsed, /Do the work/)
@@ -74,25 +74,50 @@ test("settled work hides the earlier identical text and retains the final occurr
   assert.equal((source.match(/"text":"Done"/g) ?? []).length, 2)
   assert.doesNotMatch(source, /Worked|pi-chat/)
 
+  const entries = host.session.sessionManager.getBranch()
+  const request = entries.find(
+    (entry) => entry.type === "message" && entry.message.role === "user",
+  )!
+  const final = entries.findLast(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  )!
+  request.timestamp = new Date(
+    Date.parse(final.timestamp) - (34 * 60 + 49) * 1_000,
+  ).toISOString()
+
   await host.key("\x1bg")
   await host.frame()
   const workRow = () =>
     host.screenLines().find((line) => line.includes("Worked")) ?? ""
   const selectedBg = host.ui.theme.getBgAnsi("selectedBg")
-  assert.match(stripTerminalSequences(workRow()), /^ ▸ Worked/)
-  assert(workRow().includes(selectedBg))
+  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▸/)
+  assert(!workRow().includes(selectedBg))
+  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▸")))
+  const row = host.screenLines().findIndex((line) => line.includes("Worked"))
+  const separator = host.screenLines()[row - 1]!
+  assert.equal(stripTerminalSequences(separator).trim(), "")
+  assert(!separator.includes(host.ui.theme.getBgAnsi("userMessageBg")))
+  assert.match(stripTerminalSequences(host.screenLines()[row + 1]!), /^ ─+ $/)
+  assert.equal(stripTerminalSequences(host.screenLines()[row + 2]!).trim(), "")
+  assert(!host.screenLines()[row + 1]!.includes(selectedBg))
+  assert(!host.screenLines()[row + 2]!.includes(selectedBg))
   await host.key("\r")
   await host.frame()
-  assert.match(stripTerminalSequences(workRow()), /^ ▾ Worked/)
-  assert(workRow().includes(selectedBg))
+  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▾/)
+  assert(!workRow().includes(selectedBg))
+  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▾")))
   await host.key("\x1b")
   await host.frame()
   assert(!workRow().includes(selectedBg))
+  assert(workRow().includes(host.ui.theme.fg("muted", "Worked for 34m 49s ▾")))
   const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(expanded, /▾ Worked/)
+  assert.match(expanded, /Worked for \d+m \d+s ▾/)
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
   assert.match(expanded, /▸ Read files/)
   assert.doesNotMatch(expanded, /read one\.txt/)
+
+  await host.reload()
+  assert.match(await host.frame(), /Worked for 34m 49s ▸/)
 })
 
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
@@ -136,8 +161,12 @@ test("identical delivered steering and follow-up retain separate request relatio
     (JSON.stringify(host.requests[3]).match(/Same queued text/g) ?? []).length,
     2,
   )
-  assert.equal((frame.match(/▸ Worked/g) ?? []).length, 2)
-  assert.equal((frame.match(/Same queued text/g) ?? []).length, 1)
+  assert.equal((frame.match(/Worked for \d+m \d+s ▸/g) ?? []).length, 2)
+  assert.equal((frame.match(/Same queued text/g) ?? []).length, 2)
+  assert.match(
+    frame,
+    /Original request[\s\S]*Worked for \d+m \d+s ▸[\s\S]*Same queued text[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Worked for \d+m \d+s ▸[\s\S]*Second answer/,
+  )
   assert.match(frame, /Original request/)
   assert.match(frame, /First answer/)
   assert.match(frame, /Second answer/)
@@ -145,7 +174,9 @@ test("identical delivered steering and follow-up retain separate request relatio
 
   const row = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("▸ Worked"))
+    .findIndex((line) =>
+      /Worked for \d+m \d+s ▸/.test(stripTerminalSequences(line)),
+    )
   assert(row >= 0)
   await host.key(`\x1b[<0;2;${row + 1}M`)
   await host.key(`\x1b[<0;2;${row + 1}m`)
@@ -153,12 +184,16 @@ test("identical delivered steering and follow-up retain separate request relatio
   assert.equal((expanded.match(/Same queued text/g) ?? []).length, 2)
   assert.match(expanded, /Before steering/)
   assert.match(expanded, /After steering/)
+  assert.match(
+    expanded,
+    /Before steering[\s\S]*Same queued text[\s\S]*After steering[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Second answer/,
+  )
   assert.doesNotMatch(expanded, /Followup progress/)
 
   await host.reload()
   const replayed = await host.frame()
-  assert.equal((replayed.match(/▸ Worked/g) ?? []).length, 2)
-  assert.equal((replayed.match(/Same queued text/g) ?? []).length, 1)
+  assert.equal((replayed.match(/Worked for \d+m \d+s ▸/g) ?? []).length, 2)
+  assert.equal((replayed.match(/Same queued text/g) ?? []).length, 2)
   assert.match(replayed, /First answer|Second answer/)
 })
 
@@ -187,7 +222,7 @@ test("without provider phase evidence work stays visible until the final stream 
   host.resumeResponse()
   await host.settled()
   const settled = await host.frame()
-  assert.match(settled, /▸ Worked/)
+  assert.match(settled, /Worked for \d+m \d+s ▸/)
   assert.doesNotMatch(settled, /Earlier commentary/)
   assert.match(settled, /A partial final becomes complete\./)
 })
@@ -221,7 +256,7 @@ test("native user replacement preserves the delivered request relationship and p
   await host.key("\r")
   await host.settled()
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Forwarded answer/)
   assert.doesNotMatch(frame, /Original work/)
   const entry = host.session.sessionManager
@@ -241,7 +276,7 @@ test("native user replacement preserves the delivered request relationship and p
     /Original request|Worked|pi-chat/,
   )
   await host.reload()
-  assert.match(await host.frame(), /▸ Worked/)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▸/)
 })
 
 test("a settled terminal assistant keeps its native thoughts in work and its text as one answer", async (t) => {
@@ -282,7 +317,7 @@ test("a settled terminal assistant keeps its native thoughts in work and its tex
   await host.settled()
   const collapsed = await host.frame()
   assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1)
-  assert.match(collapsed, /▸ Worked/)
+  assert.match(collapsed, /Worked for \d+m \d+s ▸/)
   assert.doesNotMatch(collapsed, /Private thought body/)
   await host.key("\x1bg")
   await host.key("\r")
@@ -336,7 +371,10 @@ test("all terminal text parts share one answer when a native extension interleav
   await host.settled()
   const frame = await host.frame()
   assert.equal((frame.match(/Worked/g) ?? []).length, 1)
-  assert.match(frame, /▸ Worked[\s\S]*First answer part[\s\S]*Last answer part/)
+  assert.match(
+    frame,
+    /Worked for \d+m \d+s ▸[\s\S]*First answer part[\s\S]*Last answer part/,
+  )
   assert.doesNotMatch(frame, /Interleaved native thought/)
   await host.key("\x1bg")
   await host.key("\r")
@@ -380,7 +418,7 @@ test("native tool inspection keeps work open and work toggles preserve tool deta
   host.resumeResponse()
   await host.settled()
   const settled = await host.frame()
-  assert.match(settled, /▾ Worked/)
+  assert.match(settled, /Worked for \d+m \d+s ▾/)
   assert.match(settled, /Inspected commentary/)
   assert.match(settled, /INSPECTED BODY/)
 
@@ -640,7 +678,7 @@ test("a truncated terminal text can be the final answer without hiding its nativ
   await host.key("\r")
   await host.settled()
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Truncated answer/)
   assert.match(frame, /Response was truncated before completion/)
   assert.doesNotMatch(
@@ -690,7 +728,7 @@ test("automatic folding clears a selected progress range even while reading scro
   host.resumeResponse()
   await host.settled()
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Visible final/)
   assert.doesNotMatch(frame, /Selected progress/)
   await host.key("\x18")
@@ -728,7 +766,7 @@ test("certified work relationships survive native journal reload", async (t) => 
   const reloaded = await host.frame()
   assert.doesNotMatch(reloaded, /Live progress/)
   assert.match(reloaded, /Live answer/)
-  assert.match(reloaded, /▸ Worked/)
+  assert.match(reloaded, /Worked for \d+m \d+s ▸/)
 })
 
 test("history without delivery records leaves uncertain work unfolded", async (t) => {
@@ -806,7 +844,7 @@ test("same-journal tree navigation restores only surviving relationships", async
     false,
   )
   const restored = await host.frame()
-  assert.match(restored, /▸ Worked/)
+  assert.match(restored, /Worked for \d+m \d+s ▸/)
   assert.match(restored, /Tree answer/)
   assert.doesNotMatch(restored, /Tree progress/)
 
@@ -815,12 +853,12 @@ test("same-journal tree navigation restores only surviving relationships", async
   await host.key("\r")
   const partial = await host.frame()
   assert.match(partial, /Tree progress/)
-  assert.doesNotMatch(partial, /Tree answer|▸ Worked/)
+  assert.doesNotMatch(partial, /Tree answer|Worked for \d+m \d+s ▸/)
 
   target = answer.id
   await host.type("/test-tree")
   await host.key("\r")
-  assert.match(await host.frame(), /▸ Worked/)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▸/)
 })
 
 test("native fork carries certified relationships whose sources survive", async (t) => {
@@ -857,7 +895,7 @@ test("native fork carries certified relationships whose sources survive", async 
   assert.equal(result.cancelled, false)
   assert.notEqual(host.session.sessionFile, originalFile)
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Fork answer/)
   assert.doesNotMatch(frame, /Fork progress/)
   assert.doesNotMatch(frame, /Sibling request|Sibling answer/)
@@ -909,7 +947,7 @@ test("a retained fork method cannot transfer a disposed adapter's relationships"
   const frame = await host.frame()
   assert.match(frame, /Stale progress|read one\.txt/)
   assert.match(frame, /Stale answer/)
-  assert.doesNotMatch(frame, /▸ Worked/)
+  assert.doesNotMatch(frame, /Worked for \d+m \d+s ▸/)
   assert.equal(
     host.session.sessionManager
       .getEntries()
@@ -1004,7 +1042,7 @@ test("copied journal restores work without changing provider context", async (t)
   await host.runtime.switchSession(copiedFile)
 
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Copy answer/)
   assert.doesNotMatch(frame, /Copy progress/)
   await host.type("Next request")
@@ -1063,7 +1101,7 @@ test("compaction keeps certified source relationships for later tree navigation"
   await host.type("/test-tree")
   await host.key("\r")
   const restored = await host.frame()
-  assert.match(restored, /▸ Worked/)
+  assert.match(restored, /Worked for \d+m \d+s ▸/)
   assert.match(restored, /Archived answer/)
   assert.doesNotMatch(restored, /Archived progress/)
 })
@@ -1109,7 +1147,7 @@ test("a standalone native message after the final keeps its source position", as
   await host.key("\r")
   await host.settled()
   const frame = await host.frame()
-  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Worked for \d+m \d+s ▸/)
   assert.match(frame, /Final before notice[\s\S]*Native post-answer notice/)
   assert.doesNotMatch(frame, /Earlier native work/)
 })

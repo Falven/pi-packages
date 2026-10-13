@@ -47,7 +47,9 @@ async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
   await host.frame()
   const row = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("▸ Worked"))
+    .findIndex((line) =>
+      /Worked for \d+m \d+s ▸/.test(stripTerminalSequences(line)),
+    )
   assert(row >= 0)
   await host.key(`\x1b[<0;2;${row + 1}M`)
   await host.key(`\x1b[<0;2;${row + 1}m`)
@@ -516,16 +518,16 @@ test("native image crops combine logical clips once and retain their identity an
   const first = kittyPlacements(host.terminal.output).at(-1)
   assert(first, host.terminal.output)
   assert.equal(first["y"], "360")
-  assert.equal(first["h"], "315")
-  assert.equal(first["r"], "7")
+  assert.equal(first["h"], "225")
+  assert.equal(first["r"], "5")
   await host.key("\x1b[6~")
   await host.frame()
   const second = kittyPlacements(host.terminal.output).at(-1)
   assert(second)
   assert.equal(second["i"], first["i"])
-  assert.equal(second["y"], "495")
-  assert.equal(second["h"], "585")
-  assert.equal(second["r"], "13")
+  assert.equal(second["y"], "405")
+  assert.equal(second["h"], "675")
+  assert.equal(second["r"], "15")
   const imageRow = host
     .screenLines()
     .findIndex((line) => kittyPlacements(line).length)
@@ -533,7 +535,7 @@ test("native image crops combine logical clips once and retain their identity an
   assert(
     host
       .screenLines()
-      .slice(imageRow + 1, imageRow + 13)
+      .slice(imageRow + 1, imageRow + 15)
       .every((line) => stripTerminalSequences(line).slice(0, -1).trim() === ""),
   )
   assert.match(
@@ -541,7 +543,7 @@ test("native image crops combine logical clips once and retain their identity an
     /[┃│]/,
   )
   assert.match(
-    stripTerminalSequences(host.screenLines()[imageRow + 14] ?? ""),
+    stripTerminalSequences(host.screenLines()[imageRow + 16] ?? ""),
     /Received\./,
   )
   host.terminal.resize(60, 28)

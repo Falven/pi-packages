@@ -695,14 +695,18 @@ export class NativeChatHost {
     }
     composed = this.composeWork(composed).flatMap((activity, index, all) => {
       const { component } = activity
+      const previous = all[index - 1]?.component
       const spacing =
-        component instanceof GroupHeader
+        component instanceof GroupHeader || component instanceof WorkHeader
           ? component.spacing
-          : activity.occurrence &&
-            this.thoughts.get(activity.occurrence)?.spacing
+          : previous instanceof WorkHeader
+            ? previous.spacing
+            : activity.occurrence &&
+              this.thoughts.get(activity.occurrence)?.spacing
       return index > 0 &&
         spacing &&
-        !(all[index - 1]!.component instanceof Spacer)
+        !(component instanceof Spacer) &&
+        !(previous instanceof Spacer)
         ? [{ component: spacing, tool: false }, activity]
         : [activity]
     })
@@ -1217,6 +1221,10 @@ export class NativeChatHost {
         work.header ??= new WorkHeader(this, work)
         result.push({ component: work.header, tool: false })
         if (this.work.expanded(work)) result.push(...body)
+        else
+          result.push(
+            ...body.filter((item) => item.occurrence?.message?.role === "user"),
+          )
       } else result.push(...body)
       result.push(...final)
     }

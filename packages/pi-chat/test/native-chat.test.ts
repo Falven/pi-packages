@@ -91,7 +91,9 @@ async function openWork(
   await host.frame()
   const row = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("▸ Worked"))
+    .findIndex((line) =>
+      /Worked for \d+m \d+s ▸/.test(stripTerminalSequences(line)),
+    )
   assert(row >= 0)
   await host.key(`\x1b[<0;2;${row + 1}M`)
   await host.key(`\x1b[<0;2;${row + 1}m`)
@@ -708,7 +710,7 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 17,
+    rows: 19,
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
     },
@@ -780,8 +782,8 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
     host
       .screenLines()
       .map(stripTerminalSequences)
-      .find((line) => line.includes("▸ Worked")) ?? "",
-    /^▸ Worked/,
+      .find((line) => /Worked for \d+m \d+s ▸/.test(line)) ?? "",
+    /^Worked for \d+m \d+s ▸/,
   )
   await openWork(host)
   const lines = () => host.screenLines().map(stripTerminalSequences)
@@ -835,7 +837,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   assert.match(lines()[header] ?? "", /^ ▸ Read files/)
   assert.match(
     lines().find((line) => line.includes("Worked")) ?? "",
-    /^ ▾ Worked/,
+    /^ Worked for \d+m \d+s ▾/,
   )
   await click(header)
   await host.frame()

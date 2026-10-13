@@ -63,14 +63,14 @@ test("native Find reveals a matching occurrence inside closed work", async (t) =
   await host.key("\r")
   await host.settled()
   const before = await host.frame()
-  assert.match(before, /▸ Worked/)
+  assert.match(before, /Worked for \d+m \d+s ▸/)
   assert.doesNotMatch(before, /Hidden telescope/)
 
   await host.key("\x06")
   await host.type("telescope")
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /▾ Worked/)
+  assert.match(screen, /Worked for \d+m \d+s ▾/)
   assert.match(screen, /Hidden telescope/)
   assert.match(screen, /1\/1/)
   const matched = host
@@ -114,13 +114,13 @@ test("Find opens a closed tool group and keeps the native result presenter", asy
   await host.type("Read two files")
   await host.key("\r")
   await host.settled()
-  assert.match(await host.frame(), /▸ Worked/)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▸/)
 
   await host.key("\x06")
   await host.type("telescope")
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /▾ Worked/)
+  assert.match(screen, /Worked for \d+m \d+s ▾/)
   assert.match(screen, /▾ Read files/)
   assert.match(screen, /rare telescope output/)
   assert.match(screen, /1\/1/)
@@ -471,7 +471,7 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
   await host.frame()
   const headingHit = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(headingHit, /1\/1/)
-  assert.match(headingHit, /▾ Worked[\s\S]*The hidden telescope/)
+  assert.match(headingHit, /Worked for \d+m \d+s ▾[\s\S]*The hidden telescope/)
   assert.doesNotMatch(headingHit, /Investigating optics/)
   await host.key("\x1b")
   assert.doesNotMatch(await host.frame(), /Worked|The hidden telescope/)
@@ -482,7 +482,7 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
   assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/2/)
   assert.match(
     lines.map(stripTerminalSequences).join("\n"),
-    /▾ Worked[\s\S]*The hidden telescope/,
+    /Worked for \d+m \d+s ▾[\s\S]*The hidden telescope/,
   )
   const thought = lines.find((line) =>
     stripTerminalSequences(line).includes("The hidden telescope"),
