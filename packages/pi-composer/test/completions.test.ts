@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { test } from "node:test"
 import { stripVTControlCharacters } from "node:util"
@@ -197,6 +198,51 @@ test("effective wrappers installed before and after composer activation preserve
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Use $al tail")
   assert.equal(host.requests.length, 0)
+})
+
+test("inline skill completion opens automatically inside Markdown emphasis", async (t) => {
+  const skill = await mkdtemp(join(tmpdir(), "pi-composer-skill-"))
+  t.after(() => rm(skill, { recursive: true, force: true }))
+  await writeFile(
+    join(skill, "SKILL.md"),
+    "---\nname: review\ndescription: Review behavior\n---\nReview the actual behavior.\n",
+  )
+  const host = await openHost(t, {
+    skillPaths: [skill],
+    extensionPaths: [
+      new URL("../../pi-skill-references/src/index.ts", import.meta.url)
+        .pathname,
+    ],
+  })
+  /* oxlint-disable no-await-in-loop -- Each gesture depends on the preceding edit and picker render. */
+  for (const delimiter of ["**", "_", "~~", "***"]) {
+    await host.key("\x1b[109;10u")
+    host.ui.setEditorText(`Use (${delimiter}$rv${delimiter})`)
+    for (let index = 0; index <= delimiter.length; index += 1) {
+      await host.key("\x1b[D")
+    }
+    await host.key("\x1b[109;10u")
+    host.terminal.output = ""
+    await host.type("w")
+    await t.waitFor(async () =>
+      assert.match(await host.output(), /Review behavior/),
+    )
+    await host.key("\r")
+    assert.equal(
+      host.ui.getEditorText(),
+      `Use (${delimiter}/skill:review${delimiter})`,
+    )
+    assert.equal(host.requests.length, 0)
+    await host.type("!")
+    assert.equal(
+      host.ui.getEditorText(),
+      `Use (${delimiter}/skill:review!${delimiter})`,
+    )
+    await host.key("\x1b[122;9u")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), `Use (${delimiter}$rvw${delimiter})`)
+  }
+  /* oxlint-enable no-await-in-loop */
 })
 
 test("provider updates cancel outstanding requests and discard late suggestions", async (t) => {

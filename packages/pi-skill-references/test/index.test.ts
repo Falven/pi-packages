@@ -100,6 +100,35 @@ test(
 )
 
 test(
+  "Unicode punctuation invokes a skill, exact catalog names win, and filename suffixes stay literal",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, undefined, false, {
+      skillsOverride: (result) => {
+        const review = result.skills.find((skill) => skill.name === "review")
+        assert(review)
+        return {
+          ...result,
+          skills: [...result.skills, { ...review, name: "review…" }],
+        }
+      },
+    })
+    for (const [draft, name] of [
+      ["Apply /skill:review。", "review"],
+      ["Apply /skill:review…", "review…"],
+      ["Apply /skill:review……", "review"],
+    ] as const) {
+      host.ui.setEditorText(draft)
+      const submitted = await host.submit()
+      assert(submitted.includes(`<skill name="${name}"`), submitted)
+      assert(submitted.includes(draft), submitted)
+    }
+    host.ui.setEditorText("Keep /skill:review.md literal.")
+    assert.equal(await host.submit(), "Keep /skill:review.md literal.")
+  },
+)
+
+test(
   "leading native prompt commands keep their argument handling",
   { timeout: 15000 },
   async (t) => {

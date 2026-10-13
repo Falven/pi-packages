@@ -1,4 +1,3 @@
-import { diff } from "node:util"
 import { Marked, type AutocompleteProvider } from "@earendil-works/pi-tui"
 
 export function withInlineSkills(
@@ -24,7 +23,9 @@ export function withInlineSkills(
     ) {
       return undefined
     }
-    const prefix = beforeCursor.match(/(?:^|[\s([{"'“‘])([$/][^\s/]*)$/)?.[1]
+    const prefix = beforeCursor.match(
+      /(?:^|[\s([{"'“‘])(?:[*_]|~~)*([$/][^\s/]*)$/,
+    )?.[1]
     if (!prefix) return undefined
     let marker = "%skill-completion%"
     while (lines.some((text) => text.includes(marker))) marker += "%"
@@ -113,10 +114,12 @@ export function withInlineSkills(
       }
       const line = lines[cursorLine] ?? ""
       const before = line.slice(0, cursorCol - completion.token.length)
+      let marker = "%skill-reference-anchor%"
+      while (lines.some((text) => text.includes(marker))) marker += "%"
       const result = current.applyCompletion(
         lines.with(
           cursorLine,
-          `/${completion.token.slice(1)}${line.slice(cursorCol)}`,
+          `/${completion.token.slice(1)}${before ? marker : ""}${line.slice(cursorCol)}`,
         ),
         cursorLine,
         completion.token.length,
@@ -125,72 +128,65 @@ export function withInlineSkills(
       )
       if (!before) return result
       const reference = `/${item.value}`
-      const nativeLines = lines.with(
-        cursorLine,
-        `${reference} ${line.slice(cursorCol)}`,
-      )
-      // Align whole lines first so a reference inside added prose is not the target.
-      const changes = diff(result.lines, nativeLines)
-      let sourceLine = 0
-      let position = 0
-      for (let index = 0; index < changes.length;) {
-        const [operation, text] = changes[index]!
-        if (operation === 0) {
-          if (sourceLine === cursorLine) break
-          sourceLine += 1
-          position += text.length + 1
-          index += 1
-          continue
-        }
-        const removed: string[] = []
-        const added: string[] = []
-        while (index < changes.length && changes[index]![0] !== 0) {
-          const [change, value] = changes[index++]!
-          if (change === -1) removed.push(value)
-          else added.push(value)
-        }
-        if (sourceLine + removed.length > cursorLine) {
-          const target = removed
-            .slice(0, cursorLine - sourceLine)
-            .reduce((offset, content) => offset + content.length + 1, 0)
-          let offset = 0
-          for (const [change, value] of diff(
-            added.join("\n"),
-            removed.join("\n"),
-          )) {
-            if (change !== 1 && offset >= target) break
-            if (change !== 1) offset += value.length
-            if (change !== -1) position += value.length
-          }
-          break
-        }
-        sourceLine += removed.length
-        position += added.reduce(
-          (offset, content) => offset + content.length + 1,
-          0,
-        )
-      }
-      if (!changes.length) {
-        position = nativeLines
-          .slice(0, cursorLine)
-          .reduce((offset, text) => offset + text.length + 1, 0)
-      }
       const text = result.lines.join("\n")
-      if (!text.startsWith(reference, position))
-        throw new Error("Could not locate completed skill reference")
+      const anchor = text.indexOf(marker)
+      if (
+        anchor < reference.length + 1 ||
+        text.indexOf(marker, anchor + marker.length) !== -1 ||
+        text.slice(anchor - reference.length - 1, anchor) !== `${reference} `
+      ) {
+        return { lines, cursorLine, cursorCol }
+      }
+      const position = anchor - reference.length - 1
       const precedingLines = text.slice(0, position).split("\n")
       const completedLine = precedingLines.length - 1
       const completedCol = precedingLines.at(-1)!.length
       const completed = result.lines[completedLine]!
+      const markerCol = completedCol + reference.length + 1
+      if (
+        result.cursorLine === completedLine &&
+        result.cursorCol > markerCol &&
+        result.cursorCol < markerCol + marker.length
+      ) {
+        return { lines, cursorLine, cursorCol }
+      }
       result.lines[completedLine] =
         completed.slice(0, completedCol) +
         before +
-        completed.slice(completedCol)
+        completed.slice(completedCol, markerCol) +
+        completed.slice(markerCol + marker.length)
+      if (
+        result.cursorLine === completedLine &&
+        result.cursorCol >= markerCol + marker.length
+      ) {
+        result.cursorCol -= marker.length
+      }
       if (
         result.cursorLine === completedLine &&
         result.cursorCol >= completedCol
       ) {
         result.cursorCol += before.length
+      }
+      const closer = before.match(/(\*+|_+|(?:~~)+)$/)?.[1]
+      const closingCol = completedCol + before.length + reference.length
+      if (
+        closer &&
+        line.slice(cursorCol).startsWith(closer) &&
+        result.lines[completedLine]!.slice(
+          closingCol,
+          closingCol + closer.length + 1,
+        ) === ` ${closer}`
+      ) {
+        const completedText = result.lines[completedLine]!
+        result.lines[completedLine] =
+          completedText.slice(0, closingCol) +
+          completedText.slice(closingCol + 1)
+        if (
+          result.cursorLine === completedLine &&
+          result.cursorCol > closingCol
+        ) {
+          result.cursorCol -= 1
+        }
       }
       return result
     },

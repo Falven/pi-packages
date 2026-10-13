@@ -493,6 +493,8 @@ test(
       ["- ` $rvw `", " `"],
       ["> - ` $rvw `", " `"],
       ["- [guide]($rvw)", ")"],
+      ["Example `**$rvw**`.", "**`."],
+      ["file_$rvw", ""],
     ] as const) {
       host.ui.setEditorText(draft)
       for (let index = 0; index < suffix.length; index += 1) {
@@ -501,6 +503,30 @@ test(
       host.terminal.input("\t")
       await setImmediate()
       assert.equal(host.ui.getEditorText(), draft)
+    }
+  },
+)
+
+test(
+  "skill completion works inside Markdown emphasis",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t)
+    for (const [draft, suffix, expected] of [
+      ["Apply **$rvw**", "**", "Apply **/skill:review**"],
+      ["Apply _$rvw_", "_", "Apply _/skill:review_"],
+      ["Apply **/rvw**", "**", "Apply **/skill:review**"],
+      ["Apply ***$rvw***", "***", "Apply ***/skill:review***"],
+      ["Apply **_$rvw_**", "_**", "Apply **_/skill:review_**"],
+      ["Apply ~~$rvw~~", "~~", "Apply ~~/skill:review~~"],
+    ] as const) {
+      host.ui.setEditorText(draft)
+      for (let index = 0; index < suffix.length; index += 1) {
+        host.terminal.input("\x1b[D")
+      }
+      host.terminal.input("\t")
+      await t.waitFor(() => assert.equal(host.ui.getEditorText(), expected))
+      assert((await host.submit()).includes("Review the actual behavior."))
     }
   },
 )
@@ -625,6 +651,88 @@ test(
       host.terminal.input("\t")
       host.terminal.input("here")
       assert.equal(host.ui.getEditorText(), expected)
+    }
+  },
+)
+
+test(
+  "inline completion restores prose after a provider-added reference on the same line",
+  { timeout: 15000 },
+  async (t) => {
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            if (args[3].value === "skill:review") {
+              const added = "Provider /skill:review "
+              result.lines[result.cursorLine] =
+                added + result.lines[result.cursorLine]
+              result.cursorCol += added.length
+            }
+            return result
+          },
+        }))
+      })
+    })
+    host.ui.setEditorText("Use $rvw /skill:review")
+    for (let index = 0; index < " /skill:review".length; index += 1) {
+      host.terminal.input("\x1b[D")
+    }
+    host.terminal.input("\t")
+    await t.waitFor(() =>
+      assert.equal(
+        host.ui.getEditorText(),
+        "Provider /skill:review Use /skill:review  /skill:review",
+      ),
+    )
+    host.terminal.input("here")
+    assert.equal(
+      host.ui.getEditorText(),
+      "Provider /skill:review Use /skill:review here /skill:review",
+    )
+    const submitted = await host.submit()
+    assert.equal(submitted.match(/<skill name="review"/g)?.length, 1)
+  },
+)
+
+test(
+  "an ambiguous provider result leaves the original draft and caret intact",
+  { timeout: 15000 },
+  async (t) => {
+    let duplicate = false
+    const host = await createHost(t, (pi) => {
+      pi.on("session_start", (_event, ctx) => {
+        ctx.ui.addAutocompleteProvider((current) => ({
+          ...current,
+          getSuggestions: (...args) => current.getSuggestions(...args),
+          applyCompletion(...args) {
+            const result = current.applyCompletion(...args)
+            const completed = result.lines[result.cursorLine]!
+            const reference = "/skill:review "
+            result.lines[result.cursorLine] = duplicate
+              ? `${completed}${completed}`
+              : completed.slice(
+                  0,
+                  completed.indexOf(reference) + reference.length,
+                )
+            return result
+          },
+        }))
+      })
+    })
+    for (duplicate of [false, true]) {
+      host.ui.setEditorText("Use $rvw tail")
+      for (let index = 0; index < " tail".length; index += 1) {
+        host.terminal.input("\x1b[D")
+      }
+      host.terminal.input("\t")
+      await setImmediate()
+      assert.equal(host.ui.getEditorText(), "Use $rvw tail")
+      host.terminal.input("x")
+      assert.equal(host.ui.getEditorText(), "Use $rvwx tail")
     }
   },
 )

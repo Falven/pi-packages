@@ -20,6 +20,8 @@ See the [specification](../../docs/specs/pi-skill-references.md), its [architect
 
 ## Install
 
+Requires Pi and `@earendil-works/pi-tui` `^1.0.2`.
+
 From the repository root:
 
 ```bash

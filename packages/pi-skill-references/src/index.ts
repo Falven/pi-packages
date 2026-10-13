@@ -81,7 +81,7 @@ export default function piSkillReferences(pi: ExtensionAPI): void {
     })
     const blocks = await Promise.all(
       references.map(async (reference) => {
-        const name = reference.replace(/[.,:;!?]+$/, "")
+        const name = reference.replace(/[\p{Po}\p{Pe}\p{Pf}–—]+$/u, "")
         const skill =
           commands.find(
             (command) =>

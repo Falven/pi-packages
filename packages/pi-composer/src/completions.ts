@@ -69,7 +69,7 @@ export function createCompletions(
       !explicitTab &&
       !(line === 0 && before[0]!.startsWith("/")) &&
       !new RegExp(
-        `(?:^|${separator.source})(?:@"[^"]*|(?:${triggers})(?:(?!${separator.source}).)*)$`,
+        `(?:^|${separator.source}|[([{"'“‘])(?:[*_]|~~)*(?:@"[^"]*|(?:${triggers})(?:(?!${separator.source}).)*)$`,
         "u",
       ).test(before.at(-1)!)
     ) {
