@@ -12,7 +12,7 @@
 - [x] Preserve format extensions in generated native-image recovery references and conservative cleanup.
 - [x] Verify PNG and BMP clipboard capture, image recovery, retained bytes, and cleanup through existing public-host tests.
 - [x] Check a generated image link through the actual macOS application-selection and opening API.
-- [ ] Manually open newly pasted image labels, thumbnails, and composer references in Ghostty after reload.
+- [ ] Manually open newly pasted image thumbnails, filename fallbacks, and composer references in Ghostty after reload.
 
 **Failure evidence:** On 2026-10-12, the retained clipboard PNG was named `clipboard-image`. macOS selected TextEdit for that path and CleanShot X for the same format with a `.png` extension. The system-opener reproduction rejected the extensionless target as the wrong application. Both `file:///` and `file://localhost/` URLs selected TextEdit; the retained image existed and was readable. Existing extensionless attachments retain their paths and need recapture to acquire a format extension.
 

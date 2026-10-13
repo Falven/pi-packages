@@ -2,7 +2,7 @@
 
 Paste handling and preserved text, file, and image attachments for the [pi coding agent](https://pi.dev).
 
-Paste a single file path to capture its contents, paste other small text inline, or capture large text and native clipboard files or images as attachments. Explicit attachment commands use the same capture operation and insert a readable Markdown attachment reference. A widget above the editor lists the draft's attachments. Removing a reference from the draft removes its membership while keeping the saved contents.
+Paste a single file path to capture its contents, paste other small text inline, or capture large text and native clipboard files or images as attachments. Explicit attachment commands use the same capture operation and insert a readable Markdown attachment reference. A widget above the editor shows image previews and the Manage attachments shortcut. Attachment names remain in the draft and management picker. Removing a reference from the draft removes its membership while keeping the saved contents.
 
 See the [specification](../../docs/specs/pi-attachments.md), its [architecture decisions](../../docs/specs/pi-attachments.md#architecture-decisions), and the [package overview](../../README.md#packages).
 
@@ -63,7 +63,7 @@ To keep only an attachment's path, edit its Markdown reference down to the bare 
 
 ## Text actions
 
-Use `Ctrl+Alt+A` while composing to choose an attachment and an action. The attachment widget shows the shortcut; `/attachments` also appears in Pi's command list.
+Use `Ctrl+Alt+A` (`Ctrl+Option+A` on macOS) while composing to choose an attachment and an action. The widget shows this shortcut beside **Manage attachments**. `/attachments` follows Pi's leading slash-command dispatch; appending it after an attachment reference or other draft text does not open the manager.
 
 - **Preview text** opens a read-only, scrollable view of the captured UTF-8 text. The preview uses Pi's navigation and cancel bindings and leaves the draft and its selection intact.
 - **Restore Inline** inserts the complete captured text at the caret or over the selection and removes that snapshot's references from the draft. It stays inline at any size, including inside code. The native editor expands tabs and normalizes line endings; pi-composer preserves tabs and normalizes line endings. Snapshot bytes stay unchanged.
@@ -75,7 +75,7 @@ With pi-composer, each restoration or removal is one undo/redo action, including
 
 `/attach-file` recognizes PNG, JPEG, GIF, WebP, and BMP images from the captured bytes, including files with a different extension. Each image gets a small preview above the native editor or composer, using Pi's theme and image graphics. Terminals without image graphics show Pi's filename and dimensions fallback. Removing a reference removes its preview and draft membership while retaining the snapshot for undo and older requests.
 
-Click an image's filename, thumbnail, or text fallback to open the retained full-resolution file in the system's associated application. This uses Pi's native hyperlinks when supported, without terminal configuration changes. In fullscreen Ghostty on macOS, **Shift+Cmd+click** also uses the terminal's native link handling; use that gesture for the attachment reference inside `pi-composer`, where ordinary clicks edit text. Saving changes from the external application can modify the retained attachment; save elsewhere to keep the captured contents intact.
+Click an image's thumbnail or filename fallback to open the retained full-resolution file in the system's associated application. This uses Pi's native hyperlinks when supported, without terminal configuration changes. In fullscreen Ghostty on macOS, **Shift+Cmd+click** also uses the terminal's native link handling; use that gesture for the attachment reference inside `pi-composer`, where ordinary clicks edit text. Saving changes from the external application can modify the retained attachment; save elsewhere to keep the captured contents intact.
 
 Generated clipboard and recovery image filenames include their format extension, such as `.png`, so the system can choose the image application. Copied files retain their names and existing snapshots keep their paths. Paste an older extensionless clipboard image again to create a snapshot with a format extension.
 
