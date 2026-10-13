@@ -14,6 +14,7 @@
 - [x] Keep extracted activity headings searchable in canonical thought source; a hit opens the work history and reveals its thought without reinserting the heading, adding an excerpt/placeholder, or highlighting text that is not rendered.
 - [x] Reuse native search input and action routing with an owned source-search controller.
 - [x] Verify keyboard search, hidden matches, reveal, highlighting, transforms, stale results, and branch exclusion through the native host.
+- [x] Verify Find temporarily reveals only the selected hidden thinking occurrence as native Markdown; navigation/query changes move or remove the reveal and closing Find removes it, without changing Hide thinking.
 - [x] Verify extracted-heading hits and unchanged ordinary thought search through the real host.
 
-After activity-heading extraction, `node --test packages/pi-chat/test/*.test.ts` passed 116/116 against each of Pi 1.0.2 and 1.1.0. Modified existing cases verify hidden-heading search reveals the owning thought without displaying the heading, while ordinary thought-body matches still receive text highlighting. Physical terminal acceptance remains pending under ticket 12.
+Hide thinking verification: `node --test packages/pi-chat/test/*.test.ts` passed 116/116 against each of Pi 1.0.2 and 1.1.0, with no failures, cancellations, or skips. Modified existing cases verify temporary thought reveal for body and extracted-heading hits, next/previous navigation, no-match queries, cleanup on close, native text highlighting, and an unchanged global visibility preference. Physical terminal acceptance remains pending under ticket 12.

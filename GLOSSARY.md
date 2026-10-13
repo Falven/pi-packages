@@ -70,7 +70,7 @@ A display state that replaces displayed conversation content with a summary or d
 _Avoid_: Compaction, when only the presentation changes
 
 **Activity group**:
-Consecutive tool calls presented together within a work history. Standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
+Consecutive tool calls presented together within a work history. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
 _Avoid_: Nested tool call, unless one tool actually called another
 
 **Work history**:
@@ -86,8 +86,11 @@ A user request held until the current request finishes, with its own work histor
 **Final response**:
 The assistant's answer to a request, presented separately from the work history leading to it. It can still be streaming or remain partial after interruption.
 
+**Hide thinking**:
+The choice to omit thoughts from ordinary chat flow while retaining them in conversation history. Finding a thought can temporarily reveal that occurrence without changing the choice.
+
 **Inline thought**:
-A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or fold. It remains visible after thinking completes whenever its enclosing work history is open.
+A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or fold. It remains visible after thinking completes whenever thinking is shown and its enclosing work history is open.
 
 **Activity heading**:
 A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.
