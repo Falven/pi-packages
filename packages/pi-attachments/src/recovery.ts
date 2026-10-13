@@ -42,6 +42,17 @@ const processState = globalThis as typeof globalThis & {
 }
 const unsavedByStorage = (processState[unsavedKey] ??= new Map())
 
+export async function readRegularFile(path: string): Promise<Uint8Array> {
+  const source = await open(path, constants.O_RDONLY | constants.O_NONBLOCK)
+  try {
+    if (!(await source.stat()).isFile())
+      throw new Error(`Not a regular file: ${path}`)
+    return await source.readFile()
+  } finally {
+    await source.close()
+  }
+}
+
 export async function saveSnapshot(storage: string, request: SnapshotRequest) {
   const unsaved = unsavedByStorage.get(storage) ?? new Set()
   unsavedByStorage.set(storage, unsaved)
@@ -49,17 +60,7 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
     const reads = await Promise.allSettled(
       request.snapshots.map(async (snapshot) => {
         if ("path" in snapshot && snapshot.contents === undefined) {
-          const source = await open(
-            snapshot.path,
-            constants.O_RDONLY | constants.O_NONBLOCK,
-          )
-          try {
-            if (!(await source.stat()).isFile())
-              throw new Error(`Not a regular file: ${snapshot.path}`)
-            snapshot.contents = await source.readFile()
-          } finally {
-            await source.close()
-          }
+          snapshot.contents = await readRegularFile(snapshot.path)
         }
       }),
     )

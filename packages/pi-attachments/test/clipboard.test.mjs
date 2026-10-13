@@ -1,3 +1,4 @@
+/* eslint-disable no-await-in-loop -- Each paste spelling waits for its native draft before the next paste. */
 import assert from "node:assert/strict"
 import fs, {
   chmod,
@@ -8,14 +9,16 @@ import fs, {
   writeFile,
 } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
-import { basename, join } from "node:path"
+import { homedir } from "node:os"
+import { basename, join, relative } from "node:path"
 import { beforeEach, test } from "node:test"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
 import { convertToPng, CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
 import piAttachments from "../src/index.ts"
 import {
+  holdFileRead,
   nativePi,
   retainedRequest,
   snapshotPath,
@@ -199,6 +202,130 @@ test("native copied paths preserve surrounding spaces and quotes through the att
   assert.equal(await readFile(path, "utf8"), "Exact path identity")
 })
 
+test("one pasted path accepts terminal escaping, whole-path quotes, file URLs, and working-directory names", async (t) => {
+  const host = await nativePi(t)
+  const name = "CleanShot 2026-10-12 at 9.48.56 PM@2x.png"
+  const source = join(host.directory, name)
+  await writeFile(source, Buffer.from(PNG, "base64"))
+  for (const text of [
+    `${host.directory}/CleanShot\\ 2026-10-12\\ at\\ 9.48.56\\ PM@2x.png`,
+    `'${source}'`,
+    `"${source}"`,
+    pathToFileURL(source).href,
+    `file:${pathToFileURL(source).pathname}`,
+    `~/${relative(homedir(), source)}`,
+    name,
+    `./${name}`,
+    `../${basename(host.directory)}/${name}`,
+  ]) {
+    host.ui.setEditorText("")
+    host.ui.pasteToEditor(text)
+    const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+    assert.equal(basename(path), name)
+    assert.equal((await readFile(path)).toString("base64"), PNG)
+  }
+})
+
+test("unsuitable single-path pastes stay text silently and Paste Inline leaves readable paths literal", async (t) => {
+  const host = await nativePi(t)
+  const source = join(host.directory, "Readable file.txt")
+  const unreadable = join(host.directory, "Unreadable file.txt")
+  await writeFile(source, "File contents")
+  await writeFile(unreadable, "Unavailable contents")
+  await chmod(unreadable, 0o000)
+  for (const text of [
+    join(host.directory, "Missing file.txt"),
+    unreadable,
+    host.directory,
+    `Look at ${source}`,
+    `${source} ${source}`,
+    `${source}\n${source}`,
+    `\`${source}\``,
+    `file://remote${source}`,
+    "file:///%GG",
+  ]) {
+    host.ui.setEditorText("")
+    host.ui.pasteToEditor(text)
+    await waitFor(() => assert.equal(host.ui.getEditorText(), text))
+    assert.doesNotMatch(
+      host.render(),
+      /Attachments \(|Could not (paste|attach)/,
+    )
+  }
+  t.mock.method(getNativeClipboard(), "getText", async () => source)
+  host.ui.setEditorText("")
+  await host.runtime.session.prompt("/paste-inline")
+  assert.equal(host.ui.getEditorText(), source)
+  host.ui.setEditorText("")
+  host.input(source)
+  assert.equal(host.ui.getEditorText(), source)
+  host.ui.setEditorText(source)
+  assert.equal(host.ui.getEditorText(), source)
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+  await assert.rejects(readdir(join(host.agentDir, "pi-attachments")), {
+    code: "ENOENT",
+  })
+})
+
+test("a fragmented image-path paste replaces a composer selection in code and its reference can become plain path text", async (t) => {
+  const host = await nativePi(t, [composerPath])
+  const source = join(host.directory, "Pasted image.png")
+  await writeFile(source, Buffer.from(PNG, "base64"))
+  const before = "```text\nKeep selected"
+  host.ui.setEditorText(before)
+  for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
+  host.input(`\x1b[200~${host.directory}/Pasted\\ `)
+  assert.equal(host.ui.getEditorText(), before)
+  host.input("image.png\x1b[201~")
+  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  const after = host.ui.getEditorText()
+  assert.match(after, /^```text\nKeep \n\[Attachment:/)
+  await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
+  host.input("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), before)
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+  host.input("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), after)
+
+  const reference = after.trim().split("\n").at(-1)
+  host.ui.setEditorText(reference)
+  host.input("\x1b[109;10u")
+  host.input("\x7f")
+  host.input("\x7f")
+  host.input("\x01")
+  for (let index = 0; index < reference.indexOf(path); index++)
+    host.input("\x1b[3~")
+  assert.equal(host.ui.getEditorText(), path)
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+  host.submit()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const user = host.requests[0].messages.find(({ role }) => role === "user")
+  assert.deepEqual(user.content, [{ type: "text", text: path }])
+  assert.equal((await readFile(path)).toString("base64"), PNG)
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+})
+
+test("a delayed text-path capture retains the requesting draft without overwriting later edits", async (t) => {
+  const host = await nativePi(t, [composerPath])
+  const source = join(host.directory, "Delayed file.txt")
+  await writeFile(source, "Captured before the source changed")
+  const capture = holdFileRead(t, source)
+  host.ui.setEditorText("Original draft")
+  host.ui.pasteToEditor(source)
+  await capture.started()
+  host.ui.setEditorText("Later draft")
+  await rm(source)
+  capture.release()
+  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
+  const recovery = await retainedRequest(host, "Original draft")
+  assert.equal(
+    await readFile(snapshotPath(recovery.text), "utf8"),
+    "Captured before the source changed",
+  )
+  assert.equal(host.ui.getEditorText(), "Later draft")
+  assert.doesNotMatch(host.render(), /Attachments \(/)
+})
+
 test("a failed snapshot write retains all copied bytes across reload even if the original files disappear", async (t) => {
   const host = await nativePi(t, [composerPath])
   const sources = [
@@ -259,7 +386,7 @@ test("invalid native image bytes report a recoverable error without replacing th
 })
 
 for (const composer of [false, true]) {
-  test(`${composer ? "composer" : "native"} clipboard action distinguishes a copied image file from the same path as text`, async (t) => {
+  test(`${composer ? "composer" : "native"} clipboard action captures both a copied image file and the same path as text`, async (t) => {
     const host = await nativePi(t, composer ? [composerPath] : [])
     const source = join(host.directory, "Clipboard image 你好.png")
     await writeFile(source, Buffer.from(PNG, "base64"))
@@ -267,13 +394,16 @@ for (const composer of [false, true]) {
     t.mock.method(clipboard, "getText", async () => source)
     host.ui.setEditorText("Path ")
     host.input("\x16")
-    await waitFor(() => assert.equal(host.ui.getEditorText(), `Path ${source}`))
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    const textPath = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+    assert.equal(basename(textPath), basename(source))
+    assert.equal((await readFile(textPath)).toString("base64"), PNG)
+    await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
 
     t.mock.method(clipboard, "getFilePaths", async () => [source])
     host.ui.setEditorText("Image ")
     host.input("\x16")
     const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+    assert.notEqual(path, textPath)
     assert.equal(basename(path), basename(source))
     assert.equal((await readFile(path)).toString("base64"), PNG)
     await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
@@ -281,7 +411,7 @@ for (const composer of [false, true]) {
   })
 
   for (const route of ["terminal", "extension"]) {
-    test(`${composer ? "composer" : "native"} ${route} paste keeps existing image paths literal without reading clipboard metadata`, async (t) => {
+    test(`${composer ? "composer" : "native"} ${route} paste captures one image path without reading clipboard metadata`, async (t) => {
       const host = await nativePi(t, composer ? [composerPath] : [])
       const source = join(host.directory, "Literal image 你好.png")
       await writeFile(source, Buffer.from(PNG, "base64"))
@@ -295,12 +425,24 @@ for (const composer of [false, true]) {
       host.ui.setEditorText("Path ")
       if (route === "terminal") host.input(`\x1b[200~${source}\x1b[201~`)
       else host.ui.pasteToEditor(source)
-      await waitFor(() =>
-        assert.equal(host.ui.getEditorText(), `Path ${source}`),
-      )
+      const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+      assert.notEqual(path, source)
+      assert.equal(basename(path), basename(source))
+      assert.equal((await readFile(path)).toString("base64"), PNG)
       assert.equal(reads, 0)
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
       assert.equal(host.requests.length, 0)
+      host.submit()
+      await waitFor(() => assert.equal(host.requests.length, 1))
+      const user = host.requests[0].messages.find(({ role }) => role === "user")
+      assert.deepEqual(
+        user.content.find(({ type }) => type === "image_url"),
+        {
+          type: "image_url",
+          image_url: { url: `data:image/png;base64,${PNG}` },
+        },
+      )
+      await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
     })
   }
 
@@ -321,20 +463,13 @@ for (const composer of [false, true]) {
       host.render()
       host.input("\x1b[<2;10;27M")
       host.input("\x1b[<2;10;27m")
-      if (kind === "text") {
-        await waitFor(() =>
-          assert.equal(host.ui.getEditorText(), `Draft ${source}`),
-        )
-        assert.doesNotMatch(host.render(), /Attachments \(/)
+      const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+      if (kind === "files" || kind === "text") {
+        assert.equal(basename(path), "Clipboard path 你好.txt")
+        assert.equal(await readFile(path, "utf8"), "Copied file body")
       } else {
-        const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
-        if (kind === "files") {
-          assert.equal(basename(path), "Clipboard path 你好.txt")
-          assert.equal(await readFile(path, "utf8"), "Copied file body")
-        } else {
-          assert.equal((await readFile(path)).toString("base64"), PNG)
-          await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
-        }
+        assert.equal((await readFile(path)).toString("base64"), PNG)
+        await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
       }
     })
   }

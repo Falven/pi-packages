@@ -1,4 +1,7 @@
+import { statSync } from "node:fs"
+import { homedir } from "node:os"
 import { basename, resolve } from "node:path"
+import { fileURLToPath } from "node:url"
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -12,12 +15,55 @@ import {
   type TUI,
   type TuiMouseEvent,
 } from "@earendil-works/pi-tui"
-import type { Snapshot } from "./recovery.ts"
+import { readRegularFile, type Snapshot } from "./recovery.ts"
 
-function content(text: string, forceInline = false): string | Snapshot[] {
-  return forceInline || text.length < 5000
-    ? text
-    : [{ name: "paste.txt", contents: Buffer.from(text) }]
+function content(
+  text: string,
+  cwd: string,
+  forceInline = false,
+): string | Snapshot[] | Promise<string | Snapshot[]> {
+  const fallback =
+    forceInline || text.length < 5000
+      ? text
+      : [{ name: "paste.txt", contents: Buffer.from(text) }]
+  if (!forceInline && text && !/\p{Cc}/u.test(text)) {
+    let unquoted = text
+    if (text.startsWith("'") && text.endsWith("'")) {
+      unquoted = text.slice(1, -1)
+    } else if (text.startsWith('"') && text.endsWith('"')) {
+      unquoted = text.slice(1, -1).replace(/\\(["\\$`])/gu, "$1")
+    } else {
+      unquoted = text.replace(/\\(.)/gu, "$1")
+    }
+    for (let path of new Set([text, unquoted])) {
+      try {
+        if (/^file:/iu.test(path)) {
+          const url = new URL(path)
+          if (url.hostname && url.hostname !== "localhost") continue
+          path = fileURLToPath(url)
+        } else if (path.startsWith("~/")) {
+          path = resolve(homedir(), path.slice(2))
+        }
+        if (!path || /\p{Cc}/u.test(path)) continue
+        path = resolve(cwd, path)
+        // Keep ordinary text insertion synchronous without reading file bytes on the UI thread.
+        if (statSync(path).isFile()) {
+          return readRegularFile(path).then(
+            (contents) => [
+              {
+                name: basename(path).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
+                contents,
+              },
+            ],
+            () => fallback,
+          )
+        }
+      } catch {
+        // Unmatched paths follow ordinary text-paste policy.
+      }
+    }
+  }
+  return fallback
 }
 
 export function registerPaste(
@@ -38,7 +84,7 @@ export function registerPaste(
   }
 
   pi.registerCommand("paste-inline", {
-    description: "Paste clipboard text inline regardless of size",
+    description: "Paste clipboard text without attachment conversion",
     handler: (_args, ctx) => inline(ctx),
   })
   pi.registerShortcut("ctrl+alt+v", {
@@ -55,7 +101,7 @@ export function registerPaste(
     let pendingPaste: string | undefined
 
     function paste(text: string): void {
-      const captured = content(text)
+      const captured = content(text, ctx.cwd)
       if (typeof captured === "string" && editor.insertTextAtCursor) {
         editor.insertTextAtCursor(captured)
       } else {
@@ -94,7 +140,7 @@ export function registerPaste(
             const text = await clipboard.getText()
             if (text === undefined)
               throw new Error("Clipboard text is unavailable")
-            return text ? content(text, forceInline) : undefined
+            return text ? content(text, cwd, forceInline) : undefined
           } catch (error) {
             if (!signal.aborted)
               ctx.ui.notify(`Could not paste: ${String(error)}`, "error")

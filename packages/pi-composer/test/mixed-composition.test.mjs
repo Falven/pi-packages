@@ -834,7 +834,10 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
   const latePath = snapshotPath(
     recovery.text.slice(recovery.text.indexOf(draftA) + draftA.length),
   )
-  assert.equal(await readFile(latePath, "utf8"), lateText)
+  // Recovery metadata is written before the retained attachment bytes.
+  await waitFor(async () =>
+    assert.equal(await readFile(latePath, "utf8"), lateText),
+  )
   assert.equal(host.ui.getEditorText(), draftB)
   host.ui.pasteToEditor("B later edit")
   host.input(undo)
