@@ -15,8 +15,10 @@ import {
   type Component,
   sliceByColumn,
   stripTerminalSequences,
+  truncateToWidth,
 } from "@earendil-works/pi-tui"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
+import { InlineViewport } from "./inline-viewport.ts"
 const { allocateStackSizes } = (await import(
   new URL(
     "./components/stack.js",
@@ -157,7 +159,18 @@ type Leaf = {
   occurrence: Occurrence | undefined
   rows: string[]
   start: number
+  top: number
+  offset: number
+  body?: InlineViewport
 }
+
+function currentTop(leaf: Leaf) {
+  return leaf.body
+    ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
+    : leaf.top
+}
+
+type PaintedInterval = { leaf: Leaf; start: number; end: number; top: number }
 
 type SelectionPoint = {
   row: number
@@ -200,11 +213,17 @@ class RawLeaf extends Container {
   }
 }
 
-type Activity = { component: Component; occurrence?: Occurrence; tool: boolean }
+type Activity = {
+  component: Component
+  occurrence?: Occurrence
+  tool: boolean
+  body?: InlineViewport
+}
 type ToolGroup = {
   calls: Activity[]
   expanded: boolean
   header?: GroupHeader
+  viewport: InlineViewport
 }
 
 type ToolPresenter = Component & {
@@ -223,11 +242,21 @@ class GroupHeader extends Text {
   }
 
   override render(width: number) {
-    const names = this.group.calls.map((call) =>
-      "toolName" in call.component ? String(call.component.toolName) : "tool",
-    )
+    const names = [
+      ...new Set(
+        this.group.calls.map((call) =>
+          "toolName" in call.component
+            ? String(call.component.toolName)
+            : "tool",
+        ),
+      ),
+    ]
+    const count = this.group.calls.length
     this.setText(
-      `${this.focused ? "→" : this.group.expanded ? "▾" : "▸"} ${names.length} tool ${names.length === 1 ? "call" : "calls"}: ${names.join(", ")}`,
+      truncateToWidth(
+        `${this.focused ? "→" : this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
+        Math.max(1, width - 2),
+      ),
     )
     return super.render(width)
   }
@@ -324,8 +353,8 @@ export class NativeChatHost {
   readonly transcript: ScrollView
   private readonly painting = new VStack()
   private leaves: Leaf[] = []
+  private intervals: PaintedInterval[] = []
   private viewportHeight = 0
-  private totalRows = 0
   private layoutWidth = 0
   private boundRenderer: TuiAltScreen | undefined
   private selectionTimer: NodeJS.Timeout | undefined
@@ -454,14 +483,21 @@ export class NativeChatHost {
     const selectedEnd =
       oldAnchor && oldFocus ? Math.max(oldAnchor.row, oldFocus.row) : -1
     const wasFollowing = this.transcript.isFollowingEnd
-    const anchor =
-      !wasFollowing &&
-      oldLeaves.find(
-        (leaf) =>
-          this.transcript.scrollTop >= leaf.start &&
-          this.transcript.scrollTop < leaf.start + leaf.rows.length,
-      )
-    const anchorRow = anchor ? this.transcript.scrollTop - anchor.start : 0
+    const previousTop = this.transcript.scrollTop
+    const anchor = !wasFollowing
+      ? oldLeaves.find(
+          (leaf) =>
+            previousTop >= Math.max(currentTop(leaf), leaf.body?.top ?? 0) &&
+            previousTop <
+              Math.min(
+                currentTop(leaf) + leaf.rows.length,
+                leaf.body
+                  ? leaf.body.top + leaf.body.scroll.viewportHeight
+                  : Infinity,
+              ),
+        )
+      : undefined
+    const anchorRow = anchor ? previousTop - currentTop(anchor) : 0
     let start = 0
     const components = this.host.documentContainer.children.flatMap(
       (component) =>
@@ -488,7 +524,7 @@ export class NativeChatHost {
       }
       let group = this.groups.get(first)
       if (!group) {
-        group = { calls, expanded: false }
+        group = { calls, expanded: false, viewport: new InlineViewport() }
         group.header = new GroupHeader(this, group)
         this.groups.set(first, group)
       }
@@ -503,21 +539,51 @@ export class NativeChatHost {
       } else {
         composed.push({ component: group.header!, tool: false })
         this.visibleDisclosures.push(group.header!)
-        if (group.expanded)
-          composed.push(...calls.map((call) => this.focusableTool(call)))
+        if (group.expanded) {
+          for (const call of calls) {
+            const focused = this.focusableTool(call)
+            focused.body = group.viewport
+            composed.push(focused)
+          }
+        }
       }
     }
-    const leaves = composed.map(({ component, occurrence }) => {
+    const leaves = composed.map(({ component, occurrence, body }) => {
       const rows = component.render(contentWidth)
-      const leaf = {
+      const leaf: Leaf = {
         component,
         occurrence,
         rows,
         start,
+        top: 0,
+        offset: 0,
       }
+      if (body) leaf.body = body
       start += rows.length
       return leaf
     })
+    let contentHeight = 0
+    for (let index = 0; index < leaves.length;) {
+      const leaf = leaves[index]!
+      if (!leaf.body) {
+        leaf.top = contentHeight
+        contentHeight += leaf.rows.length
+        index++
+        continue
+      }
+      const body = leaf.body
+      const children: Leaf[] = []
+      while (leaves[index]?.body === body) children.push(leaves[index++]!)
+      body.top = contentHeight
+      body.update(
+        children,
+        Math.max(1, Math.min(16, (available ?? 0) - 3)),
+        () => renderer.requestRender(),
+      )
+      for (const child of children)
+        child.top = body.top + child.offset - body.scroll.scrollTop
+      contentHeight += body.scroll.viewportHeight
+    }
     this.leaves = leaves
     if (
       (renderer.getFocusedComponent() instanceof GroupHeader ||
@@ -528,8 +594,7 @@ export class NativeChatHost {
     )
       this.returnToComposer()
     this.viewportHeight = available ?? 0
-    this.totalRows = start
-    this.transcript.updateLayout(start, this.viewportHeight, () =>
+    this.transcript.updateLayout(contentHeight, this.viewportHeight, () =>
       renderer.requestRender(),
     )
     if (anchor) {
@@ -540,10 +605,15 @@ export class NativeChatHost {
       )
       if (next)
         this.transcript.scrollTo(
-          next.start + Math.min(anchorRow, Math.max(0, next.rows.length - 1)),
+          Math.max(
+            next.body?.top ?? 0,
+            next.top + Math.min(anchorRow, Math.max(0, next.rows.length - 1)),
+          ),
           { disableFollow: true },
         )
-    }
+      else this.transcript.scrollTo(previousTop, { disableFollow: true })
+    } else if (!wasFollowing)
+      this.transcript.scrollTo(previousTop, { disableFollow: true })
     const widthChanged = this.layoutWidth !== 0 && this.layoutWidth !== width
     this.layoutWidth = width
     for (const point of [oldAnchor, oldFocus]) {
@@ -586,12 +656,29 @@ export class NativeChatHost {
       }
     }
     this.painting.clear()
+    this.intervals = []
     const top = this.transcript.scrollTop
     const bottom = top + this.viewportHeight
     for (const leaf of leaves) {
-      const sourceStart = Math.max(0, top - leaf.start)
-      const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.start)
+      const sourceStart = Math.max(
+        0,
+        top - leaf.top,
+        (leaf.body?.top ?? leaf.top) - leaf.top,
+      )
+      const sourceEnd = Math.min(
+        leaf.rows.length,
+        bottom - leaf.top,
+        leaf.body
+          ? leaf.body.top + leaf.body.scroll.viewportHeight - leaf.top
+          : leaf.rows.length,
+      )
       if (sourceEnd <= sourceStart) continue
+      this.intervals.push({
+        leaf,
+        start: sourceStart,
+        end: sourceEnd,
+        top: leaf.top + sourceStart - top,
+      })
       const raw = new RawLeaf(leaf.component, leaf.rows)
       const window = new ScrollView(raw, {
         follow: "none",
@@ -708,11 +795,7 @@ export class NativeChatHost {
       return
     const nearest = this.visibleDisclosures.findLast((disclosure) => {
       const leaf = this.leaves.find((item) => item.component === disclosure)
-      return (
-        leaf &&
-        leaf.start < this.transcript.scrollTop + this.viewportHeight &&
-        leaf.start + leaf.rows.length > this.transcript.scrollTop
-      )
+      return leaf && this.visibleInterval(leaf)?.start === 0
     })
     if (!nearest) return
     renderer.setFocus(nearest)
@@ -733,10 +816,13 @@ export class NativeChatHost {
   private revealDisclosure(component: GroupHeader | ToolFocus) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
-    if (leaf.start < this.transcript.scrollTop)
-      this.transcript.scrollTo(leaf.start)
-    else if (leaf.start >= this.transcript.scrollTop + this.viewportHeight)
-      this.transcript.scrollTo(leaf.start - this.viewportHeight + 1)
+    if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
+    const top = leaf.body
+      ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
+      : leaf.top
+    if (top < this.transcript.scrollTop) this.transcript.scrollTo(top)
+    else if (top >= this.transcript.scrollTop + this.viewportHeight)
+      this.transcript.scrollTo(top - this.viewportHeight + 1)
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
@@ -773,16 +859,44 @@ export class NativeChatHost {
     )
   }
 
-  private pointAt(x: number, y: number): SelectionPoint {
-    const row = Math.max(
+  private visibleInterval(leaf: Leaf): PaintedInterval | undefined {
+    const top = leaf.body
+      ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
+      : leaf.top
+    const start = Math.max(
       0,
-      Math.min(
-        Math.max(0, this.totalRows - 1),
-        this.transcript.scrollTop +
-          Math.max(0, Math.min(this.viewportHeight - 1, y)),
-      ),
+      this.transcript.scrollTop - top,
+      (leaf.body?.top ?? top) - top,
     )
-    const leaf = this.leafAt(row)
+    const end = Math.min(
+      leaf.rows.length,
+      this.transcript.scrollTop + this.viewportHeight - top,
+      leaf.body
+        ? leaf.body.top + leaf.body.scroll.viewportHeight - top
+        : leaf.rows.length,
+    )
+    return end > start
+      ? { leaf, start, end, top: top + start - this.transcript.scrollTop }
+      : undefined
+  }
+
+  private pointAt(x: number, y: number): SelectionPoint {
+    const visible = this.leaves.flatMap((leaf) => {
+      const interval = this.visibleInterval(leaf)
+      return interval ? [interval] : []
+    })
+    const interval =
+      visible.find((item) => y < item.top + item.end - item.start) ??
+      visible.at(-1)
+    const leaf = interval?.leaf
+    const localRow = interval
+      ? interval.start +
+        Math.max(
+          0,
+          Math.min(interval.end - interval.start - 1, y - interval.top),
+        )
+      : 0
+    const row = leaf ? leaf.start + localRow : 0
     return {
       row,
       col: Math.max(0, Math.min(this.layoutWidth - 1, x)),
@@ -791,7 +905,7 @@ export class NativeChatHost {
         ? {
             component: leaf.component,
             ...(leaf.occurrence ? { occurrence: leaf.occurrence } : {}),
-            localRow: row - leaf.start,
+            localRow,
           }
         : {}),
     }
@@ -885,7 +999,12 @@ export class NativeChatHost {
       (original) => (event: { x: number; y: number }, delta: number) => {
         if (!this.ownsRenderer(renderer) || event.y >= this.viewportHeight)
           return original.call(renderer, event, delta)
-        this.transcript.scrollBy(delta)
+        const interval = this.intervals.find(
+          (item) =>
+            event.y >= item.top && event.y < item.top + item.end - item.start,
+        )
+        const remaining = interval?.leaf.body?.scroll.scrollBy(delta) ?? delta
+        if (remaining) this.transcript.scrollBy(remaining)
         renderer.requestRender()
       },
     )
@@ -897,26 +1016,29 @@ export class NativeChatHost {
       for (const leaf of direction < 0
         ? this.leaves.toReversed()
         : this.leaves) {
-        if (direction < 0 && leaf.start >= this.transcript.scrollTop) continue
+        const top = leaf.body
+          ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
+          : leaf.top
+        if (direction < 0 && top >= this.transcript.scrollTop) continue
         if (
           direction > 0 &&
-          leaf.start + leaf.rows.length <= this.transcript.scrollTop
+          top + leaf.rows.length <= this.transcript.scrollTop
         )
           continue
         const first =
           direction < 0
             ? Math.min(
                 leaf.rows.length - 1,
-                this.transcript.scrollTop - leaf.start - 1,
+                this.transcript.scrollTop - top - 1,
               )
-            : Math.max(0, this.transcript.scrollTop - leaf.start + 1)
+            : Math.max(0, this.transcript.scrollTop - top + 1)
         for (
           let local = first;
           local >= 0 && local < leaf.rows.length;
           local += direction
         ) {
           if (!marker.test(leaf.rows[local] ?? "")) continue
-          const row = leaf.start + local
+          const row = top + local
           this.transcript.scrollTo(row)
           renderer.requestRender()
           return
@@ -1019,25 +1141,31 @@ export class NativeChatHost {
         )
           return original.call(renderer, screen, layout)
         const target = renderer as unknown as Record<string, unknown>
-        target["selectionAnchor"] = {
-          ...anchor,
-          row: anchor.row - this.transcript.scrollTop,
-          scrollView: undefined,
-        }
-        target["selectionFocus"] = {
-          ...focus,
-          row: focus.row - this.transcript.scrollTop,
-          scrollView: undefined,
-        }
         try {
-          return [
-            ...(original.call(
+          const highlighted = [...screen]
+          for (const interval of this.intervals) {
+            const sourceStart = interval.leaf.start + interval.start
+            target["selectionAnchor"] = {
+              ...anchor,
+              row: anchor.row - sourceStart,
+              scrollView: undefined,
+            }
+            target["selectionFocus"] = {
+              ...focus,
+              row: focus.row - sourceStart,
+              scrollView: undefined,
+            }
+            const rows = original.call(
               renderer,
-              screen.slice(0, this.viewportHeight),
+              screen.slice(
+                interval.top,
+                interval.top + interval.end - interval.start,
+              ),
               layout,
-            ) as string[]),
-            ...screen.slice(this.viewportHeight),
-          ]
+            ) as string[]
+            highlighted.splice(interval.top, rows.length, ...rows)
+          }
+          return highlighted
         } finally {
           target["selectionAnchor"] = anchor
           target["selectionFocus"] = focus
@@ -1735,6 +1863,7 @@ export class NativeChatHost {
       active.delete(this.host as unknown as InteractiveMode)
     this.occurrences.length = 0
     this.leaves = []
+    this.intervals = []
     this.painting.clear()
     this.byEntryId.clear()
     this.byComponent.clear()
