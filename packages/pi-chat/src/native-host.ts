@@ -414,6 +414,7 @@ export class NativeChatHost {
   >()
   private readonly oldRoot: Component
   private readonly historical = new Map<string, Component[]>()
+  private imageSettings: { show: boolean; width: number }
   private readonly originals = new Map<string, (...args: never[]) => unknown>()
   private readonly wrappers = new Map<string, (...args: never[]) => unknown>()
   private readonly ownDescriptors = new Map<
@@ -486,6 +487,10 @@ export class NativeChatHost {
 
   private constructor(host: NativeMode) {
     this.host = host
+    this.imageSettings = {
+      show: host.settingsManager.getShowImages(),
+      width: host.settingsManager.getImageWidthCells(),
+    }
     this.relationships = new RelationshipJournal(host.sessionManager)
     this.oldRoot = host.fullscreenLayoutRoot
     this.transcript = new ScrollView(host.documentContainer, {
@@ -549,6 +554,21 @@ export class NativeChatHost {
   }
 
   private layoutChat() {
+    const show = this.host.settingsManager.getShowImages()
+    const widthCells = this.host.settingsManager.getImageWidthCells()
+    if (
+      show !== this.imageSettings.show ||
+      widthCells !== this.imageSettings.width
+    ) {
+      for (const components of this.historical.values())
+        for (const component of components)
+          if (component instanceof ToolExecutionComponent) {
+            if (show !== this.imageSettings.show) component.setShowImages(show)
+            if (widthCells !== this.imageSettings.width)
+              component.setImageWidthCells(widthCells)
+          }
+      this.imageSettings = { show, width: widthCells }
+    }
     const renderer = this.host.renderer as unknown as TuiAltScreen
     const width = Math.max(1, renderer.terminal.columns)
     const height = Math.max(1, renderer.terminal.rows)

@@ -68,7 +68,9 @@ test("settled work hides the earlier identical text and retains the final occurr
   assert.match(collapsed, /Do the work/)
   assert.equal(host.requests.length, 2)
   assert.match(JSON.stringify(host.requests[1]), /Done/)
-  const source = JSON.stringify(host.session.messages)
+  const source = JSON.stringify(
+    host.session.messages.filter((message) => message.role !== "system"),
+  )
   assert.equal((source.match(/"text":"Done"/g) ?? []).length, 2)
   assert.doesNotMatch(source, /Worked|pi-chat/)
 
@@ -1001,7 +1003,11 @@ test("copied journal restores work without changing provider context", async (t)
   await host.type("Next request")
   await host.key("\r")
   await host.settled()
-  const provider = JSON.stringify(host.requests.at(-1))
+  const provider = JSON.stringify(
+    host.requests
+      .at(-1)
+      ?.messages.filter((message) => message.role !== "system"),
+  )
   assert.match(provider, /Copy request|Copy answer|Next request/)
   assert.doesNotMatch(provider, /pi-chat|Worked/)
 })
