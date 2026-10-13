@@ -324,6 +324,11 @@ export async function openNativeHost(
     close,
     requests,
     terminal,
+    screenLines() {
+      return (
+        interactive as unknown as { renderer: { getScreenLines(): string[] } }
+      ).renderer.getScreenLines()
+    },
     switchMode(mode: "regular" | "fullscreen") {
       return (
         interactive as unknown as {

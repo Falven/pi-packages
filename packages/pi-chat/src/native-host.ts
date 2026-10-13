@@ -8,9 +8,23 @@ import {
 import {
   Container,
   ScrollView,
+  TuiAltScreen,
   VStack,
   type Component,
+  sliceByColumn,
+  stripTerminalSequences,
 } from "@earendil-works/pi-tui"
+import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
+const { allocateStackSizes } = (await import(
+  new URL(
+    "./components/stack.js",
+    import.meta.resolve("@earendil-works/pi-tui"),
+  ).href
+)) as typeof import("@earendil-works/pi-tui/dist/components/stack.js")
+const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node")
+const { dispatchMouseEvent } = (await import(
+  new URL("./tui.js", import.meta.resolve("@earendil-works/pi-tui")).href
+)) as typeof import("@earendil-works/pi-tui/dist/tui.js")
 
 /* oxlint-disable eslint/no-underscore-dangle -- This adapter targets Pi 1.0.2's private persistence seams. */
 
@@ -101,17 +115,78 @@ function requiredMode(host: InteractiveMode): NativeMode {
 
 class OwnedRoot extends VStack {
   private readonly invalidateNative: () => void
+  private readonly layoutChat: () => void
 
   constructor(
     children: ConstructorParameters<typeof VStack>[0],
     invalidateNative: () => void,
+    layoutChat: () => void,
   ) {
     super(children)
     this.invalidateNative = invalidateNative
+    this.layoutChat = layoutChat
   }
 
   override invalidate() {
     this.invalidateNative()
+  }
+
+  [LAYOUT_NODE](): StackLayoutNode {
+    this.layoutChat()
+    return {
+      type: "vstack",
+      entries: this.entries,
+      gap: this.gap,
+      align: this.align,
+    }
+  }
+}
+
+type Leaf = {
+  component: Component
+  occurrence: Occurrence | undefined
+  rows: string[]
+  start: number
+}
+
+type SelectionPoint = {
+  row: number
+  col: number
+  scrollView?: ScrollView
+  occurrence?: Occurrence
+  component?: Component
+  localRow?: number
+  boundary?: boolean
+}
+
+function rendererSelection(
+  renderer: TuiAltScreen,
+  name: "selectionAnchor" | "selectionFocus",
+) {
+  return (
+    renderer as unknown as Record<typeof name, SelectionPoint | undefined>
+  )[name]
+}
+
+class RawLeaf extends Container {
+  constructor(
+    readonly component: Component,
+    readonly rows: string[],
+  ) {
+    super()
+    this.children.push(component)
+  }
+
+  override render() {
+    return this.rows
+  }
+
+  override invalidate() {}
+
+  override handleMouse(
+    event: Parameters<NonNullable<Component["handleMouse"]>>[0],
+  ) {
+    return dispatchMouseEvent(this.component, event)
   }
 }
 
@@ -123,6 +198,17 @@ export class NativeChatHost {
   private readonly projections = new Map<string, Map<number, Occurrence>>()
   readonly root: VStack
   readonly transcript: ScrollView
+  private readonly painting = new VStack()
+  private leaves: Leaf[] = []
+  private viewportHeight = 0
+  private totalRows = 0
+  private layoutWidth = 0
+  private boundRenderer: TuiAltScreen | undefined
+  private selectionTimer: NodeJS.Timeout | undefined
+  private readonly rendererMethods = new Map<
+    string,
+    { original: Function; wrapped: Function; descriptor?: PropertyDescriptor }
+  >()
   private readonly oldRoot: Component
   private readonly originals = new Map<string, (...args: never[]) => unknown>()
   private readonly wrappers = new Map<string, (...args: never[]) => unknown>()
@@ -176,7 +262,7 @@ export class NativeChatHost {
     this.root = new OwnedRoot(
       [
         {
-          component: this.transcript,
+          component: this.painting,
           basis: 0,
           grow: 1,
           shrink: 1,
@@ -191,6 +277,7 @@ export class NativeChatHost {
         },
       ],
       () => this.oldRoot.invalidate(),
+      () => this.layoutChat(),
     )
   }
 
@@ -200,6 +287,7 @@ export class NativeChatHost {
     const adapter = new NativeChatHost(mode)
     try {
       adapter.wrapNativeConstruction()
+      adapter.bindRenderer()
       mode.fullscreenLayoutRoot = adapter.root
       if (mode.renderer.mode === "fullscreen")
         mode.renderer.setLayoutRoot(adapter.root)
@@ -213,6 +301,441 @@ export class NativeChatHost {
       adapter.dispose()
       throw error
     }
+  }
+
+  private layoutChat() {
+    const renderer = this.host.renderer as unknown as TuiAltScreen
+    const width = Math.max(1, renderer.terminal.columns)
+    const height = Math.max(1, renderer.terminal.rows)
+    const dock = (this.oldRoot as VStack).children[1]!
+    const dockHeight = dock.render(width).length
+    const [available] = allocateStackSizes(
+      [
+        { component: this.painting, basis: 0, grow: 1, shrink: 1, minSize: 1 },
+        { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
+      ],
+      [0, dockHeight],
+      height,
+      0,
+    )
+    const contentWidth = this.transcript.getContentWidth(width)
+    const oldLeaves = this.leaves
+    const oldAnchor = rendererSelection(renderer, "selectionAnchor")
+    const oldFocus = rendererSelection(renderer, "selectionFocus")
+    const selectedStart =
+      oldAnchor && oldFocus ? Math.min(oldAnchor.row, oldFocus.row) : -1
+    const selectedEnd =
+      oldAnchor && oldFocus ? Math.max(oldAnchor.row, oldFocus.row) : -1
+    const wasFollowing = this.transcript.isFollowingEnd
+    const anchor =
+      !wasFollowing &&
+      oldLeaves.find(
+        (leaf) =>
+          this.transcript.scrollTop >= leaf.start &&
+          this.transcript.scrollTop < leaf.start + leaf.rows.length,
+      )
+    const anchorRow = anchor ? this.transcript.scrollTop - anchor.start : 0
+    let start = 0
+    const components = this.host.documentContainer.children.flatMap(
+      (component) =>
+        component === this.host.chatContainer
+          ? this.host.chatContainer.children
+          : [component],
+    )
+    const leaves = components.map((component) => {
+      const rows = component.render(contentWidth)
+      const leaf = {
+        component,
+        occurrence: this.byComponent.get(component),
+        rows,
+        start,
+      }
+      start += rows.length
+      return leaf
+    })
+    this.leaves = leaves
+    this.viewportHeight = available ?? 0
+    this.totalRows = start
+    this.transcript.updateLayout(start, this.viewportHeight, () =>
+      renderer.requestRender(),
+    )
+    if (anchor) {
+      const next = leaves.find((leaf) =>
+        anchor.occurrence
+          ? leaf.occurrence === anchor.occurrence
+          : leaf.component === anchor.component,
+      )
+      if (next)
+        this.transcript.scrollTo(
+          next.start + Math.min(anchorRow, Math.max(0, next.rows.length - 1)),
+          { disableFollow: true },
+        )
+    }
+    const widthChanged = this.layoutWidth !== 0 && this.layoutWidth !== width
+    this.layoutWidth = width
+    for (const point of [oldAnchor, oldFocus]) {
+      if (point?.scrollView !== this.transcript || !point.component) continue
+      const leaf = leaves.find((candidate) =>
+        point.occurrence
+          ? candidate.occurrence === point.occurrence
+          : candidate.component === point.component,
+      )
+      if (
+        leaf &&
+        point.localRow !== undefined &&
+        point.localRow < leaf.rows.length
+      ) {
+        point.row = leaf.start + point.localRow
+        point.component = leaf.component
+      } else this.clearSelection(renderer)
+    }
+    if (widthChanged) this.clearSelection(renderer)
+    else if (selectedStart >= 0 && oldAnchor?.scrollView === this.transcript) {
+      for (const old of oldLeaves) {
+        if (
+          old.start > selectedEnd ||
+          old.start + old.rows.length <= selectedStart
+        )
+          continue
+        const next = leaves.find((leaf) =>
+          old.occurrence
+            ? leaf.occurrence === old.occurrence
+            : leaf.component === old.component,
+        )
+        if (
+          !next ||
+          next.rows.length !== old.rows.length ||
+          next.rows.some((line, row) => line !== old.rows[row])
+        ) {
+          this.clearSelection(renderer)
+          break
+        }
+      }
+    }
+    this.painting.clear()
+    const top = this.transcript.scrollTop
+    const bottom = top + this.viewportHeight
+    for (const leaf of leaves) {
+      const sourceStart = Math.max(0, top - leaf.start)
+      const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.start)
+      if (sourceEnd <= sourceStart) continue
+      const raw = new RawLeaf(leaf.component, leaf.rows)
+      const window = new ScrollView(raw, {
+        follow: "none",
+        scrollbar: "hidden",
+      })
+      window.updateLayout(leaf.rows.length, sourceEnd - sourceStart, () =>
+        renderer.requestRender(),
+      )
+      window.scrollTo(sourceStart, { disableFollow: true })
+      this.painting.addChild(window, {
+        basis: sourceEnd - sourceStart,
+        grow: 0,
+        shrink: 0,
+      })
+    }
+  }
+
+  private leafAt(row: number) {
+    return this.leaves.find(
+      (leaf) => row >= leaf.start && row < leaf.start + leaf.rows.length,
+    )
+  }
+
+  private pointAt(x: number, y: number): SelectionPoint {
+    const row = Math.max(
+      0,
+      Math.min(
+        Math.max(0, this.totalRows - 1),
+        this.transcript.scrollTop +
+          Math.max(0, Math.min(this.viewportHeight - 1, y)),
+      ),
+    )
+    const leaf = this.leafAt(row)
+    return {
+      row,
+      col: Math.max(0, Math.min(this.layoutWidth - 1, x)),
+      scrollView: this.transcript,
+      ...(leaf
+        ? {
+            component: leaf.component,
+            ...(leaf.occurrence ? { occurrence: leaf.occurrence } : {}),
+            localRow: row - leaf.start,
+          }
+        : {}),
+    }
+  }
+
+  private selectedText(renderer: TuiAltScreen): string | undefined {
+    const bounds = (
+      renderer as unknown as {
+        getSelectionBounds():
+          | { start: SelectionPoint; end: SelectionPoint }
+          | undefined
+      }
+    ).getSelectionBounds()
+    if (!bounds || bounds.start.scrollView !== this.transcript) return undefined
+    const columns = (
+      renderer as unknown as {
+        getSelectionColumns(
+          line: string,
+          row: number,
+          selection: { start: SelectionPoint; end: SelectionPoint },
+        ): { start: number; end: number }
+      }
+    ).getSelectionColumns
+    const lines: string[] = []
+    for (const leaf of this.leaves) {
+      const first = Math.max(bounds.start.row, leaf.start)
+      const last = Math.min(bounds.end.row, leaf.start + leaf.rows.length - 1)
+      for (let row = first; row <= last; row++) {
+        const line = leaf.rows[row - leaf.start]!
+        const range = columns.call(renderer, line, row, bounds)
+        lines.push(
+          stripTerminalSequences(
+            sliceByColumn(
+              line,
+              range.start,
+              Math.max(0, range.end - range.start),
+              true,
+            ),
+          ).trimEnd(),
+        )
+      }
+    }
+    const text = lines.join("\n")
+    return text || undefined
+  }
+
+  private clearSelection(renderer: TuiAltScreen) {
+    ;(
+      renderer as unknown as { clearTextSelection(): void }
+    ).clearTextSelection()
+  }
+
+  private ownsRenderer(renderer: TuiAltScreen) {
+    return (
+      this.active &&
+      (this.host.renderer as unknown) === renderer &&
+      this.host.fullscreenLayoutRoot === this.root &&
+      (renderer as unknown as { layoutRoot?: Component }).layoutRoot ===
+        this.root
+    )
+  }
+
+  private bindRenderer() {
+    if (this.host.renderer.mode !== "fullscreen") return
+    const renderer = this.host.renderer as unknown as TuiAltScreen
+    if (this.boundRenderer === renderer) return
+    this.unbindRenderer()
+    this.boundRenderer = renderer
+    const bind = (
+      name: string,
+      replacement: (original: Function) => Function,
+    ) => {
+      const target = renderer as unknown as Record<string, unknown>
+      const original = target[name] as Function
+      const descriptor = Object.getOwnPropertyDescriptor(renderer, name)
+      const wrapped = replacement(original)
+      target[name] = wrapped
+      this.rendererMethods.set(name, {
+        original,
+        wrapped,
+        ...(descriptor ? { descriptor } : {}),
+      })
+    }
+    bind(
+      "getPrimaryScrollView",
+      (original) => () =>
+        this.ownsRenderer(renderer) ? this.transcript : original.call(renderer),
+    )
+    bind(
+      "routeWheel",
+      (original) => (event: { x: number; y: number }, delta: number) => {
+        if (!this.ownsRenderer(renderer) || event.y >= this.viewportHeight)
+          return original.call(renderer, event, delta)
+        this.transcript.scrollBy(delta)
+        renderer.requestRender()
+      },
+    )
+    bind("scrollToPrompt", (original) => (direction: number) => {
+      if (!this.ownsRenderer(renderer))
+        return original.call(renderer, direction)
+      // oxlint-disable-next-line eslint/no-control-regex -- Pi marks prompt rows with OSC 133.
+      const marker = /^\x1b\]133;A(?:\x07|\x1b\\)/
+      for (const leaf of direction < 0
+        ? this.leaves.toReversed()
+        : this.leaves) {
+        if (direction < 0 && leaf.start >= this.transcript.scrollTop) continue
+        if (
+          direction > 0 &&
+          leaf.start + leaf.rows.length <= this.transcript.scrollTop
+        )
+          continue
+        const first =
+          direction < 0
+            ? Math.min(
+                leaf.rows.length - 1,
+                this.transcript.scrollTop - leaf.start - 1,
+              )
+            : Math.max(0, this.transcript.scrollTop - leaf.start + 1)
+        for (
+          let local = first;
+          local >= 0 && local < leaf.rows.length;
+          local += direction
+        ) {
+          if (!marker.test(leaf.rows[local] ?? "")) continue
+          const row = leaf.start + local
+          this.transcript.scrollTo(row)
+          renderer.requestRender()
+          return
+        }
+      }
+    })
+    bind(
+      "getSelectionPoint",
+      (original) =>
+        (event: { x: number; y: number }, scrollView?: ScrollView) => {
+          if (
+            !this.ownsRenderer(renderer) ||
+            (event.y >= this.viewportHeight && scrollView !== this.transcript)
+          )
+            return original.call(renderer, event, scrollView)
+          return this.pointAt(event.x, event.y)
+        },
+    )
+    bind(
+      "getScrollSelectionPoint",
+      (original) => (scrollView: ScrollView, x: number, y: number) =>
+        this.ownsRenderer(renderer) && scrollView === this.transcript
+          ? this.pointAt(x, y)
+          : original.call(renderer, scrollView, x, y),
+    )
+    bind("getSelectionSourceLine", (original) => (point: SelectionPoint) => {
+      if (!this.ownsRenderer(renderer) || point.scrollView !== this.transcript)
+        return original.call(renderer, point)
+      const leaf = this.leafAt(point.row)
+      return leaf?.rows[point.row - leaf.start] ?? ""
+    })
+    bind(
+      "updateSelectionAutoScroll",
+      (original) => (event: { x: number; y: number }) => {
+        const state = renderer as unknown as {
+          selectionAnchor?: SelectionPoint
+          selectionDragPointer?: { x: number; y: number }
+          selectionAutoScrollDirection: number
+          selectionAutoScrollTimer?: NodeJS.Timeout
+          stopSelectionAutoScroll(): void
+          autoScrollSelection(): void
+        }
+        if (
+          !this.ownsRenderer(renderer) ||
+          state.selectionAnchor?.scrollView !== this.transcript
+        )
+          return original.call(renderer, event)
+        const direction =
+          event.y <= 0 ? -1 : event.y >= this.viewportHeight - 1 ? 1 : 0
+        if (!direction) {
+          state.stopSelectionAutoScroll()
+          return
+        }
+        state.selectionDragPointer = { x: event.x, y: event.y }
+        state.selectionAutoScrollDirection = direction
+        if (state.selectionAutoScrollTimer) return
+        const timer = setInterval(() => state.autoScrollSelection(), 50)
+        timer.unref()
+        state.selectionAutoScrollTimer = timer
+        this.selectionTimer = timer
+      },
+    )
+    bind("autoScrollSelection", (original) => () => {
+      const state = renderer as unknown as {
+        selectionAnchor?: SelectionPoint
+        selectionDragPointer?: { x: number; y: number }
+        selectionAutoScrollDirection: number
+        stopSelectionAutoScroll(): void
+        updateSelectionFocus(point: SelectionPoint): void
+      }
+      if (
+        !this.ownsRenderer(renderer) ||
+        state.selectionAnchor?.scrollView !== this.transcript
+      )
+        return original.call(renderer)
+      const pointer = state.selectionDragPointer
+      const direction = state.selectionAutoScrollDirection
+      if (!pointer || !direction) return state.stopSelectionAutoScroll()
+      if (this.transcript.scrollBy(direction) === direction)
+        return state.stopSelectionAutoScroll()
+      state.updateSelectionFocus(this.pointAt(pointer.x, pointer.y))
+      renderer.requestRender()
+    })
+    bind(
+      "getActiveSelectionText",
+      (original) => () =>
+        this.ownsRenderer(renderer)
+          ? (this.selectedText(renderer) ?? original.call(renderer))
+          : original.call(renderer),
+    )
+    bind(
+      "applySelection",
+      (original) => (screen: string[], layout: unknown) => {
+        const anchor = rendererSelection(renderer, "selectionAnchor")
+        const focus = rendererSelection(renderer, "selectionFocus")
+        if (
+          !this.ownsRenderer(renderer) ||
+          anchor?.scrollView !== this.transcript ||
+          focus?.scrollView !== this.transcript
+        )
+          return original.call(renderer, screen, layout)
+        const target = renderer as unknown as Record<string, unknown>
+        target["selectionAnchor"] = {
+          ...anchor,
+          row: anchor.row - this.transcript.scrollTop,
+          scrollView: undefined,
+        }
+        target["selectionFocus"] = {
+          ...focus,
+          row: focus.row - this.transcript.scrollTop,
+          scrollView: undefined,
+        }
+        try {
+          return [
+            ...(original.call(
+              renderer,
+              screen.slice(0, this.viewportHeight),
+              layout,
+            ) as string[]),
+            ...screen.slice(this.viewportHeight),
+          ]
+        } finally {
+          target["selectionAnchor"] = anchor
+          target["selectionFocus"] = focus
+        }
+      },
+    )
+  }
+
+  private unbindRenderer() {
+    const renderer = this.boundRenderer
+    if (!renderer) return
+    if (this.selectionTimer) {
+      clearInterval(this.selectionTimer)
+      const state = renderer as unknown as {
+        selectionAutoScrollTimer?: NodeJS.Timeout
+      }
+      if (state.selectionAutoScrollTimer === this.selectionTimer)
+        delete state.selectionAutoScrollTimer
+      this.selectionTimer = undefined
+    }
+    for (const [name, method] of this.rendererMethods) {
+      const target = renderer as unknown as Record<string, unknown>
+      if (target[name] !== method.wrapped) continue
+      if (method.descriptor)
+        Object.defineProperty(renderer, name, method.descriptor)
+      else delete target[name]
+    }
+    this.rendererMethods.clear()
+    this.boundRenderer = undefined
   }
 
   static current(host: InteractiveMode): NativeChatHost | undefined {
@@ -583,6 +1106,11 @@ export class NativeChatHost {
         })
       },
     )
+    wrap("mountInteractiveTui", (original) => (...args: unknown[]) => {
+      const result = original.apply(host, args as never[])
+      this.bindRenderer()
+      return result
+    })
     wrap(
       "renderSessionEntries",
       () => (entries: Entry[], options?: unknown) => {
@@ -822,6 +1350,7 @@ export class NativeChatHost {
     if (!this.active) return
     this.active = false
     this.unsubscribe?.()
+    this.unbindRenderer()
     for (const [name] of this.originals) {
       const target =
         name === "appendMessage"
@@ -864,6 +1393,8 @@ export class NativeChatHost {
     if (active.get(this.host as unknown as InteractiveMode) === this)
       active.delete(this.host as unknown as InteractiveMode)
     this.occurrences.length = 0
+    this.leaves = []
+    this.painting.clear()
     this.byEntryId.clear()
     this.byComponent.clear()
     this.projections.clear()
@@ -874,6 +1405,7 @@ export class NativeChatHost {
 type Bootstrap = { renderer: unknown; install(host: InteractiveMode): void }
 const pending = new Set<Bootstrap>()
 let descriptor: PropertyDescriptor | undefined
+let bootstrapWrapper: NativeMode["renderSessionEntries"] | undefined
 
 export function armHistoryBootstrap(
   renderer: unknown,
@@ -889,30 +1421,35 @@ export function armHistoryBootstrap(
     if (!descriptor || typeof descriptor.value !== "function")
       throw new Error("pi-chat cannot observe Pi history construction")
     const original = descriptor.value as NativeMode["renderSessionEntries"]
+    bootstrapWrapper = function (
+      this: NativeMode,
+      entries: Entry[],
+      options?: unknown,
+    ) {
+      for (const candidate of pending) {
+        if (
+          this.session?.extensionRunner?.getEntryRenderer?.(
+            "pi-chat.relationship",
+          ) === candidate.renderer
+        ) {
+          try {
+            candidate.install(this as unknown as InteractiveMode)
+          } catch (error) {
+            this.showError?.(
+              `pi-chat: ${error instanceof Error ? error.message : String(error)}`,
+            )
+            return original.call(this, entries, options)
+          } finally {
+            disarmHistoryBootstrap(candidate)
+          }
+          return this.renderSessionEntries(entries, options)
+        }
+      }
+      return original.call(this, entries, options)
+    }
     Object.defineProperty(InteractiveMode.prototype, "renderSessionEntries", {
       ...descriptor,
-      value: function (this: NativeMode, entries: Entry[], options?: unknown) {
-        for (const candidate of pending) {
-          if (
-            this.session?.extensionRunner?.getEntryRenderer?.(
-              "pi-chat.relationship",
-            ) === candidate.renderer
-          ) {
-            try {
-              candidate.install(this as unknown as InteractiveMode)
-            } catch (error) {
-              this.showError?.(
-                `pi-chat: ${error instanceof Error ? error.message : String(error)}`,
-              )
-              return original.call(this, entries, options)
-            } finally {
-              disarmHistoryBootstrap(candidate)
-            }
-            return this.renderSessionEntries(entries, options)
-          }
-        }
-        return original.call(this, entries, options)
-      },
+      value: bootstrapWrapper,
     })
   }
   return () => disarmHistoryBootstrap(token)
@@ -921,12 +1458,17 @@ export function armHistoryBootstrap(
 function disarmHistoryBootstrap(token: Bootstrap) {
   pending.delete(token)
   if (pending.size === 0 && descriptor) {
-    Object.defineProperty(
-      InteractiveMode.prototype,
-      "renderSessionEntries",
-      descriptor,
+    if (
+      (InteractiveMode.prototype as unknown as NativeMode)
+        .renderSessionEntries === bootstrapWrapper
     )
+      Object.defineProperty(
+        InteractiveMode.prototype,
+        "renderSessionEntries",
+        descriptor,
+      )
     descriptor = undefined
+    bootstrapWrapper = undefined
   }
 }
 
