@@ -15,7 +15,7 @@
 - [x] Every group retains its outer accordion, including a settled single finished call; groups start collapsed and manual expansion survives growth and completion.
 - [x] Group toggles preserve child detail choices; global native tool expansion affects groups and tool details; manual choices survive redraw/resize and reset on reload/restart.
 - [x] Provide the agreed Pi-registered disclosure-focus shortcut and configured selector navigation/confirm/cancel, plus pointer toggles and overlay priority; add no slash command or separate reader.
-- [x] Keep expansion chevrons visible without an extra arrow. Highlight focused activity-group headers with Pi's native selection background; work-history headers have no background and underline only their focused label.
+- [x] Use the larger `▶` / `▼` for closed/open group and work disclosures at the normal terminal font size and line height. Keep expansion chevrons visible without an extra arrow. Highlight focused activity-group headers with Pi's native selection background; work-history headers have no background and underline only their focused label.
 - [x] Folding excludes closed bodies from copied ranges and clears invalidated selections.
 - [x] Native-host tests cover the revised singleton accordion and focused-header presentation as well as grouping boundaries, native/custom tools, failure, manual/global choices, keyboard access, and reload defaults.
 

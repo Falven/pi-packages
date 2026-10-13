@@ -13,7 +13,7 @@
 - [x] Keep the selected final occurrence outside folded earlier work, including duplicate strings, while preserving native content and source order.
 - [x] Honor explicit expansion choices; work folding is independent of group/tool state, and selection or scroll position does not defer automatic collapse.
 - [x] Cancellation or absence of a qualifying final leaves work expanded; do not invent boundaries for uncertain historical relationships.
-- [x] Show `Worked for <minutes>m <seconds>s` with a trailing expansion chevron, using native delivery and completion timestamps; retain the settled duration across reload.
+- [x] Show `Worked for <minutes>m <seconds>s` with a trailing `▶` when closed or `▼` when open at the normal terminal font size and line height, using native delivery and completion timestamps; retain the settled duration across reload.
 - [x] Give the header a muted label and native thin bottom divider, with blank lines above and below and no background; underline only the focused label.
 - [x] Verify ordinary, identical queued, steering, follow-up, cleared/consumed input, partial/error/cancellation, and duplicate-answer scenarios through real provider requests and visible frames.
 
