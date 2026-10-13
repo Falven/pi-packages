@@ -1,20 +1,20 @@
-# 06: Show temporary thoughts inline
+# 06: Show thoughts inline
 
-**What to build:** Follow a live thought at its own conversation position and reopen its content after the preview collapses.
+**What to build:** Show native thought prose inline in ordinary chat flow at its conversation position, routing standalone bold activity headings to Pi's working indicator.
 
 **Blocked by:** 05: Scroll expanded tool groups within bounded bodies.
 
 **Status:** done
 
-- [x] Show a bounded following preview inline, never in a docked widget.
+- [x] Show native thought Markdown in ordinary chat flow, without a separate viewport or docked widget.
 - [x] Use native thought/Markdown presentation and original source references, including adjacent thinking-block aggregation and otherwise-hidden native bodies.
-- [x] Collapse the body to its disclosure when thinking ends and permit reopening in place.
-- [x] Reuse disclosure keyboard/pointer controls, selection geometry, and bounded viewport routing.
+- [x] Keep the thought visible after thinking ends while its work history is open, with no static header, individual disclosure, or keyboard/mouse toggle.
+- [x] Use public `registerMarkdownTransformer` only for assistant-thinking display to omit standalone bold paragraphs anywhere in thinking; keep inline bold emphasis, original thinking blocks, native presenter identity, canonical messages, and history unchanged.
+- [x] Use public `message_update` to set the latest recognized heading through native `ctx.ui.setWorkingMessage`; clear this extension's label at `thinking_end`, `message_end`, and `agent_end`, without a custom spinner or setting.
+- [x] Add visual separation between thoughts and tool groups.
+- [x] Reuse native renderers and caches with ordinary-flow selection and scrolling.
 - [x] Retain exact occurrence ownership through stream updates, resize, native invalidation, and replay.
-- [x] Verify thought growth, completion, reopening, scrollback, selection, and native renderer transformations through the real host.
+- [x] Verify full thought growth, completion, scrollback, selection, and native renderer transformations through the real host.
+- [x] Verify leading and mid-block activity headings, inline emphasis, native working-indicator updates/clears, canonical source preservation, and search reveal through the real host.
 
-**Evidence:** Eight real-host cases in `packages/pi-chat/test/inline-thoughts.test.ts` cover native hidden-body materialization, bounded following and scrolled anchors, unchanged Markdown transforms while scrolling, adjacent-run aggregation, separate thought occurrences, pointer and keyboard reopening, cancellation/reload, Unicode copy through offscreen body rows, automatic fold selection clearing, scrollback placement, streaming prompt navigation, and native message replacement splitting a thinking run without losing final text. Responses scripts exercise Pi's actual early `thinking_end`; interleaved Completions text remains live until its parser reports completion.
-
-Merged ticket 07 before verification. Native semantic markers now attach to split activity rows without replacing focusable controls; final text retains its native trailing notices. Group, tool, thought, and work disclosures share the existing selector/copy/page dispatch. Hidden thought presenters are materialized only when their body is shown. No conversation content, model controls, dependencies, or native Pi source changed.
-
-**Validation:** `node --test packages/pi-chat/test/*.test.ts test/native-host.test.ts` passed 66/66. Direct repository TypeScript checking, scoped oxlint, oxfmt checking, and `git diff --check` passed. Physical terminal acceptance remains pending under ticket 12; recording-terminal checks do not establish real terminal rendering or OS clipboard behavior.
+After the activity-heading change, `node --test packages/pi-chat/test/*.test.ts` passed 116/116 against each of Pi 1.0.2 and 1.1.0 with no failures, cancellations, or skips. Modified existing cases cover a leading heading split across streaming updates and a mid-block heading arriving in a later update, plain labels with inline code, preserved inline bold and fenced code, native hidden-thought rendering, label cleanup on completion/cancellation/reload, and unchanged canonical messages. Parser self-checks cover quoted/list/code contexts, partial headings, link definitions, CRLF, heading-only input, and indentation after a removed heading. Group, tool, and work disclosures retain selector/copy/page handling; thoughts have no individual disclosure, and whole-work folding still applies. Physical terminal acceptance remains pending under ticket 12; recording-terminal checks do not establish visible pixels or OS clipboard behavior.

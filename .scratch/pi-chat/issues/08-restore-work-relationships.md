@@ -10,5 +10,5 @@
 - [x] Keep metadata outside model context and preserve original conversation messages.
 - [x] Reconstruct established relationships on replay, reload, session replacement, branch changes, and copied/forked history using session-journal-local identity.
 - [x] Reset fold choices at the agreed lifecycle boundaries; do not store them in metadata.
-- [x] Leave only uncertain historical work relationships unfolded, retaining known tool/thought disclosures and search compatibility without invented notices.
+- [x] Leave only uncertain historical work relationships unfolded, retaining known tool disclosures, inline thoughts, and search compatibility without invented notices.
 - [x] Verify persisted entries, provider input, reopened/forked sessions, duplicate input text, compaction history, and missing provenance through the native host.

@@ -1,6 +1,6 @@
 # One extension owns chat presentation
 
-`pi-chat`, planned at `packages/pi-chat`, keeps occurrence indexing, grouping, folds, inline thought previews, search, and reveal coordination in internal modules under one extension lifecycle because they need consistent source identity and presentation state. It owns the main chat surface alongside the composer; a transcript is a separate history-reading overlay. Message actions remain a separate package, while terminal capabilities, themes, clipboard access, and rendering reuse [Pi's native contracts](0012-transcript-preserves-native-content.md).
+`pi-chat`, planned at `packages/pi-chat`, keeps occurrence indexing, grouping, folds, inline thoughts, search, and reveal coordination in internal modules under one extension lifecycle because they need consistent source identity and presentation state. It owns the main chat surface alongside the composer; a transcript is a separate history-reading overlay. Message actions remain a separate package, while terminal capabilities, themes, clipboard access, and rendering reuse [Pi's native contracts](0012-transcript-preserves-native-content.md).
 
 ## Consequences
 

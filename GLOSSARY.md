@@ -86,5 +86,8 @@ A user request held until the current request finishes, with its own work histor
 **Final response**:
 The assistant's answer to a request, presented separately from the work history leading to it. It can still be streaming or remain partial after interruption.
 
-**Thought preview**:
-A bounded, scrolling view of a thought while it is being produced, shown at that thought's position in the chat view.
+**Inline thought**:
+A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or fold. It remains visible after thinking completes whenever its enclosing work history is open.
+
+**Activity heading**:
+A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.

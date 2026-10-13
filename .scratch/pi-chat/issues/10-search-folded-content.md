@@ -2,7 +2,7 @@
 
 **What to build:** Use native search input to find readable source text independently of folds and reveal the matching conversation occurrence.
 
-**Blocked by:** 06: Show temporary thoughts inline; 07: Fold settled work while keeping the final response visible.
+**Blocked by:** 06: Show thoughts inline; 07: Fold settled work while keeping the final response visible.
 
 **Status:** done
 
@@ -11,5 +11,9 @@
 - [x] Selecting a result opens ancestor folds and reveals the owning occurrence through logical viewports.
 - [x] Highlight reliable text ranges; otherwise highlight the owning tool call without changing its presentation or adding an excerpt/preview.
 - [x] Revalidate results when source content or the active branch changes, including duplicate text and transforming/omitting renderers.
+- [x] Keep extracted activity headings searchable in canonical thought source; a hit opens the work history and reveals its thought without reinserting the heading, adding an excerpt/placeholder, or highlighting text that is not rendered.
 - [x] Reuse native search input and action routing with an owned source-search controller.
 - [x] Verify keyboard search, hidden matches, reveal, highlighting, transforms, stale results, and branch exclusion through the native host.
+- [x] Verify extracted-heading hits and unchanged ordinary thought search through the real host.
+
+After activity-heading extraction, `node --test packages/pi-chat/test/*.test.ts` passed 116/116 against each of Pi 1.0.2 and 1.1.0. Modified existing cases verify hidden-heading search reveals the owning thought without displaying the heading, while ordinary thought-body matches still receive text highlighting. Physical terminal acceptance remains pending under ticket 12.

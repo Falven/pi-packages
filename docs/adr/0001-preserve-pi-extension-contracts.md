@@ -4,4 +4,4 @@ Every package consumes Pi's current public services and effective overrides, pre
 
 ## Consequences
 
-The version-specific runtime adapter in [ADR 0022](0022-native-rows-in-an-owned-transcript.md) is a scoped exception for `pi-chat` to acquire native rows and own chat composition, selection, and search. It preserves Pi's source files and the input, terminal, and editor ownership above; it does not authorize private integration in other packages.
+The isolated runtime adapter in [ADR 0022](0022-native-rows-in-an-owned-transcript.md) is a scoped exception for `pi-chat` to acquire native rows and own chat composition, selection, and search. It checks required capabilities rather than Pi's version string. It preserves Pi's source files and the input, terminal, and editor ownership above; it does not authorize private integration in other packages.
