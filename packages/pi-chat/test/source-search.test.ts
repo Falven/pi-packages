@@ -561,12 +561,18 @@ test("Find indexes the literal native shell command and output", async (t) => {
   })
   await host.type("!printf 'shell-telescope'")
   await host.key("\r")
-  await t.waitFor(() =>
-    assert.match(
-      host.screenLines().map(stripTerminalSequences).join("\n"),
-      /shell-telescope/,
-    ),
-  )
+  await t.waitFor(() => {
+    assert(
+      host.session.sessionManager
+        .getBranch()
+        .some(
+          (entry) =>
+            entry.type === "message" &&
+            entry.message.role === "bashExecution" &&
+            entry.message.output.includes("shell-telescope"),
+        ),
+    )
+  })
   await host.key("\x06")
   await host.type("printf 'shell-telescope'")
   assert.match(await host.frame(), /1\/1/)
