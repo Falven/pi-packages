@@ -68,6 +68,13 @@ const done = {
     response: { id: "reply", status: "completed" },
   },
 }
+const chunk = (
+  delta: Record<string, string>,
+  finishReason: string | null = null,
+) => ({
+  event: { choices: [{ index: 0, delta, finish_reason: finishReason }] },
+})
+
 const end = { end: true } as const
 
 function writableClipboard(
@@ -398,4 +405,127 @@ test("the live preview leaves the screen with its source row during chat scrollb
   )
   host.resumeResponse()
   await host.settled()
+})
+
+test("native prompt navigation reaches a split assistant while its answer is still streaming", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 20,
+  })
+  const answer =
+    "```text\n" +
+    Array.from({ length: 40 }, (_, n) => `answer-${n}`).join("\n") +
+    "\n```"
+  host.queueResponse(
+    start,
+    thoughtStart(0),
+    thoughtDelta(0, "Complete thought"),
+    thoughtEnd(0, "Complete thought"),
+    answerStart,
+    answerDelta(answer),
+    { pause: true },
+    answerEnd(answer),
+    done,
+    end,
+  )
+  await host.type("Prompt before the thought")
+  await host.key("\r")
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await t.waitFor(() => assert.match(screen(), /answer-39/))
+  await host.key("\x1b[1;5A")
+  await host.frame()
+  assert.match(screen(), /Thought[\s\S]*answer-0/)
+  assert.doesNotMatch(screen(), /Prompt before the thought/)
+  host.resumeResponse()
+  await host.settled()
+})
+
+test("native message replacement can split an earlier thinking run without stealing the final text occurrence", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 32,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_end", ({ message }) => {
+          if (message.role !== "assistant") return
+          return {
+            message: {
+              ...message,
+              content: [
+                { type: "thinking", thinking: "Retained first thought" },
+                { type: "text", text: "Visible replacement answer" },
+              ],
+            },
+          }
+        })
+      },
+    ],
+  })
+  host.queueResponse(
+    start,
+    thoughtStart(0),
+    thoughtDelta(0, "First original"),
+    thoughtEnd(0, "First original"),
+    thoughtStart(2),
+    thoughtDelta(2, "Second original"),
+    { pause: true },
+    thoughtEnd(2, "Second original"),
+    done,
+    end,
+  )
+  await host.type("Replace the run")
+  await host.key("\r")
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await t.waitFor(() => assert.match(screen(), /Second original/))
+  host.resumeResponse()
+  await host.settled()
+  await host.frame()
+  assert.match(screen(), /▸ Worked[\s\S]*Visible replacement answer/)
+  assert.doesNotMatch(
+    screen(),
+    /Retained first thought|First original|Second original/,
+  )
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  await host.key("\x1b[B")
+  await host.key("\r")
+  await host.frame()
+  assert.match(
+    screen(),
+    /Thought[\s\S]*Retained first thought[\s\S]*Visible replacement answer/,
+  )
+})
+
+test("interleaved Completions text does not end a thought before Pi reports completion", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
+  host.queueResponse(
+    chunk({ role: "assistant", reasoning_content: "Thinking before" }),
+    { pause: true },
+    chunk({ content: "Visible text" }),
+    { pause: true },
+    chunk({ reasoning_content: " and after text" }),
+    { pause: true },
+    chunk({}, "stop"),
+    { event: "[DONE]" },
+    end,
+  )
+  await host.type("Interleave response parts")
+  await host.key("\r")
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await t.waitFor(() => assert.match(screen(), /Thinking before/))
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /Visible text/))
+  assert.match(screen(), /▾ Thought[\s\S]*Thinking before/)
+  host.resumeResponse()
+  await t.waitFor(() =>
+    assert.match(screen(), /Thinking before and after text/),
+  )
+  host.resumeResponse()
+  await host.settled()
+  await host.frame()
+  assert.match(screen(), /▸ Worked[\s\S]*Visible text/)
+  assert.doesNotMatch(screen(), /Thinking before/)
 })

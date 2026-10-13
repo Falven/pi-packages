@@ -23,12 +23,17 @@ export class Thought extends Text {
   focused = false
   live = false
   readonly viewport = new InlineViewport()
-  body: Component | undefined
+  private renderedBody: Component | undefined
+  private renderedNative: Component | undefined
+  private streaming = false
   private manualExpanded?: boolean
   private native?: Component
   private presenter: AssistantMessageComponent | undefined
 
-  constructor(private readonly adapter: NativeChatHost) {
+  constructor(
+    private readonly adapter: NativeChatHost,
+    private readonly occurrence: Occurrence,
+  ) {
     super("", 1, 0)
   }
 
@@ -36,20 +41,25 @@ export class Thought extends Text {
     return this.manualExpanded ?? this.live
   }
 
-  bind(occurrence: Occurrence, native: Component, streaming: boolean) {
-    if (this.native === native) return
+  bind(native: Component, streaming: boolean) {
     this.native = native
+    this.streaming = streaming
+  }
+
+  get body() {
+    if (this.renderedNative === this.native) return this.renderedBody
+    this.renderedNative = this.native
     const child =
-      native instanceof MouseRegion
-        ? (native as unknown as { child: Component }).child
+      this.native instanceof MouseRegion
+        ? (this.native as unknown as { child: Component }).child
         : undefined
     if (child instanceof Markdown) {
-      this.body = child
+      this.renderedBody = child
       this.presenter = undefined
-      return
+      return this.renderedBody
     }
     const { host } = this.adapter
-    const message = occurrence.message
+    const message = this.occurrence.message
     if (message?.role !== "assistant") return
     this.presenter = new AssistantMessageComponent(
       undefined,
@@ -62,25 +72,27 @@ export class Thought extends Text {
     this.presenter.updateContent(
       {
         ...message,
-        content: (occurrence.contentIndices ?? []).map(
+        content: (this.occurrence.contentIndices ?? []).map(
           (index) => message.content[index]!,
         ),
       },
-      streaming,
+      this.streaming,
     )
     const region = (
       this.presenter as unknown as {
         contentContainer: { children: Component[] }
       }
     ).contentContainer.children[1]
-    this.body =
+    this.renderedBody =
       region instanceof MouseRegion
         ? (region as unknown as { child: Component }).child
         : undefined
+    return this.renderedBody
   }
 
   toggle() {
     this.manualExpanded = !this.expanded
+    if (this.manualExpanded) this.adapter.work.inspect(this.occurrence)
     this.adapter.clearChatSelection()
     this.adapter.requestRender()
   }

@@ -43,6 +43,17 @@ const toolFinish = {
 const done = { event: "[DONE]" }
 const end = { end: true } as const
 
+async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
+  await host.frame()
+  const row = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("▸ Worked"))
+  assert(row >= 0)
+  await host.key(`\x1b[<0;2;${row + 1}M`)
+  await host.key(`\x1b[<0;2;${row + 1}m`)
+  await host.key("\x1b")
+}
+
 function writableClipboard(
   clipboard: NativeClipboard | undefined,
 ): asserts clipboard is NativeClipboard &
@@ -76,6 +87,7 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   await host.type("Read the long outputs")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.key("\u000f")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
@@ -132,6 +144,7 @@ test("selection copies every expanded body row between visible endpoints", async
   await host.type("Copy expanded")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.key("\u000f")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
@@ -183,6 +196,7 @@ test("a repeated tool name appears once in a concise group header", async (t) =>
   await host.type("Read repeatedly")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.frame()
   const header = host
     .screenLines()
@@ -247,6 +261,7 @@ test("native children receive source coordinates before inner wheel movement bub
   await host.type("Pointer controls")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.key("\u000f")
   await host.frame()
   const screen = () => host.screenLines().map(stripTerminalSequences)
@@ -312,6 +327,7 @@ test("growing output and resizing preserve a body anchor and follow only an alre
   await host.type("Read growing outputs")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.key("\u000f")
   await host.frame()
   const screen = () => host.screenLines().map(stripTerminalSequences)
@@ -419,7 +435,7 @@ test("native image crops combine logical clips once and retain their identity an
             assert(entry.data)
             return new Text(
               Array.from(
-                { length: 8 },
+                { length: entry.data.name === "prefix" ? 7 : 8 },
                 (_, n) => `${entry.data!.name}-${n}`,
               ).join("\n"),
               0,
@@ -447,6 +463,7 @@ test("native image crops combine logical clips once and retain their identity an
   await host.type("Show image")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   append("suffix")
   await host.key("\u000f")
   await host.key("\x1b[H")

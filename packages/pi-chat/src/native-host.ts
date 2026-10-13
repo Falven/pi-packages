@@ -17,6 +17,12 @@ import {
   stripTerminalSequences,
   truncateToWidth,
 } from "@earendil-works/pi-tui"
+import {
+  WorkHeader,
+  WorkIndex,
+  type DeliveryKind,
+  type WorkHistory,
+} from "./work-history.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
@@ -57,7 +63,13 @@ type NativeMode = ThoughtEnvironment & {
   >
   session: {
     isStreaming: boolean
-    agent: { subscribe(listener: (event: unknown) => void): () => void }
+    agent: {
+      subscribe(listener: (event: unknown) => void): () => void
+      normalizePromptInput(...args: unknown[]): Message[]
+      steeringQueue: { drain(): Message[] }
+      followUpQueue: { drain(): Message[] }
+    }
+    _agentRunAbortRequested: boolean
     extensionRunner: { getEntryRenderer(name: string): unknown }
     _entryIdsByMessage: WeakMap<object, string>
     recordBashResult: (...args: unknown[]) => unknown
@@ -89,6 +101,7 @@ type NativeMode = ThoughtEnvironment & {
 }
 
 export type Occurrence = {
+  parent?: Occurrence
   entry: Entry | undefined
   message: Message | undefined
   itemOrdinal?: number
@@ -118,7 +131,13 @@ function requiredMode(host: InteractiveMode): NativeMode {
     typeof mode.renderSessionEntries !== "function" ||
     typeof mode.renderSessionItems !== "function" ||
     typeof mode.addMessageToChat !== "function" ||
-    typeof mode.handleEvent !== "function"
+    typeof mode.handleEvent !== "function" ||
+    typeof mode.getMarkdownThemeWithSettings !== "function" ||
+    typeof mode.getMarkdownTransformers !== "function" ||
+    typeof mode.outputPad !== "number" ||
+    typeof mode.session?.agent?.normalizePromptInput !== "function" ||
+    typeof mode.session.agent.steeringQueue?.drain !== "function" ||
+    typeof mode.session.agent.followUpQueue?.drain !== "function"
   ) {
     throw new Error(
       "pi-chat requires the unowned Pi 1.0.2 fullscreen chat host",
@@ -218,7 +237,11 @@ class RawLeaf extends Container {
 type Activity = {
   component: Component
   occurrence?: Occurrence
+  owner?: Occurrence
   tool: boolean
+  work?: WorkHistory | undefined
+  zoneStart?: boolean
+  zoneEnd?: boolean
   body?: InlineViewport
 }
 type ToolGroup = {
@@ -308,13 +331,19 @@ class ToolFocus extends Container {
   ) {
     const expanded = this.tool.expanded
     const result = super.handleMouse(event)
-    if (expanded !== this.tool.expanded) this.adapter.clearChatSelection()
+    if (expanded !== this.tool.expanded) {
+      this.adapter.clearChatSelection()
+      if (this.tool.expanded) this.adapter.inspectTool(this.tool)
+    }
     return result
   }
 }
 
 export class NativeChatHost {
   readonly host: NativeMode
+  readonly work = new WorkIndex()
+  private readonly deliveryCleanup: (() => void)[] = []
+  private deliveringUser: Occurrence | undefined
   readonly occurrences: Occurrence[] = []
   readonly byEntryId = new Map<string, Occurrence>()
   readonly byComponent = new Map<Component, Occurrence>()
@@ -371,7 +400,13 @@ export class NativeChatHost {
   private readonly toolFocus = new Map<Component, ToolFocus>()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly thinkingParts = new Map<Occurrence, Set<number>>()
-  private visibleDisclosures: (GroupHeader | ToolFocus | Thought)[] = []
+  private readonly answerParts = new WeakMap<Component, Container>()
+  private visibleDisclosures: (
+    | GroupHeader
+    | ToolFocus
+    | WorkHeader
+    | Thought
+  )[] = []
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -478,13 +513,10 @@ export class NativeChatHost {
           : [component],
     )
     const activities = this.orderedActivities(components)
-    const composed: Activity[] = []
-    this.visibleDisclosures = []
+    let composed: Activity[] = []
     for (let index = 0; index < activities.length;) {
       const activity = activities[index]!
       if (!activity.tool) {
-        if (activity.component instanceof Thought)
-          this.visibleDisclosures.push(activity.component)
         composed.push(activity)
         index++
         continue
@@ -511,8 +543,11 @@ export class NativeChatHost {
       if (calls.length === 1 && !unfinished && !groupActive) {
         composed.push(this.focusableTool(calls[0]!))
       } else {
-        composed.push({ component: group.header!, tool: false })
-        this.visibleDisclosures.push(group.header!)
+        composed.push({
+          component: group.header!,
+          tool: false,
+          work: this.work.find(first),
+        })
         if (group.expanded) {
           for (const call of calls) {
             const focused = this.focusableTool(call)
@@ -522,20 +557,38 @@ export class NativeChatHost {
         }
       }
     }
-    const leaves = composed.map(({ component, occurrence, body }) => {
-      const rows = component.render(contentWidth)
-      const leaf: Leaf = {
-        component,
-        occurrence,
-        rows,
-        start,
-        top: 0,
-        offset: 0,
-      }
-      if (body) leaf.body = body
-      start += rows.length
-      return leaf
-    })
+    composed = this.composeWork(composed)
+    this.visibleDisclosures = composed.flatMap(({ component }) =>
+      component instanceof WorkHeader ||
+      component instanceof GroupHeader ||
+      component instanceof ToolFocus ||
+      component instanceof Thought
+        ? [component]
+        : [],
+    )
+    const leaves = composed.map(
+      ({ component, occurrence, body, zoneStart, zoneEnd }) => {
+        let rows = component.render(contentWidth)
+        if (rows.length && (zoneStart || zoneEnd)) {
+          rows = [...rows]
+          // Split native assistants retain the same semantic navigation zones.
+          if (zoneStart) rows[0] = "\x1b]133;A\x07" + rows[0]
+          if (zoneEnd)
+            rows[rows.length - 1] = "\x1b]133;B\x07\x1b]133;C\x07" + rows.at(-1)
+        }
+        const leaf: Leaf = {
+          component,
+          occurrence,
+          rows,
+          start,
+          top: 0,
+          offset: 0,
+        }
+        if (body) leaf.body = body
+        start += rows.length
+        return leaf
+      },
+    )
     let contentHeight = 0
     for (let index = 0; index < leaves.length;) {
       const leaf = leaves[index]!
@@ -562,9 +615,14 @@ export class NativeChatHost {
     if (
       (renderer.getFocusedComponent() instanceof GroupHeader ||
         renderer.getFocusedComponent() instanceof ToolFocus ||
-        renderer.getFocusedComponent() instanceof Thought) &&
+        renderer.getFocusedComponent() instanceof Thought ||
+        renderer.getFocusedComponent() instanceof WorkHeader) &&
       !this.visibleDisclosures.includes(
-        renderer.getFocusedComponent() as GroupHeader | ToolFocus | Thought,
+        renderer.getFocusedComponent() as
+          | GroupHeader
+          | ToolFocus
+          | WorkHeader
+          | Thought,
       )
     )
       this.returnToComposer()
@@ -677,7 +735,6 @@ export class NativeChatHost {
       focus = new ToolFocus(this, activity.component as ToolPresenter)
       this.toolFocus.set(activity.component, focus)
     }
-    this.visibleDisclosures.push(focus)
     return { ...activity, component: focus }
   }
 
@@ -717,6 +774,7 @@ export class NativeChatHost {
         })
         continue
       }
+      const activityStart = activities.length
       const children = (component as NativeAssistant).contentContainer.children
       const hasVisibleContent = owner.message.content.some(
         (part) =>
@@ -727,7 +785,12 @@ export class NativeChatHost {
       let position = leading ? 1 : 0
       const flush = () => {
         while (children[position] && !this.byComponent.has(children[position]!))
-          activities.push({ component: children[position++]!, tool: false })
+          activities.push({
+            component: children[position++]!,
+            owner,
+            tool: false,
+            work: this.work.find(owner),
+          })
       }
       for (let index = 0; index < owner.message.content.length; index++) {
         const part = owner.message.content[index]!
@@ -742,14 +805,24 @@ export class NativeChatHost {
             })
         } else if (occurrence?.contentIndex === index && occurrence.component) {
           if (leading) {
-            activities.push({ component: leading, tool: false })
+            activities.push({
+              component: leading,
+              owner,
+              tool: false,
+              work: this.work.find(owner),
+            })
             leading = undefined
           }
           flush()
           if (children[position] === occurrence.component) position++
           const thought = this.thoughts.get(occurrence)
           if (thought) {
-            activities.push({ component: thought, tool: false })
+            activities.push({
+              component: thought,
+              owner,
+              tool: false,
+              work: this.work.find(owner),
+            })
             if (thought.expanded && thought.body)
               activities.push({
                 component: thought.body,
@@ -765,9 +838,50 @@ export class NativeChatHost {
             })
         }
       }
-      if (leading) activities.push({ component: leading, tool: false })
-      for (; position < children.length; position++)
-        activities.push({ component: children[position]!, tool: false })
+      if (leading)
+        activities.push({
+          component: leading,
+          owner,
+          tool: false,
+          work: this.work.find(owner),
+        })
+      const work = this.work.find(owner)
+      if (work && this.work.needsParts(owner)) {
+        const final = activities
+          .slice(activityStart)
+          .filter((activity) => this.work.isFinal(activity.occurrence, work))
+        for (const [index, activity] of final.entries()) {
+          let part = this.answerParts.get(activity.component)
+          if (!part) {
+            part = new Container()
+            part.addChild(activity.component)
+            this.answerParts.set(activity.component, part)
+          }
+          activity.zoneStart = index === 0
+          activity.zoneEnd = index === final.length - 1
+          part.children.splice(
+            1,
+            part.children.length - 1,
+            ...(activity.zoneEnd ? children.slice(position) : []),
+          )
+          activity.component = part
+        }
+      } else {
+        for (; position < children.length; position++)
+          activities.push({
+            component: children[position]!,
+            tool: false,
+            work,
+          })
+        if (!owner.message.content.some((part) => part.type === "toolCall")) {
+          const first = activities[activityStart]
+          const last = activities.at(-1)
+          if (first && last) {
+            first.zoneStart = true
+            last.zoneEnd = true
+          }
+        }
+      }
     }
     return activities
   }
@@ -822,7 +936,9 @@ export class NativeChatHost {
     this.revealDisclosure(next)
   }
 
-  private revealDisclosure(component: GroupHeader | ToolFocus | Thought) {
+  private revealDisclosure(
+    component: GroupHeader | ToolFocus | WorkHeader | Thought,
+  ) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
     if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
@@ -848,14 +964,64 @@ export class NativeChatHost {
 
   toggleGroup(group: ToolGroup) {
     group.expanded = !group.expanded
+    if (group.expanded) this.work.inspect(group.calls[0]?.occurrence)
     this.clearSelection(this.host.renderer as unknown as TuiAltScreen)
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
   toggleTool(tool: ToolPresenter) {
     tool.setExpanded(!tool.expanded)
+    if (tool.expanded) this.inspectTool(tool)
     this.clearChatSelection()
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+  }
+
+  toggleWork(work: WorkHistory) {
+    work.manualExpanded = !this.work.expanded(work)
+    this.clearChatSelection()
+    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+  }
+
+  inspectTool(tool: Component) {
+    this.work.inspect(this.byComponent.get(tool))
+  }
+
+  private composeWork(activities: Activity[]): Activity[] {
+    const result: Activity[] = []
+    for (let index = 0; index < activities.length;) {
+      const activity = activities[index]!
+      const work = activity.work ?? this.work.find(activity.occurrence)
+      if (
+        !work ||
+        !work.final ||
+        this.work.isRequest(activity.occurrence, work)
+      ) {
+        result.push(activity)
+        index++
+        continue
+      }
+      const body: Activity[] = []
+      const final: Activity[] = []
+      for (; index < activities.length; index++) {
+        const next = activities[index]!
+        const nextWork = next.work ?? this.work.find(next.occurrence)
+        if (nextWork !== work) break
+        if (
+          final.length &&
+          !this.work.isFinalMessage(next.occurrence ?? next.owner, work)
+        )
+          break
+        if (this.work.isFinal(next.occurrence, work)) final.push(next)
+        else body.push(next)
+      }
+      if (body.length && final.length) {
+        work.header ??= new WorkHeader(this, work)
+        result.push({ component: work.header, tool: false })
+        if (this.work.expanded(work)) result.push(...body)
+      } else result.push(...body)
+      result.push(...final)
+    }
+    return result
   }
 
   clearChatSelection() {
@@ -1310,6 +1476,7 @@ export class NativeChatHost {
       if (index >= 0) this.bindPart(this.source, index, component)
     } else {
       const notice = this.newOccurrence(this.source.entry)
+      notice.parent = this.source
       notice.message = this.source.message
       if (this.source.itemOrdinal !== undefined)
         notice.itemOrdinal = this.source.itemOrdinal
@@ -1322,9 +1489,12 @@ export class NativeChatHost {
     let part = owner.parts.get(index)
     if (!part) {
       part = this.newOccurrence(owner.entry)
+      part.parent = owner
       part.contentIndex = index
       owner.parts.set(index, part)
     }
+    this.thoughts.delete(part)
+    delete part.contentIndices
     if (
       part.component &&
       part.component !== component &&
@@ -1351,6 +1521,7 @@ export class NativeChatHost {
     ) {
       this.byComponent.delete(part.component)
     }
+    part.parent = owner
     part.contentIndex = start
     part.contentIndices = Array.from(
       { length: end - start + 1 },
@@ -1362,14 +1533,13 @@ export class NativeChatHost {
     this.byComponent.set(component, part)
     let thought = this.thoughts.get(part)
     if (!thought) {
-      thought = new Thought(this)
+      thought = new Thought(this, part)
       this.thoughts.set(part, thought)
     }
     thought.live = part.contentIndices.some((index) =>
       this.thinkingParts.get(owner)?.has(index),
     )
     thought.bind(
-      part,
       component,
       Boolean((owner.component as NativeAssistant | undefined)?.isStreaming),
     )
@@ -1379,6 +1549,12 @@ export class NativeChatHost {
     const isActive = () => this.active
     const bind = () => {
       if (!this.active || owner.message?.role !== "assistant") return
+      const previousParts = new Set(owner.parts.values())
+      // Adjacent thinking indices alias one run; a replacement can split them.
+      for (const [index, part] of owner.parts) {
+        if (part.contentIndices && index !== part.contentIndex)
+          owner.parts.delete(index)
+      }
       const oldChildren = this.assistantChildren.get(component)
       const oldIndices = this.assistantIndices.get(component)
       if (oldChildren) {
@@ -1450,6 +1626,10 @@ export class NativeChatHost {
       for (const index of oldIndices ?? []) {
         if (!boundIndices.has(index)) owner.parts.delete(index)
       }
+      const retainedParts = new Set(owner.parts.values())
+      for (const part of previousParts) {
+        if (!retainedParts.has(part)) this.thoughts.delete(part)
+      }
       this.assistantChildren.set(component, bound)
       this.assistantIndices.set(component, boundIndices)
     }
@@ -1499,6 +1679,31 @@ export class NativeChatHost {
 
   private wrapNativeConstruction() {
     const host = this.host
+    const observe = (target: object, name: string, kind: DeliveryKind) => {
+      const methods = target as Record<
+        string,
+        (...args: unknown[]) => Message[]
+      >
+      const original = methods[name]!
+      const descriptor = Object.getOwnPropertyDescriptor(target, name)
+      const record = (messages: Message[]) => {
+        if (this.active) this.work.observe(messages, kind)
+      }
+      const wrapped = function (this: unknown, ...args: unknown[]) {
+        const messages = original.apply(this, args)
+        record(messages)
+        return messages
+      }
+      methods[name] = wrapped
+      this.deliveryCleanup.push(() => {
+        if (methods[name] !== wrapped) return
+        if (descriptor) Object.defineProperty(target, name, descriptor)
+        else delete methods[name]
+      })
+    }
+    observe(host.session.agent, "normalizePromptInput", "initial")
+    observe(host.session.agent.steeringQueue, "drain", "steering")
+    observe(host.session.agent.followUpQueue, "drain", "follow-up")
     const wrap = (
       name: string,
       make: (
@@ -1679,18 +1884,26 @@ export class NativeChatHost {
           if (event.entry) owner = this.forEntry(event.entry)
           else if (event.message) {
             owner =
-              event.type === "message_start" ||
-              event.message.role !== "assistant"
-                ? this.forMessage(event.message)
-                : (this.streaming ?? this.forMessage(event.message))
+              event.type === "message_end" &&
+              event.message.role === "user" &&
+              this.deliveringUser
+                ? this.deliveringUser
+                : event.type === "message_start" ||
+                    event.message.role !== "assistant"
+                  ? this.forMessage(event.message)
+                  : (this.streaming ?? this.forMessage(event.message))
             owner.message = event.message
             this.liveMessages.set(event.message, owner)
           }
-          if (
-            event.type === "message_start" &&
-            event.message?.role === "assistant"
-          )
-            this.streaming = owner
+          if (event.type === "message_start" && owner) {
+            this.work.start(owner)
+            if (event.message?.role === "user") this.deliveringUser = owner
+            if (event.message?.role === "assistant") this.streaming = owner
+          }
+          if (event.type === "agent_settled") {
+            this.work.settle(host.session._agentRunAbortRequested)
+            ;(host.renderer as unknown as TuiAltScreen).requestRender()
+          }
           if (owner && event.message?.role === "assistant") {
             const update = event.assistantMessageEvent
             if (event.type === "message_end") this.thinkingParts.delete(owner)
@@ -1725,6 +1938,8 @@ export class NativeChatHost {
             this.streaming === owner
           )
             this.streaming = undefined
+          if (event.type === "message_end" && event.message?.role === "user")
+            this.deliveringUser = undefined
           return result
         },
     )
@@ -1851,6 +2066,7 @@ export class NativeChatHost {
       occurrence.entry = entry
       this.byEntryId.set(id, occurrence)
       for (const part of occurrence.parts.values()) part.entry = entry
+      this.work.committed(occurrence)
     }
     const bash = this.bashMessages.get(message)
     if (bash) this.byComponent.set(bash, this.forEntry(entry))
@@ -1866,6 +2082,9 @@ export class NativeChatHost {
     if (!this.active) return
     this.active = false
     this.unsubscribe?.()
+    for (const cleanup of this.deliveryCleanup) cleanup()
+    this.deliveryCleanup.length = 0
+    this.work.clear()
     this.unbindRenderer()
     for (const [name] of this.originals) {
       const target =
