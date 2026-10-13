@@ -56,6 +56,7 @@ class RecordingTerminal {
 }
 
 export type NativeHostOptions = {
+  providerApi?: "openai-completions" | "openai-responses"
   tuiMode?: "regular" | "fullscreen"
   onMount?: (host: InteractiveMode) => void
   columns?: number
@@ -235,7 +236,7 @@ export async function openNativeHost(
             (pi) => {
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,
-                api: "openai-completions",
+                api: options.providerApi ?? "openai-completions",
                 ...(options.noAuth ? {} : { apiKey: "test-only" }),
                 models: [
                   {
