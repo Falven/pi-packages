@@ -56,6 +56,8 @@ class RecordingTerminal {
 }
 
 export type NativeHostOptions = {
+  tuiMode?: "regular" | "fullscreen"
+  onMount?: (host: InteractiveMode) => void
   columns?: number
   rows?: number
   keybindings?: Record<string, string | string[] | undefined>
@@ -287,8 +289,23 @@ export async function openNativeHost(
   terminal.rows = options.rows ?? 24
   const interactive = new InteractiveMode(runtime, {
     terminal,
-    tuiMode: "fullscreen",
+    tuiMode: options.tuiMode ?? "fullscreen",
   })
+  if (options.onMount) {
+    const mode = interactive as unknown as {
+      mountInteractiveTui(...args: unknown[]): unknown
+    }
+    const original = mode.mountInteractiveTui
+    let firstMount = true
+    mode.mountInteractiveTui = (...args) => {
+      const result = original.apply(interactive, args)
+      if (firstMount) {
+        firstMount = false
+        options.onMount?.(interactive)
+      }
+      return result
+    }
+  }
   activeMode = interactive
   await interactive.init()
   assert(context, "Pi must emit session_start with its live UI context")
@@ -307,6 +324,18 @@ export async function openNativeHost(
     close,
     requests,
     terminal,
+    switchMode(mode: "regular" | "fullscreen") {
+      return (
+        interactive as unknown as {
+          switchTuiMode(mode: "regular" | "fullscreen"): boolean
+        }
+      ).switchTuiMode(mode)
+    },
+    async reload() {
+      await (
+        interactive as unknown as { handleReloadCommand(): Promise<void> }
+      ).handleReloadCommand()
+    },
     queueResponse(...steps: ResponseStep[]) {
       scriptedResponses.push(steps)
     },

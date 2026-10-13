@@ -1,0 +1,28 @@
+{
+  "name": "pi-chat",
+  "version": "0.1.0",
+  "description": "Native fullscreen chat presentation for Pi",
+  "files": [
+    "src/**/*.ts"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@earendil-works/pi-tui": "1.0.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "1.0.2",
+    "@earendil-works/pi-tui": "1.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
