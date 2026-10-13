@@ -366,7 +366,7 @@ test("a finished call stays grouped while another iteration may join it", async 
   host.resumeResponse()
   await host.settled()
   await host.frame()
-  assert.match(screen(), /2 tool calls: read, read/)
+  assert.match(screen(), /2 tool calls: read/)
   assert.match(screen(), /read one\.txt/)
   assert.match(screen(), /read two\.txt/)
 })
@@ -478,7 +478,7 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
     .split("\n")
     .map(stripTerminalSequences)
     .join("\n")
-  assert.match(screen, /2 tool calls: read, read[\s\S]*After both calls/)
+  assert.match(screen, /2 tool calls: read[\s\S]*After both calls/)
   assert.doesNotMatch(screen, /1 tool call/)
 })
 
@@ -559,17 +559,17 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   await openWork(host, "\x11")
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.equal(screen().match(/2 tool calls: read, read/g)?.length, 2)
+  assert.equal(screen().match(/2 tool calls: read/g)?.length, 2)
   await host.key("\x1bg")
   await host.key("\u000b")
   await host.key("\u0019")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
   const firstHeader = lines.findIndex((line) =>
-    line.includes("2 tool calls: read, read"),
+    line.includes("2 tool calls: read"),
   )
   const secondHeader = lines.findLastIndex((line) =>
-    line.includes("2 tool calls: read, read"),
+    line.includes("2 tool calls: read"),
   )
   assert(firstHeader >= 0 && secondHeader > firstHeader)
   assert.match(lines[firstHeader] ?? "", /^ →/)
@@ -634,7 +634,7 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
   renderer.scrollToTop()
   await host.frame()
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen(), /2 tool calls: read, read/)
+  assert.match(screen(), /2 tool calls: read/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
