@@ -20,8 +20,10 @@ type Creation = Readonly<{
 type Evidence = {
   creation: Creation
   phase?: MessagePhase
+  phaseSeen?: boolean
   doneId?: string
 }
+type NativeText = { type: "text"; textSignature?: string }
 
 const phaseOf = (value: unknown): MessagePhase | undefined =>
   value === "commentary" || value === "final_answer" ? value : undefined
@@ -37,11 +39,13 @@ export class ProviderPhaseIndex {
   private nextContentIndex = 0
   private readonly active = new Map<number, Creation>()
   private readonly evidence = new Map<number, Evidence>()
+  private readonly normalized = new Map<number, object>()
 
   beginRequest() {
     this.nextContentIndex = 0
     this.active.clear()
     this.evidence.clear()
+    this.normalized.clear()
   }
 
   observe(value: unknown) {
@@ -65,7 +69,14 @@ export class ProviderPhaseIndex {
     const evidence = this.evidence.get(creation.contentIndex)!
     if (creation.kind === "message" && item.type === "message") {
       const phase = phaseOf(item.phase)
-      if (phase) evidence.phase = phase
+      if (phase) {
+        evidence.phase = phase
+        evidence.phaseSeen = true
+      } else if (item.phase !== undefined && item.phase !== null) {
+        // An explicit unrecognized phase corrects a prior final; omission does not.
+        delete evidence.phase
+        evidence.phaseSeen = true
+      }
       if (
         event.type === "response.output_item.done" &&
         typeof item.id === "string"
@@ -79,13 +90,31 @@ export class ProviderPhaseIndex {
       this.active.delete(outputIndex)
   }
 
-  phaseFor(
-    contentIndex: number,
-    textSignature?: string,
-  ): MessagePhase | undefined {
+  bindNormalized(contentIndex: number, part: unknown) {
+    if (
+      !part ||
+      typeof part !== "object" ||
+      (part as { type?: unknown }).type !== "text" ||
+      this.normalized.has(contentIndex) ||
+      this.evidence.get(contentIndex)?.creation.kind !== "message"
+    )
+      return
+    this.normalized.set(contentIndex, part)
+  }
+
+  hasPhaseEvidence() {
+    return [...this.evidence.values()].some((item) => item.phaseSeen)
+  }
+
+  phaseFor(contentIndex: number, part: NativeText): MessagePhase | undefined {
     const evidence = this.evidence.get(contentIndex)
-    if (evidence?.creation.kind !== "message") return
-    if (textSignature?.startsWith("{")) {
+    if (
+      evidence?.creation.kind !== "message" ||
+      !this.normalized.has(contentIndex)
+    )
+      return
+    const textSignature = part.textSignature
+    if (textSignature !== undefined) {
       try {
         const signature: unknown = JSON.parse(textSignature)
         if (signature && typeof signature === "object") {
@@ -94,17 +123,22 @@ export class ProviderPhaseIndex {
             id?: unknown
             phase?: unknown
           }
-          if (native.v === 1 && typeof native.id === "string") {
-            if (native.id !== (evidence.doneId ?? evidence.creation.itemId))
-              return
-            const nativePhase = phaseOf(native.phase)
-            if (nativePhase && nativePhase !== evidence.phase) return
-          }
+          if (
+            native.v !== 1 ||
+            typeof native.id !== "string" ||
+            native.id !== (evidence.doneId ?? evidence.creation.itemId)
+          )
+            return
+          const nativePhase = phaseOf(native.phase)
+          if (nativePhase && nativePhase !== evidence.phase) return
+          return evidence.phase
         }
       } catch {
         return
       }
+      return
     }
+    if (evidence.doneId || this.normalized.get(contentIndex) !== part) return
     return evidence.phase
   }
 

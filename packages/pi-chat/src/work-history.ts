@@ -21,6 +21,7 @@ export class WorkIndex {
   private candidates = new WeakMap<object, DeliveryKind>()
   private owners = new WeakMap<Occurrence, WorkHistory>()
   private phases = new WeakMap<Occurrence, Map<number, MessagePhase>>()
+  private phaseEvidence = new WeakSet<Occurrence>()
   private readonly entries = new Map<string, WorkHistory>()
   private current: WorkHistory | undefined
 
@@ -28,6 +29,7 @@ export class WorkIndex {
     this.candidates = new WeakMap()
     this.owners = new WeakMap()
     this.phases = new WeakMap()
+    this.phaseEvidence = new WeakSet()
     this.entries.clear()
     this.current = undefined
   }
@@ -106,15 +108,21 @@ export class WorkIndex {
   }
 
   notePhase(occurrence: Occurrence, contentIndex: number, phase: MessagePhase) {
+    const phases = new Map(this.phases.get(occurrence))
+    phases.set(contentIndex, phase)
+    this.reconcilePhases(occurrence, phases, true)
+  }
+
+  reconcilePhases(
+    occurrence: Occurrence,
+    phases: Map<number, MessagePhase>,
+    hasEvidence: boolean,
+  ) {
     const work = this.find(occurrence)
     const message = occurrence.message
     if (!work || message?.role !== "assistant") return
-    let phases = this.phases.get(occurrence)
-    if (!phases) {
-      phases = new Map()
-      this.phases.set(occurrence, phases)
-    }
-    phases.set(contentIndex, phase)
+    this.phases.set(occurrence, new Map(phases))
+    if (hasEvidence) this.phaseEvidence.add(occurrence)
     const finalParts = [...phases]
       .filter(
         ([index, value]) =>
@@ -144,7 +152,7 @@ export class WorkIndex {
       !explicitFinal &&
       candidate &&
       !cancelled &&
-      !this.phases.get(candidate)?.size &&
+      !this.phaseEvidence.has(candidate) &&
       message?.role === "assistant" &&
       message.stopReason !== "error" &&
       message.stopReason !== "aborted" &&

@@ -436,3 +436,160 @@ test("a blank replacement revokes a provisional final", async (t) => {
   assert.doesNotMatch(frame, /Worked|Temporary answer/)
   assert.match(frame, /Prior work/)
 })
+
+test("native message replacement cannot select a reordered commentary part as final", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 36,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_end", ({ message: assistant }) => {
+          if (assistant.role !== "assistant") return
+          return {
+            message: { ...assistant, content: assistant.content.toReversed() },
+          }
+        })
+      },
+    ],
+  })
+  host.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Prior work"),
+    ended(0, "progress", "commentary", "Prior work"),
+    added(1, "answer", "final_answer"),
+    delta(1, "Visible answer"),
+    ended(1, "answer", "final_answer", "Visible answer"),
+    { pause: true },
+    completed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  assert.match(await host.frame(), /▸ Worked/)
+  host.resumeResponse()
+  await host.settled()
+  const frame = await host.frame()
+  assert.doesNotMatch(frame, /Worked/)
+  assert.match(frame, /Visible answer/)
+  assert.match(frame, /Prior work/)
+  const facts = host.session.sessionManager
+    .getEntries()
+    .filter(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-chat.relationship",
+    )
+  assert.doesNotMatch(
+    JSON.stringify(facts),
+    /"finalParts":|"phase":"final_answer"/,
+  )
+  await host.reload()
+  const replay = await host.frame()
+  assert.doesNotMatch(replay, /Worked/)
+  assert.match(replay, /Visible answer|Prior work/)
+})
+
+test("a new same-text block without native signature cannot inherit final phase", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 36,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_end", ({ message: assistant }) => {
+          if (assistant.role !== "assistant") return
+          return {
+            message: {
+              ...assistant,
+              content: [
+                assistant.content[0]!,
+                { type: "text", text: "Visible answer" },
+              ],
+            },
+          }
+        })
+      },
+    ],
+  })
+  host.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Prior work"),
+    ended(0, "progress", "commentary", "Prior work"),
+    added(1, "answer", "final_answer"),
+    delta(1, "Visible answer"),
+    ended(1, "answer", "final_answer", "Visible answer"),
+    { pause: true },
+    completed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  assert.match(await host.frame(), /▸ Worked/)
+  host.resumeResponse()
+  await host.settled()
+  const frame = await host.frame()
+  assert.doesNotMatch(frame, /Worked/)
+  assert.match(frame, /Prior work/)
+  assert.match(frame, /Visible answer/)
+  const facts = host.session.sessionManager
+    .getEntries()
+    .filter(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-chat.relationship",
+    )
+  assert.doesNotMatch(
+    JSON.stringify(facts),
+    /"finalParts":|"phase":"final_answer"/,
+  )
+  await host.reload()
+  assert.doesNotMatch(await host.frame(), /Worked/)
+})
+
+test("an agent retry starts a fresh provider phase index", async (t) => {
+  let turns = 0
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 36,
+    settings: {
+      retry: {
+        enabled: true,
+        maxRetries: 1,
+        baseDelayMs: 1,
+        provider: { maxRetries: 0 },
+      },
+    },
+    extensionFactories: [
+      (pi) => {
+        pi.on("turn_start", () => {
+          turns++
+        })
+      },
+    ],
+  })
+  host.queueResponse(
+    added(0, "failed", "final_answer"),
+    delta(0, "Failed candidate"),
+    {
+      event: {
+        type: "response.failed",
+        response: {
+          status: "failed",
+          error: { code: "503", message: "server error" },
+        },
+      },
+    },
+  )
+  host.queueResponse(
+    added(0, "retry"),
+    delta(0, "Retry answer"),
+    ended(0, "retry", undefined, "Retry answer"),
+    completed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  await host.settled()
+  assert.equal(turns, 2)
+  const frame = await host.frame()
+  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Retry answer/)
+  assert.doesNotMatch(frame, /Failed candidate/)
+})

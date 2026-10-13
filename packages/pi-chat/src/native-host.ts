@@ -1408,12 +1408,18 @@ export class NativeChatHost {
 
   private applyProviderPhases(owner: Occurrence) {
     if (owner.message?.role !== "assistant") return
+    const phases = new Map<number, "commentary" | "final_answer">()
     for (let index = 0; index < owner.message.content.length; index++) {
       const part = owner.message.content[index]
       if (part?.type !== "text") continue
-      const phase = this.providerPhases.phaseFor(index, part.textSignature)
-      if (phase) this.work.notePhase(owner, index, phase)
+      const phase = this.providerPhases.phaseFor(index, part)
+      if (phase) phases.set(index, phase)
     }
+    this.work.reconcilePhases(
+      owner,
+      phases,
+      this.providerPhases.hasPhaseEvidence(),
+    )
   }
 
   private restoreRelationships() {
@@ -1962,8 +1968,15 @@ export class NativeChatHost {
             if (event.message?.role === "user") this.deliveringUser = owner
             if (event.message?.role === "assistant") this.streaming = owner
           }
-          if (owner && event.message?.role === "assistant")
+          if (owner && event.message?.role === "assistant") {
+            const index = event.assistantMessageEvent?.contentIndex
+            if (event.type === "message_update" && index !== undefined)
+              this.providerPhases.bindNormalized(
+                index,
+                event.message.content[index],
+              )
             this.applyProviderPhases(owner)
+          }
           if (event.type === "agent_settled") {
             const settled = this.work.settle(
               host.session._agentRunAbortRequested,
@@ -2142,10 +2155,7 @@ export class NativeChatHost {
           for (let index = 0; index < message.content.length; index++) {
             const part = message.content[index]
             if (part?.type !== "text") continue
-            const phase = this.providerPhases.phaseFor(
-              index,
-              part.textSignature,
-            )
+            const phase = this.providerPhases.phaseFor(index, part)
             if (phase)
               this.recordRelationship({
                 version: 1,
