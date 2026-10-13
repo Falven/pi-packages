@@ -97,6 +97,10 @@ export class Thought extends Text {
     this.adapter.requestRender()
   }
 
+  ensureOpen() {
+    if (!this.expanded) this.manualExpanded = true
+  }
+
   override render(width: number) {
     this.setText(`${this.focused ? "→" : this.expanded ? "▾" : "▸"} Thought`)
     return super.render(width)

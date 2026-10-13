@@ -17,6 +17,7 @@ import {
   sliceByColumn,
   stripTerminalSequences,
   truncateToWidth,
+  visibleWidth,
 } from "@earendil-works/pi-tui"
 import {
   WorkHeader,
@@ -30,6 +31,11 @@ import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
 import { ProviderPhaseIndex } from "./provider-phase.ts"
+import {
+  SourceSearch,
+  type SearchField,
+  type SourceHit,
+} from "./source-search.ts"
 const { allocateStackSizes } = (await import(
   new URL(
     "./components/stack.js",
@@ -40,6 +46,19 @@ const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node")
 const { dispatchMouseEvent } = (await import(
   new URL("./tui.js", import.meta.resolve("@earendil-works/pi-tui")).href
 )) as typeof import("@earendil-works/pi-tui/dist/tui.js")
+const { getScrollViewBox } = (await import(
+  new URL("./layout.js", import.meta.resolve("@earendil-works/pi-tui")).href
+)) as typeof import("@earendil-works/pi-tui/dist/layout.js")
+const { isImageLine } = (await import(
+  new URL("./terminal-image.js", import.meta.resolve("@earendil-works/pi-tui"))
+    .href
+)) as typeof import("@earendil-works/pi-tui/dist/terminal-image.js")
+const { AltScreenSearchIndex } = (await import(
+  new URL(
+    "./alt-screen-search.js",
+    import.meta.resolve("@earendil-works/pi-tui"),
+  ).href
+)) as typeof import("@earendil-works/pi-tui/dist/alt-screen-search.js")
 
 /* oxlint-disable eslint/no-underscore-dangle -- This adapter targets Pi 1.0.2's private persistence seams. */
 
@@ -194,7 +213,21 @@ function currentTop(leaf: Leaf) {
     : leaf.top
 }
 
-type PaintedInterval = { leaf: Leaf; start: number; end: number; top: number }
+type VisibleInterval = {
+  leaf: Leaf
+  start: number
+  end: number
+  top: number
+}
+type PaintedInterval = VisibleInterval & { window: ScrollView }
+
+type NativeSearch = {
+  query: string
+  matches: unknown[]
+  selectedIndex: number
+  selectionMode: "query" | "next" | "previous" | "retain"
+  component: { setResult(index: number, count: number): void }
+}
 
 type SelectionPoint = {
   row: number
@@ -419,6 +452,21 @@ export class NativeChatHost {
   private active = true
   private relationshipWriteFailed = false
   private indexedIds: string[] = []
+  private sourceRevision = 0
+  private readonly sourceSearch = new SourceSearch<Occurrence>()
+  private readonly renderedSearch = new WeakMap<
+    Component,
+    InstanceType<typeof AltScreenSearchIndex>
+  >()
+  private searchState:
+    | {
+        query: string
+        revision: number
+        hits: SourceHit<Occurrence>[]
+        counts: Map<Occurrence, number>
+        selected: number
+      }
+    | undefined
 
   private constructor(host: NativeMode) {
     this.host = host
@@ -720,12 +768,6 @@ export class NativeChatHost {
           : leaf.rows.length,
       )
       if (sourceEnd <= sourceStart) continue
-      this.intervals.push({
-        leaf,
-        start: sourceStart,
-        end: sourceEnd,
-        top: leaf.top + sourceStart - top,
-      })
       const raw = new RawLeaf(leaf.component, leaf.rows)
       const window = new ScrollView(raw, {
         follow: "none",
@@ -735,6 +777,13 @@ export class NativeChatHost {
         renderer.requestRender(),
       )
       window.scrollTo(sourceStart, { disableFollow: true })
+      this.intervals.push({
+        leaf,
+        start: sourceStart,
+        end: sourceEnd,
+        top: leaf.top + sourceStart - top,
+        window,
+      })
       this.painting.addChild(window, {
         basis: sourceEnd - sourceStart,
         grow: 0,
@@ -1049,7 +1098,7 @@ export class NativeChatHost {
     )
   }
 
-  private visibleInterval(leaf: Leaf): PaintedInterval | undefined {
+  private visibleInterval(leaf: Leaf): VisibleInterval | undefined {
     const top = leaf.body
       ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
       : leaf.top
@@ -1068,6 +1117,388 @@ export class NativeChatHost {
     return end > start
       ? { leaf, start, end, top: top + start - this.transcript.scrollTop }
       : undefined
+  }
+
+  private searchFields(): SearchField<Occurrence>[] {
+    const fields: SearchField<Occurrence>[] = []
+    const pending = new Map<string, Occurrence[]>()
+    const add = (
+      owner: Occurrence | undefined,
+      key: string,
+      source: string,
+      markdown: boolean,
+      tool = false,
+      sourceEntry?: Entry,
+      sourceIndex?: number,
+    ) => {
+      if (owner?.component && source)
+        fields.push({
+          owner,
+          key,
+          sourceRef: {
+            ...(sourceEntry?.id || owner.entry?.id
+              ? { entryId: sourceEntry?.id ?? owner.entry!.id }
+              : {}),
+            ...(sourceIndex !== undefined ? { contentIndex: sourceIndex } : {}),
+            ...(owner.itemOrdinal !== undefined
+              ? { itemOrdinal: owner.itemOrdinal }
+              : {}),
+          },
+          ...(tool && owner.entry?.id && owner.contentIndex !== undefined
+            ? {
+                callRef: {
+                  entryId: owner.entry.id,
+                  contentIndex: owner.contentIndex,
+                },
+              }
+            : {}),
+          source,
+          markdown,
+          tool,
+        })
+    }
+    const addAssistant = (
+      owner: Occurrence | undefined,
+      message: Extract<Message, { role: "assistant" }>,
+    ) => {
+      for (const [index, part] of message.content.entries()) {
+        const occurrence = owner?.parts.get(index)
+        if (part.type === "text")
+          add(
+            occurrence ?? owner,
+            `text:${index}`,
+            part.text,
+            true,
+            false,
+            owner?.entry,
+            index,
+          )
+        else if (part.type === "thinking")
+          add(
+            occurrence,
+            `thought:${index}`,
+            part.thinking,
+            true,
+            false,
+            owner?.entry,
+            index,
+          )
+        else if (part.type === "toolCall") {
+          if (occurrence?.component) {
+            const calls = pending.get(part.id) ?? []
+            calls.push(occurrence)
+            pending.set(part.id, calls)
+          }
+          add(
+            occurrence,
+            `name:${index}`,
+            part.name,
+            false,
+            true,
+            owner?.entry,
+            index,
+          )
+          const addArgument = (value: unknown, path: (string | number)[]) => {
+            if (Array.isArray(value)) {
+              for (const [position, item] of value.entries())
+                addArgument(item, [...path, position])
+            } else if (value && typeof value === "object") {
+              for (const [key, item] of Object.entries(value))
+                addArgument(item, [...path, key])
+            } else {
+              add(
+                occurrence,
+                `argument:${index}:${JSON.stringify(path)}`,
+                String(value),
+                false,
+                true,
+                owner?.entry,
+                index,
+              )
+            }
+          }
+          addArgument(part.arguments, [])
+        }
+      }
+    }
+    for (const id of this.indexedIds) {
+      const entry = this.host.sessionManager.getEntry(id)
+      if (entry?.type !== "message") continue
+      const message = entry.message
+      const owner = this.byEntryId.get(id)
+      if (message.role === "assistant") {
+        addAssistant(owner, message)
+      } else if (message.role === "toolResult") {
+        const call = pending.get(message.toolCallId)?.shift()
+        for (const [index, part] of message.content.entries())
+          if (part.type === "text")
+            add(
+              call,
+              `result:${id}:${index}`,
+              part.text,
+              false,
+              true,
+              entry,
+              index,
+            )
+      } else if (message.role === "user") {
+        const content =
+          typeof message.content === "string"
+            ? [{ type: "text", text: message.content }]
+            : message.content
+        for (const [index, part] of content.entries())
+          if (part.type === "text")
+            add(owner, `user:${index}`, part.text, true, false, entry, index)
+      } else if (message.role === "bashExecution") {
+        add(owner, "command", message.command, false, false, entry)
+        add(owner, "output", message.output, false, false, entry)
+      } else if (message.role === "custom" && message.display) {
+        const content =
+          typeof message.content === "string"
+            ? [{ type: "text", text: message.content }]
+            : message.content
+        for (const [index, part] of content.entries())
+          if (part.type === "text")
+            add(owner, `custom:${index}`, part.text, true, false, entry, index)
+      }
+    }
+    if (this.streaming?.message?.role === "assistant")
+      addAssistant(this.streaming, this.streaming.message)
+    return fields
+  }
+
+  private searchLeaf(hit: SourceHit<Occurrence>): Leaf | undefined {
+    for (
+      let owner: Occurrence | undefined = hit.field.owner;
+      owner;
+      owner = owner.parent
+    ) {
+      const leaf = this.leaves.find(
+        (candidate) => candidate.occurrence === owner,
+      )
+      if (leaf) return leaf
+    }
+    return undefined
+  }
+
+  private searchSegments(hit: SourceHit<Occurrence>, leaf: Leaf) {
+    let index = this.renderedSearch.get(leaf.component)
+    if (!index) {
+      index = new AltScreenSearchIndex()
+      this.renderedSearch.set(leaf.component, index)
+    }
+    const matching = index.search(leaf.rows, hit.query).matches
+    const sourceCount = this.searchState?.counts.get(hit.field.owner)
+    if (matching.length === sourceCount) return matching[hit.ordinal]?.segments
+    if (!hit.field.tool) return undefined
+    const row = leaf.rows.findIndex((line) =>
+      stripTerminalSequences(line).trim(),
+    )
+    const fallbackRow = Math.max(0, row)
+    return [
+      {
+        row: fallbackRow,
+        startCol: 0,
+        endCol: visibleWidth(leaf.rows[fallbackRow] ?? ""),
+      },
+    ]
+  }
+
+  private revealSearchHit(hit: SourceHit<Occurrence>) {
+    const owner = hit.field.owner
+    let changed = false
+    const work = this.work.find(owner)
+    if (work && !this.work.expanded(work)) {
+      work.manualExpanded = true
+      work.keepOpen = true
+      changed = true
+    }
+    const thought = this.thoughts.get(owner)
+    if (thought && !thought.expanded) {
+      thought.ensureOpen()
+      changed = true
+    }
+    for (const group of this.groups.values()) {
+      if (
+        group.calls.some((call) => call.occurrence === owner) &&
+        !group.expanded
+      ) {
+        group.expanded = true
+        changed = true
+      }
+    }
+    if (
+      hit.field.tool &&
+      owner.component &&
+      "setExpanded" in owner.component &&
+      "expanded" in owner.component &&
+      !owner.component.expanded
+    ) {
+      ;(owner.component as ToolPresenter).setExpanded(true)
+      changed = true
+    }
+    if (changed) this.layoutChat()
+    const leaf = this.searchLeaf(hit)
+    if (!leaf) return changed
+    const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0
+    if (leaf.body) {
+      const before = leaf.body.scroll.scrollTop
+      const target = leaf.offset + row
+      if (target < before || target >= before + leaf.body.scroll.viewportHeight)
+        leaf.body.scroll.scrollTo(target, { disableFollow: true })
+      changed ||= leaf.body.scroll.scrollTop !== before
+    }
+    const top = currentTop(leaf) + row
+    const before = this.transcript.scrollTop
+    if (top < before || top >= before + this.viewportHeight)
+      this.transcript.scrollTo(
+        Math.max(0, top - Math.floor(this.viewportHeight / 3)),
+        {
+          disableFollow: true,
+        },
+      )
+    return changed || this.transcript.scrollTop !== before
+  }
+
+  private refreshSourceSearch(renderer: TuiAltScreen) {
+    const native = (renderer as unknown as { activeSearch?: NativeSearch })
+      .activeSearch
+    if (!native) {
+      this.searchState = undefined
+      return false
+    }
+    native.matches = []
+    native.selectedIndex = -1
+    const mode = native.selectionMode
+    if (
+      mode !== "retain" &&
+      this.host.sessionManager.getLeafId() !== this.indexedIds.at(-1)
+    )
+      this.indexBranch()
+    const previous = this.searchState
+    const rebuild =
+      !previous ||
+      previous.query !== native.query ||
+      previous.revision !== this.sourceRevision
+    const hits = rebuild
+      ? this.sourceSearch.find(this.searchFields(), native.query)
+      : previous.hits
+    const counts = rebuild ? new Map<Occurrence, number>() : previous.counts
+    if (rebuild)
+      for (const hit of hits)
+        counts.set(hit.field.owner, (counts.get(hit.field.owner) ?? 0) + 1)
+    let selected = previous?.selected ?? -1
+    if (rebuild) {
+      const old = previous?.hits[previous.selected]
+      selected = old
+        ? hits.findIndex(
+            (hit) =>
+              (hit.field.sourceRef.entryId
+                ? hit.field.sourceRef.entryId === old.field.sourceRef.entryId
+                : hit.field.owner === old.field.owner) &&
+              hit.field.key === old.field.key &&
+              hit.from === old.from,
+          )
+        : -1
+      if (selected < 0 && hits.length) selected = 0
+    } else if (hits.length && mode === "next")
+      selected = (selected + 1) % hits.length
+    else if (hits.length && mode === "previous")
+      selected = (selected - 1 + hits.length) % hits.length
+    this.searchState = {
+      query: native.query,
+      revision: this.sourceRevision,
+      hits,
+      counts,
+      selected,
+    }
+    native.component.setResult(selected, hits.length)
+    native.selectionMode = "retain"
+    const hit = hits[selected]
+    return hit && (rebuild || mode !== "retain")
+      ? this.revealSearchHit(hit)
+      : false
+  }
+
+  private paintSourceSearch(
+    renderer: TuiAltScreen,
+    screen: string[],
+    layout: Parameters<typeof getScrollViewBox>[0],
+  ) {
+    const state = this.searchState
+    if (!state?.hits.length) return screen
+    const ranges = new Map<
+      number,
+      { start: number; end: number; current: boolean }[]
+    >()
+    for (const [index, hit] of state.hits.entries()) {
+      const leaf = this.searchLeaf(hit)
+      const interval = leaf && this.intervals.find((item) => item.leaf === leaf)
+      if (!leaf || !interval) continue
+      const box = getScrollViewBox(layout, interval.window)
+      if (!box) continue
+      for (const segment of this.searchSegments(hit, leaf) ?? []) {
+        if (segment.row < interval.start || segment.row >= interval.end)
+          continue
+        const row = box.rect.y + segment.row - interval.window.scrollTop
+        const start = Math.max(
+          box.rect.x,
+          box.clip.x,
+          box.rect.x + segment.startCol,
+        )
+        const end = Math.min(
+          box.rect.x + box.rect.width,
+          box.clip.x + box.clip.width,
+          box.rect.x + segment.endCol,
+        )
+        if (
+          row < box.clip.y ||
+          row >= box.clip.y + box.clip.height ||
+          end <= start
+        )
+          continue
+        const rowRanges = ranges.get(row) ?? []
+        rowRanges.push({ start, end, current: index === state.selected })
+        ranges.set(row, rowRanges)
+      }
+    }
+    const painted = [...screen]
+    const highlight = (
+      renderer as unknown as {
+        applySearchTextHighlight(text: string, current: boolean): string
+      }
+    ).applySearchTextHighlight
+    for (const [row, rowRanges] of ranges) {
+      const line = painted[row] ?? ""
+      if (isImageLine(line)) continue
+      const width = visibleWidth(line)
+      const merged: typeof rowRanges = []
+      for (const range of rowRanges.toSorted(
+        (left, right) => left.start - right.start,
+      )) {
+        const last = merged.at(-1)
+        if (last && range.start < last.end) {
+          last.end = Math.max(last.end, range.end)
+          last.current ||= range.current
+        } else merged.push({ ...range })
+      }
+      let output = ""
+      let cursor = 0
+      for (const range of merged) {
+        const start = Math.min(range.start, width)
+        const end = Math.min(range.end, width)
+        if (end <= start) continue
+        output += sliceByColumn(line, cursor, start - cursor, true)
+        output += highlight.call(
+          renderer,
+          sliceByColumn(line, start, end - start, true),
+          range.current,
+        )
+        cursor = end
+      }
+      painted[row] = output + sliceByColumn(line, cursor, width - cursor, true)
+    }
+    return painted
   }
 
   private pointAt(x: number, y: number): SelectionPoint {
@@ -1184,6 +1615,26 @@ export class NativeChatHost {
       (original) => () =>
         this.ownsRenderer(renderer) ? this.transcript : original.call(renderer),
     )
+    bind(
+      "refreshSearch",
+      (original) => (layout: unknown) =>
+        this.ownsRenderer(renderer)
+          ? this.refreshSourceSearch(renderer)
+          : original.call(renderer, layout),
+    )
+    bind(
+      "applySearchHighlights",
+      (original) =>
+        (screen: string[], layout: Parameters<typeof getScrollViewBox>[0]) =>
+          this.ownsRenderer(renderer)
+            ? this.paintSourceSearch(renderer, screen, layout)
+            : original.call(renderer, screen, layout),
+    )
+    bind("closeSearch", (original) => () => {
+      const result = original.call(renderer)
+      this.searchState = undefined
+      return result
+    })
     bind(
       "routeWheel",
       (original) => (event: { x: number; y: number }, delta: number) => {
@@ -1445,6 +1896,7 @@ export class NativeChatHost {
 
   private indexBranch() {
     const branch = this.host.sessionManager.getBranch()
+    const previous = this.indexedIds.join("\0")
     const common = Math.min(this.indexedIds.length, branch.length)
     if (
       this.indexedIds.some(
@@ -1462,6 +1914,7 @@ export class NativeChatHost {
       if (!this.byEntryId.has(entry.id))
         this.byEntryId.set(entry.id, this.newOccurrence(entry))
     }
+    if (this.indexedIds.join("\0") !== previous) this.sourceRevision++
   }
 
   private recordNative(component: Component) {
@@ -2020,6 +2473,7 @@ export class NativeChatHost {
             this.streaming = undefined
           if (event.type === "message_end" && event.message?.role === "user")
             this.deliveringUser = undefined
+          if (event.message) this.sourceRevision++
           return result
         },
     )
@@ -2049,6 +2503,32 @@ export class NativeChatHost {
     )
 
     const manager = host.sessionManager
+    const appendEntry = (
+      manager as unknown as { _appendEntry(entry: Entry): void }
+    )._appendEntry
+    this.originals.set(
+      "_appendEntry",
+      appendEntry as (...args: never[]) => unknown,
+    )
+    this.ownDescriptors.set(
+      "_appendEntry",
+      Object.getOwnPropertyDescriptor(manager, "_appendEntry"),
+    )
+    const wrappedAppendEntry = (entry: Entry) => {
+      appendEntry.call(manager, entry)
+      if (!this.active) return
+      if (entry.parentId === (this.indexedIds.at(-1) ?? null)) {
+        this.indexedIds.push(entry.id)
+        this.forEntry(entry)
+        this.sourceRevision++
+      } else this.indexBranch()
+    }
+    ;(manager as unknown as { _appendEntry(entry: Entry): void })._appendEntry =
+      wrappedAppendEntry
+    this.wrappers.set(
+      "_appendEntry",
+      wrappedAppendEntry as (...args: never[]) => unknown,
+    )
     const appendMessage = manager.appendMessage
     this.originals.set(
       "appendMessage",
@@ -2190,7 +2670,7 @@ export class NativeChatHost {
     this.unbindRenderer()
     for (const [name] of this.originals) {
       const target =
-        name === "appendMessage"
+        name === "appendMessage" || name === "_appendEntry"
           ? this.host.sessionManager
           : name === "recordBashResult" || name === "_appendCustomMessage"
             ? this.host.session
