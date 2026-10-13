@@ -2,7 +2,7 @@
 
 Paste handling and preserved text, file, and image attachments for the [pi coding agent](https://pi.dev).
 
-Paste small text inline, capture large text and native clipboard files or images as attachments, or attach content through explicit commands. Attachment actions preserve the contents and insert a readable Markdown attachment reference. A widget above the editor lists the draft's attachments. Removing a reference from the draft removes its membership while keeping the saved contents.
+Paste a single file path to capture its contents, paste other small text inline, or capture large text and native clipboard files or images as attachments. Explicit attachment commands use the same capture operation and insert a readable Markdown attachment reference. A widget above the editor lists the draft's attachments. Removing a reference from the draft removes its membership while keeping the saved contents.
 
 See the [specification](../../docs/specs/pi-attachments.md), its [architecture decisions](../../docs/specs/pi-attachments.md#architecture-decisions), and the [package overview](../../README.md#packages).
 
@@ -22,13 +22,15 @@ If `pi-paste` is already installed, remove its package entry with `pi remove ./p
 
 For copied files and images, invoke **Pi's configured clipboard action** (`Ctrl+V` by default on macOS). With PastePal, choose **Copy** for the selected clip, return focus to Pi, then use that shortcut. Use Pi's native shortcut information if it is remapped. The handler reads copied-file identity first, image bytes second, and text last; copied files take precedence over accompanying icon images.
 
-**Ghostty's Cmd+V remains ordinary terminal paste.** It can turn a copied file into path text before Pi receives it. PastePal's one-step Paste action is a separate input route; use Copy followed by Pi's clipboard action for native file/image capture. The complete physical clipboard-manager workflow is tracked in the [acceptance ticket](../../.scratch/clipboard-paste/issues/01-document-and-verify-native-clipboard-paste.md).
+**Ghostty's Cmd+V remains ordinary terminal paste.** When it delivers one readable file path, the package captures that file as an attachment. Image-only clipboard data uses Pi's native clipboard action. PastePal's Paste and Copy actions can supply different content; the physical clipboard-manager workflows are tracked in the [acceptance ticket](../../.scratch/clipboard-paste/issues/01-document-and-verify-native-clipboard-paste.md).
 
-Text below 5,000 UTF-16 code units appears inline. Text at or above 5,000 units becomes a readable `paste.txt` attachment. The cutoff measures each complete decoded paste before editor formatting, independently of line count, draft length, or Markdown context. Fragmented bracketed input is assembled before classification.
+A complete text paste is first interpreted as one file path. Absolute paths, bare filenames and other relative paths, `~/` paths, local `file:` URLs, whole-path quotes, and terminal-escaped paths are supported. Relative paths use Pi's requesting working directory. Spaces within a filename are preserved; space- or newline-delimited lists are not split into files. Missing or unreadable files, directories, and other unsuccessful matches silently continue through the text policy with the original payload.
 
-Terminal bracketed paste and `ui.pasteToEditor(text)` carry text without clipboard identity. A plain, quoted, escaped, or file-URL-shaped path stays text under the text-size policy; the package does not read the named file or reread the clipboard to infer attachments. Ordinary typing, direct insertion, and `ui.setEditorText()` remain inline.
+Other text below 5,000 UTF-16 code units appears inline. Text at or above 5,000 units becomes a readable `paste.txt` attachment. The cutoff measures each complete decoded paste before editor formatting, independently of line count or draft length. Fragmented bracketed input is assembled before classification.
 
-Paste Inline reads plain clipboard text and bypasses conversion at any size. Attach Text explicitly captures text, including short text. Both work in prose and code. Inline insertion retains the active editor's whitespace behavior: native Pi expands tabs to four spaces and normalizes line endings to LF; the composer preserves tabs. Snapshot files preserve the captured text, including tabs and original line endings.
+Terminal bracketed paste, `ui.pasteToEditor(text)`, and native clipboard text use the same policy. Only the pasted payload matters, including when the caret is inside code or a link destination. Terminal and extension paste do not reread clipboard metadata. Ordinary typing, direct insertion, `ui.setEditorText()`, and restored drafts remain inline.
+
+Paste Inline reads plain clipboard text and bypasses file recognition and size conversion. Use it to insert a literal path. Attach Text explicitly captures text, including short text and path characters. Both work in prose and code. Inline insertion retains the active editor's whitespace behavior: native Pi expands tabs to four spaces and normalizes line endings to LF; the composer preserves tabs. Snapshot files preserve the captured text, including tabs and original line endings.
 
 Native listeners, extension shortcuts, clipboard handlers, mouse handlers, and focused components retain their input. The package supplies a clipboard handler only when one is absent; earlier and later custom handlers keep their chosen insertion behavior. A raw Cmd+V is an alias only when the terminal delivers it and no effective native action or accepted extension shortcut owns it. Any explicit override of `app.clipboard.pasteImage`, including an empty binding list or a repeated default, suppresses that alias. Fullscreen right-click reads the clipboard only in the focused main editor; terminal-delivered text uses the text route.
 
@@ -41,7 +43,7 @@ Native listeners, extension shortcuts, clipboard handlers, mouse handlers, and f
 | Choose a file path                      | `/attach-file`         | `Ctrl+Alt+F` |
 | Attach files directly                   | `/attach-file <path>`  |              |
 | Manage draft attachments                | `/attachments`         | `Ctrl+Alt+A` |
-| Paste clipboard text inline at any size | `/paste-inline`        | `Ctrl+Alt+V` |
+| Paste clipboard text without conversion | `/paste-inline`        | `Ctrl+Alt+V` |
 | Retry retained paste captures           | `/paste-recover`       |              |
 | Retry retained attachment captures      | `/attachments-recover` |              |
 | Clean unused capture data               | `/attachments-cleanup` |              |
@@ -56,6 +58,8 @@ Use shortcuts while composing to keep the existing draft. The text dialog preser
 Pasted attachments and explicit actions use the same capture operation. Every file in a copied or selected set is captured before its references enter the draft as one edit. Spaces and Unicode in names are preserved, and files with the same name are stored separately. With `pi-composer`, one undo restores the selection and removes the whole set's membership.
 
 Attachments are saved under `pi-attachments/` in Pi's agent directory before their references enter the draft. Editing or deleting the source file does not change the snapshot. Normal `@file` references continue to identify the working file. Text and file attachment references remain readable on demand. A draft containing only attachment references can be submitted normally.
+
+To keep only an attachment's path, edit its Markdown reference down to the bare destination. This removes membership, preview, and submitted image content while leaving the saved snapshot path as ordinary text. It does not restore the original source path or capture the file again.
 
 ## Text actions
 
@@ -79,7 +83,7 @@ Images are delivered as native image content on Enter, steering, and follow-up s
 
 ## Recovery
 
-Clipboard read, file read, and write errors leave the main draft intact. Clipboard errors remain errors instead of falling through to another content type. Failed saves from the explicit text dialog reopen that dialog with its contents. Failed pasted-text, image, or file saves offer **Retry save** for the whole set, using the already captured bytes even if the sources have changed or disappeared. Unsupported clipboard image bytes are retained with an error and are not inserted.
+Unsuccessful text-path recognition quietly falls back to text paste. Clipboard metadata reads, explicit file reads, and snapshot write failures retain the existing error and recovery behavior. Clipboard errors remain errors instead of falling through to another content type. Failed saves from the explicit text dialog reopen that dialog with its contents. Failed pasted-text, image, or file saves offer **Retry save** for the whole set, using the already captured bytes even if the sources have changed or disappeared. Unsupported clipboard image bytes are retained with an error and are not inserted.
 
 If one file cannot be read, captured members remain available in a partial recovery file that identifies the missing files. `/attachments-recover` retries retained missing reads and failed writes using the captured bytes for completed members; `/paste-recover` is an alias for the same recovery action. It saves recovery files without inserting into the current draft. Requests also retry when a session starts or a response settles.
 
