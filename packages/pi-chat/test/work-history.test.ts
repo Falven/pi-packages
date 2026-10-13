@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { copyFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
+import { SessionManager } from "@earendil-works/pi-coding-agent"
 import {
   getNativeClipboard,
   Text,
@@ -899,6 +900,61 @@ test("a retained fork method cannot transfer a disposed adapter's relationships"
       ),
     false,
   )
+})
+
+test("a fork remains usable when relationship metadata fails to append", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 36,
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Before fork", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Fork answer"), finish(), done)
+  await host.type("Fork request")
+  await host.key("\r")
+  await host.settled()
+  const oldManager = host.session.sessionManager
+  const oldFile = host.session.sessionFile
+  const answer = oldManager
+    .getEntries()
+    .find(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        JSON.stringify(entry.message.content).includes("Fork answer"),
+    )
+  assert(answer)
+  const append = SessionManager.prototype.appendCustomEntry
+  let failedWrites = 0
+  SessionManager.prototype.appendCustomEntry = function (...args) {
+    const id = append.apply(this, args)
+    if (this !== oldManager && args[0] === "pi-chat.relationship") {
+      failedWrites++
+      throw new Error("Controlled metadata append failure")
+    }
+    return id
+  }
+  try {
+    const result = await host.runtime.fork(answer.id, { position: "at" })
+    assert.equal(result.cancelled, false)
+  } finally {
+    SessionManager.prototype.appendCustomEntry = append
+  }
+  assert.equal(failedWrites, 1)
+  assert.notEqual(host.session.sessionFile, oldFile)
+  const frame = await host.frame()
+  assert.match(frame, /Error: pi-chat could not persist fork relationships/)
+  assert.match(frame, /Fork answer/)
+
+  await host.type("After failed metadata")
+  await host.key("\r")
+  await host.settled()
+  assert.match(JSON.stringify(host.requests.at(-1)), /After failed metadata/)
 })
 
 test("copied journal restores work without changing provider context", async (t) => {
