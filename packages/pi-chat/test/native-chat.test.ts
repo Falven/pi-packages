@@ -82,6 +82,21 @@ const toolFinish = {
 const done = { event: "[DONE]" }
 const end = { end: true } as const
 
+async function openWork(
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+  cancel = "\x1b",
+) {
+  await host.frame()
+  const row = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("▸ Worked"))
+  assert(row >= 0)
+  await host.key(`\x1b[<0;2;${row + 1}M`)
+  await host.key(`\x1b[<0;2;${row + 1}m`)
+  await host.key(cancel)
+  await host.frame()
+}
+
 function assertWritableClipboard(
   clipboard: NativeClipboard | undefined,
 ): asserts clipboard is NativeClipboard &
@@ -293,6 +308,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await host.type("Read both")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /2 tool calls.*read/)
@@ -385,6 +401,7 @@ test("a settled finished singleton displays its native call directly", async (t)
   assert.doesNotMatch(screen(), /read one\.txt/)
   host.resumeResponse()
   await host.settled()
+  await openWork(host)
   await host.frame()
   assert.doesNotMatch(screen(), /1 tool call: read/)
   assert.match(screen(), /read one\.txt/)
@@ -456,6 +473,7 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
   await host.type("Read with trailing prose")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   const screen = (await host.frame())
     .split("\n")
     .map(stripTerminalSequences)
@@ -492,6 +510,7 @@ test("thinking between calls separates their groups", async (t) => {
   await host.type("Read with thought")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   const screen = (await host.frame())
     .split("\n")
     .map(stripTerminalSequences)
@@ -537,6 +556,7 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   await host.type("Two groups")
   await host.key("\r")
   await host.settled()
+  await openWork(host, "\x11")
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.equal(screen().match(/2 tool calls: read, read/g)?.length, 2)
@@ -609,6 +629,7 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
   await host.type("Scrollback groups")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.frame()
   renderer.scrollToTop()
   await host.frame()
@@ -637,6 +658,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await host.type("Pointer group")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   const lines = () => host.screenLines().map(stripTerminalSequences)
   const click = async (row: number) => {
     await host.key(`\x1b[<0;3;${row + 1}M`)
@@ -731,6 +753,7 @@ test("folding a group clears selected tool output before native copy", async (t)
   await host.type("Select tool output")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   await host.key("\x1bg")
   await host.key("\u000f")
   await host.frame()
@@ -808,6 +831,7 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   await host.type("Failure and custom tool")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /2 tool calls: read, mystery/)
