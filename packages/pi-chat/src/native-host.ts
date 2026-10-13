@@ -105,6 +105,7 @@ type NativeMode = ThoughtEnvironment & {
   pendingBashComponents: Component[]
   pendingTools: Map<string, Component>
   settingsManager: {
+    getHideThinkingBlock(): boolean
     getShowImages(): boolean
     getImageWidthCells(): number
   }
@@ -145,6 +146,8 @@ export type Occurrence = {
   resultMessage?: Message
   parts: Map<number, Occurrence>
 }
+
+type SourceZone = { withThinking: number; withoutThinking: number }
 
 const active = new WeakMap<InteractiveMode, NativeChatHost>()
 
@@ -446,8 +449,8 @@ export class NativeChatHost {
   private relationshipWriteFailed = false
   private indexedIds: string[] = []
   private readonly sourceRanks = new Map<string, number>()
-  private readonly sourceZones = new Map<string, number[]>()
-  private lastSourceZone = 0
+  private readonly sourceZones = new Map<string, SourceZone[]>()
+  private lastSourceZone: SourceZone = { withThinking: 0, withoutThinking: 0 }
   private sourceRevision = 0
   private readonly sourceSearch = new SourceSearch<Occurrence>()
   private readonly renderedSearch = new WeakMap<
@@ -879,6 +882,9 @@ export class NativeChatHost {
 
   private orderedActivities(components: Component[]): Activity[] {
     const activities: Activity[] = []
+    const hideThinking = this.host.settingsManager.getHideThinkingBlock()
+    const revealed =
+      this.searchState?.hits[this.searchState.selected]?.field.owner
     const toolChildren = new Set<Component>()
     for (const component of components) {
       const owner = this.byComponent.get(component)
@@ -943,10 +949,26 @@ export class NativeChatHost {
               occurrence,
               tool: true,
               sourceZone: owner.entry?.id
-                ? this.sourceZones.get(owner.entry.id)?.[index]
+                ? this.sourceZones.get(owner.entry.id)?.[index]?.[
+                    hideThinking ? "withoutThinking" : "withThinking"
+                  ]
                 : undefined,
             })
         } else if (occurrence?.contentIndex === index && occurrence.component) {
+          flush()
+          if (children[position] === occurrence.component) position++
+          const thought = this.thoughts.get(occurrence)
+          if (thought && hideThinking && occurrence !== revealed) {
+            if (
+              children[position] instanceof Spacer &&
+              this.byComponent.has(children[position + 1]!)
+            ) {
+              // Keep spacing with the next visible prose, not intervening tools.
+              leading ??= children[position]
+              position++
+            }
+            continue
+          }
           if (leading) {
             activities.push({
               component: leading,
@@ -956,9 +978,6 @@ export class NativeChatHost {
             })
             leading = undefined
           }
-          flush()
-          if (children[position] === occurrence.component) position++
-          const thought = this.thoughts.get(occurrence)
           if (thought) {
             if (thought.body)
               activities.push({
@@ -974,13 +993,6 @@ export class NativeChatHost {
             })
         }
       }
-      if (leading)
-        activities.push({
-          component: leading,
-          owner,
-          tool: false,
-          work: this.work.find(owner),
-        })
       const work = this.work.find(owner)
       if (work && this.work.needsParts(owner)) {
         const final = activities
@@ -1144,7 +1156,10 @@ export class NativeChatHost {
         if (this.work.isFinal(next.occurrence, work)) final.push(next)
         else body.push(next)
       }
-      if (body.length && final.length) {
+      if (
+        body.some((item) => !(item.component instanceof Spacer)) &&
+        final.length
+      ) {
         work.header ??= new WorkHeader(this, work)
         result.push({ component: work.header, tool: false })
         if (this.work.expanded(work)) result.push(...body)
@@ -1580,9 +1595,16 @@ export class NativeChatHost {
     native.component.setResult(selected, hits.length)
     native.selectionMode = "retain"
     const hit = hits[selected]
-    return hit && (rebuild || mode !== "retain")
-      ? this.revealSearchHit(hit)
-      : false
+    const previousOwner = previous?.hits[previous.selected]?.field.owner
+    const visibilityChanged =
+      this.host.settingsManager.getHideThinkingBlock() &&
+      previousOwner !== hit?.field.owner &&
+      ((previousOwner && this.thoughts.has(previousOwner)) ||
+        (hit && this.thoughts.has(hit.field.owner)))
+    if (visibilityChanged) this.layoutChat()
+    const revealed =
+      hit && (rebuild || mode !== "retain") ? this.revealSearchHit(hit) : false
+    return Boolean(visibilityChanged) || revealed
   }
 
   private paintSourceSearch(
@@ -2101,7 +2123,7 @@ export class NativeChatHost {
       this.indexedIds = []
       this.sourceRanks.clear()
       this.sourceZones.clear()
-      this.lastSourceZone = 0
+      this.lastSourceZone = { withThinking: 0, withoutThinking: 0 }
     }
     for (let index = this.indexedIds.length; index < branch.length; index++) {
       const entry = branch[index]!
@@ -2113,15 +2135,16 @@ export class NativeChatHost {
   }
 
   private indexEntry(entry: Entry) {
-    const zones: number[] = []
+    const zones: SourceZone[] = []
     if (entry.type === "message" && entry.message.role === "assistant") {
       for (const [index, part] of entry.message.content.entries()) {
-        if (
-          (part.type === "text" && part.text.trim()) ||
-          (part.type === "thinking" && part.thinking.trim())
-        )
-          this.lastSourceZone++
-        else if (part.type === "toolCall") zones[index] = this.lastSourceZone
+        if (part.type === "text" && part.text.trim()) {
+          this.lastSourceZone.withThinking++
+          this.lastSourceZone.withoutThinking++
+        } else if (part.type === "thinking" && part.thinking.trim())
+          this.lastSourceZone.withThinking++
+        else if (part.type === "toolCall")
+          zones[index] = { ...this.lastSourceZone }
       }
     } else if (
       entry.type === "compaction" ||
@@ -2131,8 +2154,10 @@ export class NativeChatHost {
           entry.message.role === "bashExecution" ||
           (entry.message.role === "custom" && entry.message.display))) ||
       (entry.type === "custom_message" && entry.display)
-    )
-      this.lastSourceZone++
+    ) {
+      this.lastSourceZone.withThinking++
+      this.lastSourceZone.withoutThinking++
+    }
     this.sourceRanks.set(entry.id, this.indexedIds.length)
     if (zones.length) this.sourceZones.set(entry.id, zones)
     this.indexedIds.push(entry.id)
@@ -2417,6 +2442,10 @@ export class NativeChatHost {
 
   private wrapNativeConstruction() {
     const host = this.host
+    requireMethod(
+      host.settingsManager.getHideThinkingBlock,
+      "settingsManager.getHideThinkingBlock",
+    )
     for (const name of [
       "getMarkdownThemeWithSettings",
       "getMarkdownTransformers",
@@ -2500,7 +2529,7 @@ export class NativeChatHost {
             this.indexedIds = []
             this.sourceRanks.clear()
             this.sourceZones.clear()
-            this.lastSourceZone = 0
+            this.lastSourceZone = { withThinking: 0, withoutThinking: 0 }
             this.byComponent.clear()
             this.thoughts.clear()
             this.groups.clear()

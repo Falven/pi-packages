@@ -511,7 +511,11 @@ test("a single tool call stays grouped and collapsed after completion", async (t
 })
 
 test("commentary between model iterations separates tool groups in source order", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    settings: { hideThinkingBlock: true },
+  })
   await writeFile(join(host.directory, "one.txt"), "first")
   await writeFile(join(host.directory, "two.txt"), "second")
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
@@ -581,8 +585,13 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
   assert.doesNotMatch(screen, /1 tool call/)
 })
 
-test("thinking between calls separates their groups", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+test("native Hide thinking controls whether reasoning separates tool groups", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    settings: { hideThinkingBlock: false },
+    keybindings: { "app.thinking.toggle": "ctrl+t" },
+  })
   await writeFile(join(host.directory, "one.txt"), "first")
   await writeFile(join(host.directory, "two.txt"), "second")
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
@@ -620,6 +629,15 @@ test("thinking between calls separates their groups", async (t) => {
     screen,
     /2 tool calls|read one\.txt|read two\.txt|Thought/,
   )
+  await host.key("\x14")
+  const hidden = await host.frame()
+  assert.match(hidden, /▸ 2 tool calls: read/)
+  assert.doesNotMatch(hidden, /1 tool call:|Considering next call|Thought/)
+  await host.key("\x14")
+  const visible = await host.frame()
+  assert.equal(visible.match(/▸ 1 tool call: read/g)?.length, 2)
+  assert.match(visible, /Considering next call/)
+  assert.doesNotMatch(visible, /2 tool calls/)
 })
 
 test("remapped selector keys navigate groups and cancel returns to the composer", async (t) => {

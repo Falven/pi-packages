@@ -84,12 +84,13 @@ function writableClipboard(
   assert(clipboard?.setText)
 }
 
-test("a native hidden thought keeps prose inline and routes bold activity headings to the working indicator", async (t) => {
+test("native Hide thinking controls prose while activity headings keep updating the working indicator", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
     settings: { hideThinkingBlock: true },
+    keybindings: { "app.thinking.toggle": "ctrl+t" },
   })
   const initial =
     "**Analyzing the `tools` schema**\n\nOriginal thought with **inline emphasis**.\n\n```text\n**Code sample**\n```"
@@ -116,10 +117,15 @@ test("a native hidden thought keeps prose inline and routes bold activity headin
   await host.type("Think here")
   await host.key("\r")
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  await t.waitFor(() => assert.match(screen(), /Analyzing the/))
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  await host.frame()
   assert.match(screen(), /Working/)
+  assert.doesNotMatch(screen(), /Analyzing the|Thought|thinking hidden/)
   host.resumeResponse()
-  await t.waitFor(() => assert.match(screen(), /Original thought/))
+  await t.waitFor(() => assert.match(screen(), /Analyzing the tools schema/))
+  assert.doesNotMatch(screen(), /Original thought|Code sample|Thought/)
+  await host.key("\x14")
+  await host.frame()
   assert.match(
     screen(),
     /Think here[\s\S]*Original thought with inline emphasis/,
@@ -131,15 +137,22 @@ test("a native hidden thought keeps prose inline and routes bold activity headin
   await t.waitFor(() => assert.match(screen(), /More thought prose/))
   assert.doesNotMatch(screen(), /Analyzing the tools schema/)
   assert.equal(screen().match(/Considering documentation needs/g)?.length, 1)
+  await host.key("\x14")
+  await host.frame()
+  assert.doesNotMatch(screen(), /Original thought|More thought prose/)
+  assert.match(screen(), /Considering documentation needs/)
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Answer in progress/))
   assert.equal(host.session.isStreaming, true)
-  assert.match(screen(), /Original thought[\s\S]*Answer in progress/)
+  assert.doesNotMatch(screen(), /Original thought|More thought prose|Thought/)
   assert.match(screen(), /Working/)
   assert.doesNotMatch(
     screen(),
     /Analyzing the tools schema|Considering documentation needs/,
   )
+  await host.key("\x14")
+  await host.frame()
+  assert.match(screen(), /Original thought[\s\S]*Answer in progress/)
   const thoughtRow = host
     .screenLines()
     .findIndex((row) => row.includes("Original thought"))
@@ -269,7 +282,8 @@ test("adjacent thinking blocks share one body and every thought stays visible th
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 40,
-    settings: { hideThinkingBlock: true },
+    settings: { hideThinkingBlock: false },
+    keybindings: { "app.thinking.toggle": "ctrl+t" },
   })
   const later = "**Figuring out file processing**\n\nLater thought"
   host.queueResponse(
@@ -331,7 +345,14 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   assert(screen().some((row) => row.includes("Later thought")))
   assert(!screen().some((row) => row.includes("Figuring out file processing")))
   const stored = JSON.stringify(host.session.messages)
+  await host.key("\x14")
+  const hidden = await host.frame()
+  assert.doesNotMatch(hidden, /First adjacent block|Later thought/)
+  assert.match(hidden, /Boundary between thoughts/)
+  assert.match(hidden, /Operation aborted/)
   await host.reload()
+  assert.doesNotMatch(await host.frame(), /First adjacent block|Later thought/)
+  await host.key("\x14")
   await host.frame()
   assert(!screen().some((row) => row.includes("Thought")))
   assert(!screen().some((row) => row.includes("Figuring out file processing")))

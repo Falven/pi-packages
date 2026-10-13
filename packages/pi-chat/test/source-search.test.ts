@@ -381,13 +381,17 @@ test("Find highlights the owning call when a custom renderer omits source text",
   )
 })
 
-test("Find opens work history for a thought body or an extracted activity heading", async (t) => {
+test("Find temporarily reveals a hidden thought body or extracted activity heading", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 38,
     settings: { hideThinkingBlock: true },
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    keybindings: {
+      "tui.altScreen.search": "ctrl+f",
+      "tui.altScreen.searchPrevious": "ctrl+p",
+      "app.thinking.toggle": "ctrl+t",
+    },
   })
   const reasoning = "**Investigating optics**\n\nThe hidden telescope"
   host.queueResponse(
@@ -429,7 +433,7 @@ test("Find opens work history for a thought body or an extracted activity headin
         type: "response.output_text.delta",
         output_index: 1,
         content_index: 0,
-        delta: "Answer",
+        delta: "The visible telescope answer",
       },
     },
     {
@@ -440,7 +444,9 @@ test("Find opens work history for a thought body or an extracted activity headin
           type: "message",
           id: "answer",
           role: "assistant",
-          content: [{ type: "output_text", text: "Answer" }],
+          content: [
+            { type: "output_text", text: "The visible telescope answer" },
+          ],
         },
       },
     },
@@ -456,8 +462,7 @@ test("Find opens work history for a thought body or an extracted activity headin
   await host.key("\r")
   await host.settled()
   const before = await host.frame()
-  assert.match(before, /▸ Worked/)
-  assert.doesNotMatch(before, /The hidden telescope/)
+  assert.doesNotMatch(before, /Worked|The hidden telescope|Thought/)
   await host.key("\x06")
   await host.type("optics")
   await host.frame()
@@ -466,11 +471,12 @@ test("Find opens work history for a thought body or an extracted activity headin
   assert.match(headingHit, /▾ Worked[\s\S]*The hidden telescope/)
   assert.doesNotMatch(headingHit, /Investigating optics/)
   await host.key("\x1b")
+  assert.doesNotMatch(await host.frame(), /Worked|The hidden telescope/)
   await host.key("\x06")
   await host.type("telescope")
   await host.frame()
   const lines = host.screenLines()
-  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/)
+  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/2/)
   assert.match(
     lines.map(stripTerminalSequences).join("\n"),
     /▾ Worked[\s\S]*The hidden telescope/,
@@ -479,6 +485,19 @@ test("Find opens work history for a thought body or an extracted activity headin
     stripTerminalSequences(line).includes("The hidden telescope"),
   )
   assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
+  await host.key("\r")
+  const next = await host.frame()
+  assert.match(next, /2\/2/)
+  assert.doesNotMatch(next, /The hidden telescope/)
+  await host.key("\x10")
+  assert.match(await host.frame(), /The hidden telescope/)
+  await host.type("-missing")
+  const missing = await host.frame()
+  assert.match(missing, /No matches/)
+  assert.doesNotMatch(missing, /The hidden telescope/)
+  await host.key("\x1b")
+  await host.key("\x14")
+  assert.match(await host.frame(), /The hidden telescope/)
 })
 
 test("Find refreshes results as a represented assistant message streams", async (t) => {
@@ -743,7 +762,10 @@ test("Find reopens a hidden retained thought using the native Markdown environme
     persistSession: true,
     rows: 42,
     settings: { hideThinkingBlock: true },
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    keybindings: {
+      "tui.altScreen.search": "ctrl+f",
+      "app.thinking.toggle": "ctrl+t",
+    },
     extensionFactories: [
       (pi) => {
         pi.registerMarkdownTransformer((markdown, context) =>
@@ -787,6 +809,12 @@ test("Find reopens a hidden retained thought using the native Markdown environme
     stripTerminalSequences(line).includes("shown-historical"),
   )
   assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*historical/)
+  await host.key("\x1b")
+  assert.doesNotMatch(await host.frame(), /historical telescope/)
+  await host.key("\x14")
+  assert.match(await host.frame(), /shown-historical telescope/)
+  await host.key("\x14")
+  assert.doesNotMatch(await host.frame(), /historical telescope/)
 })
 
 test("Find restores separate retained calls with reused IDs and their own results", async (t) => {
