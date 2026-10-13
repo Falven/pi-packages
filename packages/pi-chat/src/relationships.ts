@@ -165,6 +165,7 @@ export class RelationshipJournal {
 export function carryObservedFork(
   host: AgentSessionRuntime,
   journal: RelationshipJournal,
+  reportFailure: (error: Error) => void,
 ) {
   // Pi copies only the selected ancestry; install the surviving facts before
   // its new runtime reads the forked manager and builds the initial chat.
@@ -186,16 +187,24 @@ export function carryObservedFork(
       "createRuntime",
     )
     let pending = true
+    let transferFailure: Error | undefined
     const wrappedCreate: typeof runtime.createRuntime = async (input) => {
       if (pending && input.sessionStartEvent?.reason === "fork") {
         pending = false
-        journal.transferTo(input.sessionManager)
+        try {
+          journal.transferTo(input.sessionManager)
+        } catch (error) {
+          transferFailure =
+            error instanceof Error ? error : new Error(String(error))
+        }
       }
       return originalCreate.call(runtime, input)
     }
     runtime.createRuntime = wrappedCreate
     try {
-      return await originalFork.call(runtime, entryId, options)
+      const result = await originalFork.call(runtime, entryId, options)
+      if (transferFailure) reportFailure(transferFailure)
+      return result
     } finally {
       pending = false
       if (runtime.createRuntime === wrappedCreate) {

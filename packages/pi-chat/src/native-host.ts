@@ -461,6 +461,7 @@ export class NativeChatHost {
       adapter.forkCleanup = carryObservedFork(
         mode.runtimeHost,
         adapter.relationships,
+        (error) => mode.showError?.(error.message),
       )
       adapter.bindRenderer()
       mode.fullscreenLayoutRoot = adapter.root
