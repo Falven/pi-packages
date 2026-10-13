@@ -204,7 +204,7 @@ importers:
   packages/pi-composer:
     dependencies:
       '@earendil-works/pi-coding-agent':
-        specifier: '*'
+        specifier: ^1.0.2
         version: 1.0.2(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)
     devDependencies:
       '@earendil-works/pi-tui':
@@ -214,10 +214,10 @@ importers:
   packages/pi-skill-references:
     dependencies:
       '@earendil-works/pi-coding-agent':
-        specifier: '*'
+        specifier: ^1.0.2
         version: 1.0.2(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)
       '@earendil-works/pi-tui':
-        specifier: '*'
+        specifier: ^1.0.2
         version: 1.0.2
 
 packages:
