@@ -1221,10 +1221,15 @@ export class NativeChatHost {
         work.header ??= new WorkHeader(this, work)
         result.push({ component: work.header, tool: false })
         if (this.work.expanded(work)) result.push(...body)
-        else
-          result.push(
-            ...body.filter((item) => item.occurrence?.message?.role === "user"),
+        else {
+          const users = body.filter(
+            (item) => item.occurrence?.message?.role === "user",
           )
+          result.push(...users)
+          // Split final parts omit the native assistant's leading spacer.
+          if (users.length && final[0]!.occurrence?.contentIndex !== undefined)
+            result.push({ component: work.header.spacing, tool: false })
+        }
       } else result.push(...body)
       result.push(...final)
     }

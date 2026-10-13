@@ -18,7 +18,7 @@ function assertWritableClipboard(
   Required<Pick<NativeClipboard, "setText">> {
   assert(clipboard?.setText)
 }
-const delta = (content: string, toolPath?: string) => ({
+const delta = (content: string, toolPath?: string, reasoning?: string) => ({
   event: {
     choices: [
       {
@@ -26,6 +26,7 @@ const delta = (content: string, toolPath?: string) => ({
         delta: {
           role: "assistant",
           content,
+          ...(reasoning ? { reasoning_content: reasoning } : {}),
           ...(toolPath
             ? {
                 tool_calls: [
@@ -121,7 +122,22 @@ test("settled work hides the earlier identical text and retains the final occurr
 })
 
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 52 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 52,
+    settings: { hideThinkingBlock: true },
+  })
+  const assertSteeringGap = (nextText: string) => {
+    const lines = host.screenLines()
+    const replyRow = lines.findIndex((line) =>
+      stripTerminalSequences(line).includes(nextText),
+    )
+    assert(replyRow >= 2)
+    const background = host.ui.theme.getBgAnsi("userMessageBg")
+    assert.equal(stripTerminalSequences(lines[replyRow - 1]!).trim(), "")
+    assert(!lines[replyRow - 1]!.includes(background))
+    assert(lines[replyRow - 2]!.includes(background))
+  }
   await writeFile(join(host.directory, "one.txt"), "one native result")
   await writeFile(join(host.directory, "two.txt"), "two native result")
   await writeFile(join(host.directory, "three.txt"), "three native result")
@@ -136,7 +152,11 @@ test("identical delivered steering and follow-up retain separate request relatio
     finish("tool_calls"),
     done,
   )
-  host.queueResponse(delta("First answer"), finish(), done)
+  host.queueResponse(
+    delta("First answer", undefined, "Final reasoning"),
+    finish(),
+    done,
+  )
   host.queueResponse(
     delta("Followup progress", "three.txt"),
     finish("tool_calls"),
@@ -171,6 +191,7 @@ test("identical delivered steering and follow-up retain separate request relatio
   assert.match(frame, /First answer/)
   assert.match(frame, /Second answer/)
   assert.doesNotMatch(frame, /Before steering|After steering|Followup progress/)
+  assertSteeringGap("First answer")
 
   const row = host
     .screenLines()
@@ -189,12 +210,14 @@ test("identical delivered steering and follow-up retain separate request relatio
     /Before steering[\s\S]*Same queued text[\s\S]*After steering[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Second answer/,
   )
   assert.doesNotMatch(expanded, /Followup progress/)
+  assertSteeringGap("After steering")
 
   await host.reload()
   const replayed = await host.frame()
   assert.equal((replayed.match(/Worked for \d+m \d+s ▸/g) ?? []).length, 2)
   assert.equal((replayed.match(/Same queued text/g) ?? []).length, 2)
   assert.match(replayed, /First answer|Second answer/)
+  assertSteeringGap("First answer")
 })
 
 test("without provider phase evidence work stays visible until the final stream settles", async (t) => {
