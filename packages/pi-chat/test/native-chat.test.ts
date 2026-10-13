@@ -11,12 +11,76 @@ import {
   stripTerminalSequences,
   type NativeClipboard,
 } from "@earendil-works/pi-tui"
+import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { installReplacement, observed } from "./fixtures/root-owner.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
 const rootOwner = new URL("./fixtures/root-owner.ts", import.meta.url).pathname
 const ownedRoot = () => observed.host?.fullscreenLayoutRoot
+const readDelta = (id: string, path: string) => ({
+  event: {
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: "assistant",
+          tool_calls: [
+            {
+              index: 0,
+              id,
+              type: "function",
+              function: { name: "read", arguments: JSON.stringify({ path }) },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ],
+  },
+})
+const readPairDelta = (
+  prefix: string,
+  first = "one.txt",
+  second = "two.txt",
+) => ({
+  event: {
+    choices: [
+      {
+        index: 0,
+        delta: {
+          role: "assistant",
+          tool_calls: [
+            {
+              index: 0,
+              id: `${prefix}-one`,
+              type: "function",
+              function: {
+                name: "read",
+                arguments: JSON.stringify({ path: first }),
+              },
+            },
+            {
+              index: 1,
+              id: `${prefix}-two`,
+              type: "function",
+              function: {
+                name: "read",
+                arguments: JSON.stringify({ path: second }),
+              },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ],
+  },
+})
+const toolFinish = {
+  event: { choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }] },
+}
+const done = { event: "[DONE]" }
+const end = { end: true } as const
 
 function assertWritableClipboard(
   clipboard: NativeClipboard | undefined,
@@ -184,6 +248,576 @@ test("native tool calls and results survive session replay without rerunning the
   assert.match(frame, /read note\.txt/)
   assert.match(frame, /Retained native tool result/)
   assert.equal(host.requests.length, 2)
+})
+
+test("consecutive native calls start as one closed group and open from the composer", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
+  await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "first",
+                  type: "function",
+                  function: { name: "read", arguments: '{"path":"one.txt"}' },
+                },
+                {
+                  index: 1,
+                  id: "second",
+                  type: "function",
+                  function: { name: "read", arguments: '{"path":"two.txt"}' },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    {
+      event: {
+        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
+      },
+    },
+    { event: "[DONE]" },
+    { end: true },
+  )
+  await host.type("Read both")
+  await host.key("\r")
+  await host.settled()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.match(screen(), /2 tool calls.*read/)
+  assert.doesNotMatch(screen(), /read one\.txt|read two\.txt/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /read two\.txt/)
+  await host.key("\u000f")
+  await host.frame()
+  assert.match(screen(), /FIRST TOOL BODY/)
+  await host.key("\r")
+  await host.frame()
+  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /FIRST TOOL BODY/)
+  await host.key("\u000f")
+  await host.frame()
+  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /FIRST TOOL BODY/)
+  await host.reload()
+  await host.frame()
+  assert.match(screen(), /2 tool calls.*read/)
+  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+})
+
+test("a finished call stays grouped while another iteration may join it", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "first")
+  await writeFile(join(host.directory, "two.txt"), "second")
+  host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
+  host.queueResponse(
+    { pause: true },
+    readDelta("second", "two.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read twice")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.match(screen(), /1 tool call: read/)
+  assert.doesNotMatch(screen(), /read one\.txt/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /read one\.txt/)
+  host.resumeResponse()
+  await host.settled()
+  await host.frame()
+  assert.match(screen(), /2 tool calls: read, read/)
+  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /read two\.txt/)
+})
+
+test("a settled finished singleton displays its native call directly", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "only")
+  host.queueResponse(readDelta("only", "one.txt"), toolFinish, done, end)
+  host.queueResponse(
+    { pause: true },
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Finished" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    { event: { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] } },
+    done,
+    end,
+  )
+  await host.type("One call")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.match(screen(), /1 tool call: read/)
+  assert.doesNotMatch(screen(), /read one\.txt/)
+  host.resumeResponse()
+  await host.settled()
+  await host.frame()
+  assert.doesNotMatch(screen(), /1 tool call: read/)
+  assert.match(screen(), /read one\.txt/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /only/)
+})
+
+test("commentary between model iterations separates tool groups in source order", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "first")
+  await writeFile(join(host.directory, "two.txt"), "second")
+  host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Between calls" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    readDelta("second", "two.txt"),
+    { pause: true },
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read with commentary")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.match(
+    screen(),
+    /read one\.txt[\s\S]*Between calls[\s\S]*1 tool call: read/,
+  )
+  assert.doesNotMatch(screen(), /2 tool calls/)
+  host.resumeResponse()
+  await host.settled()
+})
+
+test("a later assistant's trailing prose follows consecutive calls", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "first")
+  await writeFile(join(host.directory, "two.txt"), "second")
+  host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
+  host.queueResponse(
+    readDelta("second", "two.txt"),
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { content: "After both calls" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read with trailing prose")
+  await host.key("\r")
+  await host.settled()
+  const screen = (await host.frame())
+    .split("\n")
+    .map(stripTerminalSequences)
+    .join("\n")
+  assert.match(screen, /2 tool calls: read, read[\s\S]*After both calls/)
+  assert.doesNotMatch(screen, /1 tool call/)
+})
+
+test("thinking between calls separates their groups", async (t) => {
+  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  await writeFile(join(host.directory, "one.txt"), "first")
+  await writeFile(join(host.directory, "two.txt"), "second")
+  host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              reasoning_content: "Considering next call",
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    readDelta("second", "two.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read with thought")
+  await host.key("\r")
+  await host.settled()
+  const screen = (await host.frame())
+    .split("\n")
+    .map(stripTerminalSequences)
+    .join("\n")
+  assert.match(
+    screen,
+    /read one\.txt[\s\S]*Considering next call[\s\S]*read two\.txt/,
+  )
+  assert.doesNotMatch(screen, /2 tool calls/)
+})
+
+test("remapped selector keys navigate groups and cancel returns to the composer", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    keybindings: {
+      "tui.select.up": "ctrl+k",
+      "tui.select.down": "ctrl+j",
+      "tui.select.confirm": "ctrl+y",
+      "tui.select.cancel": "ctrl+q",
+    },
+  })
+  await writeFile(join(host.directory, "one.txt"), "first")
+  await writeFile(join(host.directory, "two.txt"), "second")
+  host.queueResponse(readPairDelta("first"), toolFinish, done, end)
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Boundary" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    readPairDelta("second"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Two groups")
+  await host.key("\r")
+  await host.settled()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.equal(screen().match(/2 tool calls: read, read/g)?.length, 2)
+  await host.key("\x1bg")
+  await host.key("\u000b")
+  await host.key("\u0019")
+  await host.frame()
+  const lines = host.screenLines().map(stripTerminalSequences)
+  const firstHeader = lines.findIndex((line) =>
+    line.includes("2 tool calls: read, read"),
+  )
+  const secondHeader = lines.findLastIndex((line) =>
+    line.includes("2 tool calls: read, read"),
+  )
+  assert(firstHeader >= 0 && secondHeader > firstHeader)
+  assert.match(lines[firstHeader] ?? "", /^ →/)
+  assert.match(lines[secondHeader] ?? "", /^ ▸/)
+  assert.match(screen(), /read one\.txt/)
+  await host.key("\u000a")
+  await host.key("\u000a")
+  await host.key("\u000a")
+  await host.key("\u0019")
+  await host.frame()
+  assert.equal(screen().match(/read one\.txt/g)?.length, 2)
+  await host.key("\u0011")
+  await host.type("draft after cancel")
+  await host.frame()
+  assert.match(screen(), /draft after cancel/)
+})
+
+test("disclosure focus enters the group visible in scrollback", async (t) => {
+  let renderer: TuiAltScreen | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 17,
+    onMount: (interactive) => {
+      renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
+    },
+  })
+  assert(renderer)
+  await Promise.all(
+    ["one", "two", "three", "four"].map((name) =>
+      writeFile(join(host.directory, `${name}.txt`), name),
+    ),
+  )
+  host.queueResponse(readPairDelta("first"), toolFinish, done, end)
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              content: Array.from(
+                { length: 16 },
+                (_, index) => `Boundary ${index}`,
+              ).join("\n"),
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    readPairDelta("second", "three.txt", "four.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Scrollback groups")
+  await host.key("\r")
+  await host.settled()
+  await host.frame()
+  renderer.scrollToTop()
+  await host.frame()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.match(screen(), /2 tool calls: read, read/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /read three\.txt/)
+})
+
+test("group pointer toggles retain native tool clicks and overlay focus", async (t) => {
+  let renderer: TuiAltScreen | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    onMount: (interactive) => {
+      renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
+    },
+  })
+  assert(renderer)
+  await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
+  await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
+  host.queueResponse(readPairDelta("pointer"), toolFinish, done, end)
+  await host.type("Pointer group")
+  await host.key("\r")
+  await host.settled()
+  const lines = () => host.screenLines().map(stripTerminalSequences)
+  const click = async (row: number) => {
+    await host.key(`\x1b[<0;3;${row + 1}M`)
+    await host.key(`\x1b[<0;3;${row + 1}m`)
+  }
+  await host.frame()
+  const header = lines().findIndex((line) => line.includes("2 tool calls"))
+  assert(header >= 0)
+  await click(header)
+  await host.frame()
+  assert.match(lines().join("\n"), /read one\.txt/)
+  const call = lines().findIndex((line) => line.includes("read one.txt"))
+  assert(call >= 0)
+  await click(call)
+  await host.frame()
+  assert.match(lines().join("\n"), /FIRST TOOL BODY/)
+
+  await host.key("\x1bg")
+  let submitted = 0
+  const input = new Input({ prompt: "Overlay" })
+  input.onSubmit = () => {
+    submitted++
+  }
+  const overlay = renderer.showOverlay(input)
+  await host.key("\x1bg")
+  await host.key("\r")
+  assert.equal(submitted, 1)
+  overlay.hide()
+  await host.key("\r")
+  await host.frame()
+  assert.doesNotMatch(lines().join("\n"), /read one\.txt|FIRST TOOL BODY/)
+})
+
+test("copy uses the native selected text while a disclosure is focused", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const sendRef: { current?: () => void } = {}
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    settings: { fullscreenCopyOnSelect: false },
+    extensionFactories: [
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.focused-copy",
+          () => new Text("focused-copy", 0, 0),
+        )
+        sendRef.current = () => pi.appendEntry("test.focused-copy", {})
+      },
+    ],
+  })
+  await writeFile(join(host.directory, "one.txt"), "ONE")
+  await writeFile(join(host.directory, "two.txt"), "TWO")
+  host.queueResponse(readPairDelta("copy"), toolFinish, done, end)
+  await host.type("Copy in group")
+  await host.key("\r")
+  await host.settled()
+  assert(sendRef.current)
+  sendRef.current()
+  await host.frame()
+  const lines = host.screenLines().map(stripTerminalSequences)
+  const row = lines.findIndex((line) => line.includes("focused-copy"))
+  assert(row >= 0)
+  const start = lines[row]!.indexOf("focused-copy") + 1
+  await host.key(`\x1b[<0;${start};${row + 1}M`)
+  await host.key(`\x1b[<32;${start + 12};${row + 1}M`)
+  await host.key(`\x1b[<0;${start + 12};${row + 1}m`)
+  await host.key("\x1bg")
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "focused-copy"))
+})
+
+test("folding a group clears selected tool output before native copy", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    settings: { fullscreenCopyOnSelect: false },
+  })
+  await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
+  await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
+  host.queueResponse(readPairDelta("selected"), toolFinish, done, end)
+  await host.type("Select tool output")
+  await host.key("\r")
+  await host.settled()
+  await host.key("\x1bg")
+  await host.key("\u000f")
+  await host.frame()
+  const lines = host.screenLines().map(stripTerminalSequences)
+  const row = lines.findIndex((line) => line.includes("FIRST TOOL BODY"))
+  assert(row >= 0)
+  const start = lines[row]!.indexOf("FIRST TOOL BODY") + 1
+  await host.key(`\x1b[<0;${start};${row + 1}M`)
+  await host.key(`\x1b[<32;${start + 15};${row + 1}M`)
+  await host.key(`\x1b[<0;${start + 15};${row + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "FIRST TOOL BODY"))
+  await host.key("\r")
+  assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY/)
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "Received."))
+})
+
+test("custom renderers and failed calls keep a manually opened group", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    extensionFactories: [
+      (pi) =>
+        pi.registerTool({
+          ...createReadToolDefinition("."),
+          name: "mystery",
+          label: "Mystery",
+          renderCall: () => new Text("CUSTOM CALL", 0, 0),
+          renderResult: () => new Text("CUSTOM RESULT", 0, 0),
+        }),
+    ],
+  })
+  await writeFile(join(host.directory, "valid.txt"), "custom")
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "failed",
+                  type: "function",
+                  function: {
+                    name: "read",
+                    arguments: '{"path":"missing.txt"}',
+                  },
+                },
+                {
+                  index: 1,
+                  id: "custom",
+                  type: "function",
+                  function: {
+                    name: "mystery",
+                    arguments: JSON.stringify({
+                      path: join(host.directory, "valid.txt"),
+                    }),
+                  },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Failure and custom tool")
+  await host.key("\r")
+  await host.settled()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  await host.frame()
+  assert.match(screen(), /2 tool calls: read, mystery/)
+  assert.doesNotMatch(screen(), /CUSTOM CALL|CUSTOM RESULT/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /CUSTOM CALL/)
+  assert.match(screen(), /CUSTOM RESULT/)
+  assert.match(screen(), /2 tool calls: read, mystery/)
 })
 
 test("native custom renderers keep equal occurrences distinct", async (t) => {

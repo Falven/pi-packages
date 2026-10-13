@@ -20,6 +20,11 @@ export default function piChat(pi: ExtensionAPI) {
   }
   const disarm = armHistoryBootstrap(relationshipRenderer, install)
 
+  pi.registerShortcut("alt+g", {
+    description: "Focus chat disclosures",
+    handler: () => adapter?.focusNearestDisclosure(),
+  })
+
   pi.on("session_start", (_event, context: ExtensionContext) => {
     disarm()
     try {
