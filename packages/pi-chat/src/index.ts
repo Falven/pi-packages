@@ -44,4 +44,5 @@ export default function piChat(pi: ExtensionAPI) {
     adapter?.dispose()
     adapter = undefined
   })
+  pi.on("session_tree", () => adapter?.rebaseRelationships())
 }

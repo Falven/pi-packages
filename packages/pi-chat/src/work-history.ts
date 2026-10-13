@@ -1,10 +1,12 @@
 import { Text, getKeybindings, type Component } from "@earendil-works/pi-tui"
 import type { NativeChatHost, Occurrence } from "./native-host.ts"
+import type { RelationshipFact } from "./relationships.ts"
 
 export type DeliveryKind = "initial" | "steering" | "follow-up"
 export type WorkHistory = {
   request: Occurrence
   lastAssistant?: Occurrence
+  lastCommitted?: Occurrence
   final?: Occurrence
   settled: boolean
   cancelled: boolean
@@ -30,13 +32,14 @@ export class WorkIndex {
     for (const message of messages) this.candidates.set(message, kind)
   }
 
-  start(occurrence: Occurrence) {
+  start(occurrence: Occurrence): RelationshipFact | undefined {
     const message = occurrence.message
     if (!message) return
+    let previous: RelationshipFact | undefined
     if (message.role === "user") {
       const kind = this.candidates.get(message)
       if (kind === "initial" || kind === "follow-up") {
-        if (this.current && !this.current.settled) this.settle(false)
+        if (this.current && !this.current.settled) previous = this.settle(false)
         this.current = {
           request: occurrence,
           settled: false,
@@ -59,18 +62,32 @@ export class WorkIndex {
         message.role !== "assistant" &&
         message.role !== "user")
     )
-      return
+      return previous
     this.owners.set(occurrence, this.current)
     if (message.role === "assistant") {
       this.current.settled = false
       this.current.lastAssistant = occurrence
       delete this.current.final
     }
+    return previous
   }
 
-  committed(occurrence: Occurrence) {
+  committed(occurrence: Occurrence): RelationshipFact | undefined {
     const work = this.find(occurrence)
-    if (work && occurrence.entry) this.entries.set(occurrence.entry.id, work)
+    if (!work || !occurrence.entry || !work.request.entry) return
+    this.entries.set(occurrence.entry.id, work)
+    work.lastCommitted = occurrence
+    const delivery =
+      occurrence.message?.role === "user"
+        ? this.candidates.get(occurrence.message)
+        : undefined
+    return {
+      version: 1,
+      kind: "member",
+      requestId: work.request.entry.id,
+      sourceId: occurrence.entry.id,
+      ...(delivery ? { delivery } : {}),
+    }
   }
 
   find(occurrence: Occurrence | undefined): WorkHistory | undefined {
@@ -82,9 +99,9 @@ export class WorkIndex {
     )
   }
 
-  settle(cancelled: boolean) {
+  settle(cancelled: boolean): RelationshipFact | undefined {
     const work = this.current
-    if (!work) return
+    if (!work || work.settled) return
     work.settled = true
     work.cancelled = cancelled
     const candidate = work.lastAssistant
@@ -100,6 +117,62 @@ export class WorkIndex {
     )
       work.final = candidate
     else delete work.final
+    if (!work.request.entry || !work.lastCommitted?.entry) return
+    return {
+      version: 1,
+      kind: "settled",
+      requestId: work.request.entry.id,
+      sourceId: work.lastCommitted.entry.id,
+      ...(work.final?.entry ? { finalId: work.final.entry.id } : {}),
+      cancelled,
+    }
+  }
+
+  restore(
+    facts: RelationshipFact[],
+    occurrenceFor: (id: string) => Occurrence | undefined,
+  ) {
+    this.clear()
+    const works = new Map<string, WorkHistory>()
+    for (const fact of facts) {
+      if (
+        fact.kind !== "member" ||
+        (fact.delivery !== "initial" && fact.delivery !== "follow-up") ||
+        fact.requestId !== fact.sourceId
+      )
+        continue
+      const request = occurrenceFor(fact.requestId)
+      if (!request) continue
+      const work: WorkHistory = {
+        request,
+        settled: false,
+        cancelled: false,
+        keepOpen: false,
+      }
+      works.set(fact.requestId, work)
+      this.current = work
+    }
+    for (const fact of facts) {
+      const work = works.get(fact.requestId)
+      if (!work) continue
+      if (fact.kind === "member") {
+        if (fact.delivery === "steering") {
+          work.settled = false
+          work.cancelled = false
+          delete work.final
+        }
+        this.entries.set(fact.sourceId, work)
+        const source = occurrenceFor(fact.sourceId)
+        if (source) work.lastCommitted = source
+      } else {
+        work.settled = true
+        work.cancelled = fact.cancelled
+        const final = fact.finalId ? occurrenceFor(fact.finalId) : undefined
+        if (final) work.final = final
+        else delete work.final
+      }
+    }
+    if (this.current?.settled) this.current = undefined
   }
 
   isRequest(occurrence: Occurrence | undefined, work: WorkHistory) {

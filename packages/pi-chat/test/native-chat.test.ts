@@ -258,6 +258,7 @@ test("native tool calls and results survive session replay without rerunning the
 
   await host.runtime.newSession()
   await host.runtime.switchSession(file)
+  await openWork(host)
   await host.key("\u000f")
   const frame = await host.frame()
   assert.match(frame, /read note\.txt/)
@@ -335,6 +336,7 @@ test("consecutive native calls start as one closed group and open from the compo
   assert.match(screen(), /read one\.txt/)
   assert.doesNotMatch(screen(), /FIRST TOOL BODY/)
   await host.reload()
+  await openWork(host)
   await host.frame()
   assert.match(screen(), /2 tool calls.*read/)
   assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)

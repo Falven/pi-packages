@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { writeFile } from "node:fs/promises"
+import { copyFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
 import {
@@ -140,6 +140,12 @@ test("identical delivered steering and follow-up retain separate request relatio
   assert.match(expanded, /Before steering/)
   assert.match(expanded, /After steering/)
   assert.doesNotMatch(expanded, /Followup progress/)
+
+  await host.reload()
+  const replayed = await host.frame()
+  assert.equal((replayed.match(/▸ Worked/g) ?? []).length, 2)
+  assert.equal((replayed.match(/Same queued text/g) ?? []).length, 1)
+  assert.match(replayed, /First answer|Second answer/)
 })
 
 test("without provider phase evidence work stays visible until the final stream settles", async (t) => {
@@ -220,6 +226,8 @@ test("native user replacement preserves the delivered request relationship and p
     JSON.stringify(requested),
     /Original request|Worked|pi-chat/,
   )
+  await host.reload()
+  assert.match(await host.frame(), /▸ Worked/)
 })
 
 test("a settled terminal assistant keeps its native thoughts in work and its text as one answer", async (t) => {
@@ -664,7 +672,7 @@ test("automatic folding clears a selected progress range even while reading scro
   await t.waitFor(() => assert.equal(copied, "Visible final"))
 })
 
-test("reloading history without relationship records leaves its work unfolded", async (t) => {
+test("certified work relationships survive native journal reload", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -677,11 +685,303 @@ test("reloading history without relationship records leaves its work unfolded", 
   await host.key("\r")
   await host.settled()
   assert.doesNotMatch(await host.frame(), /Live progress/)
+  const entries = host.session.sessionManager.getEntries()
+  const facts = entries.filter(
+    (entry) =>
+      entry.type === "custom" && entry.customType === "pi-chat.relationship",
+  )
+  assert(facts.length > 0)
+  assert.doesNotMatch(
+    JSON.stringify(facts),
+    /Live progress|Live answer|Uncertain replay/,
+  )
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.key("\x1b")
+  assert.match(await host.frame(), /Live progress/)
   await host.reload()
   const reloaded = await host.frame()
-  assert.match(reloaded, /Live progress/)
+  assert.doesNotMatch(reloaded, /Live progress/)
   assert.match(reloaded, /Live answer/)
-  assert.doesNotMatch(reloaded, /Worked/)
+  assert.match(reloaded, /▸ Worked/)
+})
+
+test("history without delivery records leaves uncertain work unfolded", async (t) => {
+  const source = await openNativeHost(t, { persistSession: true, rows: 32 })
+  await writeFile(join(source.directory, "one.txt"), "native result")
+  source.queueResponse(
+    delta("Old progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  source.queueResponse(delta("Old answer"), finish(), done)
+  await source.type("Old request")
+  await source.key("\r")
+  await source.settled()
+  const sessionFile = source.session.sessionFile
+  assert(sessionFile)
+  await source.close()
+
+  const restored = await openNativeHost(t, {
+    extensionPaths: [chat],
+    sessionFile,
+    directory: source.directory,
+    rows: 32,
+  })
+  const frame = await restored.frame()
+  assert.match(frame, /Old progress/)
+  assert.match(frame, /Old answer/)
+  assert.doesNotMatch(frame, /Worked/)
+})
+
+test("same-journal tree navigation restores only surviving relationships", async (t) => {
+  let target = ""
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 36,
+    extensionFactories: [
+      (pi) =>
+        pi.registerCommand("test-tree", {
+          handler: async (_args, ctx) => {
+            await ctx.navigateTree(target)
+          },
+        }),
+    ],
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Tree progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Tree answer"), finish(), done)
+  await host.type("Tree request")
+  await host.key("\r")
+  await host.settled()
+
+  const entries = host.session.sessionManager.getEntries()
+  const assistant = entries.filter(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  )
+  assert.equal(assistant.length, 2)
+  const progress = assistant[0]!
+  const answer = assistant[1]!
+  target = answer.id
+  await host.type("/test-tree")
+  await host.key("\r")
+  const selected = host.session.sessionManager.getBranch()
+  assert.equal(selected.at(-1)?.id, answer.id)
+  assert.equal(
+    selected.some(
+      (entry) =>
+        entry.type === "custom" &&
+        entry.customType === "pi-chat.relationship" &&
+        entry.parentId === answer.id,
+    ),
+    false,
+  )
+  const restored = await host.frame()
+  assert.match(restored, /▸ Worked/)
+  assert.match(restored, /Tree answer/)
+  assert.doesNotMatch(restored, /Tree progress/)
+
+  target = progress.id
+  await host.type("/test-tree")
+  await host.key("\r")
+  const partial = await host.frame()
+  assert.match(partial, /Tree progress/)
+  assert.doesNotMatch(partial, /Tree answer|▸ Worked/)
+
+  target = answer.id
+  await host.type("/test-tree")
+  await host.key("\r")
+  assert.match(await host.frame(), /▸ Worked/)
+})
+
+test("native fork carries certified relationships whose sources survive", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 36,
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Fork progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Fork answer"), finish(), done)
+  await host.type("Fork request")
+  await host.key("\r")
+  await host.settled()
+  const originalFile = host.session.sessionFile
+  const answer = host.session.sessionManager
+    .getEntries()
+    .find(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        JSON.stringify(entry.message.content).includes("Fork answer"),
+    )
+  assert(answer)
+  host.queueResponse(delta("Sibling answer"), finish(), done)
+  await host.type("Sibling request")
+  await host.key("\r")
+  await host.settled()
+  const result = await host.runtime.fork(answer.id, { position: "at" })
+  assert.equal(result.cancelled, false)
+  assert.notEqual(host.session.sessionFile, originalFile)
+  const frame = await host.frame()
+  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Fork answer/)
+  assert.doesNotMatch(frame, /Fork progress/)
+  assert.doesNotMatch(frame, /Sibling request|Sibling answer/)
+  assert.doesNotMatch(
+    JSON.stringify(host.session.sessionManager.getEntries()),
+    /Sibling request|Sibling answer/,
+  )
+  assert(
+    host.session.sessionManager
+      .getEntries()
+      .some(
+        (entry) =>
+          entry.type === "custom" &&
+          entry.customType === "pi-chat.relationship",
+      ),
+  )
+})
+
+test("a retained fork method cannot transfer a disposed adapter's relationships", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 36,
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Stale progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Stale answer"), finish(), done)
+  await host.type("Stale request")
+  await host.key("\r")
+  await host.settled()
+  const retainedFork = host.runtime.fork
+  const answer = host.session.sessionManager
+    .getEntries()
+    .find(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        JSON.stringify(entry.message.content).includes("Stale answer"),
+    )
+  assert(answer)
+  await host.reload()
+
+  const result = await retainedFork(answer.id, { position: "at" })
+  assert.equal(result.cancelled, false)
+  const frame = await host.frame()
+  assert.match(frame, /Stale progress|read one\.txt/)
+  assert.match(frame, /Stale answer/)
+  assert.doesNotMatch(frame, /▸ Worked/)
+  assert.equal(
+    host.session.sessionManager
+      .getEntries()
+      .some(
+        (entry) =>
+          entry.type === "custom" &&
+          entry.customType === "pi-chat.relationship" &&
+          entry.data &&
+          typeof entry.data === "object" &&
+          "kind" in entry.data &&
+          entry.data.kind === "settled",
+      ),
+    false,
+  )
+})
+
+test("copied journal restores work without changing provider context", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 36,
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Copy progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Copy answer"), finish(), done)
+  await host.type("Copy request")
+  await host.key("\r")
+  await host.settled()
+  const sourceFile = host.session.sessionFile
+  assert(sourceFile)
+  const copiedFile = join(host.directory, "copied-session.jsonl")
+  await copyFile(sourceFile, copiedFile)
+  await host.runtime.switchSession(copiedFile)
+
+  const frame = await host.frame()
+  assert.match(frame, /▸ Worked/)
+  assert.match(frame, /Copy answer/)
+  assert.doesNotMatch(frame, /Copy progress/)
+  await host.type("Next request")
+  await host.key("\r")
+  await host.settled()
+  const provider = JSON.stringify(host.requests.at(-1))
+  assert.match(provider, /Copy request|Copy answer|Next request/)
+  assert.doesNotMatch(provider, /pi-chat|Worked/)
+})
+
+test("compaction keeps certified source relationships for later tree navigation", async (t) => {
+  let target = ""
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 36,
+    extensionFactories: [
+      (pi) =>
+        pi.registerCommand("test-tree", {
+          handler: async (_args, ctx) => {
+            await ctx.navigateTree(target)
+          },
+        }),
+    ],
+  })
+  await writeFile(join(host.directory, "one.txt"), "native result")
+  host.queueResponse(
+    delta("Archived progress", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Archived answer"), finish(), done)
+  await host.type("Archived request")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile
+  assert(file)
+  const answer = host.session.sessionManager
+    .getEntries()
+    .find(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        JSON.stringify(entry.message.content).includes("Archived answer"),
+    )
+  assert(answer)
+  target = answer.id
+  host.session.sessionManager.appendCompaction("Archived context", null, 100)
+  await host.runtime.switchSession(file)
+  assert.match(await host.frame(), /Compacted from 100 tokens/)
+
+  await host.type("/test-tree")
+  await host.key("\r")
+  const restored = await host.frame()
+  assert.match(restored, /▸ Worked/)
+  assert.match(restored, /Archived answer/)
+  assert.doesNotMatch(restored, /Archived progress/)
 })
 
 test("a standalone native message after the final keeps its source position", async (t) => {

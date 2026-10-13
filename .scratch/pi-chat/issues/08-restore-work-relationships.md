@@ -4,11 +4,11 @@
 
 **Blocked by:** 07: Fold settled work while keeping the final response visible.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Append minimal native custom entries for certified delivery, work, and final relationships using source references rather than copied text.
-- [ ] Keep metadata outside model context and preserve original conversation messages.
-- [ ] Reconstruct established relationships on replay, reload, session replacement, branch changes, and copied/forked history using session-journal-local identity.
-- [ ] Reset fold choices at the agreed lifecycle boundaries; do not store them in metadata.
-- [ ] Leave only uncertain historical work relationships unfolded, retaining known tool/thought disclosures and search compatibility without invented notices.
-- [ ] Verify persisted entries, provider input, reopened/forked sessions, duplicate input text, compaction history, and missing provenance through the native host.
+- [x] Append minimal native custom entries for certified delivery, work, and final relationships using source references rather than copied text.
+- [x] Keep metadata outside model context and preserve original conversation messages.
+- [x] Reconstruct established relationships on replay, reload, session replacement, branch changes, and copied/forked history using session-journal-local identity.
+- [x] Reset fold choices at the agreed lifecycle boundaries; do not store them in metadata.
+- [x] Leave only uncertain historical work relationships unfolded, retaining known tool/thought disclosures and search compatibility without invented notices.
+- [x] Verify persisted entries, provider input, reopened/forked sessions, duplicate input text, compaction history, and missing provenance through the native host.

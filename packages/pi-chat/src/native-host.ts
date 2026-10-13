@@ -2,6 +2,7 @@ import {
   InteractiveMode,
   sessionEntryToContextMessages,
   type AgentSession,
+  type AgentSessionRuntime,
   type ExtensionContext,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent"
@@ -25,6 +26,8 @@ import {
 } from "./work-history.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
+import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
+import type { RelationshipFact } from "./relationships.ts"
 const { allocateStackSizes } = (await import(
   new URL(
     "./components/stack.js",
@@ -55,10 +58,8 @@ type NativeMode = {
   transcriptScrollView: ScrollView
   chatContainer: Container
   documentContainer: Container
-  sessionManager: Pick<
-    AgentSession["sessionManager"],
-    "getBranch" | "getEntry" | "appendMessage" | "appendCustomMessageEntry"
-  >
+  sessionManager: AgentSession["sessionManager"]
+  runtimeHost: AgentSessionRuntime
   session: {
     isStreaming: boolean
     agent: {
@@ -130,6 +131,7 @@ function requiredMode(host: InteractiveMode): NativeMode {
     typeof mode.renderSessionItems !== "function" ||
     typeof mode.addMessageToChat !== "function" ||
     typeof mode.handleEvent !== "function" ||
+    typeof mode.runtimeHost?.fork !== "function" ||
     typeof mode.session?.agent?.normalizePromptInput !== "function" ||
     typeof mode.session.agent.steeringQueue?.drain !== "function" ||
     typeof mode.session.agent.followUpQueue?.drain !== "function"
@@ -387,7 +389,9 @@ class ToolFocus extends Container {
 export class NativeChatHost {
   readonly host: NativeMode
   readonly work = new WorkIndex()
+  readonly relationships: RelationshipJournal
   private readonly deliveryCleanup: (() => void)[] = []
+  private forkCleanup?: () => void
   private deliveringUser: Occurrence | undefined
   readonly occurrences: Occurrence[] = []
   readonly byEntryId = new Map<string, Occurrence>()
@@ -449,10 +453,12 @@ export class NativeChatHost {
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
   private active = true
+  private relationshipWriteFailed = false
   private indexedIds: string[] = []
 
   private constructor(host: NativeMode) {
     this.host = host
+    this.relationships = new RelationshipJournal(host.sessionManager)
     this.oldRoot = host.fullscreenLayoutRoot
     this.transcript = new ScrollView(host.documentContainer, {
       follow: "end",
@@ -488,11 +494,16 @@ export class NativeChatHost {
     const adapter = new NativeChatHost(mode)
     try {
       adapter.wrapNativeConstruction()
+      adapter.forkCleanup = carryObservedFork(
+        mode.runtimeHost,
+        adapter.relationships,
+      )
       adapter.bindRenderer()
       mode.fullscreenLayoutRoot = adapter.root
       if (mode.renderer.mode === "fullscreen")
         mode.renderer.setLayoutRoot(adapter.root)
       adapter.indexBranch()
+      adapter.restoreRelationships()
       adapter.unsubscribe = mode.session.agent.subscribe((event) => {
         adapter.promotePersistedMessage(event)
       })
@@ -1349,6 +1360,34 @@ export class NativeChatHost {
     return active.get(host)
   }
 
+  rebaseRelationships() {
+    if (!this.active) return
+    this.indexBranch()
+    this.restoreRelationships()
+    this.clearChatSelection()
+  }
+
+  private restoreRelationships() {
+    this.work.restore(
+      this.relationships.active(this.host.sessionManager.getBranch()),
+      (id) => this.byEntryId.get(id),
+    )
+  }
+
+  private recordRelationship(fact: RelationshipFact) {
+    try {
+      this.relationships.record(fact)
+    } catch (error) {
+      if (!this.relationshipWriteFailed) {
+        this.relationshipWriteFailed = true
+        this.host.showError?.(
+          error instanceof Error ? error.message : String(error),
+        )
+      }
+      throw error
+    }
+  }
+
   private indexBranch() {
     const branch = this.host.sessionManager.getBranch()
     const common = Math.min(this.indexedIds.length, branch.length)
@@ -1838,12 +1877,16 @@ export class NativeChatHost {
             this.liveMessages.set(event.message, owner)
           }
           if (event.type === "message_start" && owner) {
-            this.work.start(owner)
+            const previous = this.work.start(owner)
+            if (previous) this.recordRelationship(previous)
             if (event.message?.role === "user") this.deliveringUser = owner
             if (event.message?.role === "assistant") this.streaming = owner
           }
           if (event.type === "agent_settled") {
-            this.work.settle(host.session._agentRunAbortRequested)
+            const settled = this.work.settle(
+              host.session._agentRunAbortRequested,
+            )
+            if (settled) this.recordRelationship(settled)
             ;(host.renderer as unknown as TuiAltScreen).requestRender()
           }
           const result = this.withSource(owner, () =>
@@ -1990,7 +2033,8 @@ export class NativeChatHost {
       occurrence.entry = entry
       this.byEntryId.set(id, occurrence)
       for (const part of occurrence.parts.values()) part.entry = entry
-      this.work.committed(occurrence)
+      const relationship = this.work.committed(occurrence)
+      if (relationship) this.recordRelationship(relationship)
     }
     const bash = this.bashMessages.get(message)
     if (bash) this.byComponent.set(bash, this.forEntry(entry))
@@ -2006,6 +2050,7 @@ export class NativeChatHost {
     if (!this.active) return
     this.active = false
     this.unsubscribe?.()
+    this.forkCleanup?.()
     for (const cleanup of this.deliveryCleanup) cleanup()
     this.deliveryCleanup.length = 0
     this.work.clear()
