@@ -19,6 +19,7 @@ import {
 } from "@earendil-works/pi-tui"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
+import { Thought, type ThoughtEnvironment } from "./thought.ts"
 const { allocateStackSizes } = (await import(
   new URL(
     "./components/stack.js",
@@ -36,9 +37,10 @@ type Entry = SessionEntry
 type Message = AgentSession["messages"][number]
 type NativeAssistant = Component & {
   contentContainer: Container
+  isStreaming: boolean
   updateContent(message: Message, streaming?: boolean): void
 }
-type NativeMode = {
+type NativeMode = ThoughtEnvironment & {
   version: string
   renderer: {
     mode: string
@@ -262,25 +264,9 @@ class GroupHeader extends Text {
   }
 
   handleInput(data: string) {
-    const keys = getKeybindings()
-    if (keys.matches(data, "tui.select.up")) this.adapter.moveDisclosure(-1)
-    else if (keys.matches(data, "tui.select.down"))
-      this.adapter.moveDisclosure(1)
-    else if (keys.matches(data, "tui.select.confirm"))
-      this.adapter.toggleGroup(this.group)
-    else if (keys.matches(data, "tui.select.cancel"))
-      this.adapter.returnToComposer()
-    else if (this.adapter.host.keybindings.matches(data, "app.tools.expand"))
-      this.adapter.host.toggleToolOutputExpansion()
-    else if (this.adapter.host.keybindings.matches(data, "app.message.copy"))
-      void this.adapter.host.handleCopyCommand({
-        flashConfirmation: true,
-        preferSelection: true,
-      })
-    else if (keys.matches(data, "tui.altScreen.pageUp"))
-      this.adapter.scrollChat(-1)
-    else if (keys.matches(data, "tui.altScreen.pageDown"))
-      this.adapter.scrollChat(1)
+    this.adapter.handleDisclosureInput(data, () =>
+      this.adapter.toggleGroup(this.group),
+    )
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
@@ -312,25 +298,9 @@ class ToolFocus extends Container {
   }
 
   handleInput(data: string) {
-    const keys = getKeybindings()
-    if (keys.matches(data, "tui.select.up")) this.adapter.moveDisclosure(-1)
-    else if (keys.matches(data, "tui.select.down"))
-      this.adapter.moveDisclosure(1)
-    else if (keys.matches(data, "tui.select.confirm"))
-      this.adapter.toggleTool(this.tool)
-    else if (keys.matches(data, "tui.select.cancel"))
-      this.adapter.returnToComposer()
-    else if (this.adapter.host.keybindings.matches(data, "app.tools.expand"))
-      this.adapter.host.toggleToolOutputExpansion()
-    else if (this.adapter.host.keybindings.matches(data, "app.message.copy"))
-      void this.adapter.host.handleCopyCommand({
-        flashConfirmation: true,
-        preferSelection: true,
-      })
-    else if (keys.matches(data, "tui.altScreen.pageUp"))
-      this.adapter.scrollChat(-1)
-    else if (keys.matches(data, "tui.altScreen.pageDown"))
-      this.adapter.scrollChat(1)
+    this.adapter.handleDisclosureInput(data, () =>
+      this.adapter.toggleTool(this.tool),
+    )
   }
 
   override handleMouse(
@@ -399,7 +369,9 @@ export class NativeChatHost {
   private readonly toolResults = new WeakMap<object, Component>()
   private readonly groups = new Map<Occurrence, ToolGroup>()
   private readonly toolFocus = new Map<Component, ToolFocus>()
-  private visibleDisclosures: (GroupHeader | ToolFocus)[] = []
+  private readonly thoughts = new Map<Occurrence, Thought>()
+  private readonly thinkingParts = new Map<Occurrence, Set<number>>()
+  private visibleDisclosures: (GroupHeader | ToolFocus | Thought)[] = []
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -511,6 +483,8 @@ export class NativeChatHost {
     for (let index = 0; index < activities.length;) {
       const activity = activities[index]!
       if (!activity.tool) {
+        if (activity.component instanceof Thought)
+          this.visibleDisclosures.push(activity.component)
         composed.push(activity)
         index++
         continue
@@ -587,9 +561,10 @@ export class NativeChatHost {
     this.leaves = leaves
     if (
       (renderer.getFocusedComponent() instanceof GroupHeader ||
-        renderer.getFocusedComponent() instanceof ToolFocus) &&
+        renderer.getFocusedComponent() instanceof ToolFocus ||
+        renderer.getFocusedComponent() instanceof Thought) &&
       !this.visibleDisclosures.includes(
-        renderer.getFocusedComponent() as GroupHeader | ToolFocus,
+        renderer.getFocusedComponent() as GroupHeader | ToolFocus | Thought,
       )
     )
       this.returnToComposer()
@@ -731,7 +706,9 @@ export class NativeChatHost {
       if (
         owner?.message?.role !== "assistant" ||
         !("contentContainer" in component) ||
-        !owner.message.content.some((part) => part.type === "toolCall")
+        !owner.message.content.some(
+          (part) => part.type === "toolCall" || part.type === "thinking",
+        )
       ) {
         activities.push({
           component,
@@ -770,11 +747,22 @@ export class NativeChatHost {
           }
           flush()
           if (children[position] === occurrence.component) position++
-          activities.push({
-            component: occurrence.component,
-            occurrence,
-            tool: false,
-          })
+          const thought = this.thoughts.get(occurrence)
+          if (thought) {
+            activities.push({ component: thought, tool: false })
+            if (thought.expanded && thought.body)
+              activities.push({
+                component: thought.body,
+                occurrence,
+                tool: false,
+                body: thought.viewport,
+              })
+          } else
+            activities.push({
+              component: occurrence.component,
+              occurrence,
+              tool: false,
+            })
         }
       }
       if (leading) activities.push({ component: leading, tool: false })
@@ -782,6 +770,27 @@ export class NativeChatHost {
         activities.push({ component: children[position]!, tool: false })
     }
     return activities
+  }
+
+  requestRender() {
+    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+  }
+
+  handleDisclosureInput(data: string, toggle: () => void) {
+    const keys = getKeybindings()
+    if (keys.matches(data, "tui.select.up")) this.moveDisclosure(-1)
+    else if (keys.matches(data, "tui.select.down")) this.moveDisclosure(1)
+    else if (keys.matches(data, "tui.select.confirm")) toggle()
+    else if (keys.matches(data, "tui.select.cancel")) this.returnToComposer()
+    else if (this.host.keybindings.matches(data, "app.tools.expand"))
+      this.host.toggleToolOutputExpansion()
+    else if (this.host.keybindings.matches(data, "app.message.copy"))
+      void this.host.handleCopyCommand({
+        flashConfirmation: true,
+        preferSelection: true,
+      })
+    else if (keys.matches(data, "tui.altScreen.pageUp")) this.scrollChat(-1)
+    else if (keys.matches(data, "tui.altScreen.pageDown")) this.scrollChat(1)
   }
 
   focusNearestDisclosure() {
@@ -813,7 +822,7 @@ export class NativeChatHost {
     this.revealDisclosure(next)
   }
 
-  private revealDisclosure(component: GroupHeader | ToolFocus) {
+  private revealDisclosure(component: GroupHeader | ToolFocus | Thought) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
     if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
@@ -1351,6 +1360,19 @@ export class NativeChatHost {
     part.component = component
     for (let index = start; index <= end; index++) owner.parts.set(index, part)
     this.byComponent.set(component, part)
+    let thought = this.thoughts.get(part)
+    if (!thought) {
+      thought = new Thought(this)
+      this.thoughts.set(part, thought)
+    }
+    thought.live = part.contentIndices.some((index) =>
+      this.thinkingParts.get(owner)?.has(index),
+    )
+    thought.bind(
+      part,
+      component,
+      Boolean((owner.component as NativeAssistant | undefined)?.isStreaming),
+    )
   }
 
   private bindAssistant(component: NativeAssistant, owner: Occurrence) {
@@ -1524,6 +1546,8 @@ export class NativeChatHost {
             this.projections.clear()
             this.indexedIds = []
             this.byComponent.clear()
+            this.thoughts.clear()
+            this.thinkingParts.clear()
             this.groups.clear()
             this.toolFocus.clear()
             this.visibleDisclosures = []
@@ -1638,7 +1662,12 @@ export class NativeChatHost {
     wrap(
       "handleEvent",
       (original) =>
-        (event: { type: string; message?: Message; entry?: Entry }) => {
+        (event: {
+          type: string
+          message?: Message
+          entry?: Entry
+          assistantMessageEvent?: { type: string; contentIndex?: number }
+        }) => {
           let owner: Occurrence | undefined
           if (
             event.type === "message_end" &&
@@ -1662,6 +1691,24 @@ export class NativeChatHost {
             event.message?.role === "assistant"
           )
             this.streaming = owner
+          if (owner && event.message?.role === "assistant") {
+            const update = event.assistantMessageEvent
+            if (event.type === "message_end") this.thinkingParts.delete(owner)
+            else if (update?.contentIndex !== undefined) {
+              let parts = this.thinkingParts.get(owner)
+              if (!parts) {
+                parts = new Set()
+                this.thinkingParts.set(owner, parts)
+              }
+              if (
+                update.type === "thinking_start" ||
+                update.type === "thinking_delta"
+              )
+                parts.add(update.contentIndex)
+              else if (update.type === "thinking_end")
+                parts.delete(update.contentIndex)
+            }
+          }
           const result = this.withSource(owner, () =>
             original.call(host, event as never),
           )
@@ -1867,6 +1914,8 @@ export class NativeChatHost {
     this.painting.clear()
     this.byEntryId.clear()
     this.byComponent.clear()
+    this.thoughts.clear()
+    this.thinkingParts.clear()
     this.groups.clear()
     this.toolFocus.clear()
     this.visibleDisclosures = []
