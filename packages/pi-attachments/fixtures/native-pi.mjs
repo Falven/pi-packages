@@ -11,7 +11,7 @@ import fs, {
 import { createServer } from "node:http"
 import { syncBuiltinESMExports } from "node:module"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 import { stripVTControlCharacters } from "node:util"
@@ -257,6 +257,21 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
       return stripVTControlCharacters(output)
     },
   }
+}
+
+export function assertAttachments(draft, display, expected) {
+  assert.match(display, /Manage attachments/)
+  const paths = new Set(
+    [...draft.matchAll(/\[Attachment: [^[\]]+\]\(<([^<>]+)>\)/g)].map(
+      (match) => match[1],
+    ),
+  )
+  if (typeof expected === "number") assert.equal(paths.size, expected)
+  else
+    assert.deepEqual(
+      [...paths].map((path) => basename(path)),
+      expected,
+    )
 }
 
 export function snapshotPath(text) {

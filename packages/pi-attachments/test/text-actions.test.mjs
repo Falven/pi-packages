@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url"
 import { Text } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
+  assertAttachments,
   holdFileRead,
   nativePi,
   snapshotPath,
@@ -71,7 +72,7 @@ test("native attachment preview shows the captured text without changing the dra
   host.input("\x1b")
   await pending
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(1\): notes\.md/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["notes.md"])
   assert.match(host.render(), /Other extension widget/)
   assert.equal(await readFile(path, "utf8"), contents)
   assert.equal(host.requests.length, 0)
@@ -100,7 +101,7 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
 
   const after = `Lead\n\nKeep ${contents.replaceAll("\r\n", "\n")}\nTail`
   assert.equal(host.ui.getEditorText(), after)
-  assert.doesNotMatch(host.render(), /Attachments \(|\[paste #/)
+  assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
   })
@@ -110,7 +111,7 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
   assert.equal(host.ui.getEditorText(), after)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(1\): context\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["context.txt"])
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), after)
   host.input("\x1b[122;9u")
@@ -154,10 +155,13 @@ for (const selection of ["prose", "attachment"]) {
     const after = `**aa CAPTURED**\n\nKeep /skill:review @current.md\n${other}\n\nTail`
     assert.equal(host.ui.getEditorText(), after)
     assert.doesNotMatch(host.render(), /Could not restore/)
-    assert.match(host.render(), /Attachments \(1\): text\.txt/)
+    assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
     host.input("\x1b[122;9u")
     assert.equal(host.ui.getEditorText(), before)
-    assert.match(host.render(), /Attachments \(2\): text\.txt, text\.txt/)
+    assertAttachments(host.ui.getEditorText(), host.render(), [
+      "text.txt",
+      "text.txt",
+    ])
     host.input("\x1b[122;10u")
     assert.equal(host.ui.getEditorText(), after)
     host.input("!")
@@ -208,10 +212,13 @@ test("Remove from draft removes repeated membership in one composer edit and ret
   await pending
   const after = `Head\n\n${second}\n\nTail`
   assert.equal(host.ui.getEditorText(), after)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(2\): text\.txt, text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "text.txt",
+    "text.txt",
+  ])
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), after)
   host.input("\x1b[122;9u")
@@ -305,7 +312,7 @@ test("a native text rendering failure leaves preview content and membership reco
   assert.equal(host.ui.getEditorText(), before)
   host.input("\x1b")
   await pending
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.equal(await readFile(path, "utf8"), "Captured preview body")
 })
 
@@ -352,7 +359,7 @@ for (const view of ["formatted", "source"]) {
       const inline = contents.replaceAll("\r\n", "\n")
       const after = `${prefix.replaceAll(reference, "")}\`\`\`text\n${position === "inside" ? "" : "Keep "}${inline}\n\`\`\`${suffix.replaceAll(reference, "")}`
       assert.equal(host.ui.getEditorText(), after)
-      assert.doesNotMatch(host.render(), /Attachments \(|\[paste #/)
+      assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
       host.input("!")
       assert.equal(
         host.ui.getEditorText(),
@@ -362,7 +369,7 @@ for (const view of ["formatted", "source"]) {
       host.input("\x1b[109;10u")
       host.input("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), before)
-      assert.match(host.render(), /Attachments \(1\): code\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), ["code.txt"])
       host.input("\x1b[122;10u")
       assert.equal(host.ui.getEditorText(), after)
       host.input("\x1b[122;9u")
@@ -391,7 +398,7 @@ test("native Restore Inline removes an empty captured text attachment", async (t
   const { pending } = await startAction(host, "Restore Inline")
   await pending
   assert.equal(host.ui.getEditorText(), "Keep\n\nTail")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   assert.equal((await readFile(path)).length, 0)
 })
 
@@ -415,7 +422,7 @@ for (const editor of ["native", "composer"]) {
         ? contents.replaceAll("\r\n", "\n")
         : contents.replaceAll("\r\n", "\n").replaceAll("\t", "    ")
     assert.equal(host.ui.getEditorText(), `Keep\n\n${inline}Tail`)
-    assert.doesNotMatch(host.render(), /Attachments \(|\[paste #/)
+    assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
     assert.deepEqual(await readFile(path), Buffer.from(contents))
     assert.equal(host.requests.length, 0)
   })
@@ -437,7 +444,7 @@ for (const editor of ["native", "composer"]) {
     const { pending } = await startAction(host, "Restore Inline")
     await pending
     assert.equal(host.ui.getEditorText(), "Keep\nCAPTURED\nTail")
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
     assert.equal(await readFile(path, "utf8"), "CAPTURED")
     if (editor === "composer") {
       host.input("\x1b[122;9u")
@@ -467,7 +474,8 @@ test("the attachment widget exposes its shortcut and composer preview scrolls wi
   const before = `${reference}\nKeep old`
   host.ui.setEditorText(before)
   for (let i = 0; i < 3; i++) host.input("\x1b[1;2D")
-  assert.match(host.render(), /\/attachments/)
+  assert.match(host.render(), /Manage attachments/)
+  assert.doesNotMatch(host.render(), /\/attachments/)
   host.input("\x1b[97;7u")
   await waitFor(() => assert.match(host.render(), /Choose attachment/))
   host.input("\r")
@@ -578,7 +586,7 @@ for (const action of ["Preview text", "Restore Inline"]) {
       await pending
       assert.equal(host.ui.getEditorText(), before)
       assert.match(host.render(), /Could not (?:preview|restore).*EACCES/)
-      assert.match(host.render(), /Attachments \(1\): text\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
       host.input("new")
       assert.equal(host.ui.getEditorText(), `${reference}\nKeep new`)
     } finally {
@@ -668,7 +676,7 @@ test("Remove from draft preserves a snapshot used by a submitted request and ano
   assert.equal(await readFile(path, "utf8"), "Shared captured bytes")
   await host.runtime.switchSession(sessionFile)
   assert.equal(host.ui.getEditorText(), draftA)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.equal(
     await readFile(snapshotPath(submitted), "utf8"),
     "Shared captured bytes",
@@ -726,7 +734,7 @@ test("all three packages preserve one native change callback, formatted selectio
   assert.deepEqual(edits, [
     { text: after, visible: after, cursor: { line: 3, col: 0 } },
   ])
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
   host.input("\x1b[122;10u")
@@ -762,7 +770,7 @@ test("native Restore Inline retains pasted text around the caret and removes mem
     host.ui.getEditorText(),
     `Left ${first}\n middle CAPTURED${second} Tail`,
   )
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   assert.equal(await readFile(path, "utf8"), "CAPTURED")
 })
 
@@ -784,7 +792,7 @@ test("native Restore Inline keeps pasted text when inserting inside a visible re
   const { pending } = await startAction(host, "Restore Inline")
   await pending
   assert.equal(host.ui.getEditorText(), `${pasted}\nCAPTURED\nTail`)
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   assert.equal(await readFile(path, "utf8"), "CAPTURED")
 })
 

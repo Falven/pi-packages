@@ -6,6 +6,7 @@ import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
+  assertAttachments,
   holdFileRead,
   nativePi,
   retainedRequest,
@@ -83,11 +84,11 @@ test("native draft membership follows references and coexists with other widgets
   host.ui.setEditorText("Review the draft")
   await host.runtime.session.prompt("/attach-text Supporting material")
   assert.match(host.ui.getEditorText(), /^Review the draft\n/)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.match(host.render(), /Other extension widget/)
 
   host.ui.setEditorText("Review the draft")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   assert.match(host.render(), /Other extension widget/)
   host.submit("/other-action")
   await waitFor(() =>
@@ -180,7 +181,7 @@ test("native attachment-only submission sends a reference and Pi reads its text 
   assert.equal(read.content, "This body stays out of the initial prompt.")
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   assert.equal(host.ui.getEditorText(), "")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   assert.equal(
     await readFile(path, "utf8"),
     "This body stays out of the initial prompt.",
@@ -306,7 +307,10 @@ test("an unreadable file leaves the draft and existing snapshots intact", async 
     await chmod(source, 0o600)
   }
   await host.runtime.session.prompt(`/attach-file ${source}`)
-  assert.match(host.render(), /Attachments \(2\): text\.txt, unreadable\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "text.txt",
+    "unreadable.txt",
+  ])
 })
 
 test("clearing the native editor during a file read keeps the resulting snapshot out of the new draft", async (t) => {
@@ -418,7 +422,7 @@ test("a later transparent editor factory attaches to the unchanged native draft"
   const path = snapshotPath(host.ui.getEditorText())
   assert.match(host.ui.getEditorText(), /^Current draft\n\[Attachment:/)
   assert.equal(await readFile(path, "utf8"), "Composed snapshot")
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
 })
 
 for (const replacement of ["before", "during"]) {
@@ -493,11 +497,11 @@ test("a later factory keeps composer selection replacement and undo when attachi
   await host.runtime.session.prompt("/attach-text Selected snapshot")
   const path = snapshotPath(host.ui.getEditorText())
   assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
 
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep draft")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("source")
   assert.equal(host.ui.getEditorText(), "Keep source")
   assert.equal(await readFile(path, "utf8"), "Selected snapshot")
@@ -523,7 +527,7 @@ test("native callbacks, ordinary text, and autocomplete updates survive attachme
   )
   assert.doesNotMatch(host.render(), /\[paste #/)
   assert.match(host.render(), /x{80}/)
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
 
   host.ui.addAutocompleteProvider((current) => ({
     async getSuggestions(...args) {

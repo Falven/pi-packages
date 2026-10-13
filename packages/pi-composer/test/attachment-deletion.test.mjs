@@ -4,7 +4,10 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { openHost } from "../fixtures/host.ts"
-import { snapshotPath } from "../../pi-attachments/fixtures/native-pi.mjs"
+import {
+  assertAttachments,
+  snapshotPath,
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 
 const attachments = fileURLToPath(
   new URL("../../pi-attachments/src/index.ts", import.meta.url),
@@ -33,11 +36,13 @@ for (const view of ["formatted", "source"]) {
     host.terminal.output = ""
     await host.key("\x17")
     assert.equal(host.ui.getEditorText(), "Keep\n\nTail")
-    assert.doesNotMatch(await host.output(), /Attachments \(/)
+    assert.doesNotMatch(await host.output(), /Manage attachments/)
     host.terminal.output = ""
     await host.key("\x1b[122;9u")
     assert.equal(host.ui.getEditorText(), before)
-    assert.match(await host.output(), /Attachments \(1\): context\.txt/)
+    assertAttachments(host.ui.getEditorText(), await host.output(), [
+      "context.txt",
+    ])
     await host.key("\x1b[122;10u")
     assert.equal(host.ui.getEditorText(), "Keep\n\nTail")
     await host.key("\x1b[122;9u")
@@ -58,23 +63,29 @@ for (const view of ["formatted", "source"]) {
     assert(reference.endsWith(">)"))
     host.ui.setEditorText(reference)
     if (view === "source") await host.key("\x1b[109;10u")
-    assert.match(await host.output(), /Attachments \(1\): image\.png/)
+    assertAttachments(host.ui.getEditorText(), await host.output(), [
+      "image.png",
+    ])
     host.terminal.output = ""
     await host.key("\x7f")
     assert.equal(host.ui.getEditorText(), reference.slice(0, -1))
-    assert.doesNotMatch(await host.output(), /Attachments \(/)
+    assert.doesNotMatch(await host.output(), /Manage attachments/)
     host.terminal.output = ""
     await host.key("\x1b[122;9u")
     assert.equal(host.ui.getEditorText(), reference)
-    assert.match(await host.output(), /Attachments \(1\): image\.png/)
+    assertAttachments(host.ui.getEditorText(), await host.output(), [
+      "image.png",
+    ])
     host.terminal.output = ""
     await host.key("\x1b[122;10u")
     assert.equal(host.ui.getEditorText(), reference.slice(0, -1))
-    assert.doesNotMatch(await host.output(), /Attachments \(/)
+    assert.doesNotMatch(await host.output(), /Manage attachments/)
     host.terminal.output = ""
     await host.type(")")
     assert.equal(host.ui.getEditorText(), reference)
-    assert.match(await host.output(), /Attachments \(1\): image\.png/)
+    assertAttachments(host.ui.getEditorText(), await host.output(), [
+      "image.png",
+    ])
     assert.equal((await readFile(snapshot)).toString("base64"), imageData)
     await host.key("\x1b[13;9u")
     await host.settled()

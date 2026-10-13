@@ -23,6 +23,7 @@ import {
 } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
+  assertAttachments,
   nativePi,
   retainedRequest,
   snapshotPath,
@@ -114,7 +115,10 @@ test("mixed snapshots stay opaque until Restore Inline invokes prose while resto
   const draft = `# Mixed request\n\n**Review** this \`example\`.\n${textReference}\n${imageReference}\nREPLACE`
   host.ui.setEditorText(draft)
   await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
-  assert.match(host.render(), /Attachments \(2\): paste.txt, diagram.png/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "paste.txt",
+    "diagram.png",
+  ])
   assert.match(host.render(), /Other extension widget/)
 
   host.input(submit)
@@ -137,7 +141,7 @@ test("mixed snapshots stay opaque until Restore Inline invokes prose while resto
   await attachmentAction(host, "Restore Inline")
   const restored = draft.replace(textReference, "").replace("REPLACE", body)
   await waitFor(() => assert.equal(host.ui.getEditorText(), restored))
-  assert.match(host.render(), /Attachments \(1\): diagram.png/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["diagram.png"])
   host.input(undo)
   assert.equal(host.ui.getEditorText(), draft)
   host.input(redo)
@@ -194,7 +198,9 @@ test("configured deletion and yank preserve a mixed draft through view changes a
   const textPath = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const textReference = host.ui.getEditorText().trim()
   host.input("\x16")
-  await waitFor(() => assert.match(host.render(), /Attachments \(2\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 2),
+  )
   const imageReference = host.ui
     .getEditorText()
     .slice(textReference.length)
@@ -233,7 +239,7 @@ test("configured deletion and yank preserve a mixed draft through view changes a
   host.input("\x1b[121;7u")
   assert.equal(host.ui.getEditorText(), draft)
   host.input("\x1b[109;10u")
-  assert.match(host.render(), /Attachments \(2\):/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 2)
   assert.equal(await readFile(textPath, "utf8"), body)
   assert.deepEqual(await readFile(imagePath), Buffer.from(PNG, "base64"))
 
@@ -313,7 +319,7 @@ for (const [route, paste] of [
               original.replace("Selected", text.replaceAll("\r\n", "\n")),
             ),
           )
-          assert.doesNotMatch(host.render(), /Attachments \(/)
+          assert.doesNotMatch(host.render(), /Manage attachments/)
         } else {
           path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
           assert.equal(
@@ -324,12 +330,14 @@ for (const [route, paste] of [
             ),
           )
           assert.equal(await readFile(path, "utf8"), text)
-          assert.match(host.render(), /Attachments \(1\): paste.txt/)
+          assertAttachments(host.ui.getEditorText(), host.render(), [
+            "paste.txt",
+          ])
         }
         const after = host.ui.getEditorText()
         host.input(undo)
         assert.equal(host.ui.getEditorText(), original)
-        assert.doesNotMatch(host.render(), /Attachments \(/)
+        assert.doesNotMatch(host.render(), /Manage attachments/)
         host.input(redo)
         assert.equal(host.ui.getEditorText(), after)
         if (path) assert.equal(await readFile(path, "utf8"), text)
@@ -389,7 +397,9 @@ test("copied files, clipboard images, copied references, and explicit overrides 
 
   files = null
   host.input("\x16")
-  await waitFor(() => assert.match(host.render(), /Attachments \(3\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 3),
+  )
   const withImage = host.ui.getEditorText()
   const imagePath = snapshotPath(withImage.slice(attached.length))
   assert.deepEqual(await readFile(imagePath), Buffer.from(PNG, "base64"))
@@ -421,14 +431,16 @@ test("copied files, clipboard images, copied references, and explicit overrides 
   await waitFor(() =>
     assert.equal(host.ui.getEditorText(), code.replace("OLD", copied)),
   )
-  assert.match(host.render(), /Attachments \(3\):/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 3)
   host.input(undo)
   assert.equal(host.ui.getEditorText(), code)
   host.input("\x1b[116;7u")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("\x1b[200~Short /skill:literal\x1b[201~")
   host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Attachments \(4\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 4),
+  )
   assert.doesNotMatch(host.ui.getEditorText(), /OLD/)
   host.input(undo)
   assert.equal(host.ui.getEditorText(), code)
@@ -532,7 +544,7 @@ test("mixed drafts retain early and updated native providers, character editing,
   assert.equal(host.ui.getEditorText(), `${prefix}Keep LISTENER`)
   assert.match(host.render(), /Mixed acceptance fixture ready/)
   assert.match(host.render(), /Other extension widget/)
-  assert.match(host.render(), /Attachments \(1\): text.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.equal(
     await readFile(snapshotPath(reference), "utf8"),
     "Opaque /skill:literal",
@@ -848,7 +860,9 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
   await host.runtime.session.sendUserMessage(`/attach-file ${latePath}`, {
     expandPromptTemplates: true,
   })
-  await waitFor(() => assert.match(host.render(), /Attachments \(3\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 3),
+  )
   host.input(undo)
   assert.equal(host.ui.getEditorText(), draftA)
   await host.runtime.session.reload()
@@ -955,7 +969,7 @@ test("real model and filesystem failures keep mixed requests recoverable without
       assert.match(host.render(), /Could not restore.*EACCES/),
     )
     assert.equal(host.ui.getEditorText(), draft)
-    assert.match(host.render(), /Attachments \(2\):/)
+    assertAttachments(host.ui.getEditorText(), host.render(), 2)
   } finally {
     await chmod(textPath, 0o600)
   }
@@ -1025,7 +1039,9 @@ test("a denied snapshot write retries a captured mixed paste as one selection ed
     await chmod(storage, 0o700)
   }
   host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Attachments \(2\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 2),
+  )
   const after = host.ui.getEditorText()
   const path = snapshotPath(
     after.slice(after.indexOf(reference) + reference.length),
@@ -1063,7 +1079,9 @@ test("native editing alone combines canonical completion, paste policy, restored
   t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
   t.mock.method(clipboard, "getText", async () => "Ignore icon text")
   host.input("\x16")
-  await waitFor(() => assert.match(host.render(), /Attachments \(2\):/))
+  await waitFor(() =>
+    assertAttachments(host.ui.getEditorText(), host.render(), 2),
+  )
   const draft = host.ui.getEditorText().trim()
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),
@@ -1084,7 +1102,9 @@ test("native editing alone combines canonical completion, paste policy, restored
   host.ui.setEditorText(`${draft}\n\`\`\`text\n`)
   await attachmentAction(host, "Restore Inline")
   await waitFor(() => assert.ok(host.ui.getEditorText().includes(body)))
-  assert.match(host.render(), /Attachments \(1\): clipboard-image/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "clipboard-image.png",
+  ])
   host.ui.pasteToEditor("```\n")
   host.submit()
   await waitFor(() => assert.equal(host.requests.length, 2))
@@ -1142,7 +1162,7 @@ test("replacing the editor and disabling composition extensions leave saved Mark
   loaded.splice(0, loaded.length, attachmentsPath)
   await host.runtime.switchSession(sessionFile)
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(host.render(), /Attachments \(2\):/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 2)
   await rm(source)
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,

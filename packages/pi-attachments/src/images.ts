@@ -195,12 +195,9 @@ export function registerImages(
                   ),
                 )
               : text
-          const names = paths
-            .map((path) => link(basename(path), path))
-            .join(", ")
           const lines = truncateToVisualLines(
-            `${theme.fg("muted", `Attachments (${paths.length}): ${names}`)}\n${rawKeyHint("ctrl+alt+a", "/attachments")}`,
-            5,
+            rawKeyHint("ctrl+alt+a", "Manage attachments"),
+            2,
             width,
           ).visualLines
           for (const path of paths) {

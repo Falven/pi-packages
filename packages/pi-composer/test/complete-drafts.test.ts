@@ -12,7 +12,10 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { promisify, stripVTControlCharacters } from "node:util"
 import type { TUI } from "@earendil-works/pi-tui"
-import { snapshotPath } from "../../pi-attachments/fixtures/native-pi.mjs"
+import {
+  assertAttachments,
+  snapshotPath,
+} from "../../pi-attachments/fixtures/native-pi.mjs"
 import { openHost } from "../fixtures/host.ts"
 
 const extensions = [
@@ -75,10 +78,13 @@ test("complete mixed drafts and their isolated histories survive cwd switches, r
   const draftA = host.ui.getEditorText()
   const imagePath = snapshotPath(draftA.slice(beforeImage.length))
   await rm(image)
-  assert.match(render(), /Attachments \(2\): paste.txt, image.png/)
+  assertAttachments(host.ui.getEditorText(), render(), [
+    "paste.txt",
+    "image.png",
+  ])
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), beforeImage)
-  assert.match(render(), /Attachments \(1\): paste.txt/)
+  assertAttachments(host.ui.getEditorText(), render(), ["paste.txt"])
   await host.key("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), draftA)
   host.ui.pasteToEditor("A later edit")
@@ -96,12 +102,15 @@ test("complete mixed drafts and their isolated histories survive cwd switches, r
   const draftB = host.ui.getEditorText()
   const pathB = snapshotPath(draftB)
   host.ui.pasteToEditor("B later edit")
-  assert.match(render(), /Attachments \(1\): text.txt/)
+  assertAttachments(host.ui.getEditorText(), render(), ["text.txt"])
 
   await host.runtime.switchSession(sessionA)
   assert.equal(host.runtime.cwd, host.directory)
   assert.equal(host.ui.getEditorText(), draftA)
-  assert.match(render(), /Attachments \(2\): paste.txt, image.png/)
+  assertAttachments(host.ui.getEditorText(), render(), [
+    "paste.txt",
+    "image.png",
+  ])
   await host.session.reload()
   assert.equal(host.ui.getEditorText(), draftA)
   await host.key("\x1b[122;10u")
@@ -223,7 +232,10 @@ test("native forks restore mixed membership and restart independently of their p
   const child = host.session.sessionFile!
   assert.notEqual(host.session.sessionManager.getSessionId(), parentId)
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(await host.output(), /Attachments \(2\): text.txt, forked.png/)
+  assertAttachments(host.ui.getEditorText(), await host.output(), [
+    "text.txt",
+    "forked.png",
+  ])
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "")
   await host.key("\x1b[122;9u")

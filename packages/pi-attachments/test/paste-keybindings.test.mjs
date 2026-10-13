@@ -51,7 +51,7 @@ for (const [editor, extensions] of [
         )
       }
       assert.equal(host.requests.length, 0)
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.doesNotMatch(host.render(), /Manage attachments/)
     })
   }
 
@@ -85,7 +85,7 @@ for (const [editor, extensions] of [
       assert.equal(host.ui.getEditorText(), `Draft ${text}${text}`),
     )
     assert.equal(reads, 0)
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
   })
 
   if (editor !== "native") {
@@ -200,7 +200,7 @@ for (const [editor, extensions] of [
       )
       assert.equal(reads, 0)
       assert.equal(host.requests.length, 0)
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.doesNotMatch(host.render(), /Manage attachments/)
     })
   }
 
@@ -217,6 +217,6 @@ for (const [editor, extensions] of [
     host.ui.pasteToEditor(`\n${text}`)
     assert.equal(host.ui.getEditorText(), `${text}\n${text}`)
     assert.equal(reads, 0)
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
   })
 }

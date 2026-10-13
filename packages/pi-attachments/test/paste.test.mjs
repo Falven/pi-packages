@@ -10,6 +10,7 @@ import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
 import piAttachments from "../src/index.ts"
 import {
+  assertAttachments,
   nativePi,
   retainedRequest,
   snapshotPath,
@@ -179,10 +180,10 @@ test("the paste decorator preserves Attach Text read observation and composer se
   assert.equal(await readFile(path, "utf8"), "Small code context")
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "```text\nKeep draft")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
-  assert.match(host.render(), /Attachments \(1\)/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 1)
 })
 
 test("a failed paste snapshot write leaves the selection and captured bytes recoverable", async (t) => {
@@ -617,13 +618,13 @@ test("a delayed clipboard attachment replaces the original selection and undoes 
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
   assert.equal(await readFile(path, "utf8"), text)
-  assert.match(host.render(), /Attachments \(1\)/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 1)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep selected")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
-  assert.match(host.render(), /Attachments \(1\)/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 1)
 })
 
 test("a paste snapshot write that finishes after edits cannot attach to the restored-looking draft", async (t) => {

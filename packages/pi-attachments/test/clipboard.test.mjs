@@ -18,6 +18,7 @@ import { convertToPng, CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../../pi-composer/fixtures/host.ts"
 import piAttachments from "../src/index.ts"
 import {
+  assertAttachments,
   holdFileRead,
   nativePi,
   retainedRequest,
@@ -90,10 +91,10 @@ test("native copied files win over their icon and text as one paste with preserv
     paths.toSorted(),
     "Each copied file has one retained content copy",
   )
-  assert.match(
-    host.render(),
-    /Attachments \(2\): Résumé 你好 notes\.txt, Résumé 你好 notes\.txt/,
-  )
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "Résumé 你好 notes.txt",
+    "Résumé 你好 notes.txt",
+  ])
   assert.doesNotMatch(host.render(), /\[Image:/)
   assert.equal(host.requests.length, 0)
 })
@@ -115,7 +116,7 @@ test("composer Command+V reads original file identity and replaces its selection
   assert.equal(await readFile(path, "utf8"), "Command snapshot")
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep selected")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
 })
@@ -174,7 +175,7 @@ test("a copied file set whose references exceed the text cutoff stays one image-
   assert.match(draft, /^Keep \n\[Attachment:/)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep selected")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), draft)
   host.submit()
@@ -249,7 +250,7 @@ test("unsuitable single-path pastes stay text silently and Paste Inline leaves r
     await waitFor(() => assert.equal(host.ui.getEditorText(), text))
     assert.doesNotMatch(
       host.render(),
-      /Attachments \(|Could not (paste|attach)/,
+      /Manage attachments|Could not (paste|attach)/,
     )
   }
   t.mock.method(getNativeClipboard(), "getText", async () => source)
@@ -261,7 +262,7 @@ test("unsuitable single-path pastes stay text silently and Paste Inline leaves r
   assert.equal(host.ui.getEditorText(), source)
   host.ui.setEditorText(source)
   assert.equal(host.ui.getEditorText(), source)
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   await assert.rejects(readdir(join(host.agentDir, "pi-attachments")), {
     code: "ENOENT",
   })
@@ -283,7 +284,7 @@ test("a fragmented image-path paste replaces a composer selection in code and it
   await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), after)
 
@@ -296,7 +297,7 @@ test("a fragmented image-path paste replaces a composer selection in code and it
   for (let index = 0; index < reference.indexOf(path); index++)
     host.input("\x1b[3~")
   assert.equal(host.ui.getEditorText(), path)
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.submit()
   await waitFor(() => assert.equal(host.requests.length, 1))
   const user = host.requests[0].messages.find(({ role }) => role === "user")
@@ -323,7 +324,7 @@ test("a delayed text-path capture retains the requesting draft without overwriti
     "Captured before the source changed",
   )
   assert.equal(host.ui.getEditorText(), "Later draft")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
 })
 
 test("a failed snapshot write retains all copied bytes across reload even if the original files disappear", async (t) => {
@@ -498,7 +499,7 @@ for (const composer of [false, true]) {
         assert.ok(host.render().includes(`${method} transfer failed`)),
       )
       assert.equal(host.ui.getEditorText(), "Keep selected")
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.doesNotMatch(host.render(), /Manage attachments/)
       if (composer) {
         host.input("!")
         assert.equal(host.ui.getEditorText(), "Keep !")
@@ -535,7 +536,7 @@ for (const target of [
       assert.match(host.render(), /Could not (?:paste|attach)/),
     )
     assert.equal(host.ui.getEditorText(), "Keep selected")
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
     host.input("!")
     assert.equal(host.ui.getEditorText(), "Keep !")
     assert.equal(host.requests.length, 0)
@@ -561,7 +562,7 @@ test("Attach File accepts a user-entered list of paths as one native attachment 
     await Promise.all(paths.map((path) => readFile(path, "utf8"))),
     ["First user body", "Second user body"],
   )
-  assert.match(host.render(), /Attachments \(2\)/)
+  assertAttachments(host.ui.getEditorText(), host.render(), 2)
   assert.equal(host.requests.length, 0)
 })
 
@@ -613,7 +614,7 @@ for (const kind of ["files", "image"]) {
         host.ui.getEditorText(),
         change === "selection" ? "Keep selected" : "Later draft",
       )
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.doesNotMatch(host.render(), /Manage attachments/)
       if (change === "selection") {
         host.input("!")
         assert.equal(host.ui.getEditorText(), "Keep s!")
@@ -799,7 +800,7 @@ test("Paste Inline bypasses file/image classification and measures no attachment
   for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
   host.input("\x1b[118;7u")
   await waitFor(() => assert.equal(host.ui.getEditorText(), `Keep ${text}`))
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep selected")
 })
@@ -839,7 +840,7 @@ test("a failed snapshot save retries the whole copied set from captured bytes in
   assert.equal((await readFile(paths[1])).toString("base64"), PNG)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep selected")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
 })
 
 test("image recovery remains available when its read and storage failure arrive after session replacement and reload", async (t) => {
@@ -926,7 +927,7 @@ for (const files of [null, undefined, []]) {
     await waitFor(() =>
       assert.equal(host.ui.getEditorText(), "Draft /tmp/Plain path 你好.txt"),
     )
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
   })
 }
 
@@ -966,7 +967,7 @@ for (const change of ["none", "selection", "edit", "session"]) {
     host.input("\x1b[118;9u")
     await waitFor(() => assert.ok(started))
     assert.equal(host.ui.getEditorText(), "Keep selected")
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
     if (change === "session") await host.runtime.newSession()
     if (change === "selection") host.input("\x1b[1;2C")
     else if (change !== "none") host.ui.setEditorText("Later draft")
@@ -982,7 +983,7 @@ for (const change of ["none", "selection", "edit", "session"]) {
       assert.match(draft, /^Keep \n\[Attachment:/)
       host.input("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), "Keep selected")
-      assert.doesNotMatch(host.render(), /Attachments \(/)
+      assert.doesNotMatch(host.render(), /Manage attachments/)
       host.input("\x1b[122;10u")
       assert.equal(host.ui.getEditorText(), draft)
     } else {

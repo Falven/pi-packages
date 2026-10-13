@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import {
+  assertAttachments,
   nativePi,
   snapshotPath,
 } from "../../pi-attachments/fixtures/native-pi.mjs"
@@ -24,7 +25,7 @@ for (const view of ["formatted", "source"]) {
     host.input("\x1b[97;9u")
     host.input("\x15")
     assert.equal(host.ui.getEditorText(), "")
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
 
     await host.runtime.session.sendUserMessage(
       "/attach-text Second retained bytes",
@@ -45,10 +46,10 @@ for (const view of ["formatted", "source"]) {
     for (let index = 0; index < 3; index++) host.input("\x1b[1;2D")
     host.input("\x19")
     assert.equal(host.ui.getEditorText(), `Keep **${second}**`)
-    assert.match(host.render(), /Attachments \(1\): text\.txt/)
+    assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
     host.input("\x1by")
     assert.equal(host.ui.getEditorText(), `Keep **${first}**`)
-    assert.match(host.render(), /Attachments \(1\): text\.txt/)
+    assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
     host.input("\x1b[122;9u")
     assert.equal(host.ui.getEditorText(), `Keep **${second}**`)
     host.input("\x1b[122;10u")
@@ -56,7 +57,7 @@ for (const view of ["formatted", "source"]) {
     host.input("\x1b[122;9u")
     host.input("\x1b[122;9u")
     assert.equal(host.ui.getEditorText(), "Keep **old**")
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
     host.input("new")
     assert.equal(host.ui.getEditorText(), "Keep **new**")
     assert.equal(

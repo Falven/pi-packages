@@ -19,9 +19,9 @@ import {
   getImageDimensions,
   getOsc8LinkAtColumn,
   setCapabilities,
-  visibleWidth,
 } from "@earendil-works/pi-tui"
 import {
+  assertAttachments,
   holdFileRead,
   nativePi,
   retainedRequest,
@@ -58,10 +58,18 @@ test("image previews link retained files through native click handling beside th
   await waitFor(() =>
     assert.ok(host.render().includes(`[Image: ${name} [image/png] 2x1]`)),
   )
-  assert.ok(host.render().includes(`Attachments (1): ${name}`))
+  assert.doesNotMatch(host.render(), /Attachments \(1\):/)
+  assert.match(host.render(), /Manage attachments/)
   assert.match(host.render(), /Other extension widget/)
   assert.equal(host.ui.getEditorText(), draft)
   assert.equal((await readFile(path)).toString("base64"), PNG)
+  host.input("\x1b[97;7u")
+  await waitFor(() => assert.match(host.render(), /Choose attachment/))
+  assert.ok(host.render().includes(name))
+  host.input("\x1b")
+  await waitFor(() => assert.doesNotMatch(host.render(), /Choose attachment/))
+  assert.equal(host.ui.getEditorText(), draft)
+  assert.equal(host.requests.length, 0)
   await rm(source)
 
   const spawn = t.mock.method(
@@ -90,14 +98,11 @@ test("image previews link retained files through native click handling beside th
     assert.equal(spawn.mock.calls.at(-1).arguments[1].at(-1), target)
     assert.equal(host.ui.getEditorText(), draft)
   }
-  const header = rows().find(({ line }) =>
-    stripVTControlCharacters(line).includes("Attachments (1):"),
+  const hint = rows().find(({ line }) =>
+    stripVTControlCharacters(line).includes("Manage attachments"),
   )
-  assert.ok(header)
-  const labelColumn = visibleWidth("Attachments (1): ")
-  assert.equal(getOsc8LinkAtColumn(header.line, labelColumn), target)
-  assert.equal(getOsc8LinkAtColumn(header.line, labelColumn - 1), undefined)
-  click(labelColumn, header.row)
+  assert.ok(hint)
+  assert.equal(getOsc8LinkAtColumn(hint.line, 0), undefined)
   const fallback = rows().find(({ line }) =>
     stripVTControlCharacters(line).includes("[Image:"),
   )
@@ -278,7 +283,9 @@ test("an image preview decode failure stays visible without removing its capture
   )
   assert.equal(host.ui.getEditorText(), draft)
   assert.deepEqual(await readFile(path), broken)
-  assert.match(host.render(), /Attachments \(1\): unrenderable\.png/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "unrenderable.png",
+  ])
   assert.match(host.render(), /Other extension widget/)
 })
 
@@ -431,7 +438,7 @@ test("a delayed image preview cannot replace previews for the current draft", as
   held.release()
   await waitFor(() => assert.equal(host.ui.getEditorText(), currentDraft))
   assert.doesNotMatch(host.render(), /\[Image: old\.png/)
-  assert.match(host.render(), /Attachments \(1\): new\.bmp/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["new.bmp"])
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })
 
@@ -704,10 +711,10 @@ test("composer image insertion, membership, undo, and redo use the same retained
   await rm(source)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep draft")
-  assert.doesNotMatch(host.render(), /Attachments \(|\[Image:/)
+  assert.doesNotMatch(host.render(), /Manage attachments|\[Image:/)
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(host.render(), /Attachments \(1\): selection\.png/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["selection.png"])
   assert.equal((await readFile(path)).toString("base64"), PNG)
   host.submit()
   await waitFor(() => assert.equal(host.requests.length, 1))

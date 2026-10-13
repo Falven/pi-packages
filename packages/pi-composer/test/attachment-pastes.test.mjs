@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { getNativeClipboard, StdinBuffer } from "@earendil-works/pi-tui"
 import {
+  assertAttachments,
   nativePi,
   retainedRequest,
   snapshotPath,
@@ -94,10 +95,13 @@ test("snapshot failure preserves the selected draft and captured bytes for one u
   const after = `Keep\n${originalReference}\n\n${reference}\n`
   assert.equal(host.ui.getEditorText(), after)
   assert.equal(await readFile(path, "utf8"), text)
-  assert.match(host.render(), /Attachments \(2\): text\.txt, paste\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "text.txt",
+    "paste.txt",
+  ])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), after)
   assert.equal(await readFile(path, "utf8"), text)
@@ -174,7 +178,9 @@ for (const [route, extensions] of [
       const pendingPath = await capture.started()
       assert.equal(host.ui.getEditorText(), before)
       assert.deepEqual(edits, [])
-      assert.match(host.render(), /Attachments \(1\): original\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), [
+        "original.txt",
+      ])
       await assert.rejects(stat(pendingPath), { code: "ENOENT" })
 
       capture.release()
@@ -195,17 +201,19 @@ for (const [route, extensions] of [
         await readFile(originalPath, "utf8"),
         "Original attachment contents\n",
       )
-      assert.match(host.render(), /Attachments \(1\): paste\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), ["paste.txt"])
       assert.equal(host.requests.length, 0)
 
       host.input("\x1b[109;10u")
       host.input("\x1b[122;9u")
       assert.equal(host.ui.getEditorText(), before)
-      assert.match(host.render(), /Attachments \(1\): original\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), [
+        "original.txt",
+      ])
       assert.equal(await readFile(path, "utf8"), text)
       host.input("\x1b[122;10u")
       assert.equal(host.ui.getEditorText(), after)
-      assert.match(host.render(), /Attachments \(1\): paste\.txt/)
+      assertAttachments(host.ui.getEditorText(), host.render(), ["paste.txt"])
       assert.equal(await readFile(path, "utf8"), text)
     })
   }
@@ -232,7 +240,7 @@ test("a paste over a complete formatted attachment replaces its reference withou
   })
   const after = `Keep\n\n[Attachment: paste.txt](<${path}>)\n\nTail`
   assert.equal(host.ui.getEditorText(), after)
-  assert.match(host.render(), /Attachments \(1\): paste\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["paste.txt"])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
   host.input("\x1b[122;10u")
@@ -284,7 +292,7 @@ for (const change of [
     assert.ok(recovery.text.includes(path))
     assert.equal(await readFile(path, "utf8"), text)
     assert.equal(await readFile(originalPath, "utf8"), "Existing context")
-    assert.match(host.render(), /Attachments \(1\): text\.txt/)
+    assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
     let edited = after
     if (change !== "later edit") {
       host.input("placed")
@@ -332,7 +340,7 @@ for (const replacement of ["recreated", "reused", "replaced"]) {
     const recovery = await retainedRequest(host, before)
     assert.ok(recovery.text.includes(path))
     assert.equal(await readFile(path, "utf8"), text)
-    assert.doesNotMatch(host.render(), /Attachments \(/)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
   })
 }
 
@@ -367,7 +375,7 @@ test("a capture finishing across a native session switch preserves both drafts a
   capture.release()
   await waitFor(async () => assert.equal(await readFile(path, "utf8"), text))
   assert.equal(host.ui.getEditorText(), "Other session draft")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   const recovery = await retainedRequest(host, before)
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(path))
@@ -377,7 +385,7 @@ test("a capture finishing across a native session switch preserves both drafts a
     cancelled: false,
   })
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.equal(await readFile(path, "utf8"), text)
 })
 
@@ -438,10 +446,10 @@ test("Paste Inline replaces formatted attachment membership without retaining it
   })
   const after = `Keep\n${text}\nTail`
   assert.equal(host.ui.getEditorText(), after)
-  assert.doesNotMatch(host.render(), /Attachments \(|\[paste #/)
+  assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), after)
   assert.equal(await readFile(originalPath, "utf8"), "Original context")
@@ -471,7 +479,7 @@ test("Attach Text replaces a formatted attachment selection with short captured 
   const after = `Keep\n\n[Attachment: text.txt](<${path}>)\n\nTail`
   assert.equal(host.ui.getEditorText(), after)
   assert.equal(await readFile(path, "utf8"), "\nShort context\n")
-  assert.match(host.render(), /Attachments \(1\): text\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
   host.input("\x1b[122;10u")
@@ -514,7 +522,10 @@ test("an attachment paste commits during native settlement as one undoable selec
   assert.equal(host.ui.getEditorText(), after)
   assert.equal(await readFile(path, "utf8"), text)
   assert.equal(await readFile(originalPath, "utf8"), "Existing context")
-  assert.match(host.render(), /Attachments \(2\): text\.txt, paste\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "text.txt",
+    "paste.txt",
+  ])
   assert.equal(host.requests.length, 1)
   host.input("later")
   assert.equal(host.ui.getEditorText(), `${after}later`)

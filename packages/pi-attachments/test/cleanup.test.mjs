@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { convertToPng } from "@earendil-works/pi-coding-agent"
 import {
+  assertAttachments,
   nativePi,
   retainedRequest,
   snapshotPath,
@@ -378,15 +379,15 @@ test("composer recovery restores attachment membership after cleanup and stays u
   host.input("\r")
   await recovery
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(host.render(), /Attachments \(1\): text.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Newer work")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   await cleanup(host)
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), draft)
   assert.equal(await readFile(path, "utf8"), "Retained restored text")
-  assert.match(host.render(), /Attachments \(1\): text.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
 })
 
 test("an image recovery record remains readable after a late write failure, retry, and cleanup", async (t) => {

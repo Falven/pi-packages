@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import { test } from "node:test"
+import { assertAttachments } from "../../pi-attachments/fixtures/native-pi.mjs"
 import { openHost } from "./host.ts"
 
 const options: {
@@ -47,10 +48,10 @@ test("a fresh Pi process restores the saved draft", async (t) => {
   }
   assert.equal(host.ui.getEditorText(), options.text)
   if (options.attachments) {
-    assert(
-      (await host.output()).includes(
-        `Attachments (${options.attachments.length}):`,
-      ),
+    assertAttachments(
+      host.ui.getEditorText(),
+      await host.output(),
+      options.attachments.length,
     )
     await Promise.all(
       options.attachments.map(async ({ path, data }) => {

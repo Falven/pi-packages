@@ -14,6 +14,7 @@ import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import {
+  assertAttachments,
   holdFileRead,
   nativePi,
   retainedRequest,
@@ -81,13 +82,13 @@ test("old submitted references survive draft removal, source loss, native resume
   await utimes(path, old, old)
   host.ui.setEditorText(draft)
   host.ui.setEditorText("")
-  assert.doesNotMatch(host.render(), /Attachments \(/)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
   })
   host.input("\x1b[45;5u")
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(host.render(), /Attachments \(1\): retained\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["retained.txt"])
   assert.equal(await readFile(path, "utf8"), "Captured file contents.\n")
   host.submit("A later request without attachments")
   await waitFor(() => assert.equal(host.requests.length, 2))
@@ -155,7 +156,7 @@ test("native fork prefills the submitted reference and the child survives restar
     expandPromptTemplates: true,
   })
   assert.equal(host.ui.getEditorText(), draft)
-  assert.match(host.render(), /Attachments \(1\): forked\.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), ["forked.txt"])
   assert.equal(await readFile(path, "utf8"), "Captured for the fork.\n")
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
@@ -412,7 +413,10 @@ test("a partial multi-file read retains captured members for recovery with the o
   )
   assert.equal(host.ui.getEditorText(), "Unrelated current draft")
   host.ui.pasteToEditor(`\n${references.join("\n")}\n`)
-  assert.match(host.render(), /Attachments \(2\): first.txt, second.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "first.txt",
+    "second.txt",
+  ])
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Unrelated current draft")
   assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
@@ -427,5 +431,8 @@ test("a partial multi-file read retains captured members for recovery with the o
   assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
   assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
   host.input("\x1b[122;10u")
-  assert.match(host.render(), /Attachments \(2\): first.txt, second.txt/)
+  assertAttachments(host.ui.getEditorText(), host.render(), [
+    "first.txt",
+    "second.txt",
+  ])
 })
