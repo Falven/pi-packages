@@ -10,7 +10,9 @@ import { Container, SelectList, Text } from "@earendil-works/pi-tui"
 import { Clipboard } from "./clipboard.ts"
 import { SourceEditor, type DraftHistory } from "./source-editor.ts"
 import {
+  clearedDraftType,
   checkpointType,
+  isClearedDraft,
   isCheckpoint,
   readDrafts,
   writeDraft,
@@ -19,6 +21,7 @@ import {
 
 type SessionHistory = DraftHistory & {
   clearedDrafts?: string[]
+  nativeClearedDrafts?: string[]
   pendingDraft?: DraftCheckpoint
 }
 
@@ -29,6 +32,18 @@ const processState = globalThis as typeof globalThis & {
 }
 const histories = (processState[historiesKey] ??= new Map())
 
+function retainClearedDrafts(native: string[], recovered: string[]): string[] {
+  let shared = 0
+  while (
+    shared < native.length &&
+    shared < recovered.length &&
+    native[shared] === recovered[shared]
+  ) {
+    shared++
+  }
+  return [...native, ...recovered.slice(shared)]
+}
+
 export function sessionDrafts(pi: ExtensionAPI): void {
   const directory = join(getAgentDir(), "pi-composer", "drafts")
   let editor: SourceEditor | undefined
@@ -37,6 +52,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
   let active = false
   let revision = 0
   let clearedDrafts: string[] = []
+  let nativeClearedDrafts: string[] = []
   let pendingDraft: DraftCheckpoint | undefined
   let flush: (() => Promise<boolean>) | undefined
   const recoveryAbort = new AbortController()
@@ -49,17 +65,34 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     const sessionFile = ctx.sessionManager.getSessionFile()
     const cwd = ctx.cwd
     historyKey = `${directory}\0${sessionId}`
+    const history = histories.get(historyKey)
     let checkpoint: DraftCheckpoint | undefined
+    nativeClearedDrafts = []
     for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type !== "custom") continue
       if (
-        entry.type === "custom" &&
+        entry.customType === clearedDraftType &&
+        isClearedDraft(entry.data) &&
+        entry.data.sessionId === sessionId
+      ) {
+        nativeClearedDrafts.push(entry.data.text)
+      } else if (
         entry.customType === checkpointType &&
         isCheckpoint(entry.data) &&
         entry.data.sessionId === sessionId
       ) {
         checkpoint = entry.data
+        if (entry.data.clearedDrafts)
+          nativeClearedDrafts = retainClearedDrafts(
+            nativeClearedDrafts,
+            entry.data.clearedDrafts,
+          )
       }
     }
+    // Pi keeps failed appends in memory; reload must retain our last successful prefix.
+    if (history?.nativeClearedDrafts)
+      nativeClearedDrafts = [...history.nativeClearedDrafts]
+    let restoredClearedDrafts = nativeClearedDrafts
     if (sessionFile) {
       const recovery = readDrafts(directory)
       for (const error of recovery.errors) ctx.ui.notify(error, "error")
@@ -68,6 +101,10 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       )
       if (saved && (!checkpoint || saved.revision > checkpoint.revision)) {
         checkpoint = saved
+        restoredClearedDrafts = retainClearedDrafts(
+          nativeClearedDrafts,
+          saved.clearedDrafts ?? [],
+        )
       }
       if (
         recovery.drafts.some(
@@ -82,7 +119,6 @@ export function sessionDrafts(pi: ExtensionAPI): void {
         )
       }
     }
-    const history = histories.get(historyKey)
     if (
       history?.pendingDraft &&
       (!checkpoint || history.pendingDraft.revision >= checkpoint.revision)
@@ -92,9 +128,12 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     pendingDraft =
       checkpoint === history?.pendingDraft ? history?.pendingDraft : undefined
     const text = checkpoint?.text ?? history?.draft.text ?? ""
-    clearedDrafts = [
-      ...(history?.clearedDrafts ?? checkpoint?.clearedDrafts ?? []),
-    ]
+    clearedDrafts = retainClearedDrafts(
+      nativeClearedDrafts,
+      history?.clearedDrafts ?? restoredClearedDrafts,
+    )
+    if (pendingDraft)
+      pendingDraft = { ...pendingDraft, clearedDrafts: [...clearedDrafts] }
     revision = checkpoint?.revision ?? 0
     let latest = pendingDraft
     let savedRevision = pendingDraft ? -1 : revision
@@ -122,7 +161,22 @@ export function sessionDrafts(pi: ExtensionAPI): void {
             )
           }
           try {
-            pi.appendEntry(checkpointType, draft)
+            const clears = draft.clearedDrafts ?? []
+            for (
+              let index = nativeClearedDrafts.length;
+              index < clears.length;
+              index++
+            ) {
+              pi.appendEntry(clearedDraftType, {
+                version: 1,
+                sessionId,
+                text: clears[index]!,
+              })
+              nativeClearedDrafts.push(clears[index]!)
+            }
+            const nativeDraft = { ...draft }
+            delete nativeDraft.clearedDrafts
+            pi.appendEntry(checkpointType, nativeDraft)
           } catch (error) {
             saved = false
             ctx.ui.notify(
@@ -201,6 +255,7 @@ export function sessionDrafts(pi: ExtensionAPI): void {
     histories.set(historyKey, {
       ...editor.getDraftHistory(),
       clearedDrafts,
+      nativeClearedDrafts,
       ...(pendingDraft ? { pendingDraft } : {}),
     })
     editor.onDraftChange = undefined

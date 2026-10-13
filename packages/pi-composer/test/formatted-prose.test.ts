@@ -73,6 +73,23 @@ test("typing over a formatted selection edits its visible text and submits the M
   )
 })
 
+test("replacing nested formatted text leaves unrelated marks and undo intact", async (t) => {
+  const host = await openHost(t)
+  const source =
+    "***target*** " +
+    Array.from({ length: 100 }, (_, index) => `**outside${index}**`).join(" ")
+  host.ui.setEditorText(source)
+  await host.key("\x1b[1;9A")
+  await host.key("\x1b[C")
+  await host.key("\x1b[1;2C")
+  await host.type("Z")
+  assert.equal(host.ui.getEditorText(), source.replace("target", "tZrget"))
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), source)
+  await host.key("\x1b[122;10u")
+  assert.equal(host.ui.getEditorText(), source.replace("target", "tZrget"))
+})
+
 test("formatted vertical selection follows terminal cells across wide text and wrapping", async (t) => {
   const host = await openHost(t, { columns: 12 })
   host.ui.setEditorText("**abcd界efghij**\nklmnop")

@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks"
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import {
@@ -130,7 +130,10 @@ export class Clipboard {
   ): Promise<void> {
     const contents = JSON.stringify(recovery, null, 2)
     try {
-      const directory = join(this.directory, recovery.sessionId)
+      const sessionName = createHash("sha256")
+        .update(recovery.sessionId)
+        .digest("hex")
+      const directory = join(this.directory, sessionName)
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const path = join(directory, `${randomUUID()}.json`)
       await writeFile(path, contents, { flag: "wx", mode: 0o600, flush: true })

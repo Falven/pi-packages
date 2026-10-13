@@ -311,7 +311,10 @@ export class Projection {
       }
     }
     const cuts = selected.flatMap((cell) => cell.ranges)
+    const first = selected[0]!
+    const last = selected.at(-1)!
     for (const mark of this.marks) {
+      if (mark.to <= first.from || mark.from >= last.to) continue
       const content = this.cells.filter((cell) =>
         cell.ranges.some(
           (range) => range.to > mark.contentFrom && range.from < mark.contentTo,
@@ -324,8 +327,8 @@ export class Projection {
         text.length > 0 &&
         !text.startsWith("\n") &&
         !text.endsWith("\n") &&
-        selected[0]!.from >= mark.contentFrom &&
-        selected.at(-1)!.from < mark.contentTo
+        first.from >= mark.contentFrom &&
+        last.from < mark.contentTo
       if (
         (from <= mark.from && to >= mark.to) ||
         (covered && !replacingInside)

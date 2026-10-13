@@ -59,6 +59,23 @@ test("Pi's clipboard application action inserts into the same draft and selectio
   assert.equal(host.ui.getEditorText(), "Keep new\nreference")
 })
 
+test("an empty public paste keeps the selected text and undo history", async (t) => {
+  const host = await openHost(t)
+  host.ui.setEditorText("Before")
+  host.ui.setEditorText("Keep old")
+  await host.key("\x1b[1;2D")
+  await host.key("\x1b[1;2D")
+  await host.key("\x1b[1;2D")
+  host.ui.pasteToEditor("")
+  assert.equal(host.ui.getEditorText(), "Keep old")
+  await host.type("new")
+  assert.equal(host.ui.getEditorText(), "Keep new")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Keep old")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "Before")
+})
+
 test("a failed external editor leaves the draft and undo history intact", async (t) => {
   const previousVisual = process.env["VISUAL"]
   t.after(() => {

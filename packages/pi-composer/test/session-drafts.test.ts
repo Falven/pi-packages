@@ -1,24 +1,32 @@
 import assert from "node:assert/strict"
 import { execFile } from "node:child_process"
-import type { PathLike } from "node:fs"
+import filesystemSync, { type PathLike } from "node:fs"
 import filesystem, {
   access,
   chmod,
   mkdir,
   readFile,
   readdir,
+  rm,
 } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { test } from "node:test"
 import { promisify } from "node:util"
+import { SessionManager } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../fixtures/host.ts"
+import {
+  clearedDraftType,
+  checkpointType,
+} from "../src/session-draft-storage.ts"
 
 const restart = (options: {
   directory: string
   sessionFile: string
   text: string
   recover?: boolean
+  clearedText?: string
+  clearedIndex?: number
 }) => {
   const environment = { ...process.env }
   delete environment["NODE_TEST_CONTEXT"]
@@ -550,5 +558,250 @@ test("reinstalling the public editor factory preserves autosave and the session 
     directory: host.directory,
     sessionFile,
     text: "After editor replacement",
+  })
+})
+
+test("native checkpoints store each cleared draft once while disk recovery keeps the full snapshot", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session")
+  await host.key("\r")
+  await host.settled()
+  const sessionFile = host.session.sessionFile!
+  const cleared = Array.from(
+    { length: 4 },
+    (_, index) => `Cleared ${index} ${"x".repeat(2048)}`,
+  )
+  /* eslint-disable no-await-in-loop -- Flush a native checkpoint after each submission. */
+  for (const text of cleared) {
+    host.ui.setEditorText(text)
+    await host.key("\r")
+    await host.settled()
+    await host.runtime.newSession()
+    await host.runtime.switchSession(sessionFile)
+  }
+  /* eslint-enable no-await-in-loop */
+  host.ui.setEditorText("Later unsent draft")
+  await host.close()
+
+  const entries = (await readFile(sessionFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  const custom = entries.filter((entry) => entry.type === "custom")
+  const clearEntries = custom.filter(
+    (entry) => entry.customType === clearedDraftType,
+  )
+  const checkpoints = custom.filter(
+    (entry) => entry.customType === checkpointType,
+  )
+  assert.deepEqual(
+    clearEntries.map((entry) => entry.data.text),
+    ["Start session", ...cleared],
+  )
+  assert(checkpoints.length >= cleared.length)
+  assert(checkpoints.every((entry) => !("clearedDrafts" in entry.data)))
+
+  const recorded: string[] = []
+  let oldBytes = 0
+  for (const entry of custom) {
+    if (entry.customType === clearedDraftType) recorded.push(entry.data.text)
+    if (entry.customType === checkpointType)
+      oldBytes +=
+        Buffer.byteLength(
+          JSON.stringify({
+            ...entry,
+            data: { ...entry.data, clearedDrafts: [...recorded] },
+          }),
+        ) + 1
+  }
+  const nativeBytes = custom.reduce(
+    (bytes, entry) => bytes + Buffer.byteLength(JSON.stringify(entry)) + 1,
+    0,
+  )
+  assert(
+    nativeBytes < oldBytes,
+    `${nativeBytes} native vs ${oldBytes} repeated bytes`,
+  )
+  const recoveryDirectory = join(host.directory, "pi-composer", "drafts")
+  const [name] = await readdir(recoveryDirectory)
+  assert(name)
+  const disk = JSON.parse(await readFile(join(recoveryDirectory, name), "utf8"))
+  assert.deepEqual(disk.clearedDrafts, ["Start session", ...cleared])
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "Later unsent draft",
+    clearedText: cleared.at(-1)!,
+    clearedIndex: 0,
+  })
+})
+
+test("old cumulative checkpoints and new cleared-draft entries remain recoverable together", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session")
+  await host.key("\r")
+  await host.settled()
+  const sessionFile = host.session.sessionFile!
+  const sessionId = host.session.sessionManager.getSessionId()
+  await host.close()
+  const manager = SessionManager.open(sessionFile)
+  const base = {
+    version: 1,
+    sessionId,
+    sessionFile,
+    cwd: host.directory,
+    text: "",
+  } as const
+  manager.appendCustomEntry(checkpointType, {
+    ...base,
+    revision: 100,
+    clearedDrafts: ["Legacy first", "Legacy second"],
+  })
+  manager.appendCustomEntry(checkpointType, { ...base, revision: 101 })
+  manager.appendCustomEntry(clearedDraftType, {
+    version: 1,
+    sessionId,
+    text: "New clear",
+  })
+  manager.appendCustomEntry(checkpointType, { ...base, revision: 102 })
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "",
+    clearedText: "New clear",
+    clearedIndex: 0,
+  })
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "",
+    clearedText: "Legacy second",
+    clearedIndex: 1,
+  })
+})
+
+test("a checkpoint append failure retries without duplicating a durably appended cleared draft", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session")
+  await host.key("\r")
+  await host.settled()
+  const sessionFile = host.session.sessionFile!
+  await host.runtime.newSession()
+  await host.runtime.switchSession(sessionFile)
+  const append = filesystemSync.appendFileSync
+  let failed = false
+  const intercepted = t.mock.method(
+    filesystemSync,
+    "appendFileSync",
+    (path: PathLike, data: string | Uint8Array) => {
+      if (
+        !failed &&
+        String(path) === sessionFile &&
+        String(data).includes(`"customType":"${checkpointType}"`)
+      ) {
+        failed = true
+        throw new Error("Controlled checkpoint append failure")
+      }
+      return append(path, data)
+    },
+  )
+  syncBuiltinESMExports()
+  try {
+    host.ui.setEditorText("Recover after partial append")
+    host.ui.setEditorText("")
+    assert.deepEqual(await host.runtime.newSession(), { cancelled: true })
+    assert(failed)
+  } finally {
+    intercepted.mock.restore()
+    syncBuiltinESMExports()
+  }
+  assert.deepEqual(await host.runtime.newSession(), { cancelled: false })
+  await host.close()
+  const entries = (await readFile(sessionFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line))
+  assert.equal(
+    entries.filter(
+      (entry) =>
+        entry.customType === clearedDraftType &&
+        entry.data.text === "Recover after partial append",
+    ).length,
+    1,
+  )
+  await rm(join(host.directory, "pi-composer", "drafts"), {
+    recursive: true,
+    force: true,
+  })
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "",
+    clearedText: "Recover after partial append",
+    clearedIndex: 0,
+  })
+})
+
+test("reload retries a failed native clear append even when Pi retained an in-memory entry", async (t) => {
+  const host = await openHost(t, { persistSession: true })
+  host.ui.setEditorText("Start session")
+  await host.key("\r")
+  await host.settled()
+  const sessionFile = host.session.sessionFile!
+  await host.runtime.newSession()
+  await host.runtime.switchSession(sessionFile)
+  const append = filesystemSync.appendFileSync
+  let failures = 0
+  const intercepted = t.mock.method(
+    filesystemSync,
+    "appendFileSync",
+    (path: PathLike, data: string | Uint8Array) => {
+      if (
+        failures < 2 &&
+        String(path) === sessionFile &&
+        String(data).includes(`"customType":"${clearedDraftType}"`)
+      ) {
+        failures++
+        throw new Error("Controlled cleared-draft append failure")
+      }
+      return append(path, data)
+    },
+  )
+  syncBuiltinESMExports()
+  try {
+    host.ui.setEditorText("Recover after reload")
+    host.ui.setEditorText("")
+    assert.deepEqual(await host.runtime.newSession(), { cancelled: true })
+    await host.session.reload()
+    assert.equal(failures, 2)
+    await t.waitFor(async () => {
+      const entries = (await readFile(sessionFile, "utf8"))
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line))
+      assert.equal(
+        entries.filter(
+          (entry) =>
+            entry.customType === clearedDraftType &&
+            entry.data.text === "Recover after reload",
+        ).length,
+        1,
+      )
+    })
+  } finally {
+    intercepted.mock.restore()
+    syncBuiltinESMExports()
+  }
+  await host.close()
+  await rm(join(host.directory, "pi-composer", "drafts"), {
+    recursive: true,
+    force: true,
+  })
+  await restart({
+    directory: host.directory,
+    sessionFile,
+    text: "",
+    clearedText: "Recover after reload",
+    clearedIndex: 0,
   })
 })

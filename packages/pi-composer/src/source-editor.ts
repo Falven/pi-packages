@@ -255,6 +255,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   override insertTextAtCursor(text: string): void {
+    if (!text) return
     const insert = () => {
       const { anchor, head } = this.draft
       this.replaceRange(Math.min(anchor, head), Math.max(anchor, head), text)
@@ -298,7 +299,7 @@ export class SourceEditor extends CustomEditor {
           this.draft === selection &&
           this.revision === revision
         ) {
-          this.insertTextAtCursor("")
+          this.replaceRange(Math.min(anchor, head), Math.max(anchor, head), "")
         }
       })
   }
@@ -652,10 +653,22 @@ export class SourceEditor extends CustomEditor {
     const backward = keys.matches(data, "tui.editor.deleteCharBackward")
     if (backward || keys.matches(data, "tui.editor.deleteCharForward")) {
       const { anchor, head } = this.draft
-      const end =
-        anchor === head
-          ? this.project(false).adjacent(head, backward ? -1 : 1)
-          : anchor
+      let end = anchor
+      if (anchor === head) {
+        const segment = graphemes
+          .segment(this.getText())
+          .containing(backward ? head - 1 : head)
+        if (segment)
+          end = backward
+            ? segment.index
+            : segment.index + segment.segment.length
+      }
+      if (head === end) {
+        this.deletionSource = undefined
+        this.yankSource = undefined
+        this.editGroup = undefined
+        return
+      }
       this.replaceRange(
         Math.min(head, end),
         Math.max(head, end),

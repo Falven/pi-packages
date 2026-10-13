@@ -259,3 +259,20 @@ test("native forward character deletion yields to the application's empty-editor
   await host.key("\x04")
   assert.equal(exited, true)
 })
+
+for (const view of ["formatted", "source"]) {
+  test(`native character deletion follows source grapheme boundaries in ${view} view`, async (t) => {
+    const host = await openHost(t)
+    if (view === "source") await host.key("\x1b[109;10u")
+    host.ui.setEditorText("A👩‍💻e\u0301界")
+    await host.key("\x7f")
+    await host.key("\x7f")
+    assert.equal(host.ui.getEditorText(), "A👩‍💻")
+    await host.key("\x1b[1;9A")
+    await host.key("\x1b[3~")
+    await host.key("\x1b[3~")
+    assert.equal(host.ui.getEditorText(), "")
+    await host.key("\x1b[122;9u")
+    assert.equal(host.ui.getEditorText(), "A👩‍💻")
+  })
+}

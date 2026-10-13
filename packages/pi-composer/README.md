@@ -64,7 +64,7 @@ Continuous typing and character deletion group until movement, another kind of e
 
 Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V invokes the same supplied handler as the effective native clipboard action. With `pi-attachments` loaded, that handler classifies copied files, images, and text before insertion. A custom handler retains its chosen insertion route. Terminal and public extension paste carry only their supplied text; suppressing the raw Cmd+V alias does not disable those routes.
 
-If a clipboard result reaches the composer after its draft or selection changes, the original session, cwd, draft, selection offsets, and delivered text are saved as JSON under `pi-composer/clipboard-recovery/<session-id>/` in Pi's agent directory. This also covers delivery to a replacement composer after a session switch or reload. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory. Starting a session or running `/composer-recover` retries those writes without inserting into the current draft.
+If a clipboard result reaches the composer after its draft or selection changes, the original session, cwd, draft, selection offsets, and delivered text are saved as JSON under `pi-composer/clipboard-recovery/<session-hash>/` in Pi's agent directory. The session ID stays in the recovery record; its hash names the directory. This also covers delivery to a replacement composer after a session switch or reload. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory. Starting a session or running `/composer-recover` retries those writes without inserting into the current draft.
 
 Pi's default clipboard handler returns text-read failures as empty results and delivers copied-file paths or temporary image paths as text. The composer cannot report errors or retain bytes that this handler does not expose, or guard delivery to an unrelated replacement editor. `pi-attachments` supplies metadata classification, read-error reporting, captured-content recovery, and stable snapshots.
 
@@ -79,6 +79,8 @@ Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Applica
 Installation and repeat verification require the native U.S. keyboard input source and layout (`com.apple.keylayout.US`), no modifier remapping, and no higher-priority physical bindings for the three letter shortcuts. Other or unknown layouts require manual setup. Removal remains available after layout, remap, or physical-binding changes. Files with ACL permissions are refused; ordinary owner, group, mode, and surrounding contents are preserved. Configuration verification does not observe the GUI's loaded state or physical shortcut delivery.
 
 ## Load
+
+Requires Pi and `@earendil-works/pi-tui` `^1.0.2`.
 
 From the repository root:
 

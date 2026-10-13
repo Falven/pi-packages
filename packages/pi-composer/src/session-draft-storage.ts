@@ -4,6 +4,27 @@ import { mkdir, rename, writeFile } from "node:fs/promises"
 import { isAbsolute, join } from "node:path"
 
 export const checkpointType = "pi-composer:draft"
+export const clearedDraftType = "pi-composer:cleared-draft"
+
+export type ClearedDraft = {
+  version: 1
+  sessionId: string
+  text: string
+}
+
+export function isClearedDraft(data: unknown): data is ClearedDraft {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "version" in data &&
+    data.version === 1 &&
+    "sessionId" in data &&
+    typeof data.sessionId === "string" &&
+    data.sessionId.length > 0 &&
+    "text" in data &&
+    typeof data.text === "string"
+  )
+}
 
 export type DraftCheckpoint = {
   version: 1

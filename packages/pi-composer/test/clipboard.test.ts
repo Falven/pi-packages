@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { createHash } from "node:crypto"
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { beforeEach, describe, test } from "node:test"
@@ -19,6 +20,11 @@ function assertWritableClipboard(
     clipboard?.setText,
     "The macOS target must provide Pi's native clipboard",
   )
+}
+
+function recoveryDirectory(sessionId: string): string {
+  const name = createHash("sha256").update(sessionId).digest("hex")
+  return join(getAgentDir(), "pi-composer", "clipboard-recovery", name)
 }
 
 describe(
@@ -260,9 +266,14 @@ describe(
         assert(host.terminal.output.includes("Clipboard paste saved to ")),
       )
       assert.equal(host.ui.getEditorText(), "Keep original and later work")
-      const output = await host.output()
-      const path = output.match(/Clipboard paste saved to (.+?\.json)/)?.[1]
-      assert(path, "Pi must report the retained clipboard file")
+      const files = await readdir(
+        recoveryDirectory(host.session.sessionManager.getSessionId()),
+      )
+      assert.equal(files.length, 1)
+      const path = join(
+        recoveryDirectory(host.session.sessionManager.getSessionId()),
+        files[0]!,
+      )
       assert.equal((await stat(path)).mode & 0o777, 0o600)
       const { revision, ...saved } = JSON.parse(await readFile(path, "utf8"))
       assert(Number.isSafeInteger(revision))
@@ -276,6 +287,44 @@ describe(
       assert.equal(host.ui.getEditorText(), "Keep original")
       await host.key("\x1b[122;10u")
       assert.equal(host.ui.getEditorText(), "Keep original and later work")
+    })
+
+    test("an imported session ID cannot move delayed clipboard recovery outside package storage", async (t) => {
+      const clipboard = getNativeClipboard()
+      assert(clipboard)
+      const read = Promise.withResolvers<string>()
+      t.mock.method(clipboard, "getText", () => read.promise)
+      const host = await openHost(t)
+      const sessionFile = join(host.directory, "imported.jsonl")
+      const sessionId = "../../escaped"
+      await writeFile(
+        sessionFile,
+        `${JSON.stringify({ type: "session", version: 3, id: sessionId, timestamp: new Date().toISOString(), cwd: host.directory })}\n`,
+      )
+      await host.runtime.switchSession(sessionFile)
+      assert.equal(host.session.sessionManager.getSessionId(), sessionId)
+      host.ui.setEditorText("Original")
+      await host.key("\x1b[118;9u")
+      await host.type(" later")
+      read.resolve("Retained clipboard")
+      await t.waitFor(() =>
+        assert(host.terminal.output.includes("Clipboard paste saved to ")),
+      )
+      const directory = recoveryDirectory(sessionId)
+      const files = await readdir(directory)
+      assert.equal(files.length, 1)
+      const path = join(directory, files[0]!)
+      assert.equal((await stat(path)).mode & 0o777, 0o600)
+      const saved = JSON.parse(await readFile(path, "utf8"))
+      assert.equal(saved.sessionId, sessionId)
+      assert.equal(saved.sessionFile, sessionFile)
+      assert.equal(saved.cwd, host.directory)
+      assert.equal(saved.draft.text, "Original")
+      assert.equal(saved.clipboard, "Retained clipboard")
+      await assert.rejects(() => stat(join(host.directory, "escaped")), {
+        code: "ENOENT",
+      })
+      assert.equal(host.ui.getEditorText(), "Original later")
     })
 
     test("a failing public paste decorator reports its error and preserves the selection", async (t) => {
@@ -342,12 +391,7 @@ describe(
           })
         },
       })
-      const directory = join(
-        getAgentDir(),
-        "pi-composer",
-        "clipboard-recovery",
-        sessions[0]!,
-      )
+      const directory = recoveryDirectory(sessions[0]!)
       host.ui.setEditorText("Original session draft")
       await host.key("\x1b[97;9u")
       await host.key("\x1b[118;9u")
@@ -467,10 +511,12 @@ describe(
         assert(host.terminal.output.includes("Clipboard paste saved to ")),
       )
       assert.equal(host.ui.getEditorText(), "Keep newer paste and later typing")
-      const path = (await host.output()).match(
-        /Clipboard paste saved to (.+?\.json)/,
-      )?.[1]
-      assert(path)
+      const directory = recoveryDirectory(
+        host.session.sessionManager.getSessionId(),
+      )
+      const files = await readdir(directory)
+      assert.equal(files.length, 1)
+      const path = join(directory, files[0]!)
       assert.equal(
         JSON.parse(await readFile(path, "utf8")).clipboard,
         "earlier paste",
@@ -579,10 +625,13 @@ describe(
       await host.session.sendUserMessage("/composer-recover", {
         expandPromptTemplates: true,
       })
-      const path = (await host.output()).match(
-        /Clipboard paste saved to (.+?\.json)/,
-      )?.[1]
-      assert(path, "The recovery action must retry the retained clipboard")
+      const files = await readdir(recoveryDirectory(sessionId))
+      assert.equal(
+        files.length,
+        1,
+        "The recovery action must retry the retained clipboard",
+      )
+      const path = join(recoveryDirectory(sessionId), files[0]!)
       const saved = JSON.parse(await readFile(path, "utf8"))
       assert.equal(saved.sessionId, sessionId)
       assert.deepEqual(saved.draft, {
