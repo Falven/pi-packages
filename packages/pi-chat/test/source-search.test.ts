@@ -216,6 +216,65 @@ test("Find searches readable Markdown and literal command syntax", async (t) => 
   assert.match(await query("secret-path"), /No matches/)
 })
 
+for (const { name, source, rendered, escaped, escapedQuery } of [
+  {
+    name: "code span",
+    source: "[a `b]` c](https://hidden.example/secret-path)",
+    rendered: "a b] c",
+    escaped: false,
+    escapedQuery: "",
+  },
+  {
+    name: "escaped brackets and code span",
+    source: "[a \\[x\\] `b]` c](https://hidden.example/secret-path)",
+    rendered: "a [x] b] c",
+    escaped: true,
+    escapedQuery: "[x]",
+  },
+  {
+    name: "escaped closing bracket and code span",
+    source: "[a \\] `b]` c](https://hidden.example/secret-path)",
+    rendered: "a ] b] c",
+    escaped: true,
+    escapedQuery: "",
+  },
+  {
+    name: "escaped brackets and double-backtick code span",
+    source: "[a \\[x\\] ``b]`` c](https://hidden.example/secret-path)",
+    rendered: "a [x] b] c",
+    escaped: true,
+    escapedQuery: "[x]",
+  },
+] as const) {
+  test(`Find includes an entire Markdown link label with ${name}`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [chat],
+      rows: 34,
+      keybindings: { "tui.altScreen.search": "ctrl+f" },
+    })
+    host.queueResponse(delta(source), finish(), done)
+    await host.type("Show link")
+    await host.key("\r")
+    await host.settled()
+    assert.ok((await host.frame()).includes(rendered))
+
+    const query = async (value: string) => {
+      await host.key("\x06")
+      await host.type(value)
+      const frame = await host.frame()
+      const lines = host.screenLines()
+      await host.key("\x1b")
+      return { frame, lines }
+    }
+    const code = await query("b]")
+    assert.match(code.frame, /1\/1/)
+    if (!escaped) assert.match(code.lines.join("\n"), /\x1b\[48;5;52m[^\n]*b\]/)
+    assert.match((await query("c")).frame, /1\/1/)
+    if (escapedQuery) assert.match((await query(escapedQuery)).frame, /1\/1/)
+    assert.match((await query("secret-path")).frame, /No matches/)
+  })
+}
+
 test("native Find navigation keeps duplicate occurrences distinct", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],

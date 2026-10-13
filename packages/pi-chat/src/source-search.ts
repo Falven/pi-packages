@@ -89,18 +89,28 @@ function readablePieces(source: string): Piece[] {
           append(token.text, at + content, at + content + token.text.length)
       } else if (token.type === "link") {
         // Only the label is readable; the destination remains out of the corpus.
+        // Marked has selected the full label, including code-span brackets.
+        // Its link text only unescapes bracket characters at this stage.
         let close = 0
         if (token.raw.startsWith("[")) {
-          let depth = 1
-          for (let index = 1; index < token.raw.length; index++) {
-            if (token.raw[index] === "\\") index++
-            else if (token.raw[index] === "[") depth++
-            else if (token.raw[index] === "]" && --depth === 0) {
-              close = index
+          let rawIndex = 1
+          let matches = true
+          for (let index = 0; index < token.text.length; index++) {
+            if (
+              token.raw[rawIndex] === "\\" &&
+              (token.raw[rawIndex + 1] === "[" ||
+                token.raw[rawIndex + 1] === "]")
+            )
+              rawIndex++
+            if (token.raw[rawIndex] !== token.text[index]) {
+              matches = false
               break
             }
+            rawIndex++
           }
+          if (matches && token.raw[rawIndex] === "]") close = rawIndex
         }
+        if (token.raw.startsWith("[") && !close) continue
         const label = close ? token.raw.slice(1, close) : token.text
         const offset = token.raw.indexOf(label)
         if (offset >= 0) {
