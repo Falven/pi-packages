@@ -1,6 +1,8 @@
 {
   "extends": "./tsconfig.base.json",
   "include": [
+    "fixtures/**/*.ts",
+    "test/**/*.ts",
     "packages/*/src/**/*.ts",
     "packages/*/test/**/*.ts",
     "packages/*/fixtures/**/*.ts"
