@@ -267,7 +267,20 @@ test("native tool calls and results survive session replay without rerunning the
 })
 
 test("consecutive native calls start as one closed group and open from the composer", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    onMount: (interactive) => {
+      const mode = interactive as unknown as {
+        version: string
+        fullscreenLayoutRoot: {
+          addChild(component: Text): void
+        }
+      }
+      mode.version = "unversioned"
+      mode.fullscreenLayoutRoot.addChild(new Text("Native status row", 0, 0))
+    },
+  })
   await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
   await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
   host.queueResponse(
@@ -312,6 +325,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await openWork(host)
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
+  assert.match(screen(), /Native status row/)
   assert.match(screen(), /2 tool calls.*read/)
   assert.doesNotMatch(screen(), /read one\.txt|read two\.txt/)
   await host.key("\x1bg")
@@ -995,13 +1009,59 @@ test("a prior fullscreen owner prevents activation without losing its root", asy
   assert.match(await host.frame(), /Other owner active/)
   assert(
     [...observed.notifications, ...observed.errors].some((message) =>
-      /requires the unowned Pi 1\.0\.2 fullscreen chat host/.test(message),
+      /pi-chat chat root is already owned/.test(message),
     ),
   )
   assert.equal(ownedRoot(), observed.replacement)
   await host.close()
   assert.equal(ownedRoot(), observed.replacement)
 })
+
+for (const hook of ["getSelectionSourceLine", "getSelectionColumns"])
+  test(`missing renderer.${hook} reports its name and restores native chat`, async (t) => {
+    const errors: string[] = []
+    let nativeRoot: unknown
+    let currentRoot: (() => unknown) | undefined
+    let restore: (() => void) | undefined
+    const host = await openNativeHost(t, {
+      extensionPaths: [chat],
+      onMount: (interactive) => {
+        const mode = interactive as unknown as {
+          fullscreenLayoutRoot: unknown
+          renderer: Record<string, Function | undefined>
+          showError(message: string): void
+        }
+        nativeRoot = mode.fullscreenLayoutRoot
+        currentRoot = () => mode.fullscreenLayoutRoot
+        const original = mode.renderer[hook]
+        Object.defineProperty(mode.renderer, hook, {
+          configurable: true,
+          writable: true,
+          value: undefined,
+        })
+        restore = () => {
+          mode.renderer[hook] = original
+        }
+        const showError = mode.showError
+        t.mock.method(mode, "showError", (message: string) => {
+          errors.push(message)
+          showError.call(mode, message)
+        })
+      },
+    })
+    restore?.()
+    assert(
+      errors.some((message) =>
+        message.includes(`Pi is missing renderer.${hook}()`),
+      ),
+    )
+    assert.equal(currentRoot?.(), nativeRoot)
+    await host.type("Native chat still works")
+    await host.key("\r")
+    await host.settled()
+    assert.match(await host.frame(), /Received\./)
+    assert.equal(currentRoot?.(), nativeRoot)
+  })
 
 test("cleanup leaves a later fullscreen owner's replacement intact", async (t) => {
   delete observed.host
@@ -1020,6 +1080,7 @@ test("page navigation scrolls native chat while the composer stays usable", asyn
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 16,
+    keybindings: { "tui.altScreen.top": "home", "tui.altScreen.bottom": "end" },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
@@ -1075,6 +1136,7 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 17,
+    keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
@@ -1355,6 +1417,7 @@ test("dragging at the chat edge reveals offscreen rows for selection", async (t)
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 16,
+    keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer

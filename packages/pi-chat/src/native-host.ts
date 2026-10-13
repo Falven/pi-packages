@@ -61,7 +61,7 @@ const { AltScreenSearchIndex } = (await import(
   ).href
 )) as typeof import("@earendil-works/pi-tui/dist/alt-screen-search.js")
 
-/* oxlint-disable eslint/no-underscore-dangle -- This adapter targets Pi 1.0.2's private persistence seams. */
+/* oxlint-disable eslint/no-underscore-dangle -- Pi's persistence seams are private. */
 
 type Entry = SessionEntry
 type Message = AgentSession["messages"][number]
@@ -71,13 +71,12 @@ type NativeAssistant = Component & {
   updateContent(message: Message, streaming?: boolean): void
 }
 type NativeMode = ThoughtEnvironment & {
-  version: string
   renderer: {
     mode: string
     layoutRoot?: Component
     setLayoutRoot(root?: Component): void
   }
-  fullscreenLayoutRoot: Component
+  fullscreenLayoutRoot: VStack & { [LAYOUT_NODE](): StackLayoutNode }
   transcriptScrollView: ScrollView
   chatContainer: Container
   documentContainer: Container
@@ -115,7 +114,6 @@ type NativeMode = ThoughtEnvironment & {
   renderSessionEntries(entries: Entry[], options?: unknown): void
   renderSessionItems(items: Iterable<unknown>, options?: unknown): void
   renderInitialMessages(): void
-  addCustomEntryToChat(entry: Entry): void
   addMessageToChat(message: Message, options?: unknown): void
   handleEvent(event: {
     type: string
@@ -147,36 +145,13 @@ export type Occurrence = {
 
 const active = new WeakMap<InteractiveMode, NativeChatHost>()
 
-function requiredMode(host: InteractiveMode): NativeMode {
-  const mode = host as unknown as NativeMode
-  const root = mode.fullscreenLayoutRoot as VStack | undefined
-  if (
-    mode.version !== "1.0.2" ||
-    !mode.chatContainer ||
-    !mode.documentContainer ||
-    !mode.transcriptScrollView ||
-    !root ||
-    root.children[0] !== mode.transcriptScrollView ||
-    root.children.length !== 2 ||
-    (mode.renderer.mode === "fullscreen" &&
-      mode.renderer.layoutRoot !== root) ||
-    typeof mode.renderSessionEntries !== "function" ||
-    typeof mode.renderSessionItems !== "function" ||
-    typeof mode.addMessageToChat !== "function" ||
-    typeof mode.handleEvent !== "function" ||
-    typeof mode.runtimeHost?.fork !== "function" ||
-    typeof mode.getMarkdownThemeWithSettings !== "function" ||
-    typeof mode.getMarkdownTransformers !== "function" ||
-    typeof mode.outputPad !== "number" ||
-    typeof mode.session?.agent?.normalizePromptInput !== "function" ||
-    typeof mode.session.agent.steeringQueue?.drain !== "function" ||
-    typeof mode.session.agent.followUpQueue?.drain !== "function"
-  ) {
-    throw new Error(
-      "pi-chat requires the unowned Pi 1.0.2 fullscreen chat host",
-    )
-  }
-  return mode
+function requireMethod<T extends Function>(
+  method: T | undefined,
+  name: string,
+): T {
+  if (typeof method !== "function")
+    throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`)
+  return method
 }
 
 class OwnedRoot extends VStack {
@@ -184,11 +159,11 @@ class OwnedRoot extends VStack {
   private readonly layoutChat: () => void
 
   constructor(
-    children: ConstructorParameters<typeof VStack>[0],
+    layout: StackLayoutNode,
     invalidateNative: () => void,
     layoutChat: () => void,
   ) {
-    super(children)
+    super([...layout.entries], { gap: layout.gap, align: layout.align })
     this.invalidateNative = invalidateNative
     this.layoutChat = layoutChat
   }
@@ -399,7 +374,7 @@ export class NativeChatHost {
   readonly byEntryId = new Map<string, Occurrence>()
   readonly byComponent = new Map<Component, Occurrence>()
   private readonly projections = new Map<string, Map<number, Occurrence>>()
-  readonly root: VStack
+  readonly root: OwnedRoot
   readonly transcript: ScrollView
   private readonly painting = new VStack()
   private leaves: Leaf[] = []
@@ -412,7 +387,7 @@ export class NativeChatHost {
     string,
     { original: Function; wrapped: Function; descriptor?: PropertyDescriptor }
   >()
-  private readonly oldRoot: Component
+  private readonly oldRoot: NativeMode["fullscreenLayoutRoot"]
   private readonly historical = new Map<string, Component[]>()
   private imageSettings: { show: boolean; width: number }
   private readonly originals = new Map<string, (...args: never[]) => unknown>()
@@ -499,23 +474,14 @@ export class NativeChatHost {
       overscroll: "chain",
       scrollbar: host.transcriptScrollView.scrollbar,
     })
+    const layout = requireMethod(
+      this.oldRoot[LAYOUT_NODE],
+      "fullscreen layout node",
+    ).call(this.oldRoot)
+    const entries = [...layout.entries]
+    entries[0] = { ...entries[0]!, component: this.painting }
     this.root = new OwnedRoot(
-      [
-        {
-          component: this.painting,
-          basis: 0,
-          grow: 1,
-          shrink: 1,
-          minSize: 1,
-        },
-        {
-          component: (this.oldRoot as VStack).children[1]!,
-          basis: "auto",
-          grow: 0,
-          shrink: 1,
-          minSize: 1,
-        },
-      ],
+      { ...layout, entries },
       () => {
         this.oldRoot.invalidate()
         for (const components of this.historical.values())
@@ -526,8 +492,14 @@ export class NativeChatHost {
   }
 
   static install(host: InteractiveMode): NativeChatHost {
-    if (active.has(host)) throw new Error("pi-chat chat root is already owned")
-    const mode = requiredMode(host)
+    const mode = host as unknown as NativeMode
+    if (
+      active.has(host) ||
+      mode.fullscreenLayoutRoot.children[0] !== mode.transcriptScrollView ||
+      (mode.renderer.mode === "fullscreen" &&
+        mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
+    )
+      throw new Error("pi-chat chat root is already owned")
     const adapter = new NativeChatHost(mode)
     try {
       adapter.wrapNativeConstruction()
@@ -572,16 +544,14 @@ export class NativeChatHost {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     const width = Math.max(1, renderer.terminal.columns)
     const height = Math.max(1, renderer.terminal.rows)
-    const dock = (this.oldRoot as VStack).children[1]!
-    const dockHeight = dock.render(width).length
+    const { entries, gap } = this.oldRoot[LAYOUT_NODE]()
     const [available] = allocateStackSizes(
-      [
-        { component: this.painting, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-        { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
-      ],
-      [0, dockHeight],
+      entries,
+      entries.map(({ component }, index) =>
+        index === 0 ? 0 : component.render(width).length,
+      ),
       height,
-      0,
+      gap,
     )
     const contentWidth = this.transcript.getContentWidth(width)
     const oldLeaves = this.leaves
@@ -1430,14 +1400,16 @@ export class NativeChatHost {
         const call =
           index === undefined ? undefined : owner.message.content[index]
         if (call?.type === "toolCall") {
+          const options = {
+            showImages: this.host.settingsManager.getShowImages(),
+            imageWidthCells: this.host.settingsManager.getImageWidthCells(),
+            outputPad: this.host.outputPad,
+          }
           const tool = new ToolExecutionComponent(
             call.name,
             call.id,
             call.arguments,
-            {
-              showImages: this.host.settingsManager.getShowImages(),
-              imageWidthCells: this.host.settingsManager.getImageWidthCells(),
-            },
+            options,
             this.host.getRegisteredToolDefinition(call.name),
             this.host.ui,
             this.host.sessionManager.getCwd(),
@@ -1748,9 +1720,13 @@ export class NativeChatHost {
   }
 
   private clearSelection(renderer: TuiAltScreen) {
-    ;(
-      renderer as unknown as { clearTextSelection(): void }
-    ).clearTextSelection()
+    const selection = renderer as unknown as {
+      resetTextSelection?(): void
+      clearTextSelection(): void
+    }
+    ;(selection.resetTextSelection ?? selection.clearTextSelection).call(
+      renderer,
+    )
   }
 
   private ownsRenderer(renderer: TuiAltScreen) {
@@ -1769,15 +1745,21 @@ export class NativeChatHost {
     if (this.boundRenderer === renderer) return
     this.unbindRenderer()
     this.boundRenderer = renderer
+    const methods = renderer as unknown as Record<string, Function | undefined>
+    for (const name of ["getSelectionBounds", "getSelectionColumns"])
+      requireMethod(methods[name], `renderer.${name}`)
+    requireMethod(
+      methods["resetTextSelection"] ?? methods["clearTextSelection"],
+      "renderer.resetTextSelection or renderer.clearTextSelection",
+    )
     const bind = (
       name: string,
       replacement: (original: Function) => Function,
     ) => {
-      const target = renderer as unknown as Record<string, unknown>
-      const original = target[name] as Function
+      const original = requireMethod(methods[name], `renderer.${name}`)
       const descriptor = Object.getOwnPropertyDescriptor(renderer, name)
       const wrapped = replacement(original)
-      target[name] = wrapped
+      methods[name] = wrapped
       this.rendererMethods.set(name, {
         original,
         wrapped,
@@ -2423,12 +2405,18 @@ export class NativeChatHost {
 
   private wrapNativeConstruction() {
     const host = this.host
+    for (const name of [
+      "getMarkdownThemeWithSettings",
+      "getMarkdownTransformers",
+      "getRegisteredToolDefinition",
+    ] as const)
+      requireMethod(host[name], name)
     const observe = (target: object, name: string, kind: DeliveryKind) => {
       const methods = target as Record<
         string,
         (...args: unknown[]) => Message[]
       >
-      const original = methods[name]!
+      const original = requireMethod(methods[name], name)
       const descriptor = Object.getOwnPropertyDescriptor(target, name)
       const record = (messages: Message[]) => {
         if (this.active) this.work.observe(messages, kind)
@@ -2454,9 +2442,12 @@ export class NativeChatHost {
         original: (...args: never[]) => unknown,
       ) => (...args: never[]) => unknown,
     ) => {
-      const original = (
-        host as unknown as Record<string, (...args: never[]) => unknown>
-      )[name]!
+      const original = requireMethod(
+        (host as unknown as Record<string, (...args: never[]) => unknown>)[
+          name
+        ],
+        name,
+      )
       const implementation = make(original)
       const wrapped = (...args: never[]) =>
         this.active ? implementation(...args) : original.apply(host, args)
@@ -2561,61 +2552,65 @@ export class NativeChatHost {
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
       return result
     })
+    requireMethod(host.renderSessionItems, "renderSessionItems")
     wrap(
       "renderSessionEntries",
-      () => (entries: Entry[], options?: unknown) => {
+      (original) => (entries: Entry[], options?: unknown) => {
         this.indexBranch()
-        const pairs = entries.flatMap((entry) => {
-          const items =
-            entry.type === "custom" ||
-            (entry.type === "usage" && entry.kind === "cache_warm")
-              ? [entry]
-              : sessionEntryToContextMessages(entry as never)
-          const projected =
-            (entry.type === "compaction" || entry.type === "branch_summary") &&
-            entry.usage &&
-            items.length
-              ? [
-                  ...items,
-                  {
-                    type: "compaction_cost",
-                    kind: entry.type,
-                    usage: entry.usage,
-                  },
-                ]
-              : items
-          return projected.map((item, ordinal) => ({
-            item,
-            owner: this.forProjectedItem(entry, ordinal),
-          }))
-        })
+        const owners: Occurrence[] = []
+        const scopedEntries = [...entries]
+        // Observe Pi's projection on our array; entry and message objects stay untouched.
+        scopedEntries.flatMap = (project, thisArg) =>
+          entries.flatMap((entry, index, array) => {
+            const items = project.call(thisArg!, entry, index, array)
+            if (Array.isArray(items))
+              items.forEach((_item, ordinal) =>
+                owners.push(this.forProjectedItem(entry, ordinal)),
+              )
+            else owners.push(this.forProjectedItem(entry, 0))
+            return items
+          })
         const setSource = (owner: Occurrence) => {
           this.source = owner
         }
-        function* scopedItems() {
-          for (const { item, owner } of pairs) {
+        const renderItems = host.renderSessionItems
+        const descriptor = Object.getOwnPropertyDescriptor(
+          host,
+          "renderSessionItems",
+        )
+        function* scopedItems(items: Iterable<unknown>) {
+          let index = 0
+          for (const item of items) {
+            const owner = owners[index++]
+            if (!owner)
+              throw new Error("pi-chat cannot associate Pi's history items")
             if (typeof item === "object" && item && "role" in item)
               owner.message = item as Message
             setSource(owner)
             yield item
           }
+          if (index !== owners.length)
+            throw new Error("pi-chat cannot associate Pi's history items")
         }
+        const scopedRender: typeof renderItems = (items, renderOptions) =>
+          renderItems.call(host, scopedItems(items), renderOptions)
+        host.renderSessionItems = scopedRender
         const previous = this.source
         try {
-          return host.renderSessionItems(scopedItems(), options)
+          return original.call(host, scopedEntries as never, options as never)
         } finally {
           this.source = previous
+          if (host.renderSessionItems === scopedRender) {
+            if (descriptor)
+              Object.defineProperty(host, "renderSessionItems", descriptor)
+            else
+              delete (host as unknown as Record<string, unknown>)[
+                "renderSessionItems"
+              ]
+          }
         }
       },
     )
-    wrap("addCustomEntryToChat", (original) => (entry: Entry) => {
-      const before = new Set(host.chatContainer.children)
-      const result = original.call(host, entry as never)
-      for (const child of host.chatContainer.children) {
-        if (!before.has(child)) this.recordNative(child)
-      }
-      return result
-    })
     wrap(
       "handleEvent",
       (original) =>
@@ -2623,6 +2618,7 @@ export class NativeChatHost {
           type: string
           message?: Message
           entry?: Entry
+          aborted?: boolean
           assistantMessageEvent?: { type: string; contentIndex?: number }
         }) => {
           let owner: Occurrence | undefined
@@ -2664,7 +2660,7 @@ export class NativeChatHost {
           }
           if (event.type === "agent_settled") {
             const settled = this.work.settle(
-              host.session._agentRunAbortRequested,
+              event.aborted ?? host.session._agentRunAbortRequested,
             )
             if (settled) this.recordRelationship(settled)
             ;(host.renderer as unknown as TuiAltScreen).requestRender()
@@ -2710,7 +2706,7 @@ export class NativeChatHost {
         },
     )
     const session = host.session
-    const record = session.recordBashResult
+    const record = requireMethod(session.recordBashResult, "recordBashResult")
     this.originals.set(
       "recordBashResult",
       record as (...args: never[]) => unknown,
@@ -2735,9 +2731,10 @@ export class NativeChatHost {
     )
 
     const manager = host.sessionManager
-    const appendEntry = (
-      manager as unknown as { _appendEntry(entry: Entry): void }
-    )._appendEntry
+    const appendEntry = requireMethod(
+      (manager as unknown as { _appendEntry(entry: Entry): void })._appendEntry,
+      "sessionManager._appendEntry",
+    )
     this.originals.set(
       "_appendEntry",
       appendEntry as (...args: never[]) => unknown,
@@ -2761,7 +2758,10 @@ export class NativeChatHost {
       "_appendEntry",
       wrappedAppendEntry as (...args: never[]) => unknown,
     )
-    const appendMessage = manager.appendMessage
+    const appendMessage = requireMethod(
+      manager.appendMessage,
+      "sessionManager.appendMessage",
+    )
     this.originals.set(
       "appendMessage",
       appendMessage as (...args: never[]) => unknown,
@@ -2789,7 +2789,14 @@ export class NativeChatHost {
       wrappedAppendMessage as (...args: never[]) => unknown,
     )
 
-    const appendCustom = session._appendCustomMessage
+    requireMethod(
+      manager.appendCustomMessageEntry,
+      "sessionManager.appendCustomMessageEntry",
+    )
+    const appendCustom = requireMethod(
+      session._appendCustomMessage,
+      "_appendCustomMessage",
+    )
     this.originals.set(
       "_appendCustomMessage",
       appendCustom as (...args: never[]) => unknown,

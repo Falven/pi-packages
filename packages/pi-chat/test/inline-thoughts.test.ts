@@ -310,6 +310,7 @@ test("native copy includes expanded offscreen thought rows and automatic collaps
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
+    keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
   })
   const body =

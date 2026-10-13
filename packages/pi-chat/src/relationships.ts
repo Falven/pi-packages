@@ -176,6 +176,9 @@ export function carryObservedFork(
       sessionStartEvent?: { reason: string }
     }) => Promise<unknown>
   }
+  for (const name of ["fork", "createRuntime"] as const)
+    if (typeof runtime[name] !== "function")
+      throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`)
   const originalFork = runtime.fork
   const forkDescriptor = Object.getOwnPropertyDescriptor(runtime, "fork")
   let active = true

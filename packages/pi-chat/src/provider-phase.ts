@@ -34,7 +34,7 @@ function itemOf(value: unknown): ProviderItem | undefined {
     : undefined
 }
 
-// Mirror only the slot-creation rules in Pi 1.0.2's Responses parser.
+// Pi's normalized text omits phase, so associate provider slots before normalization.
 export class ProviderPhaseIndex {
   private nextContentIndex = 0
   private readonly active = new Map<number, Creation>()

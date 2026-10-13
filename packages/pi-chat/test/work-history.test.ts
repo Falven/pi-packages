@@ -237,6 +237,7 @@ test("a settled terminal assistant keeps its native thoughts in work and its tex
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 38,
+    keybindings: { "tui.altScreen.bottom": "end" },
     settings: { hideThinkingBlock: false },
   })
   await writeFile(join(host.directory, "one.txt"), "native result")
@@ -653,6 +654,7 @@ test("automatic folding clears a selected progress range even while reading scro
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 16,
+    keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
   })
   await writeFile(join(host.directory, "one.txt"), "native result")

@@ -426,6 +426,7 @@ test("native image crops combine logical clips once and retain their identity an
     extensionPaths: [chat],
     columns: 82,
     rows: 28,
+    keybindings: { "tui.altScreen.top": "home" },
     settings: { terminal: { imageWidthCells: 48 } },
     extensionFactories: [
       (pi) => {

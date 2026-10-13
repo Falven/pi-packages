@@ -55,6 +55,7 @@ class RecordingTerminal {
   clearScreen() {}
   setTitle() {}
   setProgress() {}
+  setProgramStatus() {}
 }
 
 export type NativeHostOptions = {
