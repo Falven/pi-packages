@@ -241,6 +241,7 @@ test("native Find navigation keeps duplicate occurrences distinct", async (t) =>
 test("Find highlights the owning call when a custom renderer omits source text", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
+    persistSession: true,
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     extensionFactories: [
@@ -301,6 +302,23 @@ test("Find highlights the owning call when a custom renderer omits source text",
   assert.doesNotMatch(
     lines.map(stripTerminalSequences).join("\n"),
     /unrendered telescope/,
+  )
+  await host.key("\x1b")
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  assert.doesNotMatch(await host.frame(), /CUSTOM CALL/)
+  await host.key("\x06")
+  await host.type("telescope")
+  await host.frame()
+  const retained = host.screenLines()
+  assert.match(retained.map(stripTerminalSequences).join("\n"), /1\/1/)
+  assert.match(
+    retained.find((line) =>
+      stripTerminalSequences(line).includes("CUSTOM CALL"),
+    ) ?? "",
+    /\x1b\[48;5;52m/,
   )
 })
 
@@ -551,4 +569,536 @@ test("Find uses native case, Unicode, and whitespace matching", async (t) => {
     .screenLines()
     .find((line) => stripTerminalSequences(line).includes("Café"))
   assert.match(match ?? "", /\x1b\[48;5;52m/)
+})
+
+test("Find reveals a retained message before Pi's compaction summary", async (t) => {
+  let native: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 44,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    onMount: (mode) => {
+      native = mode
+    },
+  })
+  host.queueResponse(delta("Earlier answer"), finish(), done)
+  await host.type("archival-needle request")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  assert.doesNotMatch(await host.frame(), /archival-needle/)
+  ;(
+    native as { headerContainer: { addChild(component: Text): void } }
+  ).headerContainer.addChild(new Text("Native header marker", 0, 0))
+
+  await host.key("\x06")
+  await host.type("archival-needle")
+  const frame = await host.frame()
+  assert.match(frame, /1\/1/)
+  assert.match(frame, /archival-needle/)
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.ok(
+    screen.indexOf("archival-needle") < screen.indexOf("Compacted from"),
+  )
+  assert.ok(
+    screen.indexOf("Native header marker") < screen.indexOf("archival-needle"),
+  )
+  await host.key("\x1b")
+  host.queueResponse(delta("New answer"), finish(), done)
+  await host.type("New request")
+  await host.key("\r")
+  await host.settled()
+  assert.doesNotMatch(JSON.stringify(host.requests.at(-1)), /archival-needle/)
+})
+
+test("revealing a retained user row does not add it to native editor history", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 40,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  host.queueResponse(delta("Seed answer"), finish(), done)
+  await host.type("Seed request")
+  await host.key("\r")
+  await host.settled()
+  const original = host.session.sessionManager
+    .getBranch()
+    .find((entry) => entry.type === "message" && entry.message.role === "user")
+  assert(original?.type === "message" && original.message.role === "user")
+  host.session.sessionManager.appendMessage({
+    ...original.message,
+    content: "history-needle request",
+  })
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+
+  await host.key("\x06")
+  await host.type("history-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  await host.key("\x1b[A")
+  await host.frame()
+  assert.doesNotMatch(
+    host.screenLines().slice(-6).map(stripTerminalSequences).join("\n"),
+    /history-needle/,
+  )
+})
+
+test("Find reopens a hidden retained thought using the native Markdown environment", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 42,
+    settings: { hideThinkingBlock: true },
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) => {
+        pi.registerMarkdownTransformer((markdown, context) =>
+          context.messageType === "assistant-thinking"
+            ? markdown.replaceAll("source-", "shown-")
+            : markdown,
+        )
+        pi.on("message_end", ({ message }) => {
+          if (message.role !== "assistant") return
+          return {
+            message: {
+              ...message,
+              content: [
+                { type: "thinking", thinking: "source-historical telescope" },
+                { type: "text", text: "Visible answer" },
+              ],
+            },
+          }
+        })
+      },
+    ],
+  })
+  host.queueResponse(delta("Original answer"), finish(), done)
+  await host.type("Think about history")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  assert.doesNotMatch(await host.frame(), /historical telescope/)
+
+  await host.key("\x06")
+  await host.type("historical")
+  await host.frame()
+  const lines = host.screenLines()
+  const screen = lines.map(stripTerminalSequences).join("\n")
+  assert.match(screen, /1\/1/)
+  assert.match(screen, /▾ Thought[\s\S]*shown-historical/)
+  const thought = lines.find((line) =>
+    stripTerminalSequences(line).includes("shown-historical"),
+  )
+  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*historical/)
+})
+
+test("Find restores separate retained calls with reused IDs and their own results", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 50,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  await writeFile(join(host.directory, "first.txt"), "first-needle output")
+  await writeFile(join(host.directory, "second.txt"), "second-needle output")
+  const run = async (prompt: string, file: string) => {
+    host.queueResponse(delta("", file), finish("tool_calls"), done)
+    host.queueResponse(delta(`Completed ${prompt}`), finish(), done)
+    await host.type(prompt)
+    await host.key("\r")
+    await host.settled()
+  }
+  await run("First request", "first.txt")
+  await run("Second request", "second.txt")
+  const requests = host.requests.length
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  assert.doesNotMatch(await host.frame(), /first-needle|second-needle/)
+
+  await host.key("\x06")
+  await host.type("first-needle")
+  assert.match(await host.frame(), /1\/1/)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /read first\.txt[\s\S]*first-needle output/,
+  )
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("second-needle")
+  assert.match(await host.frame(), /1\/1/)
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.match(screen, /read second\.txt[\s\S]*second-needle output/)
+  assert.doesNotMatch(screen, /2 tool calls/)
+  assert.equal(host.requests.length, requests)
+})
+
+test("native global tool expansion reaches a revealed retained call", async (t) => {
+  let native: { setToolsExpanded(expanded: boolean): void } | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 44,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    onMount: (mode) => {
+      native = mode as unknown as typeof native
+    },
+  })
+  await writeFile(
+    join(host.directory, "older.txt"),
+    "retained-tool-needle output",
+  )
+  host.queueResponse(delta("", "older.txt"), finish("tool_calls"), done)
+  host.queueResponse(delta("Done"), finish(), done)
+  await host.type("Read older file")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+
+  await host.key("\x06")
+  await host.type("retained-tool-needle")
+  assert.match(await host.frame(), /retained-tool-needle output/)
+  await host.key("\x1b")
+  assert(native)
+  native.setToolsExpanded(true)
+  assert.match(await host.frame(), /retained-tool-needle output/)
+  native.setToolsExpanded(false)
+  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
+})
+
+test("Find includes displayed native custom messages before and after compaction", async (t) => {
+  let send: (() => void) | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 42,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) => {
+        pi.registerMessageRenderer(
+          "historical-notice",
+          () => new Text("Current custom renderer", 0, 0),
+        )
+        send = () => {
+          pi.sendMessage(
+            {
+              customType: "historical-notice",
+              content: "custom-needle source",
+              display: true,
+            },
+            { triggerTurn: false },
+          )
+          pi.sendMessage(
+            {
+              customType: "historical-notice",
+              content: "private-needle metadata",
+              display: false,
+            },
+            { triggerTurn: false },
+          )
+        }
+      },
+    ],
+  })
+  assert(send)
+  host.queueResponse(delta("Seed answer"), finish(), done)
+  await host.type("Seed session")
+  await host.key("\r")
+  await host.settled()
+  send()
+  assert.match(await host.frame(), /Current custom renderer/)
+  assert.match(
+    JSON.stringify(host.session.sessionManager.getBranch()),
+    /custom-needle/,
+  )
+  await host.key("\x06")
+  await host.type("custom-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  assert.doesNotMatch(await host.frame(), /Current custom renderer/)
+  assert.match(
+    JSON.stringify(host.session.sessionManager.getBranch()),
+    /custom-needle/,
+  )
+
+  await host.key("\x06")
+  await host.type("custom-needle")
+  assert.match(await host.frame(), /1\/1/)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /Current custom renderer/,
+  )
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("private-needle")
+  assert.match(await host.frame(), /No matches/)
+})
+
+test("revealing retained history leaves a live native tool result attached", async (t) => {
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  t.after(() => release())
+  let started = false
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 44,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) =>
+        pi.registerTool({
+          ...createReadToolDefinition("."),
+          name: "wait",
+          label: "Wait",
+          execute: async () => {
+            started = true
+            await gate
+            return {
+              content: [{ type: "text", text: "live-result needle" }],
+              details: {},
+            }
+          },
+        }),
+    ],
+  })
+  host.queueResponse(delta("Old answer"), finish(), done)
+  await host.type("archival-needle request")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "live-call",
+                  type: "function",
+                  function: {
+                    name: "wait",
+                    arguments: '{"path":"live.txt"}',
+                  },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Live work done"), finish(), done)
+  await host.type("Run live work")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(started, true))
+  assert.equal(host.session.isStreaming, true)
+  await host.key("\x06")
+  await host.type("archival-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  release()
+  await host.settled()
+  await host.key("\x06")
+  await host.type("live-result")
+  assert.match(await host.frame(), /1\/1/)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /live-result needle/,
+  )
+})
+
+test("Find keeps source order when selecting a retained assistant's calls backward", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 50,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  await writeFile(join(host.directory, "one.txt"), "one-needle output")
+  await writeFile(join(host.directory, "two.txt"), "two-needle output")
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: ["one.txt", "two.txt"].map((path, index) => ({
+                index,
+                id: `same-${index}`,
+                type: "function",
+                function: { name: "read", arguments: JSON.stringify({ path }) },
+              })),
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(delta("Done"), finish(), done)
+  await host.type("Read both")
+  await host.key("\r")
+  await host.settled()
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+
+  await host.key("\x06")
+  await host.type("two-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("one-needle")
+  assert.match(await host.frame(), /1\/1/)
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.match(screen, /2 tool calls/)
+  assert.match(screen, /one-needle output/)
+  assert.match(screen, /two-needle output/)
+  assert.ok(
+    screen.indexOf("one-needle output") < screen.indexOf("two-needle output"),
+  )
+})
+
+test("historical presenters clear on reload and branch navigation", async (t) => {
+  let target = ""
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 42,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) =>
+        pi.registerCommand("test-tree", {
+          handler: async (_args, ctx) => {
+            await ctx.navigateTree(target)
+          },
+        }),
+    ],
+  })
+  host.queueResponse(delta("Old answer"), finish(), done)
+  await host.type("archival-needle request")
+  await host.key("\r")
+  await host.settled()
+  const user = host.session.sessionManager
+    .getBranch()
+    .find((entry) => entry.type === "message" && entry.message.role === "user")
+  assert(user?.parentId)
+  target = user.parentId
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+
+  await host.key("\x06")
+  await host.type("archival-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  await host.reload()
+  assert.doesNotMatch(await host.frame(), /archival-needle/)
+  await host.key("\x06")
+  await host.type("archival-needle")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  await host.type("/test-tree")
+  await host.key("\r")
+  assert.doesNotMatch(await host.frame(), /archival-needle/)
+  await host.key("\x06")
+  await host.type("archival-needle")
+  assert.match(await host.frame(), /No matches/)
+})
+
+test("retained aborted and failed calls keep Pi's historical error display", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    persistSession: true,
+    rows: 44,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  await writeFile(join(host.directory, "seed.txt"), "seed output")
+  host.queueResponse(delta("", "seed.txt"), finish("tool_calls"), done)
+  host.queueResponse(delta("Done"), finish(), done)
+  await host.type("Read seed")
+  await host.key("\r")
+  await host.settled()
+  const assistant = host.session.sessionManager
+    .getBranch()
+    .find(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "assistant" &&
+        entry.message.content.some((part) => part.type === "toolCall"),
+    )
+  assert(
+    assistant?.type === "message" && assistant.message.role === "assistant",
+  )
+  const call = assistant.message.content.find(
+    (part) => part.type === "toolCall",
+  )
+  assert(call?.type === "toolCall")
+  for (const [stopReason, path, errorMessage] of [
+    ["aborted", "abort-needle", undefined],
+    ["error", "error-needle", "Historical failure"],
+  ] as const)
+    host.session.sessionManager.appendMessage({
+      ...assistant.message,
+      stopReason,
+      ...(errorMessage ? { errorMessage } : {}),
+      content: [{ ...call, id: path, arguments: { path } }],
+    })
+  const file = host.session.sessionFile!
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
+  await host.runtime.newSession()
+  await host.runtime.switchSession(file)
+
+  await host.key("\x06")
+  await host.type("abort-needle")
+  assert.match(await host.frame(), /1\/1/)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /Operation aborted/,
+  )
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("error-needle")
+  assert.match(await host.frame(), /1\/1/)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /Historical failure/,
+  )
 })

@@ -4,11 +4,11 @@
 
 **Blocked by:** 10: Find and reveal content inside closed folds.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Extend source search to retained pre-compaction entries in the active branch and ancestry, without loading sibling branches or discarded content.
-- [ ] Materialize absent rows through native historical presenters at their source-ordered positions without changing Pi session projection or model context.
-- [ ] Historical tool presentation must not execute tools, start speculative previews, clear live pending tools, or populate editor history.
-- [ ] Keep hidden-thought rendering and current effective renderer/theme environments correct for materialized rows.
-- [ ] Reuse source references and cached presenters with proper invalidation/cleanup; do not keep another conversation buffer.
-- [ ] Verify original hidden message/thought/tool hits, live work during reveal, source ordering, owning-call highlighting, and absence of execution side effects through the native host.
+- [x] Extend source search to retained pre-compaction entries in the active branch and ancestry, without loading sibling branches or discarded content.
+- [x] Materialize absent rows through native historical presenters at their source-ordered positions without changing Pi session projection or model context.
+- [x] Historical tool presentation must not execute tools, start speculative previews, clear live pending tools, or populate editor history.
+- [x] Keep hidden-thought rendering and current effective renderer/theme environments correct for materialized rows.
+- [x] Reuse source references and cached presenters with proper invalidation/cleanup; do not keep another conversation buffer.
+- [x] Verify original hidden message/thought/tool hits, live work during reveal, source ordering, owning-call highlighting, and absence of execution side effects through the native host.

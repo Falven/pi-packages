@@ -1,5 +1,6 @@
 import {
   InteractiveMode,
+  ToolExecutionComponent,
   sessionEntryToContextMessages,
   type AgentSession,
   type AgentSessionRuntime,
@@ -84,6 +85,7 @@ type NativeMode = ThoughtEnvironment & {
   runtimeHost: AgentSessionRuntime
   session: {
     isStreaming: boolean
+    retryAttempt: number
     agent: {
       subscribe(listener: (event: unknown) => void): () => void
       normalizePromptInput(...args: unknown[]): Message[]
@@ -100,6 +102,15 @@ type NativeMode = ThoughtEnvironment & {
   bashComponent?: Component
   pendingBashComponents: Component[]
   pendingTools: Map<string, Component>
+  settingsManager: {
+    getShowImages(): boolean
+    getImageWidthCells(): number
+  }
+  toolOutputExpanded: boolean
+  ui: ConstructorParameters<typeof ToolExecutionComponent>[5]
+  getRegisteredToolDefinition(
+    name: string,
+  ): ConstructorParameters<typeof ToolExecutionComponent>[4]
   streamingComponent?: NativeAssistant
   renderSessionEntries(entries: Entry[], options?: unknown): void
   renderSessionItems(items: Iterable<unknown>, options?: unknown): void
@@ -279,6 +290,7 @@ type Activity = {
   zoneStart?: boolean
   zoneEnd?: boolean
   body?: InlineViewport
+  sourceZone?: number | undefined
 }
 type ToolGroup = {
   calls: Activity[]
@@ -401,6 +413,7 @@ export class NativeChatHost {
     { original: Function; wrapped: Function; descriptor?: PropertyDescriptor }
   >()
   private readonly oldRoot: Component
+  private readonly historical = new Map<string, Component[]>()
   private readonly originals = new Map<string, (...args: never[]) => unknown>()
   private readonly wrappers = new Map<string, (...args: never[]) => unknown>()
   private readonly ownDescriptors = new Map<
@@ -452,6 +465,9 @@ export class NativeChatHost {
   private active = true
   private relationshipWriteFailed = false
   private indexedIds: string[] = []
+  private readonly sourceRanks = new Map<string, number>()
+  private readonly sourceZones = new Map<string, number[]>()
+  private lastSourceZone = 0
   private sourceRevision = 0
   private readonly sourceSearch = new SourceSearch<Occurrence>()
   private readonly renderedSearch = new WeakMap<
@@ -495,7 +511,11 @@ export class NativeChatHost {
           minSize: 1,
         },
       ],
-      () => this.oldRoot.invalidate(),
+      () => {
+        this.oldRoot.invalidate()
+        for (const components of this.historical.values())
+          for (const component of components) component.invalidate()
+      },
       () => this.layoutChat(),
     )
   }
@@ -568,12 +588,34 @@ export class NativeChatHost {
       : undefined
     const anchorRow = anchor ? previousTop - currentTop(anchor) : 0
     let start = 0
-    const components = this.host.documentContainer.children.flatMap(
-      (component) =>
-        component === this.host.chatContainer
-          ? this.host.chatContainer.children
-          : [component],
+    const missing = [...this.historical].toSorted(
+      ([left], [right]) =>
+        (this.sourceRanks.get(left) ?? Infinity) -
+        (this.sourceRanks.get(right) ?? Infinity),
     )
+    const components: Component[] = []
+    let nextMissing = 0
+    for (const section of this.host.documentContainer.children) {
+      if (section !== this.host.chatContainer) {
+        components.push(section)
+        continue
+      }
+      for (const component of this.host.chatContainer.children) {
+        const position = this.sourceRanks.get(
+          this.byComponent.get(component)?.entry?.id ?? "",
+        )
+        if (position !== undefined)
+          while (
+            nextMissing < missing.length &&
+            (this.sourceRanks.get(missing[nextMissing]![0]) ?? Infinity) <
+              position
+          )
+            components.push(...missing[nextMissing++]![1])
+        components.push(component)
+      }
+      while (nextMissing < missing.length)
+        components.push(...missing[nextMissing++]![1])
+    }
     const activities = this.orderedActivities(components)
     let composed: Activity[] = []
     for (let index = 0; index < activities.length;) {
@@ -584,7 +626,14 @@ export class NativeChatHost {
         continue
       }
       const calls: Activity[] = []
-      while (activities[index]?.tool) calls.push(activities[index++]!)
+      while (
+        activities[index]?.tool &&
+        (!calls.length ||
+          activities[index]?.sourceZone === undefined ||
+          calls.at(-1)?.sourceZone === undefined ||
+          activities[index]?.sourceZone === calls.at(-1)?.sourceZone)
+      )
+        calls.push(activities[index++]!)
       const first = calls[0]!.occurrence
       if (!first) {
         composed.push(...calls)
@@ -866,6 +915,9 @@ export class NativeChatHost {
               component: occurrence.component,
               occurrence,
               tool: true,
+              sourceZone: owner.entry?.id
+                ? this.sourceZones.get(owner.entry.id)?.[index]
+                : undefined,
             })
         } else if (occurrence?.contentIndex === index && occurrence.component) {
           if (leading) {
@@ -1131,7 +1183,7 @@ export class NativeChatHost {
       sourceEntry?: Entry,
       sourceIndex?: number,
     ) => {
-      if (owner?.component && source)
+      if (owner && source)
         fields.push({
           owner,
           key,
@@ -1162,7 +1214,14 @@ export class NativeChatHost {
       message: Extract<Message, { role: "assistant" }>,
     ) => {
       for (const [index, part] of message.content.entries()) {
-        const occurrence = owner?.parts.get(index)
+        let occurrence = owner?.parts.get(index)
+        if (!occurrence && owner) {
+          occurrence = this.newOccurrence(owner.entry)
+          occurrence.parent = owner
+          occurrence.message = message
+          occurrence.contentIndex = index
+          owner.parts.set(index, occurrence)
+        }
         if (part.type === "text")
           add(
             occurrence ?? owner,
@@ -1184,7 +1243,7 @@ export class NativeChatHost {
             index,
           )
         else if (part.type === "toolCall") {
-          if (occurrence?.component) {
+          if (occurrence) {
             const calls = pending.get(part.id) ?? []
             calls.push(occurrence)
             pending.set(part.id, calls)
@@ -1223,13 +1282,24 @@ export class NativeChatHost {
     }
     for (const id of this.indexedIds) {
       const entry = this.host.sessionManager.getEntry(id)
-      if (entry?.type !== "message") continue
-      const message = entry.message
+      if (!entry) continue
+      const message =
+        entry.type === "message"
+          ? entry.message
+          : entry.type === "custom_message"
+            ? sessionEntryToContextMessages(entry)[0]
+            : undefined
+      if (!message) continue
       const owner = this.byEntryId.get(id)
+      if (owner && !owner.message) owner.message = message
       if (message.role === "assistant") {
         addAssistant(owner, message)
       } else if (message.role === "toolResult") {
         const call = pending.get(message.toolCallId)?.shift()
+        if (call) {
+          call.resultEntry = entry
+          call.resultMessage = message
+        }
         for (const [index, part] of message.content.entries())
           if (part.type === "text")
             add(
@@ -1304,9 +1374,91 @@ export class NativeChatHost {
     ]
   }
 
+  private materializeSearchHit(hit: SourceHit<Occurrence>) {
+    const selected = hit.field.owner
+    const owner = selected.parent ?? selected
+    const entry = owner.entry
+    if (!entry?.id || !owner.message) return false
+    const retained = this.historical.get(entry.id)
+    if (retained && (!hit.field.tool || selected.component)) return false
+    if (!retained && owner.component) return false
+    let components = retained
+    if (!components) {
+      const receiver = Object.create(this.host) as NativeMode
+      receiver.chatContainer = new Container()
+      ;(
+        InteractiveMode.prototype as unknown as NativeMode
+      ).addMessageToChat.call(receiver, owner.message, {
+        populateHistory: false,
+      })
+      components = [...receiver.chatContainer.children]
+    }
+    if (owner.message.role === "assistant") {
+      const presenter =
+        !retained &&
+        components.find(
+          (component): component is NativeAssistant =>
+            "contentContainer" in component,
+        )
+      if (presenter) {
+        owner.component = presenter
+        this.byComponent.set(presenter, owner)
+        this.bindAssistant(presenter, owner)
+      }
+      if (hit.field.tool) {
+        const index = hit.field.callRef?.contentIndex
+        const call =
+          index === undefined ? undefined : owner.message.content[index]
+        if (call?.type === "toolCall") {
+          const tool = new ToolExecutionComponent(
+            call.name,
+            call.id,
+            call.arguments,
+            {
+              showImages: this.host.settingsManager.getShowImages(),
+              imageWidthCells: this.host.settingsManager.getImageWidthCells(),
+            },
+            this.host.getRegisteredToolDefinition(call.name),
+            this.host.ui,
+            this.host.sessionManager.getCwd(),
+          )
+          tool.setExpanded(this.host.toolOutputExpanded)
+          if (
+            owner.message.stopReason === "aborted" ||
+            owner.message.stopReason === "error"
+          ) {
+            const retries = this.host.session.retryAttempt
+            const error =
+              owner.message.stopReason === "aborted"
+                ? retries > 0
+                  ? `Aborted after ${retries} retry attempt${retries > 1 ? "s" : ""}`
+                  : "Operation aborted"
+                : owner.message.errorMessage || "Error"
+            tool.updateResult({
+              content: [{ type: "text", text: error }],
+              isError: true,
+            })
+          } else if (selected.resultMessage?.role === "toolResult")
+            tool.updateResult(selected.resultMessage)
+          this.bindPart(owner, index!, tool)
+          components.push(tool)
+        }
+      }
+    } else if (!retained) {
+      const presenter = components.at(-1)
+      if (presenter) {
+        owner.component = presenter
+        this.byComponent.set(presenter, owner)
+      }
+    }
+    if (!components.length) return false
+    this.historical.set(entry.id, components)
+    return true
+  }
+
   private revealSearchHit(hit: SourceHit<Occurrence>) {
     const owner = hit.field.owner
-    let changed = false
+    let changed = this.materializeSearchHit(hit)
     const work = this.work.find(owner)
     if (work && !this.work.expanded(work)) {
       work.manualExpanded = true
@@ -1317,15 +1469,6 @@ export class NativeChatHost {
     if (thought && !thought.expanded) {
       thought.ensureOpen()
       changed = true
-    }
-    for (const group of this.groups.values()) {
-      if (
-        group.calls.some((call) => call.occurrence === owner) &&
-        !group.expanded
-      ) {
-        group.expanded = true
-        changed = true
-      }
     }
     if (
       hit.field.tool &&
@@ -1338,6 +1481,17 @@ export class NativeChatHost {
       changed = true
     }
     if (changed) this.layoutChat()
+    for (const group of this.groups.values()) {
+      if (
+        group.calls.some((call) => call.occurrence === owner) &&
+        !group.expanded
+      ) {
+        group.expanded = true
+        this.layoutChat()
+        changed = true
+        break
+      }
+    }
     const leaf = this.searchLeaf(hit)
     if (!leaf) return changed
     const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0
@@ -1894,6 +2048,26 @@ export class NativeChatHost {
     }
   }
 
+  private clearHistorical() {
+    for (const [id, components] of this.historical) {
+      const owned = new Set(components)
+      const owner = this.byEntryId.get(id)
+      if (owner?.component && owned.has(owner.component)) delete owner.component
+      for (const part of new Set(owner?.parts.values() ?? [])) {
+        if (part.component && owned.has(part.component)) delete part.component
+        this.thoughts.delete(part)
+        this.groups.delete(part)
+      }
+      for (const component of components) {
+        if (this.assistantMethods.has(component as NativeAssistant))
+          this.releaseAssistant(component as NativeAssistant)
+        this.byComponent.delete(component)
+        this.toolFocus.delete(component)
+      }
+    }
+    this.historical.clear()
+  }
+
   private indexBranch() {
     const branch = this.host.sessionManager.getBranch()
     const previous = this.indexedIds.join("\0")
@@ -1904,17 +2078,47 @@ export class NativeChatHost {
       ) ||
       branch.length < this.indexedIds.length
     ) {
+      this.clearHistorical()
       this.byEntryId.clear()
       this.projections.clear()
       this.indexedIds = []
+      this.sourceRanks.clear()
+      this.sourceZones.clear()
+      this.lastSourceZone = 0
     }
     for (let index = this.indexedIds.length; index < branch.length; index++) {
       const entry = branch[index]!
-      this.indexedIds.push(entry.id)
+      this.indexEntry(entry)
       if (!this.byEntryId.has(entry.id))
         this.byEntryId.set(entry.id, this.newOccurrence(entry))
     }
     if (this.indexedIds.join("\0") !== previous) this.sourceRevision++
+  }
+
+  private indexEntry(entry: Entry) {
+    const zones: number[] = []
+    if (entry.type === "message" && entry.message.role === "assistant") {
+      for (const [index, part] of entry.message.content.entries()) {
+        if (
+          (part.type === "text" && part.text.trim()) ||
+          (part.type === "thinking" && part.thinking.trim())
+        )
+          this.lastSourceZone++
+        else if (part.type === "toolCall") zones[index] = this.lastSourceZone
+      }
+    } else if (
+      entry.type === "compaction" ||
+      entry.type === "branch_summary" ||
+      (entry.type === "message" &&
+        (entry.message.role === "user" ||
+          entry.message.role === "bashExecution" ||
+          (entry.message.role === "custom" && entry.message.display))) ||
+      (entry.type === "custom_message" && entry.display)
+    )
+      this.lastSourceZone++
+    this.sourceRanks.set(entry.id, this.indexedIds.length)
+    if (zones.length) this.sourceZones.set(entry.id, zones)
+    this.indexedIds.push(entry.id)
   }
 
   private recordNative(component: Component) {
@@ -2264,12 +2468,16 @@ export class NativeChatHost {
           const result = original.apply(host.chatContainer, args)
           if (!this.active) return result
           if (name === "clear") {
+            this.clearHistorical()
             for (const component of this.assistantMethods.keys())
               this.releaseAssistant(component)
             this.occurrences.length = 0
             this.byEntryId.clear()
             this.projections.clear()
             this.indexedIds = []
+            this.sourceRanks.clear()
+            this.sourceZones.clear()
+            this.lastSourceZone = 0
             this.byComponent.clear()
             this.thoughts.clear()
             this.thinkingParts.clear()
@@ -2324,6 +2532,10 @@ export class NativeChatHost {
     })
     wrap("setToolsExpanded", (original) => (expanded: boolean) => {
       const result = original.call(host, expanded as never)
+      for (const components of this.historical.values())
+        for (const component of components)
+          if (component instanceof ToolExecutionComponent)
+            component.setExpanded(expanded)
       for (const group of this.groups.values()) group.expanded = expanded
       this.clearSelection(host.renderer as unknown as TuiAltScreen)
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
@@ -2518,7 +2730,7 @@ export class NativeChatHost {
       appendEntry.call(manager, entry)
       if (!this.active) return
       if (entry.parentId === (this.indexedIds.at(-1) ?? null)) {
-        this.indexedIds.push(entry.id)
+        this.indexEntry(entry)
         this.forEntry(entry)
         this.sourceRevision++
       } else this.indexBranch()
@@ -2713,6 +2925,7 @@ export class NativeChatHost {
     this.leaves = []
     this.intervals = []
     this.painting.clear()
+    this.clearHistorical()
     this.byEntryId.clear()
     this.byComponent.clear()
     this.thoughts.clear()
@@ -2722,6 +2935,8 @@ export class NativeChatHost {
     this.visibleDisclosures = []
     this.projections.clear()
     this.indexedIds = []
+    this.sourceRanks.clear()
+    this.sourceZones.clear()
   }
 }
 
