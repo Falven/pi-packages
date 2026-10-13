@@ -73,6 +73,10 @@ _Avoid_: Compaction, when only the presentation changes
 Consecutive tool calls presented together within a work history. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
 _Avoid_: Nested tool call, unless one tool actually called another
 
+**Action label**:
+A short description of observed tool activity in an activity group's collapsed header or while a call is running. It describes the action without replacing the tool's own presentation.
+_Avoid_: Tool title, when referring to the group's summary
+
 **Work history**:
 The ordered commentary, thoughts, and tool activity associated with answering a request, distinct from its final response.
 _Avoid_: Thought, when referring to all of the work preceding an answer
