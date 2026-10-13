@@ -11,6 +11,7 @@ type RootHost = {
 
 export const observed: {
   host?: RootHost
+  previousRoot?: VStack
   replacement?: Component
   notifications: string[]
   errors: string[]
@@ -38,6 +39,7 @@ export function installReplacement(interactive: InteractiveMode) {
   host.fullscreenLayoutRoot = replacement
   host.renderer.setLayoutRoot(replacement)
   observed.host = host
+  observed.previousRoot = oldRoot
   observed.replacement = replacement
 }
 

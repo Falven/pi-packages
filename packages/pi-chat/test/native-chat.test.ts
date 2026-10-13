@@ -12,13 +12,13 @@ import {
   stripTerminalSequences,
   visibleWidth,
   type NativeClipboard,
+  type ScrollView,
 } from "@earendil-works/pi-tui"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { installReplacement, observed } from "./fixtures/root-owner.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
-const rootOwner = new URL("./fixtures/root-owner.ts", import.meta.url).pathname
 const ownedRoot = () => observed.host?.fullscreenLayoutRoot
 const readDelta = (id: string, path: string) => ({
   event: {
@@ -115,7 +115,7 @@ test("native chat right-aligns user messages and keeps the answer, composer, and
   })
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    settings: { fullscreenCopyOnSelect: false },
+    settings: { fullscreenCopyOnSelect: false, outputPad: 0 },
   })
   await host.type("Hello")
   await host.key("\r")
@@ -135,12 +135,12 @@ test("native chat right-aligns user messages and keeps the answer, composer, and
   const row = lines.findIndex((line) => line.trim() === "Hello")
   assert(row >= 0)
   const column = lines[row]!.indexOf("Hello")
-  assert.equal(column, host.terminal.columns - "Hello".length - 1)
+  assert.equal(column, host.terminal.columns - "Hello".length)
   // oxlint-disable-next-line eslint/no-control-regex -- The native background still spans the first cell.
   assert.match(sliceByColumn(host.screenLines()[row]!, 0, 1, true), /\x1b\[48;/)
   assert.equal(
     lines.find((line) => line.includes("Received."))?.indexOf("Received."),
-    1,
+    0,
   )
   await host.key(`\x1b[<0;${column + 1};${row + 1}M`)
   await host.key(`\x1b[<32;${column + 5};${row + 1}M`)
@@ -402,12 +402,12 @@ test("consecutive native calls start as one closed group and open from the compo
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /Native status row/)
-  assert.match(screen(), /2 tool calls.*read/)
+  assert.match(screen(), /Read files/)
   assert.doesNotMatch(screen(), /read one\.txt|read two\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /▾ 2 tool calls: read/)
+  assert.match(screen(), /▾ Read files/)
   assert.match(screen(), /read one\.txt/)
   assert.match(screen(), /read two\.txt/)
   await host.key("\u000f")
@@ -415,7 +415,7 @@ test("consecutive native calls start as one closed group and open from the compo
   assert.match(screen(), /FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /▸ 2 tool calls: read/)
+  assert.match(screen(), /▸ Read files/)
   assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
@@ -430,7 +430,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await host.reload()
   await openWork(host)
   await host.frame()
-  assert.match(screen(), /2 tool calls.*read/)
+  assert.match(screen(), /Called tools/)
   assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
 })
 
@@ -451,7 +451,7 @@ test("a finished call stays grouped while another iteration may join it", async 
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /1 tool call: read/)
+  assert.match(screen(), /Read files/)
   assert.doesNotMatch(screen(), /read one\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
@@ -460,7 +460,7 @@ test("a finished call stays grouped while another iteration may join it", async 
   host.resumeResponse()
   await host.settled()
   await host.frame()
-  assert.match(screen(), /2 tool calls: read/)
+  assert.match(screen(), /Read files/)
   assert.match(screen(), /read one\.txt/)
   assert.match(screen(), /read two\.txt/)
 })
@@ -491,18 +491,18 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /1 tool call: read/)
+  assert.match(screen(), /Read files/)
   assert.doesNotMatch(screen(), /read one\.txt/)
   host.resumeResponse()
   await host.settled()
   await openWork(host)
   await host.frame()
-  assert.match(screen(), /▸ 1 tool call: read/)
+  assert.match(screen(), /▸ Read files/)
   assert.doesNotMatch(screen(), /read one\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /▾ 1 tool call: read/)
+  assert.match(screen(), /▾ Read files/)
   assert.match(screen(), /read one\.txt/)
   await host.key("\x1b[B")
   await host.key("\r")
@@ -542,11 +542,9 @@ test("commentary between model iterations separates tool groups in source order"
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(
-    screen(),
-    /1 tool call: read[\s\S]*Between calls[\s\S]*1 tool call: read/,
-  )
-  assert.doesNotMatch(screen(), /2 tool calls|read one\.txt|read two\.txt/)
+  assert.match(screen(), /Read files[\s\S]*Between calls[\s\S]*Called a tool/)
+  assert.equal(screen().match(/▸ /g)?.length, 2)
+  assert.doesNotMatch(screen(), /Reading |read one\.txt|read two\.txt/)
   host.resumeResponse()
   await host.settled()
 })
@@ -581,8 +579,8 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
     .split("\n")
     .map(stripTerminalSequences)
     .join("\n")
-  assert.match(screen, /2 tool calls: read[\s\S]*After both calls/)
-  assert.doesNotMatch(screen, /1 tool call/)
+  assert.match(screen, /Read files[\s\S]*After both calls/)
+  assert.equal(screen.match(/▸ Read files/g)?.length, 1)
 })
 
 test("native Hide thinking controls whether reasoning separates tool groups", async (t) => {
@@ -623,21 +621,17 @@ test("native Hide thinking controls whether reasoning separates tool groups", as
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(
     screen,
-    /▸ 1 tool call: read[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*▸ 1 tool call: read/,
+    /▸ Read files[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*▸ Read files/,
   )
-  assert.doesNotMatch(
-    screen,
-    /2 tool calls|read one\.txt|read two\.txt|Thought/,
-  )
+  assert.doesNotMatch(screen, /read one\.txt|read two\.txt|Thought/)
   await host.key("\x14")
   const hidden = await host.frame()
-  assert.match(hidden, /▸ 2 tool calls: read/)
-  assert.doesNotMatch(hidden, /1 tool call:|Considering next call|Thought/)
+  assert.equal(hidden.match(/▸ Read files/g)?.length, 1)
+  assert.doesNotMatch(hidden, /Considering next call|Thought/)
   await host.key("\x14")
   const visible = await host.frame()
-  assert.equal(visible.match(/▸ 1 tool call: read/g)?.length, 2)
+  assert.equal(visible.match(/▸ Read files/g)?.length, 2)
   assert.match(visible, /Considering next call/)
-  assert.doesNotMatch(visible, /2 tool calls/)
 })
 
 test("remapped selector keys navigate groups and cancel returns to the composer", async (t) => {
@@ -677,20 +671,18 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   await openWork(host, "\x11")
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.equal(screen().match(/2 tool calls: read/g)?.length, 2)
+  assert.equal(screen().match(/Read files/g)?.length, 2)
   await host.key("\x1bg")
   await host.key("\u000b")
   await host.key("\u0019")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
-  const firstHeader = lines.findIndex((line) =>
-    line.includes("2 tool calls: read"),
-  )
+  const firstHeader = lines.findIndex((line) => line.includes("Read files"))
   const secondHeader = lines.findLastIndex((line) =>
-    line.includes("2 tool calls: read"),
+    line.includes("Read files"),
   )
   assert(firstHeader >= 0 && secondHeader > firstHeader)
-  assert.match(lines[firstHeader] ?? "", /^ ▾ 2 tool calls/)
+  assert.match(lines[firstHeader] ?? "", /^ ▾ Read files/)
   assert.match(lines[secondHeader] ?? "", /^ ▸/)
   const selectedBg = host.ui.theme.getBgAnsi("selectedBg")
   assert(host.screenLines()[firstHeader]?.includes(selectedBg))
@@ -708,7 +700,7 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   assert.match(screen(), /draft after cancel/)
   for (const line of host
     .screenLines()
-    .filter((row) => row.includes("2 tool calls")))
+    .filter((row) => row.includes("Read files")))
     assert(!line.includes(selectedBg))
 })
 
@@ -759,7 +751,7 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
   renderer.scrollToTop()
   await host.frame()
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen(), /2 tool calls: read/)
+  assert.match(screen(), /Read files/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
@@ -772,6 +764,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
+    settings: { outputPad: 0 },
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
     },
@@ -783,6 +776,13 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await host.type("Pointer group")
   await host.key("\r")
   await host.settled()
+  assert.match(
+    host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .find((line) => line.includes("▸ Worked")) ?? "",
+    /^▸ Worked/,
+  )
   await openWork(host)
   const lines = () => host.screenLines().map(stripTerminalSequences)
   const click = async (row: number) => {
@@ -790,11 +790,11 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
     await host.key(`\x1b[<0;3;${row + 1}m`)
   }
   await host.frame()
-  const header = lines().findIndex((line) => line.includes("2 tool calls"))
+  const header = lines().findIndex((line) => line.includes("Read files"))
   assert(header >= 0)
   await click(header)
   await host.frame()
-  assert.match(lines()[header] ?? "", /^ ▾ 2 tool calls/)
+  assert.match(lines()[header] ?? "", /^▾ Read files/)
   const darkBg = host.ui.theme.getBgAnsi("selectedBg")
   assert(host.screenLines()[header]?.includes(darkBg))
   assert.equal(host.ui.setTheme("light").success, true)
@@ -822,9 +822,27 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   overlay.hide()
   await host.key("\r")
   await host.frame()
-  assert.match(lines()[header] ?? "", /^ ▸ 2 tool calls/)
+  assert.match(lines()[header] ?? "", /^▸ Read files/)
   assert(host.screenLines()[header]?.includes(lightBg))
   assert.doesNotMatch(lines().join("\n"), /read one\.txt|FIRST TOOL BODY/)
+  await host.key("\x1b")
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  await host.frame()
+  assert.match(lines()[header] ?? "", /^ ▸ Read files/)
+  assert.match(
+    lines().find((line) => line.includes("Worked")) ?? "",
+    /^ ▾ Worked/,
+  )
+  await click(header)
+  await host.frame()
+  assert.match(
+    lines().find((line) => line.includes("read one.txt")) ?? "",
+    /^ read one\.txt/,
+  )
 })
 
 test("copy uses the native selected text while a disclosure is focused", async (t) => {
@@ -969,14 +987,14 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   await openWork(host)
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /2 tool calls: read, mystery/)
+  assert.match(screen(), /Called a tool, read files/)
   assert.doesNotMatch(screen(), /CUSTOM CALL|CUSTOM RESULT/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /CUSTOM CALL/)
   assert.match(screen(), /CUSTOM RESULT/)
-  assert.match(screen(), /2 tool calls: read, mystery/)
+  assert.match(screen(), /Called a tool, read files/)
 })
 
 test("native custom renderers keep equal occurrences distinct", async (t) => {
@@ -1190,18 +1208,36 @@ test("cleanup leaves a later fullscreen owner's replacement intact", async (t) =
   delete observed.replacement
   observed.notifications.length = 0
   observed.errors.length = 0
-  const host = await openNativeHost(t, { extensionPaths: [chat, rootOwner] })
+  let interactive: Parameters<typeof installReplacement>[0] | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    settings: { fullscreenScrollbar: "always" },
+    onMount: (mode) => {
+      interactive = mode
+    },
+  })
+  await host.frame()
+  assert(interactive)
+  installReplacement(interactive)
+  const borrowed = observed.previousRoot?.children[0]
+  assert(borrowed && "scrollbar" in borrowed)
   assert.match(await host.frame(), /Other owner active/)
   assert.equal(ownedRoot(), observed.replacement)
   await host.close()
   assert.equal(ownedRoot(), observed.replacement)
+  assert.equal(borrowed.scrollbar, "always")
 })
 
 test("page navigation scrolls native chat while the composer stays usable", async (t) => {
   const sendRef: { current?: () => void } = {}
+  let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 16,
+    settings: { fullscreenScrollbar: "always" },
+    onMount: (interactive) => {
+      renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
+    },
     keybindings: { "tui.altScreen.top": "home", "tui.altScreen.bottom": "end" },
     extensionFactories: [
       (pi) => {
@@ -1225,6 +1261,23 @@ test("page navigation scrolls native chat while the composer stays usable", asyn
   assert(sendRef.current)
   sendRef.current()
   assert.match(await host.frame(), /chat-row-31/)
+  assert(renderer)
+  const scroll = (
+    renderer as unknown as { getPrimaryScrollView(): ScrollView }
+  ).getPrimaryScrollView()
+  const scrollbarCell = () =>
+    stripTerminalSequences(host.screenLines()[0] ?? "").slice(-1)
+  assert.equal(scroll.scrollbar, "always")
+  assert.match(scrollbarCell(), /[┃│]/)
+  const lastColumn = host.terminal.columns
+  await host.key(`\x1b[<0;${lastColumn};1M`)
+  await host.key(`\x1b[<0;${lastColumn};1m`)
+  assert.equal(scroll.scrollTop, 0)
+  assert.match(await host.frame(), /chat-row-00/)
+  await host.key(`\x1b[<0;${lastColumn};1M`)
+  await host.key(`\x1b[<32;${lastColumn};${scroll.viewportHeight}M`)
+  await host.key(`\x1b[<0;${lastColumn};${scroll.viewportHeight}m`)
+  assert.match(await host.frame(), /chat-row-31/)
   await host.key("\x1b[5~")
   assert.match(await host.frame(), /chat-row-1[0-9]/)
   await host.key("\x1b[5~")
@@ -1233,6 +1286,37 @@ test("page navigation scrolls native chat while the composer stays usable", asyn
   assert.match(await host.frame(), /chat-row-00/)
   await host.type("Composer still works")
   assert.match(await host.frame(), /Composer still works/)
+  await host.key("\x15")
+  assert.equal(host.ui.setTheme("light").success, true)
+  await host.frame()
+  assert(
+    host.screenLines()[0]?.includes(host.ui.theme.getFgAnsi("scrollbarThumb")),
+  )
+  /* oxlint-disable eslint/no-await-in-loop -- Settings input must reach Pi in order. */
+  for (const expected of ["hidden", "auto"] as const) {
+    await host.type("/settings")
+    await host.key("\r")
+    await host.type("Fullscreen scrollbar")
+    await host.key("\r")
+    await host.key("\x1b")
+    await host.frame()
+    assert.equal(scroll.scrollbar, expected)
+    if (expected === "hidden") assert.doesNotMatch(scrollbarCell(), /[┃█│]/)
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+  await host.key("\x1b[H")
+  await host.key("\x1b[6~")
+  await host.frame()
+  assert(scroll.scrollTop > 0)
+  assert.equal(scroll.isScrollbarVisible, true)
+  await host.key("\x1b[<35;5;1M")
+  await t.waitFor(() => assert.equal(scroll.isScrollbarVisible, false), {
+    timeout: 3000,
+  })
+  await host.key(`\x1b[<35;${lastColumn};1M`)
+  await host.frame()
+  assert.equal(scroll.isScrollbarActive, true)
+  assert.match(scrollbarCell(), /[█│]/)
   await host.key("\x1b[F")
   await host.key("\x1b[1;5A")
   await host.frame()
@@ -1258,6 +1342,7 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 17,
+    settings: { fullscreenScrollbar: "always" },
     keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
       (pi) => {
@@ -1320,6 +1405,18 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   await t.waitFor(() => assert(copied))
   assert.match(copied, /^copy-A界\ncopy-row-00/)
   assert.match(copied, /copy-row-19\ncopy-Z$/)
+  assert.doesNotMatch(copied, /[┃█│]/)
+  await host.frame()
+  const selected = host
+    .screenLines()
+    .find((line) => stripTerminalSequences(line).includes("copy-row-19"))
+  assert(selected)
+  const gutter = sliceByColumn(selected, host.terminal.columns - 1, 1, true)
+  assert.match(stripTerminalSequences(gutter), /[┃█│]/)
+  assert(
+    gutter.lastIndexOf("\x1b[7m") <
+      Math.max(gutter.lastIndexOf("\x1b[0m"), gutter.lastIndexOf("\x1b[27m")),
+  )
 })
 
 test("message copy prefers a retained selection and resize clears it", async (t) => {

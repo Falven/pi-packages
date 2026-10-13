@@ -111,7 +111,7 @@ const completion = (delta: Record<string, unknown>) => ({
     ],
   },
 })
-const toolCalls = (paths: [string, string] | [string], names: string[]) =>
+const toolCalls = (paths: string[], names: string[]) =>
   paths.map((path, index) => ({
     index,
     id: `mixed-${path}`,
@@ -225,9 +225,10 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
   t.mock.method(clipboard, "setText", async (text: string) => {
     copied = text
   })
+  const catalog = await skillCatalog(t)
   const host = await openNativeHost(t, {
     extensionPaths: [composer, attachments, skills, acceptance, chat],
-    skillPaths: [await skillCatalog(t)],
+    skillPaths: [catalog],
     rows: 52,
     settings: {
       fullscreenCopyOnSelect: false,
@@ -263,7 +264,10 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
     completion({
       reasoning_content: "Mixed thought preview",
       content: "Before steering",
-      tool_calls: toolCalls(["one.txt", "two.txt"], ["read", "mystery"]),
+      tool_calls: toolCalls(
+        [join(catalog, "review", "SKILL.md"), "one.txt", "two.txt"],
+        ["read", "read", "mystery"],
+      ),
     }),
     { pause: true },
     finish("tool_calls"),
@@ -317,7 +321,11 @@ test("mixed live work keeps native and custom tools, queued requests, search, an
   assert.match(await host.frame(), /Mixed thought preview/)
   const groupRow = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("2 tool calls"))
+    .findIndex((line) =>
+      stripTerminalSequences(line).includes(
+        "Loaded a tool, called a tool, read files",
+      ),
+    )
   assert(groupRow >= 0)
   await host.key(`\x1b[<0;2;${groupRow + 1}M`)
   await host.key(`\x1b[<0;2;${groupRow + 1}m`)

@@ -91,11 +91,11 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   await host.key("\u000f")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
-  assert(lines.some((line) => line.includes("2 tool calls")))
+  assert(lines.some((line) => line.includes("Read files")))
   assert(lines.some((line) => line.includes("second-row-19")))
   assert(lines.some((line) => line.includes("Received.")))
   assert(!lines.some((line) => line.includes("first-row-0")))
-  const header = lines.findIndex((line) => line.includes("2 tool calls"))
+  const header = lines.findIndex((line) => line.includes("Read files"))
   const body = lines.findIndex((line) => line.includes("second-row-19"))
   const transformsBeforeScrolling = markdownTransforms
   await host.key(`\x1b[<64;3;${body + 1}M`)
@@ -103,7 +103,7 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   assert.equal(markdownTransforms, transformsBeforeScrolling)
   const scrolled = host.screenLines().map(stripTerminalSequences)
   assert.equal(
-    scrolled.findIndex((line) => line.includes("2 tool calls")),
+    scrolled.findIndex((line) => line.includes("Read files")),
     header,
   )
   assert.notDeepEqual(
@@ -187,30 +187,64 @@ test("selection copies every expanded body row between visible endpoints", async
   await host.key(`\x1b[<0;10;${foldedLast + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
-  assert.match(copied, /2 tool calls/)
+  assert.match(copied, /Read files/)
   assert.doesNotMatch(copied, /first-row|second-row/)
 })
 
-test("a repeated tool name appears once in a concise group header", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 24 })
+test("action summaries combine native categories and distinct paths while execution updates the header", async (t) => {
+  const gate = Promise.withResolvers<void>()
+  let waiting = false
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    columns: 100,
+    rows: 24,
+    extensionFactories: [
+      (pi) => {
+        pi.on("tool_execution_update", async (event) => {
+          if (event.toolName !== "bash" || waiting) return
+          waiting = true
+          await gate.promise
+        })
+      },
+    ],
+  })
   await writeFile(join(host.directory, "one.txt"), "ok")
-  host.queueResponse(
-    reads(Array.from({ length: 30 }, () => "one.txt")),
-    toolFinish,
-    done,
-    end,
+  const response = reads(["one.txt", "one.txt"])
+  response.event.choices[0]!.delta.tool_calls.push(
+    ...[
+      { name: "write", args: { path: "one.txt", content: "first edit" } },
+      { name: "write", args: { path: "./one.txt", content: "second edit" } },
+      { name: "bash", args: { command: "printf first-command" } },
+      { name: "bash", args: { command: "printf second-command" } },
+    ].map(({ name, args }, index) => ({
+      index: index + 2,
+      id: `action-${index}`,
+      type: "function",
+      function: { name, arguments: JSON.stringify(args) },
+    })),
   )
-  await host.type("Read repeatedly")
-  await host.key("\r")
+  host.queueResponse(response, toolFinish, done, end)
+  await host.type("Read, edit, and run commands")
+  try {
+    await host.key("\r")
+    await t.waitFor(() => assert(waiting))
+    assert.match(await host.frame(), /▸ Running printf first-command/)
+  } finally {
+    gate.resolve()
+  }
   await host.settled()
   await openWork(host)
   await host.frame()
   const header = host
     .screenLines()
     .map(stripTerminalSequences)
-    .find((line) => line.includes("30 tool calls"))
+    .find((line) => line.includes("Edited a file"))
   assert(header)
-  assert.match(header.trimEnd(), /30 tool calls: read$/)
+  assert.match(header.trimEnd(), /▸ Edited a file, read files, ran commands$/)
+  host.terminal.resize(50, 24)
+  await host.frame()
+  host.terminal.resize(100, 24)
+  assert.match(await host.frame(), /▸ Edited a file, read files, ran commands/)
 })
 
 test("native children receive source coordinates before inner wheel movement bubbles outward", async (t) => {
@@ -286,11 +320,11 @@ test("native children receive source coordinates before inner wheel movement bub
   await host.key("\x1b[B")
   await host.frame()
   const first = screen().findIndex((line) => line.includes("first-row-0"))
-  const header = screen().findIndex((line) => line.includes("2 tool calls"))
+  const header = screen().findIndex((line) => line.includes("Called tools"))
   assert(first > header && header >= 0)
   await host.key(`\x1b[<64;3;${first + 1}M`)
   await host.frame()
-  assert(screen().findIndex((line) => line.includes("2 tool calls")) > header)
+  assert(screen().findIndex((line) => line.includes("Called tools")) > header)
   await host.key("\x1b")
   await host.key("\x1b[6~")
   await host.frame()
@@ -434,7 +468,10 @@ test("native image crops combine logical clips once and retain their identity an
     columns: 82,
     rows: 28,
     keybindings: { "tui.altScreen.top": "home" },
-    settings: { terminal: { imageWidthCells: 48 } },
+    settings: {
+      fullscreenScrollbar: "always",
+      terminal: { imageWidthCells: 48 },
+    },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer<{ name: string }>(
@@ -497,7 +534,11 @@ test("native image crops combine logical clips once and retain their identity an
     host
       .screenLines()
       .slice(imageRow + 1, imageRow + 13)
-      .every((line) => stripTerminalSequences(line).trim() === ""),
+      .every((line) => stripTerminalSequences(line).slice(0, -1).trim() === ""),
+  )
+  assert.match(
+    stripTerminalSequences(host.screenLines()[imageRow + 1] ?? "").slice(-1),
+    /[┃│]/,
   )
   assert.match(
     stripTerminalSequences(host.screenLines()[imageRow + 14] ?? ""),

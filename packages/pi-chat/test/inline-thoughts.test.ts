@@ -231,7 +231,7 @@ test("a full inline thought follows chat scrolling, preserves an anchor, and kee
   await host.output()
   const anchor = screen()
     .find((row) => /shown-\d/.test(row))
-    ?.trim()
+    ?.match(/shown-\d+/)?.[0]
   assert(anchor)
   assert.equal(transformations, cached)
   host.resumeResponse()
@@ -239,7 +239,7 @@ test("a full inline thought follows chat scrolling, preserves an anchor, and kee
   assert.equal(
     screen()
       .find((row) => /shown-\d/.test(row))
-      ?.trim(),
+      ?.match(/shown-\d+/)?.[0],
     anchor,
   )
   assert(!screen().some((row) => row.includes("shown-40")))
@@ -248,7 +248,7 @@ test("a full inline thought follows chat scrolling, preserves an anchor, and kee
   assert.equal(
     screen()
       .find((row) => /shown-\d/.test(row))
-      ?.trim(),
+      ?.match(/shown-\d+/)?.[0],
     anchor,
   )
   const body = screen().findIndex((row) => /shown-\d/.test(row))

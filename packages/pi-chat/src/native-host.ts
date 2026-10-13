@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import {
   Container,
+  HStack,
   ScrollView,
   Spacer,
   Text,
@@ -31,6 +32,7 @@ import {
 } from "./work-history.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
+import type { ActionLabels } from "./action-labels.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
@@ -268,6 +270,21 @@ class RawLeaf extends Container {
   }
 }
 
+class LayoutStack extends VStack {
+  private readonly rows: string[] = []
+
+  setHeight(height: number) {
+    const previous = this.rows.length
+    this.rows.length = height
+    if (height > previous) this.rows.fill(" ", previous)
+  }
+
+  override render() {
+    // Geometry only: leaf windows own image clipping and source-row access.
+    return this.rows
+  }
+}
+
 type Activity = {
   component: Component
   occurrence?: Occurrence
@@ -291,40 +308,29 @@ type ToolPresenter = Component & {
   setExpanded(expanded: boolean): void
 }
 
-class GroupHeader extends Text {
+class GroupHeader implements Component {
   focused = false
   readonly spacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,
     readonly group: ToolGroup,
-  ) {
-    super("", 1, 0)
-  }
+  ) {}
 
-  override render(width: number) {
-    const names = [
-      ...new Set(
-        this.group.calls.map((call) =>
-          "toolName" in call.component
-            ? String(call.component.toolName)
-            : "tool",
-        ),
-      ),
-    ]
-    const count = this.group.calls.length
-    this.setText(
+  invalidate() {}
+
+  render(width: number) {
+    return new Text(
       truncateToWidth(
-        `${this.group.expanded ? "▾" : "▸"} ${count} tool ${count === 1 ? "call" : "calls"}: ${names.join(", ")}`,
-        Math.max(1, width - 2),
+        `${this.group.expanded ? "▾" : "▸"} ${this.adapter.actionLabels.summary(this.group)}`,
+        Math.max(1, width - this.adapter.host.outputPad * 2),
       ),
-    )
-    this.setCustomBgFn(
+      this.adapter.host.outputPad,
+      0,
       this.focused
         ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
         : undefined,
-    )
-    return super.render(width)
+    ).render(width)
   }
 
   handleInput(data: string) {
@@ -395,7 +401,10 @@ export class NativeChatHost {
   private readonly projections = new Map<string, Map<number, Occurrence>>()
   readonly root: OwnedRoot
   readonly transcript: ScrollView
-  private readonly painting = new VStack()
+  private readonly painting = new LayoutStack()
+  private readonly scrollContent = new LayoutStack()
+  private readonly paintingWidth = new HStack()
+  private readonly layoutSpace = new Spacer(0)
   private leaves: Leaf[] = []
   private intervals: PaintedInterval[] = []
   private viewportHeight = 0
@@ -409,6 +418,7 @@ export class NativeChatHost {
   private readonly oldRoot: NativeMode["fullscreenLayoutRoot"]
   private readonly historical = new Map<string, Component[]>()
   private imageSettings: { show: boolean; width: number }
+  private outputPad: number
   private readonly originals = new Map<string, (...args: never[]) => unknown>()
   private readonly wrappers = new Map<string, (...args: never[]) => unknown>()
   private readonly ownDescriptors = new Map<
@@ -473,27 +483,33 @@ export class NativeChatHost {
       }
     | undefined
 
-  private constructor(host: NativeMode) {
+  private constructor(
+    host: NativeMode,
+    readonly actionLabels: ActionLabels,
+  ) {
     this.host = host
     this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
+    this.outputPad = host.outputPad
     this.imageSettings = {
       show: host.settingsManager.getShowImages(),
       width: host.settingsManager.getImageWidthCells(),
     }
     this.relationships = new RelationshipJournal(host.sessionManager)
     this.oldRoot = host.fullscreenLayoutRoot
-    this.transcript = new ScrollView(host.documentContainer, {
+    this.transcript = new ScrollView(this.scrollContent, {
       follow: "end",
       primary: true,
       overscroll: "chain",
       scrollbar: host.transcriptScrollView.scrollbar,
+      scrollbarTrackStyle: host.transcriptScrollView.scrollbarTrackStyle,
+      scrollbarThumbStyle: host.transcriptScrollView.scrollbarThumbStyle,
     })
     const layout = requireMethod(
       this.oldRoot[LAYOUT_NODE],
       "fullscreen layout node",
     ).call(this.oldRoot)
     const entries = [...layout.entries]
-    entries[0] = { ...entries[0]!, component: this.painting }
+    entries[0] = { ...entries[0]!, component: this.transcript }
     this.root = new OwnedRoot(
       { ...layout, entries },
       () => {
@@ -505,7 +521,10 @@ export class NativeChatHost {
     )
   }
 
-  static install(host: InteractiveMode): NativeChatHost {
+  static install(
+    host: InteractiveMode,
+    actionLabels: ActionLabels,
+  ): NativeChatHost {
     const mode = host as unknown as NativeMode
     if (
       active.has(host) ||
@@ -514,7 +533,7 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(mode)
+    const adapter = new NativeChatHost(mode, actionLabels)
     try {
       adapter.wrapNativeConstruction()
       adapter.forkCleanup = carryObservedFork(
@@ -540,6 +559,17 @@ export class NativeChatHost {
   }
 
   private layoutChat() {
+    this.transcript.setScrollbar(this.host.transcriptScrollView.scrollbar)
+    if (this.outputPad !== this.host.outputPad) {
+      for (const components of this.historical.values())
+        for (const component of components)
+          if (
+            "setOutputPad" in component &&
+            typeof component.setOutputPad === "function"
+          )
+            component.setOutputPad(this.host.outputPad)
+      this.outputPad = this.host.outputPad
+    }
     const show = this.host.settingsManager.getShowImages()
     const widthCells = this.host.settingsManager.getImageWidthCells()
     if (
@@ -795,8 +825,9 @@ export class NativeChatHost {
       else this.transcript.scrollTo(previousTop, { disableFollow: true })
     } else if (!wasFollowing)
       this.transcript.scrollTo(previousTop, { disableFollow: true })
-    const widthChanged = this.layoutWidth !== 0 && this.layoutWidth !== width
-    this.layoutWidth = width
+    const widthChanged =
+      this.layoutWidth !== 0 && this.layoutWidth !== contentWidth
+    this.layoutWidth = contentWidth
     for (const point of [oldAnchor, oldFocus]) {
       if (point?.scrollView !== this.transcript || !point.component) continue
       const leaf = leaves.find((candidate) =>
@@ -876,6 +907,22 @@ export class NativeChatHost {
         shrink: 0,
       })
     }
+    const visibleHeight = Math.min(this.viewportHeight, contentHeight - top)
+    this.paintingWidth.clear()
+    // Native image recovery needs full-width windows, including with a gutter.
+    this.paintingWidth.addChild(this.painting, {
+      basis: width,
+      grow: 0,
+      shrink: 0,
+    })
+    this.scrollContent.setHeight(contentHeight)
+    this.scrollContent.clear()
+    for (const [component, basis] of [
+      [this.layoutSpace, top],
+      [this.paintingWidth, visibleHeight],
+      [this.layoutSpace, contentHeight - top - visibleHeight],
+    ] as const)
+      this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 })
   }
 
   private focusableTool(activity: Activity): Activity {
@@ -1811,11 +1858,6 @@ export class NativeChatHost {
       })
     }
     bind(
-      "getPrimaryScrollView",
-      (original) => () =>
-        this.ownsRenderer(renderer) ? this.transcript : original.call(renderer),
-    )
-    bind(
       "refreshSearch",
       (original) => (layout: unknown) =>
         this.ownsRenderer(renderer)
@@ -1846,7 +1888,7 @@ export class NativeChatHost {
         )
         const remaining = interval?.leaf.body?.scroll.scrollBy(delta) ?? delta
         if (remaining) this.transcript.scrollBy(remaining)
-        renderer.requestRender()
+        original.call(renderer, event, 0)
       },
     )
     bind("scrollToPrompt", (original) => (direction: number) => {
@@ -2004,7 +2046,23 @@ export class NativeChatHost {
               ),
               layout,
             ) as string[]
-            highlighted.splice(interval.top, rows.length, ...rows)
+            const width = renderer.terminal.columns
+            const contentWidth = this.transcript.getContentWidth(width)
+            highlighted.splice(
+              interval.top,
+              rows.length,
+              ...rows.map((line, row) =>
+                contentWidth < width
+                  ? compositeTuiLine(
+                      screen[interval.top + row] ?? "",
+                      line,
+                      0,
+                      contentWidth,
+                      width,
+                    )
+                  : line,
+              ),
+            )
           }
           return highlighted
         } finally {
@@ -2278,6 +2336,18 @@ export class NativeChatHost {
     part.message = owner.message
     part.component = component
     this.byComponent.set(component, part)
+    const content =
+      owner.message?.role === "assistant"
+        ? owner.message.content[index]
+        : undefined
+    if (content?.type === "toolCall")
+      this.actionLabels.bind(
+        part,
+        content,
+        this.streaming === owner,
+        part.entry,
+        index,
+      )
   }
 
   private bindThinkingRun(
@@ -2893,7 +2963,15 @@ export class NativeChatHost {
     if (occurrence) {
       occurrence.entry = entry
       this.byEntryId.set(id, occurrence)
-      for (const part of occurrence.parts.values()) part.entry = entry
+      for (const part of occurrence.parts.values()) {
+        part.entry = entry
+        const content =
+          message.role === "assistant" && part.contentIndex !== undefined
+            ? message.content[part.contentIndex]
+            : undefined
+        if (content?.type === "toolCall")
+          this.actionLabels.bind(part, content, false, entry, part.contentIndex)
+      }
       const relationship = this.work.committed(occurrence)
       if (relationship) this.recordRelationship(relationship)
       if (message.role === "assistant") {
@@ -2929,7 +3007,10 @@ export class NativeChatHost {
 
   dispose() {
     if (!this.active) return
+    if (this.host.fullscreenLayoutRoot === this.root)
+      this.transcript.setScrollbar("hidden")
     this.active = false
+    this.actionLabels.stop()
     this.unsubscribe?.()
     this.forkCleanup?.()
     for (const cleanup of this.deliveryCleanup) cleanup()
@@ -2981,6 +3062,9 @@ export class NativeChatHost {
     this.leaves = []
     this.intervals = []
     this.painting.clear()
+    this.paintingWidth.clear()
+    this.scrollContent.clear()
+    this.scrollContent.setHeight(0)
     this.clearHistorical()
     this.byEntryId.clear()
     this.byComponent.clear()

@@ -3,7 +3,10 @@ import { writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
 import { stripTerminalSequences, Text } from "@earendil-works/pi-tui"
-import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
+import {
+  createReadToolDefinition,
+  ToolExecutionComponent,
+} from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 /* oxlint-disable eslint/no-control-regex -- Assert Pi's native terminal highlight sequences. */
@@ -118,7 +121,7 @@ test("Find opens a closed tool group and keeps the native result presenter", asy
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(screen, /▾ Worked/)
-  assert.match(screen, /▾ 2 tool calls/)
+  assert.match(screen, /▾ Read files/)
   assert.match(screen, /rare telescope output/)
   assert.match(screen, /1\/1/)
   const result = host
@@ -754,6 +757,23 @@ test("revealing a retained user row does not add it to native editor history", a
     host.screenLines().slice(-6).map(stripTerminalSequences).join("\n"),
     /history-needle/,
   )
+  host.ui.setEditorText("")
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("history-needle")
+  await host.frame()
+  const unpadded = host
+    .screenLines()
+    .map(stripTerminalSequences)
+    .find((line) => line.includes("history-needle request"))
+  assert.equal(
+    unpadded?.indexOf("history-needle request"),
+    host.terminal.columns - "history-needle request".length,
+  )
 })
 
 test("Find reopens a hidden retained thought using the native Markdown environment", async (t) => {
@@ -813,6 +833,23 @@ test("Find reopens a hidden retained thought using the native Markdown environme
   assert.doesNotMatch(await host.frame(), /historical telescope/)
   await host.key("\x14")
   assert.match(await host.frame(), /shown-historical telescope/)
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("historical")
+  await host.frame()
+  assert.equal(
+    host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .find((line) => line.includes("shown-historical telescope"))
+      ?.indexOf("shown-historical telescope"),
+    0,
+  )
+  await host.key("\x1b")
   await host.key("\x14")
   assert.doesNotMatch(await host.frame(), /historical telescope/)
 })
@@ -855,7 +892,25 @@ test("Find restores separate retained calls with reused IDs and their own result
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(screen, /read second\.txt[\s\S]*second-needle output/)
-  assert.doesNotMatch(screen, /2 tool calls/)
+  assert.match(screen, /▾ Called a tool/)
+  assert.doesNotMatch(screen, /Called tools/)
+  await host.key("\x1b")
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("first-needle")
+  await host.frame()
+  assert.equal(
+    host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .find((line) => line.includes("read first.txt"))
+      ?.indexOf("read first.txt"),
+    "setOutputPad" in ToolExecutionComponent.prototype ? 0 : 1,
+  )
   assert.equal(host.requests.length, requests)
 })
 
@@ -1101,7 +1156,7 @@ test("Find keeps source order when selecting a retained assistant's calls backwa
   await host.type("one-needle")
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /2 tool calls/)
+  assert.match(screen, /Called tools/)
   assert.match(screen, /one-needle output/)
   assert.match(screen, /two-needle output/)
   assert.ok(

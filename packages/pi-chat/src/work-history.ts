@@ -297,24 +297,25 @@ export class WorkIndex {
   }
 }
 
-export class WorkHeader extends Text {
+export class WorkHeader implements Component {
   focused = false
 
   constructor(
     private readonly adapter: NativeChatHost,
     readonly work: WorkHistory,
-  ) {
-    super("", 1, 0)
-  }
+  ) {}
 
-  override render(width: number) {
-    this.setText(`${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`)
-    this.setCustomBgFn(
+  invalidate() {}
+
+  render(width: number) {
+    return new Text(
+      `${this.adapter.work.expanded(this.work) ? "▾" : "▸"} Worked`,
+      this.adapter.host.outputPad,
+      0,
       this.focused
         ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
         : undefined,
-    )
-    return super.render(width)
+    ).render(width)
   }
 
   handleInput(data: string) {

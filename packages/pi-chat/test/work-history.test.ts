@@ -91,7 +91,7 @@ test("settled work hides the earlier identical text and retains the final occurr
   const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(expanded, /▾ Worked/)
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
-  assert.match(expanded, /▸ 1 tool call: read/)
+  assert.match(expanded, /▸ Read files/)
   assert.doesNotMatch(expanded, /read one\.txt/)
 })
 
@@ -600,7 +600,7 @@ test("a terminal response without answer text leaves work expanded", async (t) =
   await host.settled()
   const frame = await host.frame()
   assert.match(frame, /Visible work without answer/)
-  assert.match(frame, /▸ 1 tool call: read/)
+  assert.match(frame, /▸ Read files/)
   assert.doesNotMatch(frame, /read one\.txt/)
   assert.doesNotMatch(frame, /Worked/)
 })
