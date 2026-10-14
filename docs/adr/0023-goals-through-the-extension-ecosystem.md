@@ -1,3 +1,3 @@
 # Deliver goals through the extension ecosystem
 
-`pi-goal` must be implemented entirely as an extension, without modifying Pi's source or installed host files. This keeps installation and updates within the existing ecosystem and preserves the integration policy in [ADR 0001](0001-preserve-pi-extension-contracts.md). A missing capability does not authorize a host patch; any resulting design trade-off must be made explicit before implementation.
+`pi-goal` preserves goal authorization, lifecycle, persistence, budgets, accounting, and Stop entirely through the extension ecosystem, without modifying Pi's source or installed files. Pi owns tool validation, result delivery, and error handling; conversions must preserve goal values rather than emulate a different parser or transport. This follows [ADR 0001](0001-preserve-pi-extension-contracts.md); a missing public capability remains explicit and does not authorize a host patch or private adapter.

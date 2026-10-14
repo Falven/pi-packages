@@ -2,18 +2,18 @@
 
 **What to build:** Install `pi-goal` as an independent extension, create an explicitly requested goal, inspect its stored state through the agent interface and native status display, and recover that state when the same session reopens. Follow the approved [specification](../../../docs/specs/pi-goal.md).
 
-**Blocked by:** Native programmatic error compatibility, reproduced below.
+**Blocked by:** None.
 
-**Status:** blocked — creation and inspection are implemented; exact native programmatic error compatibility remains unaccepted. Dependent tickets remain blocked.
+**Status:** in-progress — creation and inspection are implemented; adapt the interface to the accepted native contract and verify lossless values before closing.
 
 - [x] Load through the repository's extension packaging and public Pi services. Verify the primary Pi 1.1.0 runtime separately from the workspace's 1.0.2 dependency, and choose supported versions from demonstrated capabilities. Companion extensions are optional.
-- [x] Expose `get_goal` and `create_goal` with the specified names, descriptions, parameter names, required fields, strictness, additional-property declaration, and absent output schema. Preserve effective tool overrides and detect or explicitly bound tool-name collisions without changing unrelated tools' concurrency.
+- [ ] Expose `get_goal` and `create_goal` through Pi's native schemas, validation, result delivery, and errors. Preserve the goal policy descriptions, effective overrides, and tool-name collision handling without changing unrelated tools' concurrency. Remove decoder emulation and provider/history rewriting.
 - [x] Describe creation as requiring explicit authorization and budgets as requiring an explicit request. The extension never infers a goal from an ordinary task and adds no default allowance or deployment-policy setting that the host does not supply.
 - [x] Keep one current goal per persisted Pi session in an extension-owned durable store independent of the active transcript branch. Create an active goal with fresh identity, creation time, and zero counters; reject replacement of an unfinished goal. Exercise replacement after completion with ticket 02.
-- [x] Preserve Unicode whitespace trimming, the nonempty 4,000-scalar objective limit, positive signed 64-bit budgets, omitted or null optional budgets, unknown object members, sequence-form arguments, and the read tool's unused raw arguments. Preserve the observed invalid-input outcomes, including duplicate members and numeric overflow.
-- [x] Prove argument fidelity through the real provider parser and active orchestration path before declaring decoder compatibility. Record a concrete capability gap if raw arguments or exact integers are lost; do not silently round, coerce, narrow the contract, or introduce private integration.
-- [x] Return the specified JSON envelope with explicit top-level nulls, omitted unbounded `tokenBudget`, exact field casing, integer counters, and Unix-second timestamps. Return ordinary failures as the specified plain text. A failed read must not become a successful missing-goal result.
-- [ ] Verify direct-call JSON text and native programmatic JSON values separately, including their next-request serialization and error propagation. Do not add internal success flags to a wire format that does not contain them.
+- [ ] Preserve domain rules for Unicode whitespace trimming, the nonempty 4,000-scalar objective limit, positive signed 64-bit budgets, and omitted/null optional budgets. Pi owns schema failures, duplicate fields, extra properties, accepted argument forms, coercion, and diagnostics.
+- [ ] Preserve budget values with safe numeric inputs and exact decimal-string inputs for larger integers. Prove that the native schema rejects unsafe numbers without coercing them to rounded strings. Preserve all stored integer values in direct and native programmatic results; remove obsolete raw-decoder fixtures.
+- [ ] Return the goal envelope through native text and structured content, preserving top-level nulls, omission of unbounded `tokenBudget`, field casing, counters, and Unix-second units. Represent unsafe-sized result integers as exact decimal strings. A failed read must not become a successful missing-goal result.
+- [ ] Verify native validation, direct and programmatic results, Pi-owned error propagation, permissions, and next-request serialization through the real session. Do not wrap the host to reproduce another exception type.
 - [x] Serialize goal operations and persist updates atomically. Session ownership and generation identity must protect other sessions and later replacement goals. Persistence failure leaves an actionable failure and does not commit an in-memory success.
 - [x] Provide native inspection and status presentation without replacing the footer, editor, chat view, or other extensions' presentation. An agent-created goal initially contributes its ordinary tool result, with no fabricated goal reminder.
 - [x] Exercise no-goal reads, valid and invalid creation, duplicate creation, direct and nested calls, storage failure, and reopening through the existing real-session fixture. Inspect actual provider requests and persisted outcomes; do not build a second fake agent loop.
@@ -47,9 +47,9 @@ The create/read prefix uses the same prompt, arguments, call identities, and scr
 
 Runtime metadata records Pi 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`, Node 26.8.1, the fixture model with reasoning disabled, 128,000 context capacity, 100 output-token maximum, and disabled compaction/retry. Scripted call responses report 100 input tokens, 20 cached tokens, 12 output tokens, and 4 reasoning tokens. The final fixture answer omits usage and is explicitly marked missing. The configured models, reasoning settings, surrounding host instructions, and complete tool sets differ. These captures establish the create/read boundary, not a matched live-model or desktop-control run. Full comparison and accounting remain pending.
 
-## Unaccepted compatibility gate
+## Revised native interface decision
 
-The [comparison native-error trace](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=f7d7c96fb493482baacc35d7c112bc38&limit=1000&order=asc) rejects ordinary failures as primitive strings. Pi's native orchestration converts the same plain tool failure into an `Error` object: `typeof error` is `"object"`, `String(error)` adds `"Error: "`, and `error.message` holds the plain message. This difference is reproduced through the real native programmatic tool and survives next-request serialization. It is not removed from comparison or replaced by a package wrapper. The pending acceptance item above requires a public host capability or an explicitly revised compatibility requirement before this ticket can close.
+On 2026-10-14 the accepted contract changed: Pi owns validation, result delivery, and errors while goal rules and values remain intact. The previously captured `Error` object is expected native behavior and is no longer a blocker. The implementation and capture evidence above describe the earlier decoder/transport approach; replace its emulation and verify the revised interface before claiming this ticket complete. Keep the earlier traces identifiable as historical evidence, not proof of code added after their capture.
 
 ## Validation
 
@@ -70,4 +70,4 @@ The [comparison native-error trace](http://127.0.0.1:6006/v1/projects/UHJvamVjdD
 - The same install command later exited with `ERR_PNPM_IGNORED_BUILDS` in the integration checkout for three existing transitive dependencies. No build approval or configuration was changed. Integration typecheck, scoped lint, and formatting passed through the existing local binaries; the integration install check remains unresolved.
 - `pnpm run typecheck`, `pnpm exec oxlint packages/pi-goal fixtures/native-host.ts`, and `pnpm exec oxfmt --check packages/pi-goal fixtures/native-host.ts` passed.
 - The integration tip `386dd12149c88e6d07f486f576db0301391af732` was merged before reporting.
-- Other provider protocols, package lifecycle composition with companion extensions, the full workspace suite, and the remaining lifecycle matrix were not exercised in this slice. Native error compatibility remains blocked.
+- Other provider protocols, package lifecycle composition with companion extensions, the full workspace suite, and the remaining lifecycle matrix were not exercised in this slice. The revised native interface needs fresh validation; the earlier exception-type blocker is superseded.

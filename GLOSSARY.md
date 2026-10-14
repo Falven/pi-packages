@@ -134,6 +134,14 @@ _Avoid_: Plan, when referring to the desired outcome rather than the steps to re
 A further work attempt toward an active goal after the previous attempt ends, without a new user request.
 _Avoid_: Queued follow-up, which originates from a user request
 
+**Goal pause**:
+A stop to future goal pursuit that retains the objective and consumed usage for an explicit resume.
+_Avoid_: Stop, when interruption of current work is not requested
+
+**Goal clear**:
+Removal of the current goal while retaining its conversation history.
+_Avoid_: Extension removal, which removes the goal capability itself
+
 **Goal budget**:
 An optional token allowance allocated to pursuing a goal.
 _Avoid_: Context limit, time limit, spending limit

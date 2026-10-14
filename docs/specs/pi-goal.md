@@ -1,18 +1,18 @@
 # pi-goal specification
 
-**Status:** implementation-blocked
+**Status:** in-progress
 
 ## Problem Statement
 
 A Pi user needs to authorize an outcome once, let the agent pursue it across successive work attempts, and retain explicit control over stopping and resuming that work. The goal must survive conversation compaction and session restoration, report trustworthy usage, and stop for the right reason. An ordinary request must never silently become an autonomous goal.
 
-The package must preserve the observed goal contract, including its edge cases, through the extension ecosystem. Matching command names or visible status is insufficient: the agent interface, accounting boundaries, message ordering, and execution lifetime are part of the behavior. Pi's source and installed host files must remain untouched.
+The package must preserve the goal rules for authorization, lifecycle, persistence, budgets, accounting, and Stop through the extension ecosystem. Pi owns tool validation, result delivery, and error handling. Goal values must survive any conversion without rounding or loss. Pi's source and installed host files must remain untouched.
 
 ## Solution
 
 Build `pi-goal` as an independently installable extension. Provide the three model tools `get_goal`, `create_goal`, and `update_goal`, durable state for one current goal per session, automatic continuation while eligible, and native user controls for inspecting and managing the goal.
 
-Use independently written, neutral instructions with the observed semantics. Preserve the public field names, accepted inputs, returned values, status transitions, accounting rules, and goal-related message roles and placement. This is an observable compatibility target; identical stochastic model decisions are not promised.
+Use independently written, neutral instructions with the observed goal semantics. Preserve goal values, status transitions, accounting rules, and goal-related message roles and placement through Pi's native agent interface. Parser-specific accepted forms, diagnostic text, exception types, and transport formatting belong to Pi; identical stochastic model decisions are not promised.
 
 Use public extension APIs and existing repository fixtures first. No private runtime adapter is accepted. A required behavior that cannot be reproduced is an explicit implementation blocker, with a reproducible scenario and the missing capability identified before proposing a different integration.
 
@@ -28,13 +28,13 @@ Verify through real Pi sessions with controlled provider responses, terminal int
 6. As a Pi user, I want an optional token budget only when explicitly requested, so that the extension does not invent a limit.
 7. As a Pi user, I want invalid objectives and budgets rejected clearly, so that unusable state is never persisted.
 8. As an agent, I want stable tool definitions and accepted arguments, so that I can manage a goal through the advertised contract.
-9. As an agent, I want stable result fields and error behavior, so that direct and nested calls expose the expected information.
+9. As an agent, I want stable goal values through Pi's native results and errors, so that direct and nested calls preserve the expected information.
 10. As an agent, I want to inspect the current stored goal, so that I can see its objective, status, usage, and remaining budget.
 11. As a Pi user, I want no-goal results distinguished from failed reads, so that storage errors do not look like missing work.
 12. As a Pi user, I want active work to continue after a work attempt finishes without a new request, so that the goal can span multiple turns.
 13. As a Pi user, I want accepted user work respected at continuation boundaries, so that background goal activity does not incorrectly overtake it.
 14. As a Pi user, I want at most one eligible continuation admitted, so that repeated events do not duplicate work.
-15. As a Pi user, I want a pending continuation revalidated against current state, so that a pause, clear, replacement, or shutdown cannot launch stale work.
+15. As a Pi user, I want a pending continuation revalidated while the extension remains loaded, so that pause, clear, or replacement cannot launch stale goal work.
 16. As a Pi user, I want to pause explicitly without requiring the current turn to be interrupted, so that pause and Stop retain distinct meanings.
 17. As a Pi user, I want Stop to attempt a goal pause and then interrupt, so that goal pursuit does not immediately undo my action.
 18. As a Pi user, I want Escape used for autocomplete or another focused interface to keep its native meaning, so that incidental key presses do not pause a goal.
@@ -85,13 +85,13 @@ Verify through real Pi sessions with controlled provider responses, terminal int
 
 ### Model tools
 
-All three tools advertise object arguments, disallow additional properties in the advertised schema, set `strict` to false, and advertise no output schema. The existing contract separates what is advertised from what its decoder accepts. Do not let a generic schema validator silently replace that decoder's observable behavior.
+Register all three tools through Pi's native extension API with object parameters. Let Pi validate their schemas, apply its ordinary coercions, advertise them to the provider, deliver results, and propagate failures. Use its native structured-result facility for programmatic consumers. Do not intercept raw argument streams, rewrite provider requests or history, emulate a foreign decoder, or wrap native orchestration to reproduce a different error type.
 
-| Tool          | Advertised inputs                                                        | Behavior                                                                                                                                      |
-| ------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `get_goal`    | No properties; no required fields                                        | Return the stored current goal or an explicit null goal. Reading does not itself flush current usage.                                         |
-| `create_goal` | Required string `objective`; optional integer `token_budget`             | Create an active goal only when none exists or the previous goal is complete. Reset accounting and creation time for the new goal generation. |
-| `update_goal` | Required string `status`, with values `complete`, `blocked`, or `paused` | Account the eligible known progress and request the specified status. Return the effective persisted status, including limit precedence.      |
+| Tool          | Advertised inputs                                                              | Behavior                                                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `get_goal`    | No properties; no required fields                                              | Return the stored current goal or an explicit null goal. Reading does not itself flush current usage.                                         |
+| `create_goal` | Required string `objective`; optional integer or decimal-string `token_budget` | Create an active goal only when none exists or the previous goal is complete. Reset accounting and creation time for the new goal generation. |
+| `update_goal` | Required string `status`, with values `complete`, `blocked`, or `paused`       | Account the eligible known progress and request the specified status. Return the effective persisted status, including limit precedence.      |
 
 Descriptions must make these policies explicit:
 
@@ -102,9 +102,11 @@ Descriptions must make these policies explicit:
 - Resume, budget-limited, and usage-limited transitions belong to user or runtime controls. The model cannot request them through `update_goal`.
 - After successful completion with a budget, report the final usage from the returned fields.
 
-Decoder compatibility includes Unicode whitespace trimming of the objective followed by a nonempty, maximum 4,000-Unicode-scalar check; positive signed 64-bit integer budgets; omitted or null optional budgets; ignored unknown object members; the observed sequence-form arguments; and the read tool's treatment of unused raw argument text. Preserve invalid-type, duplicate-field, missing-field, invalid-status, and numeric-overflow outcomes. JavaScript safe-integer limitations, already-parsed arguments, and parser-specific diagnostics require explicit compatibility fixtures. A loss of raw argument information is a capability gap, not permission to round values or silently narrow the accepted input domain.
+Keep domain validation for Unicode whitespace trimming, a nonempty objective of at most 4,000 Unicode scalars, and a positive signed 64-bit integer allowance. Optional null budgets follow Pi's ordinary optional-field handling. Pi decides schema errors, extra properties, duplicate members, positional forms, and coercion. Those parser behaviors are not independent goal rules to emulate.
 
-The model-visible successful result is JSON text with these fields. Preserve casing, omission, nullability, and integer units; do not substitute a different envelope or rely on UI-only structured details.
+Accept numeric budgets only when they are safe integers. Accept decimal strings to represent the full positive signed 64-bit range without loss. Select and test a native schema that cannot coerce an unsafe number into an apparently valid rounded string. Reject an unsafe numeric input with an actionable error; do not guess its original digits. Store and calculate integer values exactly. In tool results, retain safe integers as numbers and encode larger integers as decimal strings in both text and structured content. Every conversion must preserve the goal value; native result delivery does not authorize rounding a stored value.
+
+Successful results contain these goal fields through Pi's native text and structured-result facilities. Preserve casing, omission, nullability, and integer units. Apply the lossless integer representation above consistently; do not rely on UI-only details.
 
 | Field                                 | Value                                                                                                                                                                                                                                                               |
 | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -119,7 +121,7 @@ The model-visible successful result is JSON text with these fields. Preserve cas
 | `goal.timeUsedSeconds`                | Recorded integer elapsed pursuit seconds.                                                                                                                                                                                                                           |
 | `goal.createdAt` and `goal.updatedAt` | Integer Unix timestamps in seconds.                                                                                                                                                                                                                                 |
 
-For a direct call, the successful tool output is a JSON string containing this envelope; an ordinary failure is a plain error string. Internal success flags are not extra fields on the model-facing wire. Preserve the distinctions between absent state, unavailable persistence, invalid input, an unfinished existing goal, a prohibited status, and storage failure. Do not turn failure into a successful null result. Code execution receives a native JSON value on success; verify its error propagation and resulting model transcript separately. Compare call identity, programmatic values, host error flags where present, and next-request serialization at their actual layers.
+Return goal content through Pi's ordinary tool result and structured content, and throw ordinary errors for failures. Pi owns error objects, error flags, native exception propagation, and next-request serialization. Preserve the distinctions between absent state, unavailable persistence, invalid input, an unfinished existing goal, a prohibited status, and storage failure. Do not turn failure into a successful null result. Verify goal values and call identity through both direct and native programmatic calls without replacing Pi's delivery conventions.
 
 Goal state mutations are serialized. Preserve the reference's serial execution behavior for goal operations without globally changing unrelated tools' concurrency. Tool-name collisions and effective tool overrides must be detected or explicitly bounded by demonstrated host capabilities.
 
@@ -164,7 +166,9 @@ Keep only the minimum pending continuation state needed to coordinate the curren
 
 The reference dispatches already queued backend user work before goal idle work when that dispatch starts a turn. This does not establish a universal priority guarantee for every frontend draft, local queue, or input arriving after the idle check. Reproduce the observed admission cutoff and compare race scenarios explicitly rather than promising a stronger ordering rule.
 
-The public scheduler still needs proof for a pause command deferred during asynchronous settlement, a continuation already queued behind that command, simultaneous user input, reload, and teardown. `isIdle`, `hasPendingMessages`, and `waitForIdle` do not individually establish atomic admission. A passing simple continuation test is insufficient evidence for these cases.
+While the extension remains loaded, a pending continuation command can recheck the persisted goal when its handler runs. Paused, cleared, replaced, or otherwise ineligible goals must exit without model work; physical removal of the queued command is unnecessary. Prove this with direct runtime tests for deferred pause and clear during asynchronous settlement, accepted user work, and replacement. `isIdle`, `hasPendingMessages`, and `waitForIdle` alone do not establish that guarantee.
+
+Removing the extension is a separate boundary: its command handler disappears while Pi may retain a pending command. The tested public API offers no cancellation handle for that retained command. Record and test this unload limitation separately; it is not evidence that pause or clear fails while the extension remains loaded. Stop owned scheduling and invalidate owned callbacks on teardown, but do not claim withdrawal of work already retained by the host without runtime evidence. No private adapter or host patch is authorized by this limitation.
 
 Execution belongs to the live loaded runtime. Merely hiding its view does not stop work. Actual runtime unload stops execution and accounting without automatically changing a persisted active goal to paused. Restoring that individual active session may resume eligible pursuit; do not scan every saved session and start work globally. Preserve the host's terminal, RPC, and one-shot disposal rules. Do not create a daemon, process keep-alive loop, recurring automation, or background executor to extend them.
 
@@ -203,7 +207,7 @@ Use native widgets or status facilities without replacing the footer or taking o
 
 For the actual terminal Stop action, attempt an active-goal pause with the observed 500 ms bound, then invoke native interruption even if pausing fails. Raw backend abort is not itself an explicit user pause. A public editor composition is a candidate for observing native Stop after dispatch has resolved autocomplete and shortcut handling; it must preserve the single active editor and be verified with `pi-composer`, `pi-attachments`, and `pi-chat` in both load orders. Raw key observation alone is insufficient. Do not claim compatibility with arbitrary replacement editors without evidence.
 
-Reload and teardown must invalidate pending work and remove only extension-owned observers and presentation. A later extension's replacement remains its own. Initialization and cleanup failure must leave an actionable error, not silently partial goal control.
+Reload and teardown must invalidate extension-owned pending work and remove only extension-owned observers and presentation. A later extension's replacement remains its own. Commands already retained by Pi are subject to the separately recorded unload limitation. Initialization and cleanup failure must leave an actionable error, not silently partial goal control.
 
 ### Runtime stop conditions
 
@@ -225,18 +229,18 @@ Test each implemented slice through this seam. Add lower-level cases only where 
 
 ### Scenario coverage
 
-| Scenario family                   | Required observations                                                                                                                                                                                                           |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No goal and explicit creation     | No unsolicited goal; stable read shape; trimmed objective; one goal; absent/complete replacement; no replacement of unfinished states; persistent-session requirements.                                                         |
-| Argument and result compatibility | Required/unknown/duplicate members; sequence form; null/absent budget; Unicode scalar length; positive/zero/negative/fractional/overflow values; invalid and system-owned statuses; direct and nested results and failures.     |
-| User controls                     | Create, edit, pause, resume, clear, completion display and cleanup; headless completed-state retention; budget-limit precedence; known usage in returned snapshots.                                                             |
-| Continuation                      | Fresh run boundaries; one continuation; already accepted user work; asynchronous settlement; deferred pause/clear; replacement; request failure; no run after disposal.                                                         |
-| Accounting                        | Cache reads/writes, reasoning, pre-creation baseline, known descendants, nested aggregation, concurrent completions, repeated events, remaining-token clamp, soft overshoot, failed persistence, and late usage after stopping. |
-| Time                              | Fractional accumulation, live waits, pause/resume, host shutdown/reopen, no downtime charge, and monotonic timing independent of displayed timestamps.                                                                          |
-| Progress and failures             | Three empty automatic attempts; activity resets; qualifying execution failures; successful-tool reset; semantic blocked audits and resume; retry exhaustion; usage limits; stale-turn errors.                                   |
-| History and lifetime              | Compaction, rewind, fork cutoff and inheritance, active restoration, inactive status restoration, hidden versus unloaded runtime, session switch, reload, terminal/RPC/one-shot disposal.                                       |
-| Native terminal interaction       | Default and remapped Stop; autocomplete Escape; retry and compaction controls; overlays; companion editor and chat composition in both load orders; cleanup and late callbacks.                                                 |
-| Agent context                     | Tool advertising, roles, provenance, content placement, continuation/update/limit context, objective escaping, history replay, duplicate suppression, and final usage guidance.                                                 |
+| Scenario family                  | Required observations                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No goal and explicit creation    | No unsolicited goal; stable read shape; trimmed objective; one goal; absent/complete replacement; no replacement of unfinished states; persistent-session requirements.                                                         |
+| Native arguments and goal values | Native validation and errors; null/absent budget; Unicode scalar length; positive/zero/negative/fractional/overflow values; safe numeric and exact decimal-string budgets; direct and nested value preservation.                |
+| User controls                    | Create, edit, pause, resume, clear, completion display and cleanup; headless completed-state retention; budget-limit precedence; known usage in returned snapshots.                                                             |
+| Continuation                     | Fresh run boundaries; one continuation; accepted user work; asynchronous settlement; deferred pause/clear and replacement while loaded; request failure; separate extension-removal behavior.                                   |
+| Accounting                       | Cache reads/writes, reasoning, pre-creation baseline, known descendants, nested aggregation, concurrent completions, repeated events, remaining-token clamp, soft overshoot, failed persistence, and late usage after stopping. |
+| Time                             | Fractional accumulation, live waits, pause/resume, host shutdown/reopen, no downtime charge, and monotonic timing independent of displayed timestamps.                                                                          |
+| Progress and failures            | Three empty automatic attempts; activity resets; qualifying execution failures; successful-tool reset; semantic blocked audits and resume; retry exhaustion; usage limits; stale-turn errors.                                   |
+| History and lifetime             | Compaction, rewind, fork cutoff and inheritance, active restoration, inactive status restoration, hidden versus unloaded runtime, session switch, reload, terminal/RPC/one-shot disposal.                                       |
+| Native terminal interaction      | Default and remapped Stop; autocomplete Escape; retry and compaction controls; overlays; companion editor and chat composition in both load orders; cleanup and late callbacks.                                                 |
+| Agent context                    | Tool advertising, roles, provenance, content placement, continuation/update/limit context, objective escaping, history replay, duplicate suppression, and final usage guidance.                                                 |
 
 ### Phoenix comparison
 
@@ -253,15 +257,15 @@ For every case, record runtime versions, scenario and session identities, outer 
 Compare these agent-interface dimensions:
 
 - Message roles, channels where supplied, order, delimiters, objective data, internal versus human provenance, and when context first appears or is repeated.
-- Tool names, availability, descriptions, parameter schemas, required properties, enum order, strictness, additional-property behavior, output-schema absence, and direct versus orchestrated exposure.
-- Exact model-visible success and error shapes, null versus omitted fields, raw argument fidelity where available, call/result correspondence, programmatic results, and the next request's serialized history.
+- Goal tool names, availability, policy descriptions, domain constraints, and direct versus native programmatic exposure. Record Pi-owned validation and advertising conventions as intentional interface differences.
+- Goal values, null versus omitted fields, call/result correspondence, lossless integer conversion, programmatic results, and subsequent history. Record native result/error formatting without treating it as a behavioral compatibility failure.
 - Continuation, edited-objective, budget-limit, pause/resume, blocked, and completion exchanges; idle admission, compaction, reload, and stale-event cases.
 - Reasoning and final-output handling where observable, opaque continuation data without claiming it can be decoded, response-item ordering, stream versus terminal-response differences, and replayed history.
 - Original usage, cache treatment, goal-derived counters, checkpoint timing, and the distinction between observed usage and unreported work.
 
 Use the same scenario prompt, initial goal and repository state, model, supported reasoning settings, sampling settings, limits, and provider route when comparing behavior. Record both actual configured defaults and a controlled comparison where alignment is possible. Preserve omitted settings as omitted; do not silently replace them with assumed defaults. Record unsupported controls and unrelated instruction/tool differences as comparison limits.
 
-Keep live desktop observations, bundled-runtime checks, deterministic scripted runs, and payload replays labeled separately. A replay cannot establish desktop control behavior. Neutral wording and dynamic identities may differ by explicit contract; classify those differences separately from schema, authority, ordering, accounting, or state mismatches. Never normalize away a meaningful discrepancy to obtain a passing comparison. Identical natural-language answers or reasoning are not the compatibility criterion.
+Keep live desktop observations, bundled-runtime checks, deterministic scripted runs, and payload replays labeled separately. A replay cannot establish desktop control behavior. Neutral wording, dynamic identities, and Pi-owned validation/result/error conventions may differ by explicit contract. Classify those separately from lost goal values or differences in authority, ordering, accounting, or state. Never normalize away a meaningful goal discrepancy to obtain a passing comparison. Identical natural-language answers or reasoning are not the compatibility criterion.
 
 Retrieve Phoenix records after ingestion and verify complete capture using canonical payload hashes or byte hashes appropriate to the evidence layer. Detect truncation, missing stream events, absent usage, and unsupported provider hooks. Check both request and response records. Do not collect credential values; keep authorization headers out of saved evidence. New fixture content and trace labels use neutral terminology, and required documents link to neutral trace identifiers rather than copying branded reference material.
 
@@ -269,9 +273,9 @@ The final matrix covers create, inspect, continue, edit, pause, resume, clear, c
 
 ### Acceptance gates
 
-- Demonstrate cancellation or suppression of a not-yet-admitted continuation after pause, clear, replacement, and teardown, at the same admission cutoff as the reference. Do not approve an adapter solely from the limitations of one attempted public implementation.
+- Demonstrate suppression of a not-yet-admitted continuation after pause, clear, and replacement while the extension remains loaded. Verify extension removal separately and retain its unsupported host-queue boundary explicitly; no physical queue removal or private adapter is required for the loaded-extension cases.
 - Demonstrate native Stop composition with configured editor behavior, including the 500 ms pause attempt and interruption despite pause failure.
-- Establish argument precision and decoder/error compatibility through the real provider and orchestration paths. Preserve the advertised contract even when a provider has a weaker representation; report unsupported exact behavior explicitly.
+- Establish native validation, native error propagation, and lossless goal values through the real provider and orchestration paths. Do not recreate foreign parser or error semantics.
 - Establish delegated accounting attribution and timing for the reported-usage paths being claimed. Optional tool usage cannot establish universal child-session coverage.
 - Establish fork snapshot and continuation-deferral semantics before shipping fork support. History-only approximations are insufficient.
 - Run the relevant repository formatting, type, lint, and behavior checks for implemented changes. A terminal simulation does not replace the required actual-terminal acceptance.
@@ -289,12 +293,12 @@ The final matrix covers create, inspect, continue, edit, pause, resume, clear, c
 
 ## Further Notes
 
-The specification, real-session test boundary, Phoenix comparison, and seven-ticket delivery sequence are approved. Creation and inspection are implemented, but [ticket 01](../../.scratch/pi-goal/issues/01-create-inspect-goals.md) remains blocked on native programmatic error compatibility. Its unsupported acceptance item remains pending, and dependent implementation tickets cannot start. The approved order is create and inspect, lifecycle controls, safe continuation and Stop, accounting and budgets, session preservation, runtime stop safeguards, and final acceptance. Session preservation and runtime stop safeguards both depend on accounting and may proceed independently; final acceptance depends on both.
+The specification, real-session test boundary, Phoenix comparison, and seven-ticket delivery sequence are approved. The interface decision was revised on 2026-10-14: preserve goal behavior and values through Pi's native validation, result delivery, and errors. [Ticket 01](../../.scratch/pi-goal/issues/01-create-inspect-goals.md) must remove the obsolete decoder and transport emulation and verify lossless native values before closing. The approved order remains create and inspect, lifecycle controls, safe continuation and Stop, accounting and budgets, session preservation, runtime stop safeguards, and final acceptance. Session preservation and runtime stop safeguards both depend on accounting and may proceed independently; final acceptance depends on both.
 
 The behavior baseline was inspected on 2026-10-13: desktop version 26.1007.30912 (build 20156), engine 0.162.0-alpha.17.2, source revision `740e5af33c71225640e0c1c1555c514c2c93ab74`. The Pi source baseline is 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`; the workspace dependency is 1.0.2. These identify evidence, not a promise that future releases retain the same behavior.
 
 The test boundary was approved, with Phoenix agent-interface comparison added explicitly. Read-only inspection confirmed the [local capture collection](http://127.0.0.1:6006/projects/UHJvamVjdDoz) and an existing actual-desktop observation containing parsed request data and response events. That observation comes from an ongoing conversation and includes goal tool definitions; it is not a matched fresh goal trial or evidence of goal behavior. The create/read implementation now has real-session checks and retrieved Phoenix captures recorded in ticket 01. Public admission and Stop feasibility probes are recorded in [ticket 03](../../.scratch/pi-goal/issues/03-continue-safely-honor-stop.md). Full lifecycle implementation, actual-terminal acceptance, and the complete agent-interface comparison remain pending.
 
-Two reproduced public-boundary gaps prevent an exact-compatibility claim. Ticket 01 shows that native programmatic failures reject as an `Error` object, while the observed target rejects as a primitive string; the type, string conversion, and next-request serialization differ. Ticket 03 shows that removing the extension during asynchronous settlement can deliver a deferred `/goal` admission command as human input and start another provider request. The tested queued-command, timer, and idle-wait approaches do not provide cancellation or revalidation at that boundary; this is not proof that every public alternative is impossible. The Stop composition probe succeeds within its recording-terminal and controlled-pause scope.
+The native `Error` result observed in ticket 01 is now accepted host behavior, not an implementation blocker. Goal value loss remains prohibited. Ticket 03's reproduced stale request occurs when the extension itself is removed, leaving its queued command without a handler. This does not establish a failure of pause or clear while the handler remains loaded; those operations need their own direct runtime tests. The tested queued-command, timer, and idle-wait approaches do not withdraw host-retained commands after removal. Keep that lifecycle limitation explicit and separate from the loaded-extension acceptance. The Stop composition probe succeeds within its recording-terminal and controlled-pause scope.
 
-The unresolved items above are engineering gates. They do not authorize silently changing the contract, weakening input fidelity, adding private hooks, or claiming that a source inspection proves runtime compatibility.
+Unperformed runtime scenarios and unsupported lifecycle behavior remain explicit evidence limits. They do not authorize losing goal values, changing goal rules, adding private hooks, or claiming that source inspection proves runtime behavior.

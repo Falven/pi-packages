@@ -6,12 +6,12 @@
 
 **Status:** ready-for-agent
 
-- [ ] Add `update_goal` with only the specified `complete`, `blocked`, and `paused` inputs. Preserve the advertised schema, accepted decoder forms, ordinary error strings, and successful result envelope across direct and orchestrated calls.
+- [ ] Add `update_goal` with only the specified `complete`, `blocked`, and `paused` inputs. Use Pi's native schema validation, result delivery, and error handling; preserve goal values and the successful result envelope across direct and native programmatic calls.
 - [ ] State the explicit-pause, full-completion, three-turn blocked-audit, fresh-audit-after-resume, and returned-budget-reporting policies in independently written descriptions. These are model instructions; do not invent runtime proof checks or additional tool arguments.
 - [ ] Provide the native `/goal` surface and equivalent explicit command actions for inspect, create, edit, pause, resume, and clear. Preserve configured keys, native widgets, themes, overlays, and companion extension ownership.
 - [ ] Offer pause for active goals and resume for paused, blocked, and usage-limited goals. Preserve the absence of ordinary pause/resume actions for completed and budget-limited goals. Ordinary objective controls add no budget input or implicit budget increase.
 - [ ] Edit within the current generation, preserving creation time, budget, and recorded counters while requesting activation. An exhausted budget prevents activation. A new goal after completion receives a new generation and fresh counters.
-- [ ] Explicit pause stops future pursuit without requiring interruption of the current turn. Resume retains usage and revokes the earlier pause instruction. Keep model updates, user controls, and runtime-owned limit transitions distinct.
+- [ ] Explicit pause stops future pursuit without requiring interruption of the current turn. Resume retains usage and revokes the earlier pause instruction. Keep model updates, user controls, and runtime-owned limit transitions distinct. Verify pause and clear state changes directly; queued-continuation suppression while loaded belongs to ticket 03, independently of extension removal.
 - [ ] Preserve effective-status precedence: pause or block cannot override budget exhaustion; activation cannot replenish an exhausted allowance; actual completion can supersede a budget-limited state. Verify through the state and user-facing result, then exercise live accounting boundaries with ticket 04.
 - [ ] Return completion guidance only when an update requests completion, the resulting status is complete, and a budget exists or elapsed time is positive. Reading an already completed goal returns no completion guidance.
 - [ ] Preserve a completion result's own snapshot even if interactive cleanup clears the current goal before delivery. Retain the completed display snapshot in the interactive interface; retain completed backend state in headless use until clear or replacement.
