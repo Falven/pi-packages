@@ -1,3 +1,5 @@
 # Independent composition extensions
 
 Editing, attachments, and skill references are separate Pi extensions with separate packages and specifications, so attachment and skill behavior remain useful with the native editor when `pi-composer` is absent. `pi-attachments` owns paste classification and attachment capture in distinct internal modules that share one capture, recovery, and storage operation, keeping a pasted attachment within one package lifecycle. Cooperation with other extensions follows Pi's existing native contracts and the active editor's draft-transaction ownership.
+
+The attachment migration must use released Pi packages, preserve the selected editor, and keep `pi-composer` optional. The conditional editor-instance adapter in [ADR 0002](0002-one-editor-owns-draft-transactions.md) must pass its compatibility experiment; it does not permit silently replacing the native editor. Verify attachment-only and combined installations separately through the same editor/session boundary before claiming the migration complete; unrelated package behavior and retained data must survive the host rollback.
