@@ -18,6 +18,7 @@ import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
 import { registerPaste, sourcePath } from "./paste.ts"
 import { TextPreview } from "./preview.ts"
+import { registerShortcuts } from "./shortcuts.ts"
 import { thumbnailSettings } from "./settings.ts"
 
 function mergeRanges(ranges: { from: number; to: number }[]) {
@@ -654,20 +655,13 @@ export default function piAttachments(pi: ExtensionAPI): void {
     description: "Preview, restore inline, or remove draft attachments",
     handler: (_args, ctx) => attachments(ctx),
   })
-  pi.registerAction("extension.attachments.manage", {
-    description: "Manage attachments",
-    defaultKeys: "ctrl+alt+a",
-    handler: attachments,
-  })
-
   pi.registerCommand("attach", {
     description: "Attach a file path or entered text",
     handler: (_args, ctx) => attachChoice(ctx),
   })
 
-  pi.registerAction("extension.attachments.attach", {
-    description: "Attach",
-    defaultKeys: "ctrl+alt+f",
-    handler: attachChoice,
+  registerShortcuts(pi, {
+    attach: attachChoice,
+    manage: attachments,
   })
 }
