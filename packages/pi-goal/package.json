@@ -1,0 +1,21 @@
+{
+  "name": "pi-goal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent, explicitly authorized goals for Pi",
+  "files": [
+    "src/**/*.ts"
+  ],
+  "type": "module",
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}

@@ -60,6 +60,7 @@ class RecordingTerminal {
 
 export type NativeHostOptions = {
   providerApi?: ProviderConfig["api"]
+  providerProtocol?: "completions" | "responses"
   tuiMode?: "regular" | "fullscreen"
   onMount?: (host: InteractiveMode) => void
   columns?: number
@@ -68,6 +69,7 @@ export type NativeHostOptions = {
   extension?: ExtensionFactory
   extensionFactories?: ExtensionFactory[]
   extensionPaths?: string[]
+  expectedExtensionErrors?: { path: string; error: string }[]
   skillPaths?: string[]
   noTools?: "all" | "builtin"
   tools?: string[]
@@ -109,6 +111,7 @@ export async function openNativeHost(
   }
 
   const requests: { messages: { role: string; content: unknown }[] }[] = []
+  const requestBodies: string[] = []
   const pendingResponses: ServerResponse[] = []
   const scriptedResponses: ResponseStep[][] = []
   let pausedResponse:
@@ -128,6 +131,37 @@ export async function openNativeHost(
       return
     }
     response.writeHead(200, { "content-type": "text/event-stream" })
+    if (options.providerProtocol === "responses") {
+      const answer = {
+        type: "message",
+        id: "native-answer",
+        role: "assistant",
+        content: [{ type: "output_text", text: "Received." }],
+      }
+      const events = [
+        { type: "response.created", response: { id: "native-response" } },
+        {
+          type: "response.output_item.added",
+          output_index: 0,
+          item: { ...answer, content: [] },
+        },
+        {
+          type: "response.output_text.delta",
+          output_index: 0,
+          content_index: 0,
+          delta: "Received.",
+        },
+        { type: "response.output_item.done", output_index: 0, item: answer },
+        {
+          type: "response.completed",
+          response: { id: "native-response", status: "completed" },
+        },
+      ]
+      response.end(
+        events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+      )
+      return
+    }
     response.end(
       `data: ${JSON.stringify({
         id: "composer-test",
@@ -181,6 +215,7 @@ export async function openNativeHost(
       request.headers["content-encoding"] === "zstd"
         ? zstdDecompressSync(payload).toString()
         : payload.toString()
+    requestBodies.push(body)
     requests.push(JSON.parse(body))
     const script = scriptedResponses.shift()
     if (script) playResponse(response, script)
@@ -244,7 +279,11 @@ export async function openNativeHost(
             (pi) => {
               pi.registerProvider("composer-test", {
                 baseUrl: `http://127.0.0.1:${address.port}/v1`,
-                api: options.providerApi ?? "openai-completions",
+                api:
+                  options.providerApi ??
+                  (options.providerProtocol === "responses"
+                    ? "openai-responses"
+                    : "openai-completions"),
                 ...(options.noAuth
                   ? {}
                   : {
@@ -270,7 +309,10 @@ export async function openNativeHost(
           ],
         },
       })
-      assert.deepEqual(services.resourceLoader.getExtensions().errors, [])
+      assert.deepEqual(
+        services.resourceLoader.getExtensions().errors,
+        options.expectedExtensionErrors ?? [],
+      )
       assert.deepEqual(services.diagnostics, [])
       const model = services.modelRuntime.getModel(
         "composer-test",
@@ -336,6 +378,7 @@ export async function openNativeHost(
     directory,
     close,
     requests,
+    requestBodies,
     terminal,
     screenLines() {
       return (
