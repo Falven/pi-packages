@@ -4,6 +4,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { Type } from "typebox"
 import { createCommand } from "./command.ts"
 import { execute } from "./execution.ts"
+import { createPatch } from "./patch.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
 const contract = JSON.parse(
@@ -67,6 +68,30 @@ export default function coreTools(pi: ExtensionAPI): void {
   }
   pi.on("session_start", syncCommand)
   pi.on("before_agent_start", syncCommand)
+  const patchAvailable = () => {
+    const active = new Set(pi.getActiveTools())
+    const stock = new Set(
+      pi
+        .getAllTools()
+        .filter((tool) => tool.sourceInfo.source === "builtin")
+        .map((tool) => tool.name),
+    )
+    return (
+      active.has("apply_patch") ||
+      ["edit", "write"].every((name) => active.has(name) && stock.has(name))
+    )
+  }
+  const patch = createPatch(patchAvailable, lifetime.signal)
+  pi.registerTool(patch)
+  const syncPatch = () => {
+    const current = pi.getAllTools().find((tool) => tool.name === patch.name)
+    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
+      return
+    const exposure = patchAvailable() ? "codemode" : "hidden"
+    if (current.exposure !== exposure) pi.registerTool({ ...patch, exposure })
+  }
+  pi.on("session_start", syncPatch)
+  pi.on("before_agent_start", syncPatch)
   pi.registerTool({
     name: execution.name,
     label: "Execute",
@@ -85,16 +110,19 @@ export default function coreTools(pi: ExtensionAPI): void {
       )
       return {
         descriptions: { exec: description(names) },
-        hiddenDeclarations: names.has("exec_command")
-          ? loadout.declared
-              .filter(
-                (tool) =>
-                  tool.name === "exec_command" ||
+        hiddenDeclarations: loadout.declared
+          .filter(
+            (tool) =>
+              (names.has("exec_command") &&
+                (tool.name === "exec_command" ||
                   (stock.has(tool.name) &&
-                    ["bash", "grep", "find", "ls"].includes(tool.name)),
-              )
-              .map((tool) => tool.name)
-          : [],
+                    ["bash", "grep", "find", "ls"].includes(tool.name)))) ||
+              (names.has("apply_patch") &&
+                (tool.name === "apply_patch" ||
+                  (stock.has(tool.name) &&
+                    ["edit", "write"].includes(tool.name)))),
+          )
+          .map((tool) => tool.name),
       }
     },
     execute(_id, args, signal, _onUpdate, ctx) {

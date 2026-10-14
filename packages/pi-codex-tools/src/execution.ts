@@ -31,7 +31,9 @@ export async function execute(
   const calls = new Set<Promise<unknown>>()
   let timer: NodeJS.Timeout | undefined
   const bounded = new OutputBuffer(maxTokens)
-  const tools = ctx.tools.filter((tool) => tool.name === "exec_command")
+  const tools = ctx.tools.filter((tool) =>
+    ["exec_command", "apply_patch"].includes(tool.name),
+  )
   const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
     workerData: {
       source,
@@ -93,9 +95,15 @@ export async function execute(
         } else if (message.type === "error") {
           finish(new Error(message.message))
         } else if (message.type === "call") {
-          const call = ctx.executeTool(message.name, message.args, {
-            signal: callSignal,
-          })
+          const call = ctx.executeTool(
+            message.name,
+            message.name === "apply_patch"
+              ? { input: message.args }
+              : message.args,
+            {
+              signal: callSignal,
+            },
+          )
           calls.add(call)
           try {
             const outcome = await call
