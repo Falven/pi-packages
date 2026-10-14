@@ -1,0 +1,33 @@
+{
+  "case_id": "patch-24-repeated-path-overlap",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt\n@@\n-one\n+ONE\n*** Update File: /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt\n@@\n-one\n+FIRST\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "b25lCnR3bwo=",
+      "sha256": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8",
+      "text": "one\ntwo\n"
+    }
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "apply_patch verification failed: invalid patch: multiple operations target /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt",
+    "string": "apply_patch verification failed: invalid patch: multiple operations target /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt"
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "b25lCnR3bwo=",
+      "sha256": "c3f9c8c283a2b1f2f1896f27a01cbe3cddc0c9d93f752e4639035a0f5b36f6e8",
+      "text": "one\ntwo\n"
+    }
+  }
+}

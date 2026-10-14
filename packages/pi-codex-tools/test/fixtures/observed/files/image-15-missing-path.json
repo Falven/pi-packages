@@ -1,0 +1,13 @@
+{
+  "case_id": "image-15-missing-path",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "view_image",
+  "input": {},
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "failed to parse function arguments: missing field `path` at line 1 column 2",
+    "string": "failed to parse function arguments: missing field `path` at line 1 column 2"
+  }
+}

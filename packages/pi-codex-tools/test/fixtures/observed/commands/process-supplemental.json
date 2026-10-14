@@ -1,0 +1,25 @@
+{
+  "case_group": "process-supplemental",
+  "cases": [
+    {
+      "case_id": "pty-dimensions-and-environment",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "stty size; printf 'TERM=%s\\nCOLUMNS=%s\\nLINES=%s\\n' \"$TERM\" \"$COLUMNS\" \"$LINES\"; exit 7",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": true,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 500
+      },
+      "result": {
+        "chunk_id": "0d3b36",
+        "wall_time_seconds": 0.000014875,
+        "exit_code": 7,
+        "original_token_count": 9,
+        "output": "24 80\r\nTERM=dumb\r\nCOLUMNS=\r\nLINES=\r\n"
+      }
+    }
+  ]
+}

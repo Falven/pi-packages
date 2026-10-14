@@ -1,0 +1,94 @@
+{
+  "evidenceFormat": 1,
+  "kind": "Neutral index of derived live-trial metrics; raw transport remains literal outside the repository",
+  "status": "Bounded core verification complete; image-detail mismatch, approved native-host differences, and unverified behavior remain explicit",
+  "sourceContractIdentity": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "scopedContractIdentity": "fcfd6138dc219b03fd1afde6c0c0e981bed7ef1041096557cf61c583bc0935b7",
+  "finalVerifiedRuntimeRevision": "c2adc1b0310540417bcdfd02f052ece02f8752f1",
+  "totals": {
+    "batches": 5,
+    "taskSuccesses": 20,
+    "taskArms": 20,
+    "providerRequests": 72,
+    "distinctSelectedCalls": 52,
+    "modelToolSelectionMistakes": 0,
+    "modelArgumentMistakes": 0,
+    "unnecessaryCalls": 0,
+    "harnessGateStops": 0,
+    "historicalImplementationMismatches": 2
+  },
+  "files": [
+    {
+      "file": "smoke-20261014-initial.json",
+      "sha256": "4b2e9f4a198a3a181bf05b669dcb024de4e15914e575cfe809fbc128b91f80b7",
+      "sourceRevision": "f415bae160418a06d50c53397c3beeeee935655e",
+      "taskArms": 2,
+      "providerRequests": 4,
+      "scope": "Two task successes with namespace-free replay mismatch; preserved historical failure, repaired by the next smoke."
+    },
+    {
+      "file": "smoke-20261014-repaired.json",
+      "sha256": "0d1c053b0ce6086708ef8fc921dfacb66813802afec32343e0a42833485c3ac5",
+      "sourceRevision": "652266a6246667ead7b811033fc53b46e67a9970",
+      "taskArms": 2,
+      "providerRequests": 4,
+      "scope": "Two task successes with raw custom-call replay and two text result parts preserved."
+    },
+    {
+      "file": "suite-20261014.json",
+      "sha256": "4d199bf24d25cb8a46bc7a8cbb9721c277887f53419bb66cece7092aafa4fa7c",
+      "sourceRevision": "652266a6246667ead7b811033fc53b46e67a9970",
+      "taskArms": 12,
+      "providerRequests": 48,
+      "scope": "Two repetitions each of patch, continuation and image tasks; all tasks passed. Both continuation repetitions retain the frame-only result encoding mismatch. Image normalization is recorded as an approved native-host difference."
+    },
+    {
+      "file": "smoke-20261014-final.json",
+      "sha256": "5c5451db3c87f9a6260fdb19323083d6727933808a72f7bfecf86caca7104b0f",
+      "sourceRevision": "c2adc1b0310540417bcdfd02f052ece02f8752f1",
+      "taskArms": 2,
+      "providerRequests": 4,
+      "scope": "Two task successes at the final runtime fingerprint; completed raw call and multi-part result replay passed."
+    },
+    {
+      "file": "continuation-20261014-repaired.json",
+      "sha256": "bb8e44060542271e397cf307a1a3488b1932dcc6ae6aa3e01e175eb50b2e5f3d",
+      "sourceRevision": "c2adc1b0310540417bcdfd02f052ece02f8752f1",
+      "taskArms": 2,
+      "providerRequests": 12,
+      "scope": "Two continuation task successes after the matching final smoke; frame-only strings and four later two-part results preserved through all subsequent requests."
+    }
+  ],
+  "resolutions": [
+    {
+      "id": "namespace-free-replay",
+      "observedIn": "smoke-20261014-initial.json",
+      "resolvedAt": "652266a6246667ead7b811033fc53b46e67a9970",
+      "verifiedIn": [
+        "smoke-20261014-repaired.json",
+        "suite-20261014.json",
+        "smoke-20261014-final.json",
+        "continuation-20261014-repaired.json"
+      ]
+    },
+    {
+      "id": "frame-only-result-encoding",
+      "observedIn": "suite-20261014.json",
+      "resolvedAt": "c2adc1b0310540417bcdfd02f052ece02f8752f1",
+      "verifiedIn": ["continuation-20261014-repaired.json"]
+    }
+  ],
+  "limits": [
+    "The reference arm uses the bundled core runtime, not an actual desktop turn.",
+    "The public model name, gateway endpoint and in-memory client credential match. Immutable backend model and account identity and final upstream bytes are unavailable.",
+    "Common task prompts and supported forwarded settings do not make full native prompts, tool inventories, developer content, or declaration placement equal.",
+    "The proxy changes supported generation controls and buffers whole responses for the narrow fixture action gate; native ingress is preserved separately.",
+    "Both callers omit temperature, top_p and seed. Response values are observed server defaults rather than guaranteed deterministic sampling.",
+    "The original twelve-arm suite remains evidence at its own revision. A final smoke and one focused continuation pair verify the repaired result encoding; unaffected patch/image cases were not rerun at that final revision.",
+    "Native image re-encoding, conversion notice and automatic detail remain visible model-bound differences. Only the inspected image case establishes decoded pixel equality.",
+    "Whole-response buffering, cache, reasoning, network and startup differences prevent causal latency or model-quality claims.",
+    "Unknown dispatch would be a harness stop. No gate stop occurred, and the narrow guard is not a general JavaScript safety proof.",
+    "Continuation helper ledger bytes differ by owned PID and start time; all task file effects match within each pair.",
+    "Historical statuses inside observations describe their capture revision. The resolution links here establish the final state."
+  ]
+}

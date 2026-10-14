@@ -1,0 +1,37 @@
+{
+  "case_group": "outer-output-framing",
+  "baseline": "local-tools-reference-20261013",
+  "cases": [
+    {
+      "id": "outer-single-text-ascii-truncation",
+      "provenance": "reduced model-visible outer result; content-part boundaries not recorded",
+      "input": "// @exec: {\"max_output_tokens\": 40}\ntext(Array.from({length:80},(_,i)=>\"L\"+String(i).padStart(3,\"0\")+\": abcdefghijklmnopqrstuvwxyz 0123456789 END\\n\").join(\"\"));",
+      "status": "completed",
+      "observed_output": "Warning: truncated output (original token count: 960)\nTotal output lines: 80\n\nL000: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL001: abcdefghijklmnopqrstuvwxyz…920 tokens truncated…klmnopqrstuvwxyz 0123456789 END\nL079: abcdefghijklmnopqrstuvwxyz 0123456789 END\n"
+    },
+    {
+      "id": "outer-single-text-unicode-truncation",
+      "provenance": "reduced model-visible outer result",
+      "input": "// @exec: {\"max_output_tokens\": 5}\ntext(\"🙂\".repeat(40)+\"END\\n\");",
+      "status": "completed",
+      "observed_output": "Warning: truncated output (original token count: 41)\nTotal output lines: 1\n\n🙂🙂…36 tokens truncated…🙂END\n"
+    },
+    {
+      "id": "outer-two-text-block-truncation",
+      "provenance": "reduced model-visible outer result",
+      "input": "// @exec: {\"max_output_tokens\": 5}\ntext(\"A\".repeat(100));\ntext(\"B\".repeat(100));",
+      "status": "completed",
+      "observed_output": "Warning: truncated output (original token count: 51)\nTotal output lines: 2\n\nAAAAAAAAAA…46 tokens truncated…BBBBBBBBBB",
+      "inference": "Observed counting is consistent with joining two text blocks with a newline before truncation.",
+      "unverified": "Original transport content blocks and the treatment of more than two blocks were not captured."
+    },
+    {
+      "id": "outer-two-text-block-untruncated",
+      "provenance": "reduced model-visible outer result",
+      "input": "text(\"AAA\");\ntext(\"BBB\");",
+      "status": "completed",
+      "observed_output": "AAABBB",
+      "unverified": "Display concatenation does not establish transport content-part boundaries."
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+# Core tools use the native extension lifecycle
+
+The core toolset uses Pi's public registration, dispatch, and lifecycle without changes to Pi's source; session-owned cells retain their workers across yields and record compact activity through public custom entries because native nested-call history ends with the parent. Live commands, cells, and temporary values survive ordinary prompts, while session replacement or reload stops owned work and clears temporary state without erasing file changes or retained history. Package-owned identity and explicit cancellation preserve continuation but accept differences in native hook identifiers, runtime attribution, and notification delivery instead of adding a private lifetime adapter.

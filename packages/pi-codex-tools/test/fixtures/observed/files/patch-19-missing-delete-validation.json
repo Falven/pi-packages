@@ -1,0 +1,29 @@
+{
+  "case_id": "patch-19-missing-delete-validation",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Add File: /tmp/core-tools-file-evidence/fixtures/delete-missing-first.txt\n+created\n*** Delete File: /tmp/core-tools-file-evidence/fixtures/delete-missing.txt\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/delete-missing-first.txt": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/delete-missing.txt": {
+      "exists": false
+    }
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "apply_patch verification failed: Failed to read /tmp/core-tools-file-evidence/fixtures/delete-missing.txt: No such file or directory (os error 2)",
+    "string": "apply_patch verification failed: Failed to read /tmp/core-tools-file-evidence/fixtures/delete-missing.txt: No such file or directory (os error 2)"
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/delete-missing-first.txt": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/delete-missing.txt": {
+      "exists": false
+    }
+  }
+}

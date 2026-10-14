@@ -1,0 +1,337 @@
+{
+  "evidence_format": 1,
+  "case_group": "host-operation-lifetime",
+  "provenance": {
+    "observation_kind": "Supplemental current runtime observations",
+    "runtime_build_identity": "unverified",
+    "frozen_declaration_id": "local-tools-reference-20261013",
+    "frozen_declaration_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+    "capture_policy": "Existing frozen declarations remain unchanged",
+    "outer_results": "Reduced model-visible observations; original transport content-part boundaries are unavailable",
+    "nested_results": "Actual structured tool responses copied from observed results",
+    "timing": "Elapsed samples and rounded outer wall times are observations, not exact timing guarantees"
+  },
+  "helper": {
+    "file": "owned-process.py",
+    "scope": "Owned bounded local processes and case-local files only",
+    "completion_marker": "completed.json is written immediately before sys.exit(7); its exit_code field is the worker's intended code, not an independently collected process status.",
+    "signals": "The worker records SIGTERM and SIGINT if received. No signal records appeared in these cases.",
+    "readiness": "An independent command confirmed the process PID alive before each relevant cell return or termination.",
+    "input_representation": "Script whitespace is normalized; original argument values and operation ordering are retained."
+  },
+  "cases": [
+    {
+      "id": "unawaited-host-operation-after-normal-return",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 10000, \"max_output_tokens\": 1500}\nstore(\"continuation_unawaited_normal_callback\",false);\nconst pending = tools.exec_command({\"cmd\":\"exec python3 /tmp/core-tools-continuation-observations/owned-process.py run /tmp/core-tools-continuation-observations/work/unawaited-normal\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":30000,\"max_output_tokens\":1000});\npending.then(result => { store(\"continuation_unawaited_normal_callback\",true); text({event:\"HOST_CALLBACK\",result}); }, error => { store(\"continuation_unawaited_normal_callback\",true); text({event:\"HOST_ERROR_CALLBACK\",error:String(error)}); });\nconst ready = await tools.exec_command({\"cmd\":\"python3 /tmp/core-tools-continuation-observations/owned-process.py ready /tmp/core-tools-continuation-observations/work/unawaited-normal\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":1000,\"max_output_tokens\":1000});\nstore(\"continuation_unawaited_normal_ready\",ready);\ntext({event:\"NORMAL_RETURN\",ready});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "completed",
+          "wall_time_seconds": 0.4,
+          "output": "{\"event\":\"NORMAL_RETURN\",\"ready\":{\"chunk_id\":\"e00cae\",\"wall_time_seconds\":0.210827375,\"exit_code\":0,\"original_token_count\":21,\"output\":\"{\\\"ready\\\": {\\\"pid\\\": 4613}, \\\"alive\\\": true, \\\"completed\\\": null, \\\"received_signal\\\": null}\\n\"}}"
+        }
+      ],
+      "post_cell_observations": {
+        "before": {
+          "chunk_id": "05373d",
+          "wall_time_seconds": 0.279266042,
+          "exit_code": 0,
+          "original_token_count": 21,
+          "output": "{\"ready\": {\"pid\": 4613}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+        },
+        "after": {
+          "chunk_id": "e78175",
+          "wall_time_seconds": 0.196459209,
+          "exit_code": 0,
+          "original_token_count": 30,
+          "output": "{\"ready\": {\"pid\": 4613}, \"alive\": false, \"completed\": {\"reason\": \"released\", \"exit_code\": 7}, \"received_signal\": null}\n"
+        },
+        "callback_after_release": false
+      },
+      "final_callback_marker": false,
+      "observed": "The dispatched host process was alive before and after normal script return. It completed its file effect after release. Its JavaScript promise callback marker remained false.",
+      "limits": "The pending operation's result was not collected; inspection-command exit codes are not that operation's exit code."
+    },
+    {
+      "id": "awaited-host-operation-after-explicit-termination",
+      "setup": "A prior completed cell stored continuation_awaited_terminated_callback=false.",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1500}\ntext({event:\"AWAITING_HOST\"});\nconst result = await tools.exec_command({\"cmd\":\"exec python3 /tmp/core-tools-continuation-observations/owned-process.py run /tmp/core-tools-continuation-observations/work/awaited-terminated\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":30000,\"max_output_tokens\":1000});\nstore(\"continuation_awaited_terminated_callback\",true);\ntext({event:\"HOST_RETURNED\",result});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "147",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "exec_command",
+          "arguments": {
+            "cmd": "python3 /tmp/core-tools-continuation-observations/owned-process.py ready /tmp/core-tools-continuation-observations/work/awaited-terminated",
+            "shell": "/bin/sh",
+            "login": false,
+            "workdir": "/tmp",
+            "yield_time_ms": 1000,
+            "max_output_tokens": 1000
+          },
+          "result": {
+            "chunk_id": "93bedf",
+            "wall_time_seconds": 0.069702084,
+            "exit_code": 0,
+            "original_token_count": 21,
+            "output": "{\"ready\": {\"pid\": 5189}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+          }
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "147",
+            "terminate": true,
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "terminated",
+          "wall_time_seconds": 0,
+          "output": "{\"event\":\"AWAITING_HOST\"}"
+        }
+      ],
+      "post_cell_observations": {
+        "before": {
+          "chunk_id": "fa877a",
+          "wall_time_seconds": 0.06559325,
+          "exit_code": 0,
+          "original_token_count": 21,
+          "output": "{\"ready\": {\"pid\": 5189}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+        },
+        "after": {
+          "chunk_id": "dc3b0e",
+          "wall_time_seconds": 0.12288775,
+          "exit_code": 0,
+          "original_token_count": 30,
+          "output": "{\"ready\": {\"pid\": 5189}, \"alive\": false, \"completed\": {\"reason\": \"released\", \"exit_code\": 7}, \"received_signal\": null}\n"
+        },
+        "callback_after_release": false
+      },
+      "final_callback_marker": false,
+      "observed": "The awaited host process remained alive after explicit cell termination, received no recorded signal, and completed its file effect after release. The terminated JavaScript continuation marker remained false.",
+      "limits": "The pending operation's result was not collected; inspection-command exit codes are not that operation's exit code."
+    },
+    {
+      "id": "unawaited-host-operation-after-explicit-termination",
+      "setup": "A prior completed cell stored continuation_unawaited_terminated_callback=false.",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 10000, \"max_output_tokens\": 1500}\nconst pending = tools.exec_command({\"cmd\":\"exec python3 /tmp/core-tools-continuation-observations/owned-process.py run /tmp/core-tools-continuation-observations/work/unawaited-terminated\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":30000,\"max_output_tokens\":1000});\npending.then(result => { store(\"continuation_unawaited_terminated_callback\",true); text({event:\"HOST_CALLBACK\",result}); }, error => { store(\"continuation_unawaited_terminated_callback\",true); text({event:\"HOST_ERROR_CALLBACK\",error:String(error)}); });\nconst ready = await tools.exec_command({\"cmd\":\"python3 /tmp/core-tools-continuation-observations/owned-process.py ready /tmp/core-tools-continuation-observations/work/unawaited-terminated\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":1000,\"max_output_tokens\":1000});\ntext({event:\"UNAWAITED_HOST_READY\",ready});\nawait yield_control();\nawait new Promise(resolve => setTimeout(resolve,20000));\ntext({event:\"NORMAL_END\"});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "150",
+          "wall_time_seconds": 0.3,
+          "output": "{\"event\":\"UNAWAITED_HOST_READY\",\"ready\":{\"chunk_id\":\"db933c\",\"wall_time_seconds\":0.136203458,\"exit_code\":0,\"original_token_count\":21,\"output\":\"{\\\"ready\\\": {\\\"pid\\\": 5718}, \\\"alive\\\": true, \\\"completed\\\": null, \\\"received_signal\\\": null}\\n\"}}"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "150",
+            "terminate": true,
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "terminated",
+          "wall_time_seconds": 0,
+          "output": ""
+        }
+      ],
+      "post_cell_observations": {
+        "before": {
+          "chunk_id": "e91640",
+          "wall_time_seconds": 0.128044458,
+          "exit_code": 0,
+          "original_token_count": 21,
+          "output": "{\"ready\": {\"pid\": 5718}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+        },
+        "after": {
+          "chunk_id": "992f43",
+          "wall_time_seconds": 0.1450875,
+          "exit_code": 0,
+          "original_token_count": 30,
+          "output": "{\"ready\": {\"pid\": 5718}, \"alive\": false, \"completed\": {\"reason\": \"released\", \"exit_code\": 7}, \"received_signal\": null}\n"
+        },
+        "callback_after_release": false
+      },
+      "final_callback_marker": false,
+      "observed": "The unawaited host process remained alive after explicit cell termination, received no recorded signal, and completed its file effect after release. The discarded JavaScript promise callback marker remained false.",
+      "limits": "The pending operation's result was not collected; inspection-command exit codes are not that operation's exit code."
+    },
+    {
+      "id": "returned-process-handle-after-normal-return",
+      "input": {
+        "tool": "exec",
+        "source": "const result = await tools.exec_command({\"cmd\":\"exec python3 /tmp/core-tools-continuation-observations/owned-process.py run /tmp/core-tools-continuation-observations/work/awaited-handle-normal\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":250,\"max_output_tokens\":1000});\nstore(\"continuation_awaited_handle_normal_initial\",result);\ntext({event:\"NORMAL_RETURN\",result});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "completed",
+          "wall_time_seconds": 0.4,
+          "output": "{\"event\":\"NORMAL_RETURN\",\"result\":{\"chunk_id\":\"7f35c1\",\"wall_time_seconds\":0.250874083,\"session_id\":4997,\"original_token_count\":2,\"output\":\"READY\\n\"}}"
+        }
+      ],
+      "post_cell_observations": {
+        "before": {
+          "chunk_id": "b21839",
+          "wall_time_seconds": 0.0777705,
+          "exit_code": 0,
+          "original_token_count": 21,
+          "output": "{\"ready\": {\"pid\": 6281}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+        },
+        "after": {
+          "chunk_id": "32e1a7",
+          "wall_time_seconds": 0.11639075,
+          "exit_code": 0,
+          "original_token_count": 30,
+          "output": "{\"ready\": {\"pid\": 6281}, \"alive\": false, \"completed\": {\"reason\": \"released\", \"exit_code\": 7}, \"received_signal\": null}\n"
+        },
+        "collected": {
+          "chunk_id": "ae7a2f",
+          "wall_time_seconds": 0.000007,
+          "exit_code": 7,
+          "original_token_count": 2,
+          "output": "DONE\n"
+        }
+      },
+      "final_collection_arguments": {
+        "session_id": 4997,
+        "chars": "",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 1000
+      },
+      "observed": "The returned process handle survived normal cell completion. After release, another cell collected only DONE and exit_code 7."
+    },
+    {
+      "id": "returned-process-handle-after-explicit-termination",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 10000, \"max_output_tokens\": 1500}\nconst result = await tools.exec_command({\"cmd\":\"exec python3 /tmp/core-tools-continuation-observations/owned-process.py run /tmp/core-tools-continuation-observations/work/awaited-handle-terminated\",\"shell\":\"/bin/sh\",\"login\":false,\"workdir\":\"/tmp\",\"yield_time_ms\":250,\"max_output_tokens\":1000});\ntext({event:\"HOST_HANDLE_RETURNED\",result});\nawait yield_control();\nawait new Promise(resolve => setTimeout(resolve,20000));\ntext({event:\"NORMAL_END\"});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "154",
+          "wall_time_seconds": 0.4,
+          "output": "{\"event\":\"HOST_HANDLE_RETURNED\",\"result\":{\"chunk_id\":\"a815d6\",\"wall_time_seconds\":0.251733166,\"session_id\":39398,\"original_token_count\":2,\"output\":\"READY\\n\"}}"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "154",
+            "terminate": true,
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "terminated",
+          "wall_time_seconds": 0,
+          "output": ""
+        }
+      ],
+      "post_cell_observations": {
+        "before": {
+          "chunk_id": "03e735",
+          "wall_time_seconds": 0.097715208,
+          "exit_code": 0,
+          "original_token_count": 21,
+          "output": "{\"ready\": {\"pid\": 6429}, \"alive\": true, \"completed\": null, \"received_signal\": null}\n"
+        },
+        "after": {
+          "chunk_id": "147fcc",
+          "wall_time_seconds": 0.091790625,
+          "exit_code": 0,
+          "original_token_count": 30,
+          "output": "{\"ready\": {\"pid\": 6429}, \"alive\": false, \"completed\": {\"reason\": \"released\", \"exit_code\": 7}, \"received_signal\": null}\n"
+        },
+        "collected": {
+          "chunk_id": "6e04e0",
+          "wall_time_seconds": 0.000005625,
+          "exit_code": 7,
+          "original_token_count": 2,
+          "output": "DONE\n"
+        }
+      },
+      "final_collection_arguments": {
+        "session_id": 39398,
+        "chars": "",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 1000
+      },
+      "observed": "The returned process handle survived explicit cell termination. After release, another cell collected only DONE and exit_code 7."
+    }
+  ],
+  "cleanup": {
+    "snapshot": {
+      "chunk_id": "76d91b",
+      "wall_time_seconds": 0.186161209,
+      "exit_code": 0,
+      "original_token_count": 119,
+      "output": "[{\"case\": \"awaited-handle-normal\", \"pid\": 6281, \"alive\": false, \"completed_file_present\": true}, {\"case\": \"awaited-handle-terminated\", \"pid\": 6429, \"alive\": false, \"completed_file_present\": true}, {\"case\": \"awaited-terminated\", \"pid\": 5189, \"alive\": false, \"completed_file_present\": true}, {\"case\": \"unawaited-normal\", \"pid\": 4613, \"alive\": false, \"completed_file_present\": true}, {\"case\": \"unawaited-terminated\", \"pid\": 5718, \"alive\": false, \"completed_file_present\": true}]\n"
+    },
+    "known_process_handles": [
+      {
+        "session_id": 4997,
+        "status": "completed",
+        "exit_code": 7
+      },
+      {
+        "session_id": 39398,
+        "status": "completed",
+        "exit_code": 7
+      }
+    ],
+    "known_cells": [
+      {
+        "cell_id": "139",
+        "status": "completed"
+      },
+      {
+        "cell_id": "140",
+        "status": "completed"
+      },
+      {
+        "cell_id": "141",
+        "status": "completed"
+      },
+      {
+        "cell_id": "142",
+        "status": "completed"
+      },
+      {
+        "cell_id": "147",
+        "status": "terminated"
+      },
+      {
+        "cell_id": "150",
+        "status": "terminated"
+      },
+      {
+        "cell_id": "154",
+        "status": "terminated"
+      }
+    ],
+    "remaining_live_owned_processes": 0,
+    "remaining_live_known_handles": 0
+  },
+  "limits": [
+    "The current runtime build identity is unverified.",
+    "No general statement about other host operations, queued but undispatched work, task shutdown, or session replacement follows from these command cases.",
+    "Completed files are observed side effects, not proof of unseen transport responses.",
+    "Terminating a cell is not the same operation as cancelling only one wait request."
+  ]
+}

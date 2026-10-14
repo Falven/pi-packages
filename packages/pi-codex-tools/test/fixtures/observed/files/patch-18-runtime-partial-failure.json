@@ -1,0 +1,33 @@
+{
+  "case_id": "patch-18-runtime-partial-failure",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Add File: /tmp/core-tools-file-evidence/fixtures/file-as-parent\n+parent-is-a-file\n*** Add File: /tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt\n+child\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/file-as-parent": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt": {
+      "exists": false
+    }
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to write file /tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt\n",
+    "string": "Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to write file /tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt\n"
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/file-as-parent": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "cGFyZW50LWlzLWEtZmlsZQo=",
+      "sha256": "fb5d811fe7eb49963c0a7824b1afc812851f148cd071440e5860bd26f1267ec5",
+      "text": "parent-is-a-file\n"
+    },
+    "/tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt": {
+      "exists": false
+    }
+  }
+}

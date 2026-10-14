@@ -1,0 +1,1282 @@
+{
+  "evidenceFormat": 1,
+  "kind": "Derived live-trial metrics and structural observations; not raw transport",
+  "observationSet": "smoke-20261014-final",
+  "sourceRevision": "c2adc1b0310540417bcdfd02f052ece02f8752f1",
+  "capturedAt": "2026-10-14T15:47:02.274Z",
+  "externalCaptureId": "smoke-2026-10-14T15-47-02.277Z",
+  "runtime": {
+    "configuredPiVersion": "1.2.0",
+    "configuredPiShimSha256": "08e1ba92c0f68b91b89de7695442decb5b4c0a5731fcba10d75568c1c6b671b2",
+    "configuredPiModuleSha256": "e79626f2dd6f94aa45d30f3fa63cd84319a6eefcd150b353cfaf274366926774",
+    "configuredPiModuleManifestSha256": "fe0bb0e3187ce74e2df18b22327dec6d9390a7c2e1a0d91e3e94e1ab277a5e12",
+    "controlledHostVersion": "1.0.2",
+    "referenceExecutableSha256": "0d5ac7aae20c4eda6242428d5e218c55ba96d8763fda2a271088ff37104b9d28",
+    "referenceCodeHostSha256": "2e3871dba48d4a782d6acd209684536c0f4e7761c6792ed76d061d6da31048f0",
+    "nodeVersion": "v26.8.1",
+    "nodeBinarySha256": "ebd2d552c7bebde593dd0390530963ad28de56bccde6ce387cdbe55fb0b6fb8e",
+    "configuredCompanions": [
+      {
+        "name": "pi-web-search",
+        "version": "1.6.0",
+        "sourceManifestSha256": "aa9e31b97bf229390474555becaf49d22df13361598ea16c9d741dd2a01eb0ff"
+      },
+      {
+        "name": "@dietrichgebert/ponytail",
+        "version": "4.13.0",
+        "sourceManifestSha256": "169cdd954e54f38ff93aaab2c59683e22365578e54ce7117be914ae6fea62e6d"
+      },
+      {
+        "name": "pi-composer",
+        "version": "0.1.0",
+        "sourceManifestSha256": "92149939d86608390badeb7b2509fc2824842f955d0be4c1f77dce4434b74a3a"
+      },
+      {
+        "name": "pi-attachments",
+        "version": "0.1.0",
+        "sourceManifestSha256": "5c2a69c55293488b6c34abd667e8cf167aca84d0b894fc80a028c641d7838434"
+      },
+      {
+        "name": "pi-skill-references",
+        "version": "0.1.0",
+        "sourceManifestSha256": "aa46a424dca84d245b875923a907f54a3ac138ad308555d855605884af795c49"
+      },
+      {
+        "name": "pi-chat",
+        "version": "0.1.0",
+        "sourceManifestSha256": "73e462414d1025fd614fabb9b8b2104608df6fd032c14ba398fb279071ba9b9e"
+      },
+      {
+        "name": "pi-goal",
+        "version": "0.1.0",
+        "sourceManifestSha256": "3fa0f552682136f0a906b8056a12339e0f172d1a6b39527acf3a84a18fa7ea73"
+      }
+    ]
+  },
+  "status": {
+    "transportAndTaskSmoke": "passed",
+    "selectedRawCallAndTextResultShape": "passed",
+    "repeatedSuite": "not included in this smoke observation"
+  },
+  "method": {
+    "arms": "Configured Pi executable plus package versus bundled reference core runtime, using one local gateway and one in-memory client credential; fresh isolated homes and sequential restoration of one absolute fixture.",
+    "comparisonBoundary": "Selected core declarations, calls and results. Full native developer context and tool inventories differ.",
+    "proxyIntervention": "Equal output cap of 8192, max reasoning with concise summary and all-turns context, low verbosity, automatic tool choice, parallel calls disabled, store false, service tier omitted. Input and tool declarations remain unchanged by this intervention.",
+    "generationControls": "Both callers omit temperature, top_p and seed. All responses report temperature 1 and top_p 0.98; these are observed server defaults, not fixed caller values.",
+    "declarationSlicing": "Stop at the next level-two or level-three heading and exclude separator trailing newlines. The corrected slicer is used by this capture; initial capture and its correction audit remain unchanged.",
+    "canonicalHashEncoding": "sorted-key compact UTF-8 JSON, without ASCII escaping; rawSha256 fields hash the exact file bytes.",
+    "latency": "Both responses are buffered before action inspection. Native elapsed time includes model reasoning, network, startup and host activity; no streaming-latency or causal performance conclusion.",
+    "externalStartupActivity": "Reference runtime attempted a featured-plugin cache warmup and received 401. No model-selected external tool or goal operation ran."
+  },
+  "caps": {
+    "outputTokens": 8192,
+    "runMs": 240000,
+    "requestMs": 90000,
+    "requests": 12,
+    "smokeRequests": 4,
+    "bodyBytes": 16777216,
+    "processBytes": 33554432,
+    "logWindowBytes": 67108864
+  },
+  "verifiedControls": {
+    "promptBytesEqual": true,
+    "fixtureStartAndEndHashesEqual": true,
+    "callerSamplingOmissionsEqual": true,
+    "forwardedGenerationControlsEqual": true,
+    "responseControlsEqual": true,
+    "selectedFourNestedDeclarationsEqual": true,
+    "waitDeclarationAndExecFormatEqual": true,
+    "gatewayIngressEqualsForwardedPayload": true,
+    "gatewayTranslationOnlyFillsEmptyNamespaceDescription": true,
+    "gatewayLogCoverageComplete": true,
+    "knownCredentialLiteralScanPassed": true,
+    "noLiveOwnedHelperRemaining": true,
+    "globalPiSettingsUnchanged": true,
+    "gatewayConfigUnchanged": true
+  },
+  "verifiedReplay": {
+    "providerAndNativeNamespaceAbsent": true,
+    "rawInputPreserved": true,
+    "twoNativeTextPartsPreservedInReplay": true,
+    "selectedCustomCallAndOutputTypesEqual": true,
+    "sourceMismatchResolved": "namespace-free-replay",
+    "resolutionRevision": "652266a6246667ead7b811033fc53b46e67a9970",
+    "referenceOptionalCallStatusPresent": true,
+    "piOptionalCallStatusPresent": false,
+    "referenceOptionalOutputIdPresent": true,
+    "piOptionalOutputIdPresent": false,
+    "verificationRevision": "c2adc1b0310540417bcdfd02f052ece02f8752f1"
+  },
+  "remainingDifferences": [
+    "Reference raw-call replay carries completed status; Pi omits this optional field. Reference raw-result replay carries a separate id; Pi omits it. Opaque call IDs, chunk IDs and measured times differ.",
+    "Full native developer context, input item structure, unrelated tool inventory and selected execution description outside the four retained slices differ.",
+    "Pi retains its provider reasoning item in replay; reference retains a user-visible assistant commentary message. Reasoning text is not reproduced in this audit.",
+    "Reference startup attempted featured-plugin cache warmup and received HTTP 401.",
+    "Proxy normalizes supported controls and buffers complete responses. Matched public identity and one local gateway do not prove immutable backend/account identity or causal latency parity."
+  ],
+  "unverified": [
+    "Actual desktop harness parity and final authenticated upstream HTTP bytes.",
+    "Immutable backend model revision, immutable account identity, deterministic sampling and server defaults across future calls.",
+    "This smoke covers one completed command. Continued-cell result encoding is verified by the separately indexed focused follow-up; the full earlier suite remains historical evidence."
+  ],
+  "rawArtifactsRemainOutsideRepository": true,
+  "externalAuditSha256": {
+    "baseline.json": "19b502f1243fc23982b6788370036659b969f37281ec221885a34b20aa657992",
+    "batch-result.json": "eee9fdf73e87b2020fa0e4de0c48a10092c989c036447d2a59265f3a552e21a7",
+    "smoke-audit.json": "611d8e8821c2d592d73f7377beaecca9f41deed2a04a50852ca5ac2f37d38698"
+  },
+  "runs": [
+    {
+      "actor": "pi",
+      "runId": "trial-pi-smoke-1-b633d5fa",
+      "taskSuccess": true,
+      "finalText": "37",
+      "actualCommandCount": 1,
+      "extraCalls": 0,
+      "toolSelectionMistakes": 0,
+      "argumentMistakes": 0,
+      "gateStops": 0,
+      "elapsedMs": 11029,
+      "tokenTotals": {
+        "input": 25733,
+        "output": 288,
+        "reasoning": 219,
+        "cachedInput": 12691
+      },
+      "promptSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+      "fixtureBeforeSha256": "7f3df8b01f71a2ce1dca33b81efb1cd52b7d537d477e51bcaf0c615ed5d8246a",
+      "fixtureAfterSha256": "49259c07346e92e30033417d4bda038e4a218f86b83f1eead210fa2821fd2214",
+      "sameAbsoluteFixtureDirectory": true,
+      "runtimeUnchanged": true,
+      "cleanup": {
+        "verified": true,
+        "helpers": []
+      },
+      "requests": [
+        {
+          "ordinal": 1,
+          "ingressBytes": 52441,
+          "forwardedBytes": 52540,
+          "responseBytes": 104215,
+          "ingressKeys": [
+            "model",
+            "input",
+            "stream",
+            "prompt_cache_key",
+            "store",
+            "max_output_tokens",
+            "tools",
+            "reasoning",
+            "include"
+          ],
+          "inputAssembly": [
+            {
+              "type": null,
+              "role": "developer",
+              "keys": ["role", "content"],
+              "contentShape": "string",
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 37654,
+              "joinedTextSha256": "0d55aec9761ed7b9218320b288e9222267f7fbf18a94e52a54d05b5c22996645",
+              "canonicalItemSha256": "07f46521089892fd83b0499780b5e0c49b6a89bc0539266ebc37df3d7609c9a8"
+            },
+            {
+              "type": null,
+              "role": "user",
+              "keys": ["role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2157,
+              "joinedTextSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+              "canonicalItemSha256": "126b687a1c4a236137dd1fa661c80cf8d31376804148b98a155b779311493aa0"
+            }
+          ],
+          "nativeControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "max_output_tokens": 128000,
+            "store": false
+          },
+          "forwardedControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "responseControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "context": "all_turns",
+              "effort": "max",
+              "mode": "standard",
+              "summary": "concise"
+            },
+            "text": {
+              "format": {
+                "type": "text"
+              },
+              "verbosity": "low"
+            },
+            "temperature": 1,
+            "top_p": 0.98,
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "service_tier": "default",
+            "store": false
+          },
+          "usage": {
+            "input_tokens": 12694,
+            "input_tokens_details": {
+              "cache_write_tokens": 12691,
+              "cached_tokens": 0
+            },
+            "output_tokens": 283,
+            "output_tokens_details": {
+              "reasoning_tokens": 219
+            },
+            "total_tokens": 12977
+          },
+          "toolDeclarations": [
+            {
+              "namespace": null,
+              "name": "web_search",
+              "type": "function",
+              "canonicalDeclarationSha256": "c4be595dc7ec25202b3c3000f4ffe6342bdea7679d74a4e8a115641652572b05"
+            },
+            {
+              "namespace": null,
+              "name": "get_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "8866f7075e279f01ee5a6a9b7f36d93721ceaee5df894f820b18e9f5c3228218"
+            },
+            {
+              "namespace": null,
+              "name": "create_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "c03a417a2a6cfb3628ee1138f7752281ce87ffb2646ffe98890a79c700f48104"
+            },
+            {
+              "namespace": null,
+              "name": "update_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "3be4cff49ded33059bb7079042224fb12105099cff78e606c8e09333ae35450b"
+            },
+            {
+              "namespace": "functions",
+              "name": "exec",
+              "type": "custom",
+              "canonicalDeclarationSha256": "81c4b4c57fe375d4efb55a9476e8eb026244899e770cf24e0982a2df1c72c726"
+            },
+            {
+              "namespace": "functions",
+              "name": "wait",
+              "type": "function",
+              "canonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27"
+            }
+          ],
+          "declarationPlacement": "top-level tools",
+          "coreSlices": {
+            "selectedNestedDeclarations": {
+              "apply_patch": {
+                "characters": 232,
+                "utf8Bytes": 232,
+                "sha256": "fac84e039a3e74d1df78b40b63a115166b9e1ddc92b80c430b2748de6080e73b"
+              },
+              "exec_command": {
+                "characters": 1804,
+                "utf8Bytes": 1804,
+                "sha256": "b88cf794301501ee6649dd7012fc072ea9a7a6d4f0843e3b3ee5303b505b13aa"
+              },
+              "write_stdin": {
+                "characters": 1168,
+                "utf8Bytes": 1168,
+                "sha256": "693be7c60c3794d231d707aa3162101482a6a721b8845aa153bc79902a49e28b"
+              },
+              "view_image": {
+                "characters": 653,
+                "utf8Bytes": 653,
+                "sha256": "3eafab63e919ca9ab2e8ddaef5925e15a59a66b37751afbe46e439c21d85c92a"
+              }
+            },
+            "waitCanonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27",
+            "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
+            "fullExecDescriptionCharacters": 7002,
+            "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
+            "fullNestedApiInventory": [
+              "apply_patch",
+              "exec_command",
+              "view_image",
+              "write_stdin"
+            ]
+          },
+          "callAndResultShapes": [],
+          "gatewayOnlyChangedField": "/tools/4/description",
+          "gatewayChange": {
+            "before": "",
+            "after": "functions"
+          },
+          "gatewayAllOtherParsedValuesEqual": true,
+          "proxyGate": "passed",
+          "rawSha256": {
+            "ingress.raw": "8417b1a1e85138f59608baf005bbec1e2f3059e29922fe78776260d22cb6919f",
+            "forwarded.raw": "4c40c7fc848f1bc47b5d0924d55bb5c52b2183e25a37508bee496938463508fa",
+            "response.raw": "7c88248e1a865eb27c9fd15d887b3267fc94d0356bf2909d3a7b625ee3a70dbd",
+            "response.decoded": "7c88248e1a865eb27c9fd15d887b3267fc94d0356bf2909d3a7b625ee3a70dbd",
+            "events.json": "0be1cad4cdcf33bf765f25dcd4f7306bca6291e155ee9b85d8d4dd774d6f1543",
+            "metadata.json": "e7b33997aeb72a23f9d1048d3a285e79403ac76215e24dd95b4ebc5ee4e7780f"
+          },
+          "gatewayTranslatedSha256": "ea1732d231d789c18fe4072b296b7aa30276ab7f5ca294f160a745f008a71a4d"
+        },
+        {
+          "ordinal": 2,
+          "ingressBytes": 63007,
+          "forwardedBytes": 63106,
+          "responseBytes": 46345,
+          "ingressKeys": [
+            "model",
+            "input",
+            "stream",
+            "prompt_cache_key",
+            "store",
+            "max_output_tokens",
+            "tools",
+            "reasoning",
+            "include"
+          ],
+          "inputAssembly": [
+            {
+              "type": null,
+              "role": "developer",
+              "keys": ["role", "content"],
+              "contentShape": "string",
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 37654,
+              "joinedTextSha256": "0d55aec9761ed7b9218320b288e9222267f7fbf18a94e52a54d05b5c22996645",
+              "canonicalItemSha256": "07f46521089892fd83b0499780b5e0c49b6a89bc0539266ebc37df3d7609c9a8"
+            },
+            {
+              "type": null,
+              "role": "user",
+              "keys": ["role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2157,
+              "joinedTextSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+              "canonicalItemSha256": "126b687a1c4a236137dd1fa661c80cf8d31376804148b98a155b779311493aa0"
+            },
+            {
+              "type": "reasoning",
+              "role": null,
+              "keys": ["content", "encrypted_content", "id", "summary", "type"],
+              "contentShape": "array",
+              "partTypes": [],
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "fe99d3ae2f256d35c5d736202f3be9270389f62474b69f77591240cb94fa5393"
+            },
+            {
+              "type": "custom_tool_call",
+              "role": null,
+              "keys": ["type", "call_id", "name", "input"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "6a6106a7443459005570e93479f0603b57bd7b537d0b2e49731b820d0193c682"
+            },
+            {
+              "type": "custom_tool_call_output",
+              "role": null,
+              "keys": ["type", "call_id", "output"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "4e4917d75c3a3c475c74c6e4729cf2aae52ada6b4596d557115e18ffcd7cfb24"
+            }
+          ],
+          "nativeControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "auto"
+            },
+            "max_output_tokens": 128000,
+            "store": false
+          },
+          "forwardedControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "responseControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "context": "all_turns",
+              "effort": "max",
+              "mode": "standard",
+              "summary": "concise"
+            },
+            "text": {
+              "format": {
+                "type": "text"
+              },
+              "verbosity": "low"
+            },
+            "temperature": 1,
+            "top_p": 0.98,
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "service_tier": "default",
+            "store": false
+          },
+          "usage": {
+            "input_tokens": 13039,
+            "input_tokens_details": {
+              "cache_write_tokens": 345,
+              "cached_tokens": 12691
+            },
+            "output_tokens": 5,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 13044
+          },
+          "toolDeclarations": [
+            {
+              "namespace": null,
+              "name": "web_search",
+              "type": "function",
+              "canonicalDeclarationSha256": "c4be595dc7ec25202b3c3000f4ffe6342bdea7679d74a4e8a115641652572b05"
+            },
+            {
+              "namespace": null,
+              "name": "get_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "8866f7075e279f01ee5a6a9b7f36d93721ceaee5df894f820b18e9f5c3228218"
+            },
+            {
+              "namespace": null,
+              "name": "create_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "c03a417a2a6cfb3628ee1138f7752281ce87ffb2646ffe98890a79c700f48104"
+            },
+            {
+              "namespace": null,
+              "name": "update_goal",
+              "type": "function",
+              "canonicalDeclarationSha256": "3be4cff49ded33059bb7079042224fb12105099cff78e606c8e09333ae35450b"
+            },
+            {
+              "namespace": "functions",
+              "name": "exec",
+              "type": "custom",
+              "canonicalDeclarationSha256": "81c4b4c57fe375d4efb55a9476e8eb026244899e770cf24e0982a2df1c72c726"
+            },
+            {
+              "namespace": "functions",
+              "name": "wait",
+              "type": "function",
+              "canonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27"
+            }
+          ],
+          "declarationPlacement": "top-level tools",
+          "coreSlices": {
+            "selectedNestedDeclarations": {
+              "apply_patch": {
+                "characters": 232,
+                "utf8Bytes": 232,
+                "sha256": "fac84e039a3e74d1df78b40b63a115166b9e1ddc92b80c430b2748de6080e73b"
+              },
+              "exec_command": {
+                "characters": 1804,
+                "utf8Bytes": 1804,
+                "sha256": "b88cf794301501ee6649dd7012fc072ea9a7a6d4f0843e3b3ee5303b505b13aa"
+              },
+              "write_stdin": {
+                "characters": 1168,
+                "utf8Bytes": 1168,
+                "sha256": "693be7c60c3794d231d707aa3162101482a6a721b8845aa153bc79902a49e28b"
+              },
+              "view_image": {
+                "characters": 653,
+                "utf8Bytes": 653,
+                "sha256": "3eafab63e919ca9ab2e8ddaef5925e15a59a66b37751afbe46e439c21d85c92a"
+              }
+            },
+            "waitCanonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27",
+            "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
+            "fullExecDescriptionCharacters": 7002,
+            "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
+            "fullNestedApiInventory": [
+              "apply_patch",
+              "exec_command",
+              "view_image",
+              "write_stdin"
+            ]
+          },
+          "callAndResultShapes": [
+            {
+              "type": "custom_tool_call",
+              "keys": ["type", "call_id", "name", "input"],
+              "namespacePresent": false,
+              "name": "exec",
+              "input": {
+                "utf8Bytes": 168,
+                "sha256": "1e75774117818959bdf9982bb1016b0328d1d8fcaf5964e89c4900d375c8a9fd"
+              }
+            },
+            {
+              "type": "custom_tool_call_output",
+              "keys": ["type", "call_id", "output"],
+              "namespacePresent": false,
+              "outputShape": "array",
+              "contentParts": [
+                {
+                  "type": "input_text",
+                  "keys": ["type", "text"],
+                  "text": {
+                    "utf8Bytes": 47,
+                    "sha256": "8b11000664d9ae152d68a38d254a291c11ce04af19938de744eb6923727c2629"
+                  }
+                },
+                {
+                  "type": "input_text",
+                  "keys": ["type", "text"],
+                  "text": {
+                    "utf8Bytes": 116,
+                    "sha256": "04eea8c38b9d75913fddafdeb8549061e79a5329ba904e0be589944228665d70"
+                  }
+                }
+              ]
+            }
+          ],
+          "gatewayOnlyChangedField": "/tools/4/description",
+          "gatewayChange": {
+            "before": "",
+            "after": "functions"
+          },
+          "gatewayAllOtherParsedValuesEqual": true,
+          "proxyGate": "passed",
+          "rawSha256": {
+            "ingress.raw": "8ba1908499a24bad21945508abeabe18b999ce173247564e1e0e73d9b901613a",
+            "forwarded.raw": "c70e790c910ac105108d26c2832d21aba30ee89b7837af5db34ee718662d118f",
+            "response.raw": "6c9e7bd1782f3cc19681bcce211b5cf27125b444c4568ecb754c12b94c0f4837",
+            "response.decoded": "6c9e7bd1782f3cc19681bcce211b5cf27125b444c4568ecb754c12b94c0f4837",
+            "events.json": "8d76ab1d8562e9289694482766fea869d9f51853bef6d9058194063523dcb535",
+            "metadata.json": "2ff4d4c6b5471822e0cfb8a54a830ec67f9da78665f2b95403149c351eb0e10e"
+          },
+          "gatewayTranslatedSha256": "d05df6214927c335ee4ebca72a5ab0b4e1ab30136af867ced07fa1232d4aee79"
+        }
+      ],
+      "rawArtifactSha256": {
+        "start.json": "87a8680d886ab090fc62c31b135f080c074c4892c64332384e0bcad5e7439547",
+        "result.json": "efdc241d5376c536d7f88b1297897a85dd3b77c6e12f0b67ccb611b8031e5415",
+        "prompt.txt": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+        "native.stdout.raw": "7dc7062c668fc8bff8612fd6b7b04e5ccb99124ee869578501a271a6beac5ead",
+        "native.stderr.raw": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "model-final.txt": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+        "fixture.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "gateway-capture.json": "4c100a6c28b51cc02c086d5ed9b227510f49d8dfdeee7db65bc6861e49229773",
+        "gateway-matched.raw.log": "34f2b79b130eff21830eba7684e9119bdf6c08601ef3e4dbf478e231edfcd2f5",
+        "pi-events.jsonl": "8a01603fa03967da2880c816e1ade11b2281bd392fa383ba93ad09439cfbfa9e"
+      },
+      "piStderrEmpty": true
+    },
+    {
+      "actor": "reference",
+      "runId": "trial-reference-smoke-1-ed609bd7",
+      "taskSuccess": true,
+      "finalText": "37",
+      "actualCommandCount": 1,
+      "extraCalls": 0,
+      "toolSelectionMistakes": 0,
+      "argumentMistakes": 0,
+      "gateStops": 0,
+      "elapsedMs": 10979,
+      "tokenTotals": {
+        "input": 31605,
+        "output": 107,
+        "reasoning": 18,
+        "cachedInput": 15730
+      },
+      "promptSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+      "fixtureBeforeSha256": "7f3df8b01f71a2ce1dca33b81efb1cd52b7d537d477e51bcaf0c615ed5d8246a",
+      "fixtureAfterSha256": "49259c07346e92e30033417d4bda038e4a218f86b83f1eead210fa2821fd2214",
+      "sameAbsoluteFixtureDirectory": true,
+      "runtimeUnchanged": true,
+      "cleanup": {
+        "verified": true,
+        "helpers": []
+      },
+      "requests": [
+        {
+          "ordinal": 1,
+          "ingressBytes": 77997,
+          "forwardedBytes": 78022,
+          "responseBytes": 123797,
+          "ingressKeys": [
+            "model",
+            "stream",
+            "input",
+            "tool_choice",
+            "parallel_tool_calls",
+            "reasoning",
+            "store",
+            "include",
+            "prompt_cache_key",
+            "text",
+            "client_metadata"
+          ],
+          "inputAssembly": [
+            {
+              "type": "additional_tools",
+              "role": "developer",
+              "keys": ["type", "id", "role", "tools"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "96f7e3fd19953a21d6efe5181a1434af7c3605916419df74e71f652dea05b023"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 21428,
+              "joinedTextSha256": "35bd51b5f577cb7b24cd5f4629e49e37cb724ab57754ce6f8f202001635bab8a",
+              "canonicalItemSha256": "f04f5cfb6bd1244dae5a61aa21df17893607e893295a3171ea3d805b78bd8b95"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text", "input_text", "input_text"],
+              "joinedTextUtf8Bytes": 21104,
+              "joinedTextSha256": "425909c2f003cc4b4d6bb8546d781e20b1b19636da0f63f3931984212aa82add",
+              "canonicalItemSha256": "3ec4d403075f65deb7cd65369d6bd37c765a04aadfd30e1e670e841e651132d2"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2400,
+              "joinedTextSha256": "3edd51083129388f52e881435e93e4b981e00c5ee3d62ab5d32e22c428fd504b",
+              "canonicalItemSha256": "5bc34ed5ee59e28c1a975a3f62190a536d7056e2b6e5ab1a8dccfddf604ace77"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 271,
+              "joinedTextSha256": "6ded806e3cdbb35599ecaf8742574bc5274908472b1729090010c404c2151e8e",
+              "canonicalItemSha256": "4691ce8b95c25e06485d972ed4318321136ab7b92ad7ea2406517de875d73189"
+            },
+            {
+              "type": "message",
+              "role": "user",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text", "input_text"],
+              "joinedTextUtf8Bytes": 4146,
+              "joinedTextSha256": "e32b7bf9fb0229551218afcb3726978258800c0869d429919b29da2c768e4c2a",
+              "canonicalItemSha256": "3e842260c565a1cac25c935889aeda1afda5f1cd363394ba61409a28041e8281"
+            },
+            {
+              "type": "message",
+              "role": "user",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2157,
+              "joinedTextSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+              "canonicalItemSha256": "504eedf38c8acca7efd09b2b5a29a30fdecb6d13aaf950d9763ade6ea55eac62"
+            }
+          ],
+          "nativeControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "forwardedControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "responseControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "context": "all_turns",
+              "effort": "max",
+              "mode": "standard",
+              "summary": "concise"
+            },
+            "text": {
+              "format": {
+                "type": "text"
+              },
+              "verbosity": "low"
+            },
+            "temperature": 1,
+            "top_p": 0.98,
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "service_tier": "default",
+            "store": false
+          },
+          "usage": {
+            "input_tokens": 15733,
+            "input_tokens_details": {
+              "cache_write_tokens": 15730,
+              "cached_tokens": 0
+            },
+            "output_tokens": 82,
+            "output_tokens_details": {
+              "reasoning_tokens": 0
+            },
+            "total_tokens": 15815
+          },
+          "toolDeclarations": [
+            {
+              "namespace": "functions",
+              "name": "exec",
+              "type": "custom",
+              "canonicalDeclarationSha256": "bbe83d9646dbf56bb36a43ed1291f6e6aa401bc165947ed6c0affc1116128c40"
+            },
+            {
+              "namespace": "functions",
+              "name": "wait",
+              "type": "function",
+              "canonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27"
+            },
+            {
+              "namespace": "functions",
+              "name": "request_user_input_async",
+              "type": "function",
+              "canonicalDeclarationSha256": "1758e0ef7a3d190edbdad3fe9dadda9bd000d896a3eb2bd82f8dec5ff7cbef0a"
+            },
+            {
+              "namespace": "clock",
+              "name": "sleep",
+              "type": "function",
+              "canonicalDeclarationSha256": "aeb52aba96d3f24b01d3669d91a8e484c5c60367754a69ba21eb668a3b83bfd9"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "followup_task",
+              "type": "function",
+              "canonicalDeclarationSha256": "99fcb47834ace2b611610ca166e044a9ee393930c52d81dd5af75733840b744f"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "interrupt_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "be9a92ade10521e273f96dfebaef1615751d38d1d6699bef23ac6cfb6c219b7f"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "list_agents",
+              "type": "function",
+              "canonicalDeclarationSha256": "40a1c60bbf212ddd66a16f724ecacefc9a315b74c78178e603b90361a5fd8ab4"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "send_message",
+              "type": "function",
+              "canonicalDeclarationSha256": "2f2df19d49585b027a1c863144ef635e76df500f08a0d3473c9130b19682b5e1"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "spawn_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "fc0f5bbaae4bb82ebf79505c4070d6b83a47c4d6dd54841f8540c76f42d3ed33"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "wait_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "59ce049f0bd5ee093105feb2081a5b35026d99ebb1edfc17c4fa58a266358182"
+            }
+          ],
+          "declarationPlacement": "developer additional_tools input item",
+          "coreSlices": {
+            "selectedNestedDeclarations": {
+              "apply_patch": {
+                "characters": 232,
+                "utf8Bytes": 232,
+                "sha256": "fac84e039a3e74d1df78b40b63a115166b9e1ddc92b80c430b2748de6080e73b"
+              },
+              "exec_command": {
+                "characters": 1804,
+                "utf8Bytes": 1804,
+                "sha256": "b88cf794301501ee6649dd7012fc072ea9a7a6d4f0843e3b3ee5303b505b13aa"
+              },
+              "write_stdin": {
+                "characters": 1168,
+                "utf8Bytes": 1168,
+                "sha256": "693be7c60c3794d231d707aa3162101482a6a721b8845aa153bc79902a49e28b"
+              },
+              "view_image": {
+                "characters": 653,
+                "utf8Bytes": 653,
+                "sha256": "3eafab63e919ca9ab2e8ddaef5925e15a59a66b37751afbe46e439c21d85c92a"
+              }
+            },
+            "waitCanonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27",
+            "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
+            "fullExecDescriptionCharacters": 14027,
+            "fullExecDescriptionSha256": "be6e85c09e647b3c580cd1e9f43e4c8292812ba9c1ed1626af484eef12d9d6d4",
+            "fullNestedApiInventory": [
+              "apply_patch",
+              "create_goal",
+              "exec_command",
+              "get_goal",
+              "list_mcp_resource_templates",
+              "list_mcp_resources",
+              "read_mcp_resource",
+              "update_goal",
+              "view_image",
+              "write_stdin",
+              "clock__curr_time"
+            ]
+          },
+          "callAndResultShapes": [],
+          "gatewayOnlyChangedField": "/input/0/tools/0/description",
+          "gatewayChange": {
+            "before": "",
+            "after": "functions"
+          },
+          "gatewayAllOtherParsedValuesEqual": true,
+          "proxyGate": "passed",
+          "rawSha256": {
+            "ingress.raw": "7119cf0bccff192165dee5606cb92831fddd3581777aece4cf60c2a1dad7a24e",
+            "forwarded.raw": "705795d89973e9f1abe2c66fb31c7cc2ebc13e93355e4c6bc3b83761e7a857db",
+            "response.raw": "202bab738777643c6bbab5ac2ce68696ecac08a42beb8ea89b833c5881e7f0e9",
+            "response.decoded": "202bab738777643c6bbab5ac2ce68696ecac08a42beb8ea89b833c5881e7f0e9",
+            "events.json": "b6f71042301becdb42b77ba2f31f40c54d75bbe217902b6df4b3d9955912af6d",
+            "metadata.json": "87eabae7c184e8a0bdfe16bdad0019c4e5becd826dabfd27764513b634f4784c"
+          },
+          "gatewayTranslatedSha256": "1ead7f3ed16da53c2bfbe3da0f4eceb130799dda4f9926cde5d768df5e8f31e0"
+        },
+        {
+          "ordinal": 2,
+          "ingressBytes": 79003,
+          "forwardedBytes": 79028,
+          "responseBytes": 99869,
+          "ingressKeys": [
+            "model",
+            "stream",
+            "input",
+            "tool_choice",
+            "parallel_tool_calls",
+            "reasoning",
+            "store",
+            "include",
+            "prompt_cache_key",
+            "text",
+            "client_metadata"
+          ],
+          "inputAssembly": [
+            {
+              "type": "additional_tools",
+              "role": "developer",
+              "keys": ["type", "id", "role", "tools"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "96f7e3fd19953a21d6efe5181a1434af7c3605916419df74e71f652dea05b023"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 21428,
+              "joinedTextSha256": "35bd51b5f577cb7b24cd5f4629e49e37cb724ab57754ce6f8f202001635bab8a",
+              "canonicalItemSha256": "f04f5cfb6bd1244dae5a61aa21df17893607e893295a3171ea3d805b78bd8b95"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text", "input_text", "input_text"],
+              "joinedTextUtf8Bytes": 21104,
+              "joinedTextSha256": "425909c2f003cc4b4d6bb8546d781e20b1b19636da0f63f3931984212aa82add",
+              "canonicalItemSha256": "3ec4d403075f65deb7cd65369d6bd37c765a04aadfd30e1e670e841e651132d2"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2400,
+              "joinedTextSha256": "3edd51083129388f52e881435e93e4b981e00c5ee3d62ab5d32e22c428fd504b",
+              "canonicalItemSha256": "5bc34ed5ee59e28c1a975a3f62190a536d7056e2b6e5ab1a8dccfddf604ace77"
+            },
+            {
+              "type": "message",
+              "role": "developer",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 271,
+              "joinedTextSha256": "6ded806e3cdbb35599ecaf8742574bc5274908472b1729090010c404c2151e8e",
+              "canonicalItemSha256": "4691ce8b95c25e06485d972ed4318321136ab7b92ad7ea2406517de875d73189"
+            },
+            {
+              "type": "message",
+              "role": "user",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text", "input_text"],
+              "joinedTextUtf8Bytes": 4146,
+              "joinedTextSha256": "e32b7bf9fb0229551218afcb3726978258800c0869d429919b29da2c768e4c2a",
+              "canonicalItemSha256": "3e842260c565a1cac25c935889aeda1afda5f1cd363394ba61409a28041e8281"
+            },
+            {
+              "type": "message",
+              "role": "user",
+              "keys": ["type", "id", "role", "content"],
+              "contentShape": "array",
+              "partTypes": ["input_text"],
+              "joinedTextUtf8Bytes": 2157,
+              "joinedTextSha256": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+              "canonicalItemSha256": "504eedf38c8acca7efd09b2b5a29a30fdecb6d13aaf950d9763ade6ea55eac62"
+            },
+            {
+              "type": "message",
+              "role": "assistant",
+              "keys": ["type", "role", "content", "phase"],
+              "contentShape": "array",
+              "partTypes": ["output_text"],
+              "joinedTextUtf8Bytes": 69,
+              "joinedTextSha256": "a86777f2b4dfdb32accbcafa150c983813c4a0c0c95e9516f3765a1d3314336b",
+              "canonicalItemSha256": "0c7de3500a1c7f8743f296a06472fd2002f54346863a9ce544904c95841ec062"
+            },
+            {
+              "type": "custom_tool_call",
+              "role": null,
+              "keys": ["type", "status", "call_id", "name", "input"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "011c257a280185072faa22567d15898eb2a9654febd43ae9160500070362ea8e"
+            },
+            {
+              "type": "custom_tool_call_output",
+              "role": null,
+              "keys": ["type", "id", "call_id", "output"],
+              "contentShape": null,
+              "partTypes": null,
+              "joinedTextUtf8Bytes": 0,
+              "joinedTextSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+              "canonicalItemSha256": "c6da474363fc2ef53239509d163fa125a17f68142c584f0a77a8964a2d341ceb"
+            }
+          ],
+          "nativeControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "forwardedControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "effort": "max",
+              "summary": "concise",
+              "context": "all_turns"
+            },
+            "text": {
+              "verbosity": "low"
+            },
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "store": false
+          },
+          "responseControls": {
+            "publicModelNameSha256": "576a599a64cb3dde05f18ebb3e26e3d5bcbf4b108ff92da24f5229188fa0972a",
+            "reasoning": {
+              "context": "all_turns",
+              "effort": "max",
+              "mode": "standard",
+              "summary": "concise"
+            },
+            "text": {
+              "format": {
+                "type": "text"
+              },
+              "verbosity": "low"
+            },
+            "temperature": 1,
+            "top_p": 0.98,
+            "max_output_tokens": 8192,
+            "parallel_tool_calls": false,
+            "tool_choice": "auto",
+            "service_tier": "default",
+            "store": false
+          },
+          "usage": {
+            "input_tokens": 15872,
+            "input_tokens_details": {
+              "cache_write_tokens": 139,
+              "cached_tokens": 15730
+            },
+            "output_tokens": 25,
+            "output_tokens_details": {
+              "reasoning_tokens": 18
+            },
+            "total_tokens": 15897
+          },
+          "toolDeclarations": [
+            {
+              "namespace": "functions",
+              "name": "exec",
+              "type": "custom",
+              "canonicalDeclarationSha256": "bbe83d9646dbf56bb36a43ed1291f6e6aa401bc165947ed6c0affc1116128c40"
+            },
+            {
+              "namespace": "functions",
+              "name": "wait",
+              "type": "function",
+              "canonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27"
+            },
+            {
+              "namespace": "functions",
+              "name": "request_user_input_async",
+              "type": "function",
+              "canonicalDeclarationSha256": "1758e0ef7a3d190edbdad3fe9dadda9bd000d896a3eb2bd82f8dec5ff7cbef0a"
+            },
+            {
+              "namespace": "clock",
+              "name": "sleep",
+              "type": "function",
+              "canonicalDeclarationSha256": "aeb52aba96d3f24b01d3669d91a8e484c5c60367754a69ba21eb668a3b83bfd9"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "followup_task",
+              "type": "function",
+              "canonicalDeclarationSha256": "99fcb47834ace2b611610ca166e044a9ee393930c52d81dd5af75733840b744f"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "interrupt_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "be9a92ade10521e273f96dfebaef1615751d38d1d6699bef23ac6cfb6c219b7f"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "list_agents",
+              "type": "function",
+              "canonicalDeclarationSha256": "40a1c60bbf212ddd66a16f724ecacefc9a315b74c78178e603b90361a5fd8ab4"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "send_message",
+              "type": "function",
+              "canonicalDeclarationSha256": "2f2df19d49585b027a1c863144ef635e76df500f08a0d3473c9130b19682b5e1"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "spawn_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "fc0f5bbaae4bb82ebf79505c4070d6b83a47c4d6dd54841f8540c76f42d3ed33"
+            },
+            {
+              "namespace": "collaboration",
+              "name": "wait_agent",
+              "type": "function",
+              "canonicalDeclarationSha256": "59ce049f0bd5ee093105feb2081a5b35026d99ebb1edfc17c4fa58a266358182"
+            }
+          ],
+          "declarationPlacement": "developer additional_tools input item",
+          "coreSlices": {
+            "selectedNestedDeclarations": {
+              "apply_patch": {
+                "characters": 232,
+                "utf8Bytes": 232,
+                "sha256": "fac84e039a3e74d1df78b40b63a115166b9e1ddc92b80c430b2748de6080e73b"
+              },
+              "exec_command": {
+                "characters": 1804,
+                "utf8Bytes": 1804,
+                "sha256": "b88cf794301501ee6649dd7012fc072ea9a7a6d4f0843e3b3ee5303b505b13aa"
+              },
+              "write_stdin": {
+                "characters": 1168,
+                "utf8Bytes": 1168,
+                "sha256": "693be7c60c3794d231d707aa3162101482a6a721b8845aa153bc79902a49e28b"
+              },
+              "view_image": {
+                "characters": 653,
+                "utf8Bytes": 653,
+                "sha256": "3eafab63e919ca9ab2e8ddaef5925e15a59a66b37751afbe46e439c21d85c92a"
+              }
+            },
+            "waitCanonicalDeclarationSha256": "aa0a9201f8095e1f6d2e4c451cd697cab1b698630063fa9e2fb2d1c4b0caaa27",
+            "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
+            "fullExecDescriptionCharacters": 14027,
+            "fullExecDescriptionSha256": "be6e85c09e647b3c580cd1e9f43e4c8292812ba9c1ed1626af484eef12d9d6d4",
+            "fullNestedApiInventory": [
+              "apply_patch",
+              "create_goal",
+              "exec_command",
+              "get_goal",
+              "list_mcp_resource_templates",
+              "list_mcp_resources",
+              "read_mcp_resource",
+              "update_goal",
+              "view_image",
+              "write_stdin",
+              "clock__curr_time"
+            ]
+          },
+          "callAndResultShapes": [
+            {
+              "type": "custom_tool_call",
+              "keys": ["type", "status", "call_id", "name", "input"],
+              "namespacePresent": false,
+              "name": "exec",
+              "input": {
+                "utf8Bytes": 168,
+                "sha256": "1e75774117818959bdf9982bb1016b0328d1d8fcaf5964e89c4900d375c8a9fd"
+              }
+            },
+            {
+              "type": "custom_tool_call_output",
+              "keys": ["type", "id", "call_id", "output"],
+              "namespacePresent": false,
+              "outputShape": "array",
+              "contentParts": [
+                {
+                  "type": "input_text",
+                  "keys": ["type", "text"],
+                  "text": {
+                    "utf8Bytes": 47,
+                    "sha256": "8b11000664d9ae152d68a38d254a291c11ce04af19938de744eb6923727c2629"
+                  }
+                },
+                {
+                  "type": "input_text",
+                  "keys": ["type", "text"],
+                  "text": {
+                    "utf8Bytes": 108,
+                    "sha256": "daf3f854b05dd535e2866429b3760484e87766a792ce3d0c19afe357a462ee07"
+                  }
+                }
+              ]
+            }
+          ],
+          "gatewayOnlyChangedField": "/input/0/tools/0/description",
+          "gatewayChange": {
+            "before": "",
+            "after": "functions"
+          },
+          "gatewayAllOtherParsedValuesEqual": true,
+          "proxyGate": "passed",
+          "rawSha256": {
+            "ingress.raw": "c5ac73401fa8cdf2eead1d0e55620741edbc70371df6192eb11ba53d5c7d2921",
+            "forwarded.raw": "017bf38ac8492e874286ac0278422eea306c23c09a62329ec4112a328fe180f8",
+            "response.raw": "44c10536f493bfa06a74fb8ced228c4d583bf94b788e163636e0bfc47c39ff9b",
+            "response.decoded": "44c10536f493bfa06a74fb8ced228c4d583bf94b788e163636e0bfc47c39ff9b",
+            "events.json": "c858d3d57c4c2a86281f3be787e94befa403f75372f3d3c0a0a514433f058e45",
+            "metadata.json": "d97ba4faf4adc044a11776df399d8b1774f59b5d745ac11e8c73f7cc7025fc4b"
+          },
+          "gatewayTranslatedSha256": "feea173597e19f4bbc9ae3fc6bb1edb15722c8ba2f51e929328d2ff451aeca21"
+        }
+      ],
+      "rawArtifactSha256": {
+        "start.json": "72a149a6303414271d741df980c24dc6f607b748acd9621b93590b42eb4de895",
+        "result.json": "e1b7a2e96f4b2400e7e654e6f00a6bcd145e5319c983df7a5b1c2e3d2018fccd",
+        "prompt.txt": "c88401dd98fc76db7ecb24475738afb23fe431c79928c51e68c474a68c7b6ec8",
+        "native.stdout.raw": "57686a4bad17bd7911d68cd2af0a65468429c97b082b100339a3b6346eb178a6",
+        "native.stderr.raw": "e8c16daa3d9434ac64c70f0e7fcfdc86f2071ce0c1e511a84c6ae05b41efbb22",
+        "model-final.txt": "7a61b53701befdae0eeeffaecc73f14e20b537bb0f8b91ad7c2936dc63562b25",
+        "fixture.diff": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "gateway-capture.json": "5308690b4b54f01d3c087eb4846c2811ef8b0b29da874f5215e47fb73c9d70d1",
+        "gateway-matched.raw.log": "2eab2e15d813aa3f9567e0eab6eb01b9b02bcf43123eb7884bba40abbc83bb82"
+      },
+      "piStderrEmpty": null
+    }
+  ],
+  "harnessFingerprint": "02e4658c30d9f56f684cd6e9290eb37e477eb8438d0fb24f1e8521680d00053b",
+  "harnessSourceHashes": [
+    {
+      "file": "run-trials.mjs",
+      "sha256": "c0d0472c02c0c7ffb2d7e0b91239a078792b986bc753c9888c501214c9adad6f"
+    },
+    {
+      "file": "guard.mjs",
+      "sha256": "a7b62e5fc2ea622f2f721f935cce54e0e3bdd7d1c298d2b45147af5b7151acd7"
+    },
+    {
+      "file": "pi-observer.ts",
+      "sha256": "362b5aa773dcb09748194f1f38db7b1d8640b032397d4e3b1adc73ffbf560753"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "case_id": "patch-20-anchored-eof-match",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/repeated.txt\n@@ mid\n-same\n+LAST\n end\n*** End of File\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/repeated.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "c3RhcnQKQ0hBTkdFRAptaWQKc2FtZQplbmQK",
+      "sha256": "46e3b994032ad4dfbe3409c267f841ac2e7631188994a530acd4b9ae088f005f",
+      "text": "start\nCHANGED\nmid\nsame\nend\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {},
+    "own_keys": []
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/repeated.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "c3RhcnQKQ0hBTkdFRAptaWQKTEFTVAplbmQK",
+      "sha256": "8b15cbec13088f1f96232e6fd8e8a341a336e561f2badf212fa9cd8e35f38a30",
+      "text": "start\nCHANGED\nmid\nLAST\nend\n"
+    }
+  }
+}

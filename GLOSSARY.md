@@ -92,6 +92,18 @@ _Avoid_: Visible history, when content may be folded or absent from the current 
 A display state that replaces displayed conversation content with a summary or disclosure header while preserving the underlying content.
 _Avoid_: Compaction, when only the presentation changes
 
+**Core toolset**:
+The model-facing tools for Pi's built-in local command, file, and image capabilities. Tools from unrelated extensions are outside this set.
+_Avoid_: All tools, when referring only to these local coding operations
+
+**Execution cell**:
+One execution whose new output and eventual result can be collected across tool calls.
+_Avoid_: Process session, when referring to the execution coordinating commands and other operations
+
+**Process session**:
+A command that remains available for input or output collection until its final result is collected.
+_Avoid_: Execution cell, when referring to one running command
+
 **Activity group**:
 Consecutive tool calls presented together within a work history. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
 _Avoid_: Nested tool call, unless one tool actually called another

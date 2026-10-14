@@ -1,0 +1,18 @@
+{
+  "baseline_id": "local-tools-reference-20261013",
+  "source_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "comparison_scope": "Nested tool description message only; not a wire-level declaration comparison.",
+  "observation_class": "Supplemental current-runtime observations; frozen baseline not replaced.",
+  "comparisons": [
+    {
+      "tool": "apply_patch",
+      "declaration": "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.\n\nexec tool declaration:\n```ts\ndeclare const tools: { apply_patch(input: string): Promise<unknown>; };\n```",
+      "current_declaration_identical": true
+    },
+    {
+      "tool": "view_image",
+      "declaration": "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.\n\nexec tool declaration:\n```ts\ndeclare const tools: { view_image(args: {\n  // Image detail level. Defaults to `high`; use `original` to preserve exact resolution.\n  detail?: \"high\" | \"original\";\n  // Local filesystem path to an image file.\n  path: string;\n}): Promise<{\n  // Image detail hint returned by view_image. Returns `high` for default resized behavior or `original` when original resolution is preserved.\n  detail: \"high\" | \"original\";\n  // Data URL for the loaded image.\n  image_url: string;\n}>; };\n```",
+      "current_declaration_identical": true
+    }
+  ]
+}

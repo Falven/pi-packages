@@ -1,0 +1,15 @@
+{
+  "case_id": "image-14-invalid-path-type",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "view_image",
+  "input": {
+    "path": 123
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "failed to parse function arguments: invalid type: integer `123`, expected a string at line 1 column 11",
+    "string": "failed to parse function arguments: invalid type: integer `123`, expected a string at line 1 column 11"
+  }
+}

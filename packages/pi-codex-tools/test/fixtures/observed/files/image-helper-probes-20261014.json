@@ -1,0 +1,381 @@
+{
+  "evidence_id": "local-image-helper-supplement-20261014",
+  "recorded_at_utc": "2026-10-14 03:17:00 UTC",
+  "source": {
+    "kind": "current-runtime-direct-probe",
+    "entrypoint": "functions.exec",
+    "helper": "image",
+    "date_utc": "2026-10-14",
+    "run_identity": "01a137ea-9a54-7203-a8b9-495b84b83d22",
+    "method": "A labeled call is wrapped in try/catch. Each synchronous outcome is recorded, followed by direct inspection of its tool result. All image data is local, at most 70 decoded bytes."
+  },
+  "reference": {
+    "baseline_id": "local-tools-reference-20261013",
+    "baseline_source_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+    "relationship": "Supplemental current-runtime evidence. The baseline checksum identifies the earlier reference capture, not these new calls."
+  },
+  "fixture": {
+    "path": "/tmp/core-tools-file-evidence/fixtures/tiny.png",
+    "format": "png",
+    "width": 2,
+    "height": 1,
+    "bytes": 70,
+    "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5"
+  },
+  "declared_selected_surface": {
+    "input": "A base64 data URL string, or an ordinary object with image_url and optional detail.",
+    "details": ["auto", "low", "high", "original", null],
+    "precedence": "The second detail argument overrides embedded detail when provided."
+  },
+  "observations": [
+    "A base64 data URL and an ordinary image_url object both return undefined and produce an image.",
+    "A valid explicit detail overrides an invalid embedded detail. An invalid explicit detail overrides valid embedded detail and throws.",
+    "Explicit null does not override embedded detail: invalid embedded detail still throws.",
+    "Invalid detail values and types throw strings synchronously.",
+    "Invalid input shapes and non-data-URL strings throw synchronously.",
+    "Malformed, empty, and non-image data URL payloads return undefined; image processing later omits them.",
+    "The helper accepts low detail; the observed output pipeline omits it with an unsupported-detail message.",
+    "A valid tiny PNG with application/octet-stream, image/png, or text/plain URL headers produces an image."
+  ],
+  "limits": [
+    "The displayed tool result exposes rendered images or omission messages, not the raw emitted image object, MIME type, retained bytes, default detail, or provider request.",
+    "The native helper implementation is not inspectable through Function.toString; it reports native code.",
+    "Detail precedence is evidenced by validation outcomes. The final model-bound detail values were not captured.",
+    "This does not establish historical runtime identity or exact provider-wire parity.",
+    "No network URLs, protocol image overloads, large images, or repository changes were used.",
+    "Native host image normalization and detail behavior remain authoritative; no bypass is proposed."
+  ],
+  "cases": [
+    {
+      "case_id": "helper-01-data-url-default",
+      "input": {
+        "first_argument": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-02-object-default",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
+        }
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-03-object-original",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "original"
+        }
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-04-explicit-overrides-invalid-embedded",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "invalid"
+        },
+        "second_argument": "high"
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-05-explicit-invalid-overrides-valid-embedded",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "high"
+        },
+        "second_argument": "invalid"
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image detail must be one of: auto, low, high, original"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-06-invalid-embedded-detail",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "invalid"
+        }
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image detail must be one of: auto, low, high, original"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-07-invalid-explicit-detail-type",
+      "input": {
+        "first_argument": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+        "second_argument": 1
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image detail must be a string when provided"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-08-invalid-embedded-with-explicit-null",
+      "input": {
+        "first_argument": {
+          "image_url": "data:application/octet-stream;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "invalid"
+        },
+        "second_argument": null
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image detail must be one of: auto, low, high, original"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-09-object-missing-url",
+      "input": {
+        "first_argument": {}
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-10-object-url-wrong-type",
+      "input": {
+        "first_argument": {
+          "image_url": 1
+        }
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-11-null-input",
+      "input": {
+        "first_argument": null
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-12-number-input",
+      "input": {
+        "first_argument": 1
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-13-empty-string",
+      "input": {
+        "first_argument": ""
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "image expects a non-empty image URL string, an object with image_url and optional detail, or a raw MCP image block"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-14-plain-string",
+      "input": {
+        "first_argument": "not-a-data-url"
+      },
+      "helper_outcome": {
+        "kind": "threw",
+        "string": "Tool call failed: invalid image output. Pass a base64 data URI instead"
+      },
+      "render_observation": {
+        "kind": "no-image",
+        "reason": "helper threw synchronously"
+      }
+    },
+    {
+      "case_id": "helper-15-invalid-base64",
+      "input": {
+        "first_argument": "data:image/png;base64,not!base64"
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-omitted",
+        "message": "image content omitted because it could not be processed"
+      }
+    },
+    {
+      "case_id": "helper-16-text-bytes-image-header",
+      "input": {
+        "first_argument": "data:image/png;base64,dGV4dA=="
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-omitted",
+        "message": "image content omitted because it could not be processed"
+      }
+    },
+    {
+      "case_id": "helper-17-low",
+      "input": {
+        "first_argument": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+        "second_argument": "low"
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-omitted",
+        "message": "image content omitted because detail 'low' is not supported; use 'high', 'original', or 'auto'"
+      }
+    },
+    {
+      "case_id": "helper-18-auto",
+      "input": {
+        "first_argument": {
+          "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": "auto"
+        }
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-19-null-detail",
+      "input": {
+        "first_argument": {
+          "image_url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg==",
+          "detail": null
+        }
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    },
+    {
+      "case_id": "helper-20-empty-base64",
+      "input": {
+        "first_argument": "data:image/png;base64,"
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-omitted",
+        "message": "image content omitted because it could not be processed"
+      }
+    },
+    {
+      "case_id": "helper-21-no-base64-marker",
+      "input": {
+        "first_argument": "data:image/png,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-omitted",
+        "message": "image content omitted because it could not be processed"
+      }
+    },
+    {
+      "case_id": "helper-22-text-mime-valid-image",
+      "input": {
+        "first_argument": "data:text/plain;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
+      },
+      "helper_outcome": {
+        "kind": "returned",
+        "return_type": "undefined"
+      },
+      "render_observation": {
+        "kind": "image-rendered"
+      }
+    }
+  ]
+}

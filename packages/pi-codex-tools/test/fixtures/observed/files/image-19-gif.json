@@ -1,0 +1,35 @@
+{
+  "case_id": "image-19-gif",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "view_image",
+  "input": {
+    "path": "/tmp/core-tools-file-evidence/fixtures/tiny.gif"
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {
+      "image_url": "data:application/octet-stream;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==",
+      "detail": "high"
+    },
+    "own_keys": ["image_url", "detail"]
+  },
+  "fixture": {
+    "exists": true,
+    "mode": 420,
+    "kind": "file",
+    "bytes": 34,
+    "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8"
+  },
+  "derived": {
+    "data_url_header": "data:application/octet-stream;base64",
+    "bytes": 34,
+    "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+    "detail": "high",
+    "result_keys": ["image_url", "detail"],
+    "format": "gif",
+    "width": 1,
+    "height": 1
+  }
+}

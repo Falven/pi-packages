@@ -1,0 +1,29 @@
+{
+  "case_id": "patch-05-add-existing",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Add File: /tmp/core-tools-file-evidence/fixtures/not-image.txt\n+replacement\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/not-image.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "cGxhaW4gdGV4dCBmaXh0dXJlCg==",
+      "sha256": "4dc4786f68a4478077f048c177dcd92b545b5df0c1ec888e711fc9b288b2389b",
+      "text": "plain text fixture\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "value": {}
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/not-image.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "cmVwbGFjZW1lbnQK",
+      "sha256": "1d054714357ce5ee01723ed91fcaa69206e221faaf9c1fad64f73be2e5d051da",
+      "text": "replacement\n"
+    }
+  }
+}

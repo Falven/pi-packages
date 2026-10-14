@@ -1,0 +1,29 @@
+{
+  "case_group": "platform-pty-suitability",
+  "scope": "Observed installed platform gate; no reference behavior claim.",
+  "cases": [
+    {
+      "id": "node-spawn-socket-stdio",
+      "provenance": "Actual prior public command observation",
+      "launcher": "Node child_process.spawn",
+      "arguments": [
+        "-q",
+        "/dev/null",
+        "/bin/sh",
+        "-c",
+        "printf \"HELLO\\n\"; exit 7"
+      ],
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "script: tcgetattr/ioctl: Operation not supported on socket\n",
+      "limits": "No child command was observed to start."
+    }
+  ],
+  "conclusion": "Rejected for direct use from the extension process; ordinary Node child pipes failed before the command started.",
+  "cleanup": {
+    "both_probe_harnesses_terminal": true,
+    "owned_live_processes_remaining": 0,
+    "verification": "Every process collected by the completed diagnostic was absent after cleanup."
+  },
+  "limits": "No wrapper workaround or platform implementation is proposed."
+}

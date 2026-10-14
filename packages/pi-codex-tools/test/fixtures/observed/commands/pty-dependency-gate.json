@@ -1,0 +1,29 @@
+{
+  "case": "native-pty-package-gate",
+  "observed": {
+    "timestamp": "2026-10-14T04:01:37.443Z",
+    "runtime": "v26.8.1",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "dependency": {
+      "name": "node-pty",
+      "version": "1.2.0-beta.15",
+      "helper_mode": "755"
+    },
+    "terminal": {
+      "columns": 80,
+      "rows": 24,
+      "inherited_term": "dumb"
+    },
+    "output": "24 80\r\nREADY\r\nalpha\r\nINPUT:alpha\r\n^D\b\bEOF:1\r\n",
+    "exit": {
+      "exitCode": 7,
+      "signal": 0
+    }
+  },
+  "cleanup": "Native terminal reached its final exit event. Deadline timer cleared.",
+  "unverified": [
+    "Source-build fallback",
+    "Other platforms and runtime versions"
+  ]
+}

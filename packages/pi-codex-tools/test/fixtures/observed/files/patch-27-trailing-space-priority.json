@@ -1,0 +1,33 @@
+{
+  "case_id": "patch-27-trailing-space-priority",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt\n@@\n-one\n+TRAILING\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "IG9uZSAKb25lIAo=",
+      "sha256": "8969dea30a377ac26c28bb1a91d91bf6fe139d94ee488ed86e3387d36d82d2b1",
+      "text": " one \none \n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {},
+    "own_keys": []
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "IG9uZSAKVFJBSUxJTkcK",
+      "sha256": "cca348801ace025d5d25d5883d26e9dd9e614c70b832aa3d45ac924a240fec01",
+      "text": " one \nTRAILING\n"
+    }
+  }
+}

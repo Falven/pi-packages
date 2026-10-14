@@ -1,0 +1,41 @@
+{
+  "case": "input-integer-range",
+  "observation_date": "2026-10-13",
+  "observed": [
+    {
+      "input": {
+        "session_id": -1,
+        "chars": "",
+        "yield_time_ms": 0,
+        "max_output_tokens": 10
+      },
+      "status": "rejected",
+      "message": "write_stdin failed: Unknown process id -1"
+    },
+    {
+      "input": {
+        "session_id": 1.5,
+        "chars": "",
+        "yield_time_ms": 0,
+        "max_output_tokens": 10
+      },
+      "status": "rejected",
+      "message": "failed to parse function arguments: invalid type: floating point `1.5`, expected i32 at line 1 column 17"
+    },
+    {
+      "input": {
+        "session_id": 4294967296,
+        "chars": "",
+        "yield_time_ms": 0,
+        "max_output_tokens": 10
+      },
+      "status": "rejected",
+      "message": "failed to parse function arguments: invalid value: integer `4294967296`, expected i32 at line 1 column 24"
+    }
+  ],
+  "inference": "Session identifiers are parsed as signed 32-bit integers. Negative integers may reach the unknown-handle check.",
+  "unverified": [
+    "Exact validation wording through another host's validator",
+    "Identifier allocation distribution"
+  ]
+}

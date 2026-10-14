@@ -1,0 +1,52 @@
+{
+  "sourceRevision": "f415bae160418a06d50c53397c3beeeee935655e",
+  "method": "Public native-host fixture with controlled provider responses and seven configured companion extensions. Raw credential-free logs and executable probes remain outside this repository.",
+  "configuredCompanionInventory": {
+    "count": 7,
+    "changedPackageVersion": "0.1.0",
+    "changedPackageManifestSha256": "815c97ba7b58005dec1ee3c015424892e804d23cf071a1cb27a21ec4924619d8",
+    "changedPackageSourceManifestSha256": "0a4470893d29b02f1845902fd80d0a63f0c60523d5eab47901eb7341512084ba"
+  },
+  "runs": [
+    {
+      "scope": "companion composition, both load orders, selection, history, and activation in a retained conversation",
+      "passed": 5,
+      "failed": 0,
+      "probeSha256": "639b26bfaf909bdfc57983cadf2c35fd921e59f6c4d31d10be73a97ed2ed5111",
+      "rawLogSha256": "5a0ccdcd4901e67ddd0d5bb3ec53cdb98d5f88a057482d32300e25483099c1c1"
+    },
+    {
+      "scope": "cancelled wait, termination, session replacement, reload, shutdown, and interactive quit",
+      "passed": 7,
+      "failed": 0,
+      "probeSha256": "f6f9515cbc8b678249131fc8125a5870ea452411adc8bb4c4ad1d32aad9c5870",
+      "rawLogSha256": "6e667cbc643b41e33505fa3da842b2213883470b0ae26cd119208e3bc4c5d967"
+    },
+    {
+      "scope": "continued mixed workflows in both load orders and true interrupted-history resume",
+      "passed": 3,
+      "failed": 0,
+      "probeSha256": "f6f9515cbc8b678249131fc8125a5870ea452411adc8bb4c4ad1d32aad9c5870",
+      "rawLogSha256": "195e5ad2c2a87e47857bd124b5beee0056f334e81e279b50fbe9ee4e2803ceac"
+    }
+  ],
+  "subprocessProbeSha256": {
+    "interruptedHistory": "0e76c4c69e0bda53ef6611c9cd06e9c7b73313d73c110a1a79007d825a11edee",
+    "interactiveQuit": "be62a9071a1b196a9cf3e84157175835100470df2429f6e027ae974ed20dc2a0"
+  },
+  "observed": [
+    "A live cell continued command, patch, validation, and local-image work across later prompts in both load orders.",
+    "Configured hooks blocked and edited child calls and redacted a result without restoring removed structured content in the model-visible wait result.",
+    "Unrelated declarations remained selected; no companion goal operation was called or modified.",
+    "Public activity rendered while a cell ran and after a genuine abrupt exit, while remaining outside model context.",
+    "Cancellation of a later wait retained unread output; explicit termination and native session lifecycle events cleared owned work.",
+    "Stored values survived an ordinary prompt and cleared after new, resume, fork, and reload.",
+    "Notifications arrived at the safe boundary without an unsolicited provider request or duplicated model content."
+  ],
+  "limits": [
+    "Controlled responses verify integration behavior, not matched live-model outcomes.",
+    "The public host does not assign durable native child-call identity after the parent returns; activity uses package-owned identities.",
+    "Native image conversion reports automatic detail for the local-image result.",
+    "The configured companion set had no separate override for a replaced core tool name."
+  ]
+}

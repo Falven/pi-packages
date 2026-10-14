@@ -1,0 +1,159 @@
+{
+  "case_group": "command-output-and-poll-bounds",
+  "cases": [
+    {
+      "case_id": "pipe-stdin-and-empty-poll-minimum",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "printf 'READY\\n'; sleep 7; printf 'DONE\\n'",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 250,
+        "max_output_tokens": 500
+      },
+      "initial": {
+        "chunk_id": "d38af3",
+        "wall_time_seconds": 0.25228625,
+        "session_id": 45492,
+        "original_token_count": 2,
+        "output": "READY\n"
+      },
+      "write": {
+        "arguments": {
+          "session_id": 45492,
+          "chars": "unused\n",
+          "yield_time_ms": 250,
+          "max_output_tokens": 500
+        },
+        "error": "write_stdin failed: stdin is closed for this session; rerun exec_command with tty=true to keep stdin open"
+      },
+      "poll": {
+        "arguments": {
+          "session_id": 45492,
+          "chars": "",
+          "yield_time_ms": 250,
+          "max_output_tokens": 500
+        },
+        "result": {
+          "chunk_id": "6a2c42",
+          "wall_time_seconds": 5.002051166,
+          "session_id": 45492,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "caller_elapsed_ms": 5003
+      },
+      "cleanup": {
+        "chunk_id": "0ec5d6",
+        "wall_time_seconds": 1.635380917,
+        "exit_code": 0,
+        "original_token_count": 2,
+        "output": "DONE\n"
+      }
+    },
+    {
+      "case_id": "output-budget--1",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": -1
+      },
+      "error": "failed to parse function arguments: invalid value: integer `-1`, expected usize at line 1 column 220"
+    },
+    {
+      "case_id": "output-budget-0",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 0
+      },
+      "result": {
+        "chunk_id": "d11779",
+        "wall_time_seconds": 0.000013208,
+        "exit_code": 0,
+        "original_token_count": 960,
+        "output": "Warning: truncated output (original token count: 960)\nTotal output lines: 80\n\n…960 tokens truncated…"
+      }
+    },
+    {
+      "case_id": "output-budget-1.5",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 1.5
+      },
+      "error": "failed to parse function arguments: invalid type: floating point `1.5`, expected usize at line 1 column 221"
+    },
+    {
+      "case_id": "output-budget-10",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 10
+      },
+      "result": {
+        "chunk_id": "bbb58e",
+        "wall_time_seconds": 0.000009584,
+        "exit_code": 0,
+        "original_token_count": 960,
+        "output": "Warning: truncated output (original token count: 960)\nTotal output lines: 80\n\nL000: abcdefghijklmn…950 tokens truncated…wxyz 0123456789 END\n"
+      }
+    },
+    {
+      "case_id": "output-budget-40",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 40
+      },
+      "result": {
+        "chunk_id": "069d4c",
+        "wall_time_seconds": 0.000016416,
+        "exit_code": 0,
+        "original_token_count": 960,
+        "output": "Warning: truncated output (original token count: 960)\nTotal output lines: 80\n\nL000: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL001: abcdefghijklmnopqrstuvwxyz…920 tokens truncated…klmnopqrstuvwxyz 0123456789 END\nL079: abcdefghijklmnopqrstuvwxyz 0123456789 END\n"
+      }
+    },
+    {
+      "case_id": "output-budget-10000",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "i=0; while [ \"$i\" -lt 80 ]; do printf 'L%03d: abcdefghijklmnopqrstuvwxyz 0123456789 END\\n' \"$i\"; i=$((i+1)); done",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 10000
+      },
+      "result": {
+        "chunk_id": "1b7c76",
+        "wall_time_seconds": 0.000013375,
+        "exit_code": 0,
+        "original_token_count": 960,
+        "output": "L000: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL001: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL002: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL003: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL004: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL005: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL006: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL007: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL008: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL009: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL010: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL011: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL012: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL013: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL014: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL015: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL016: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL017: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL018: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL019: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL020: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL021: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL022: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL023: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL024: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL025: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL026: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL027: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL028: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL029: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL030: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL031: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL032: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL033: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL034: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL035: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL036: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL037: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL038: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL039: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL040: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL041: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL042: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL043: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL044: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL045: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL046: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL047: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL048: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL049: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL050: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL051: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL052: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL053: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL054: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL055: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL056: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL057: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL058: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL059: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL060: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL061: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL062: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL063: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL064: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL065: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL066: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL067: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL068: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL069: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL070: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL071: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL072: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL073: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL074: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL075: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL076: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL077: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL078: abcdefghijklmnopqrstuvwxyz 0123456789 END\nL079: abcdefghijklmnopqrstuvwxyz 0123456789 END\n"
+      }
+    }
+  ]
+}

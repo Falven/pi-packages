@@ -1,0 +1,29 @@
+{
+  "case_id": "patch-02-update",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt\n@@\n alpha\n-beta\n+BETA\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "YWxwaGEKYmV0YQo=",
+      "sha256": "e49c81e2d2f84e259d40e2fb8192f3bcd198b355184845d76d8f58807d0d78ee",
+      "text": "alpha\nbeta\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "value": {}
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "YWxwaGEKQkVUQQo=",
+      "sha256": "69726aa4696684f51191101c90b115e8cf6e01d6339e158d01b69ca692562fbf",
+      "text": "alpha\nBETA\n"
+    }
+  }
+}

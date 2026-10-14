@@ -1,0 +1,62 @@
+{
+  "case_group": "concurrent-process-input",
+  "scope": "Supplemental public-interface observation; runtime build identity unverified.",
+  "cases": [
+    {
+      "case_id": "serialized-input-and-poll",
+      "case_group": "concurrent-process-input",
+      "arguments": {
+        "cmd": "printf 'READY\\n'; IFS= read -r first; printf 'ONE:%s\\n' \"$first\"; IFS= read -r second; printf 'TWO:%s\\n' \"$second\"; exit 7",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": true,
+        "yield_time_ms": 250,
+        "max_output_tokens": 100
+      },
+      "initial": {
+        "chunk_id": "001afc",
+        "wall_time_seconds": 0.251744125,
+        "session_id": 70773,
+        "original_token_count": 2,
+        "output": "READY\r\n"
+      },
+      "steps": [
+        {
+          "status": "fulfilled",
+          "value": {
+            "chunk_id": "a2fafc",
+            "wall_time_seconds": 0.250880333,
+            "session_id": 70773,
+            "original_token_count": 5,
+            "output": "alpha\r\nONE:alpha\r\n"
+          }
+        },
+        {
+          "status": "fulfilled",
+          "value": {
+            "chunk_id": "f42045",
+            "wall_time_seconds": 0.000016125,
+            "exit_code": 7,
+            "original_token_count": 4,
+            "output": "beta\r\nTWO:beta\r\n"
+          }
+        }
+      ],
+      "inputs": [
+        {
+          "session_id": 70773,
+          "chars": "alpha\n",
+          "yield_time_ms": 250,
+          "max_output_tokens": 100
+        },
+        {
+          "session_id": 70773,
+          "chars": "beta\n",
+          "yield_time_ms": 250,
+          "max_output_tokens": 100
+        }
+      ],
+      "cleanup": "Second call returned exit 7 and no live handle."
+    }
+  ]
+}

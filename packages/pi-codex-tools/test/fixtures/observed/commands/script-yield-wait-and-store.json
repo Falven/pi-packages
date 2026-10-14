@@ -1,0 +1,159 @@
+{
+  "case_group": "script-yield-wait-and-store",
+  "baseline": "local-tools-reference-20261013",
+  "cases": [
+    {
+      "id": "script-yield-notify-incremental-wait",
+      "provenance": "reduced observations of model-visible outer results and injected output",
+      "input": "// @exec: {\"yield_time_ms\": 10000, \"max_output_tokens\": 1000}\ntext(\"BEFORE_YIELD\");\nawait yield_control();\nawait new Promise(resolve=>setTimeout(resolve,2000));\nnotify(\"MID_NOTIFY\");\ntext(\"AFTER_TIMER\");\nawait new Promise(resolve=>setTimeout(resolve,3000));\ntext(\"FINAL_OUTPUT\");",
+      "observed_events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "40",
+          "wall_time_seconds": 0,
+          "output": "BEFORE_YIELD"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "40",
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "running",
+          "wall_time_seconds": 0,
+          "output": "AFTER_TIMER"
+        },
+        {
+          "event": "injected-extra-output",
+          "content": "MID_NOTIFY"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "40",
+            "yield_time_ms": 1000,
+            "max_tokens": 1000
+          },
+          "status": "running",
+          "wall_time_seconds": 1,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "40",
+            "yield_time_ms": 1000,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 0,
+          "output": "FINAL_OUTPUT"
+        }
+      ],
+      "observed": "yield_control flushed output immediately despite a 10000 ms pragma. Subsequent waits delivered only undelivered text. notify appeared as a separate extra result.",
+      "unverified": "Event ordering shown is delivery ordering, not exact internal scheduling. Transport content-part schema was not captured."
+    },
+    {
+      "id": "wait-duration-numeric-validation",
+      "provenance": "reduced observations from a live cell; nested-command raw results are in command-long-waits.json",
+      "cell_id": "25",
+      "cases": [
+        {
+          "yield_time_ms": 0,
+          "status": "running",
+          "observed_wall_time_seconds": 0
+        },
+        {
+          "yield_time_ms": -1,
+          "status": "argument-error",
+          "observed_error": "failed to parse function arguments: invalid value: integer `-1`, expected u64 at line 1 column 34"
+        },
+        {
+          "yield_time_ms": 1.5,
+          "status": "argument-error",
+          "observed_error": "failed to parse function arguments: invalid type: floating point `1.5`, expected u64 at line 1 column 35"
+        },
+        {
+          "yield_time_ms": 1000,
+          "status": "running",
+          "observed_wall_time_seconds": 1
+        }
+      ],
+      "unverified": "Maximum and omitted wait duration were not measured."
+    },
+    {
+      "id": "wait-completed-cell-is-stale",
+      "provenance": "reduced outer result",
+      "arguments": {
+        "cell_id": "25",
+        "yield_time_ms": 0
+      },
+      "status": "failed",
+      "observed_output": "Script error:\nexec cell 25 not found"
+    },
+    {
+      "id": "wait-terminate",
+      "provenance": "reduced outer results plus later loads",
+      "input": "// @exec: {\"yield_time_ms\": 10000}\nstore(\"probe_terminated_script_ran\",false);\ntext(\"BEFORE_TERMINATE\");\nawait yield_control();\nawait new Promise(resolve=>setTimeout(resolve,15000));\nstore(\"probe_terminated_script_ran\",true);\ntext(\"AFTER_TERMINATE\");",
+      "observed_events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "41",
+          "wall_time_seconds": 0,
+          "output": "BEFORE_TERMINATE"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "41",
+            "terminate": true,
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "terminated",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "41",
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "failed",
+          "wall_time_seconds": 0,
+          "output": "Script error:\nexec cell 41 not found"
+        }
+      ],
+      "observed_state_after_termination": {
+        "new_key_is_undefined": true,
+        "existing_completed_cell_keys_remained": true
+      },
+      "observed": "The new key written before the yield did not become visible after termination.",
+      "unverified": "Cancellation of an awaited or unawaited nested host command was not tested."
+    },
+    {
+      "id": "store-visibility-across-overlapping-cells",
+      "provenance": "reduced outer results and subsequent observed loads",
+      "setup": {
+        "probe_overlap_value": "baseline",
+        "probe_overlap_other": "baseline"
+      },
+      "first_cell": "store(\"probe_overlap_value\",\"pending-write\");\ntext(\"STARTED_PENDING_WRITE\");\nawait yield_control();\nawait new Promise(resolve=>setTimeout(resolve,15000));\nstore(\"probe_overlap_value\",\"completed-write\");\ntext(\"FINISHED_PENDING_WRITE\");",
+      "second_cell": "text({value_while_other_cell_pending:load(\"probe_overlap_value\"),other_before_update:load(\"probe_overlap_other\")});\nstore(\"probe_overlap_other\",\"concurrent-write\");",
+      "observed_during_first_cell": {
+        "value_while_other_cell_pending": "baseline",
+        "other_before_update": "baseline"
+      },
+      "observed_after_first_cell": {
+        "value": "completed-write",
+        "other": "concurrent-write"
+      },
+      "inference": "Pending cell writes are not visible to a later cell before completion. See observed_after_first_cell for whether concurrent key writes survive; no universal transaction model is claimed."
+    }
+  ]
+}

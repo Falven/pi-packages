@@ -1,0 +1,44 @@
+{
+  "case_group": "concurrent-process-polls",
+  "scope": "Supplemental public-interface observation; runtime build identity unverified.",
+  "cases": [
+    {
+      "case_id": "concurrent-final-drain",
+      "case_group": "concurrent-process-polls",
+      "initial": {
+        "chunk_id": "48ad53",
+        "wall_time_seconds": 0.252858666,
+        "session_id": 65974,
+        "original_token_count": 2,
+        "output": "START"
+      },
+      "steps": [
+        {
+          "arguments": {
+            "session_id": 65974,
+            "chars": "",
+            "yield_time_ms": 1000,
+            "max_output_tokens": 100
+          },
+          "results": [
+            {
+              "status": "fulfilled",
+              "value": {
+                "chunk_id": "0be50e",
+                "wall_time_seconds": 0.610771375,
+                "exit_code": 7,
+                "original_token_count": 1,
+                "output": "END"
+              }
+            },
+            {
+              "status": "rejected",
+              "reason": "write_stdin failed: Unknown process id 65974"
+            }
+          ]
+        }
+      ],
+      "cleanup": "Both calls settled; the first returned exit 7, and the second rejected the now-closed handle."
+    }
+  ]
+}

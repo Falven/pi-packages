@@ -1,0 +1,54 @@
+{
+  "case_group": "command-pty-boundaries",
+  "scope": "Supplemental observation using the current public interface; runtime build identity unverified.",
+  "cases": [
+    {
+      "case_id": "terminal-defaults",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "stty size; printf 'TERM:%s\\n' \"$TERM\"; [ -t 0 ] && printf 'TTY\\n'; exit 7",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": true,
+        "workdir": "/tmp",
+        "yield_time_ms": 1000,
+        "max_output_tokens": 100
+      },
+      "result": {
+        "status": "fulfilled",
+        "value": {
+          "chunk_id": "98304d",
+          "wall_time_seconds": 0.000011,
+          "exit_code": 7,
+          "original_token_count": 6,
+          "output": "24 80\r\nTERM:dumb\r\nTTY\r\n"
+        }
+      }
+    },
+    {
+      "case_id": "nonempty-write-zero-yield",
+      "evidence_kind": "observed",
+      "initial": {
+        "chunk_id": "61f199",
+        "wall_time_seconds": 0.251674833,
+        "session_id": 36024,
+        "original_token_count": 2,
+        "output": "READY\r\n"
+      },
+      "arguments": {
+        "session_id": 36024,
+        "chars": "alpha\n",
+        "yield_time_ms": 0,
+        "max_output_tokens": 100
+      },
+      "result": {
+        "chunk_id": "1b6ab6",
+        "wall_time_seconds": 0.251493042,
+        "session_id": 36024,
+        "original_token_count": 5,
+        "output": "alpha\r\nONE:alpha\r\n"
+      },
+      "cleanup": "Second input delivered; process returned exit 7 and no live handle remains."
+    }
+  ]
+}

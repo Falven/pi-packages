@@ -1,0 +1,587 @@
+{
+  "evidence_format": 1,
+  "baseline_id": "local-tools-reference-20261013",
+  "baseline_source_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "scope": "Six selected local execution declarations and retained orchestration helpers. Supplemental observations do not replace the frozen declaration source.",
+  "runtime_identity": "The current runtime build identity is unverified. Four nested declarations matched the frozen source; outer declarations were compared manually.",
+  "collection_policy": {
+    "resources": "Temporary files and short-lived local processes only.",
+    "artifact_type": "JSON evidence only.",
+    "repository_edits": false,
+    "production_settings_changed": false,
+    "model_clients_restarted": false,
+    "maximum_blocking_wait_ms": 60000,
+    "long_probe_delivery": "The upper empty-poll measurement ran inside an asynchronously yielded orchestration call. Model-visible waits stayed below 60000 ms."
+  },
+  "evidence_kinds": {
+    "nested_tool_results": "Actual structured responses or captured thrown errors where stated in each file.",
+    "outer_tool_results": "Reduced model-visible observations; original transport content-part boundaries were unavailable.",
+    "inference": "Explicitly labelled; never substitutes for an observation."
+  },
+  "files": [
+    {
+      "file": "command-input-validation.json",
+      "sha256": "984a004dcd8e1b3578fe73cffef53a17d9d855bb0f493daada90527cf52ef1b2",
+      "case_group": "input-integer-range",
+      "case_pointers": [
+        {
+          "pointer": "/observed/0",
+          "id": "case-0"
+        },
+        {
+          "pointer": "/observed/1",
+          "id": "case-1"
+        },
+        {
+          "pointer": "/observed/2",
+          "id": "case-2"
+        }
+      ]
+    },
+    {
+      "file": "command-io-lifecycle.json",
+      "sha256": "6236c18ae6942bd125d70110865ce4da134e04abbb08f1fa85bce9bb12d4d0d4",
+      "case_group": "command-io-lifecycle",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "interactive-pipes"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "interactive-pty"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "incremental-output"
+        }
+      ]
+    },
+    {
+      "file": "command-long-waits.json",
+      "sha256": "a59d5b391c1e10b919d8da8260403017fe88171331bd43362a5a20870b987e3d",
+      "case_group": "command-long-waits",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "empty-poll-omitted-yield"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "upper-yield-bound"
+        }
+      ]
+    },
+    {
+      "file": "command-output-and-poll-bounds.json",
+      "sha256": "57c5c4dcb12395c969d1551d8be7674dc0517c8fc0586872d575d3072ee56b81",
+      "case_group": "command-output-and-poll-bounds",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "pipe-stdin-and-empty-poll-minimum"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "output-budget--1"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "output-budget-0"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "output-budget-1.5"
+        },
+        {
+          "pointer": "/cases/4",
+          "id": "output-budget-10"
+        },
+        {
+          "pointer": "/cases/5",
+          "id": "output-budget-40"
+        },
+        {
+          "pointer": "/cases/6",
+          "id": "output-budget-10000"
+        }
+      ]
+    },
+    {
+      "file": "command-pty-boundaries.json",
+      "sha256": "c355e6844956c02a8be29f361dc52015c4a373d50fa4ea7f9e304ffadc6ec811",
+      "case_group": "command-pty-boundaries",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "terminal-defaults"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "nonempty-write-zero-yield"
+        }
+      ]
+    },
+    {
+      "file": "command-yield-numeric.json",
+      "sha256": "a636d2fecf43f4907180d9b3c8ccb6d94bb862ec1cbbe1c393e30c4f0a4ee26c",
+      "case_group": "command-yield-numeric",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "yield--1"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "yield-0"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "yield-1"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "yield-249"
+        },
+        {
+          "pointer": "/cases/4",
+          "id": "yield-250"
+        },
+        {
+          "pointer": "/cases/5",
+          "id": "yield-250.5"
+        },
+        {
+          "pointer": "/cases/6",
+          "id": "yield-30001"
+        },
+        {
+          "pointer": "/cases/7",
+          "id": "yield-100000000000000000000"
+        }
+      ]
+    },
+    {
+      "file": "concurrent-process-input.json",
+      "sha256": "ba45389d66de726a70879c345440cb2a013cf78763b254c31dbc56d815b927df",
+      "case_group": "concurrent-process-input",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "serialized-input-and-poll"
+        }
+      ]
+    },
+    {
+      "file": "concurrent-process-polls.json",
+      "sha256": "03e69de69c24c3e42650aaecfd6748417e59d626b8f4f7aefa629e2d89721138",
+      "case_group": "concurrent-process-polls",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "concurrent-final-drain"
+        }
+      ]
+    },
+    {
+      "file": "declaration-comparison.json",
+      "sha256": "2036e7a34377ef711e02bcd45c8c9eb39af185cb2643f001b42d66dfe99e1a1a",
+      "case_group": "declaration-comparison",
+      "case_pointers": []
+    },
+    {
+      "file": "empty-poll-upper-bound.json",
+      "sha256": "f828000618d944bbde7b7a61c165138aab81196b40c28ace4fffc2875818bddf",
+      "case_group": "empty-poll-upper-bound",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "empty-poll-upper-clamp"
+        }
+      ]
+    },
+    {
+      "file": "outer-numeric-validation.json",
+      "sha256": "9ac877e74b306d8a87f1c18c72880eafb51ee05b48ca2935c7591cc3d23e7565",
+      "case_group": "outer-numeric-validation",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "pragma-negative-yield"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "pragma-fractional-yield"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "pragma-negative-output-budget"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "pragma-fractional-output-budget"
+        },
+        {
+          "pointer": "/cases/4",
+          "id": "pragma-unsafe-integer-yield"
+        },
+        {
+          "pointer": "/cases/5",
+          "id": "pragma-zero-yield"
+        },
+        {
+          "pointer": "/cases/6",
+          "id": "pragma-zero-output-budget"
+        },
+        {
+          "pointer": "/cases/7",
+          "id": "wait-negative-output-budget"
+        },
+        {
+          "pointer": "/cases/8",
+          "id": "wait-fractional-output-budget"
+        }
+      ]
+    },
+    {
+      "file": "outer-output-framing.json",
+      "sha256": "2dfef36fb439f1174205e9467166f930623599829eb7cf39d1e99260abe6793b",
+      "case_group": "outer-output-framing",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "outer-single-text-ascii-truncation"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "outer-single-text-unicode-truncation"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "outer-two-text-block-truncation"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "outer-two-text-block-untruncated"
+        }
+      ]
+    },
+    {
+      "file": "platform-pty-probe.json",
+      "sha256": "47ee8f4a6be5f255c81a38dad2ffe0c552735a7ab77a3c2f94d355e4d2250970",
+      "case_group": "platform-pty-suitability",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "node-spawn-socket-stdio"
+        }
+      ]
+    },
+    {
+      "file": "post-exit-handles.json",
+      "sha256": "5b8d00e691dd3272c11cdd9b36991da170defd119983ca648a622b2e0ace729c",
+      "case_group": "post-exit-handles",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "post-exit-pipe-poll"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "post-exit-pipe-input"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "post-exit-pty-poll"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "post-exit-pty-input"
+        }
+      ]
+    },
+    {
+      "file": "process-supplemental.json",
+      "sha256": "fbb11ef0c03fbee35317b8bf2353c9c1af632665d314704e3dd5d1bf6faf5ed4",
+      "case_group": "process-supplemental",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "pty-dimensions-and-environment"
+        }
+      ]
+    },
+    {
+      "file": "pty-interrupt.json",
+      "sha256": "4854899e31c3a9e6e82c056cfbe61561d95230b2462a7a11ea38b90d16ff5ebe",
+      "case_group": "pty-interrupt",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "pty-interrupt"
+        }
+      ]
+    },
+    {
+      "file": "script-helper-lifecycle.json",
+      "sha256": "59fef1ab8b0c1436814193ad31a02c1f5689095da754ccc18f9ff08bf9fafad3",
+      "case_group": "script-helper-lifecycle",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "text-coercion"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "throw-preserves-prior-output-and-store"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "exit-is-success-and-stops-evaluation"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "unawaited-timer-is-discarded"
+        },
+        {
+          "pointer": "/cases/4",
+          "id": "awaited-and-cleared-timers"
+        },
+        {
+          "pointer": "/cases/5",
+          "id": "throw-in-timer-fails-script"
+        }
+      ]
+    },
+    {
+      "file": "script-yield-wait-and-store.json",
+      "sha256": "9bdd00c709f5ea7c29174b2c029e47bf24e7294eecdcb66d873262ca66398551",
+      "case_group": "script-yield-wait-and-store",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "script-yield-notify-incremental-wait"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "wait-duration-numeric-validation"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "wait-completed-cell-is-stale"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "wait-terminate"
+        },
+        {
+          "pointer": "/cases/4",
+          "id": "store-visibility-across-overlapping-cells"
+        }
+      ]
+    },
+    {
+      "file": "shell-mode-observation.json",
+      "sha256": "5dc1d60a07945ab05db76f19700a8b18505b767449443d51341cabdd45987f85",
+      "case_group": "shell-mode-observation",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "login-false-tty-false"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "login-true-tty-false"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "login-false-tty-true"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "login-true-tty-true"
+        }
+      ]
+    },
+    {
+      "file": "store-serialization.json",
+      "sha256": "16dfb1f96c7a6b829003c4b6dfcef5e1bc6f4b0e1e0a06ec11b5deabff86e1fc",
+      "case_group": "store-serialization",
+      "case_pointers": []
+    },
+    {
+      "file": "unicode-output-truncation.json",
+      "sha256": "ab423c0adbc3e282e9bd43e948c86b8234191f9f87f469d0acdc97e7c242c1e9",
+      "case_group": "unicode-output-truncation",
+      "case_pointers": [
+        {
+          "pointer": "/cases/0",
+          "id": "emoji-full"
+        },
+        {
+          "pointer": "/cases/1",
+          "id": "emoji-truncated"
+        },
+        {
+          "pointer": "/cases/2",
+          "id": "combining-full"
+        },
+        {
+          "pointer": "/cases/3",
+          "id": "ascii-odd-budget"
+        }
+      ]
+    }
+  ],
+  "comparison_guidance": {
+    "nondeterministic_fields": [
+      "chunk_id",
+      "session_id",
+      "cell_id",
+      "wall_time_seconds",
+      "caller-measured elapsed milliseconds"
+    ],
+    "rules": [
+      "Map cell and session identifiers bijectively within a case; preserve equality and stale-handle relationships.",
+      "Compare timing against observed bounds with scheduler tolerance; elapsed samples are not exact timing promises.",
+      "Preserve output text, line endings, truncation markers, token counts, statuses, and exit codes.",
+      "Preserve causal output ordering; independent notification delivery timing is not a guaranteed scheduler order."
+    ]
+  },
+  "owned_yielded_handles": {
+    "commands": [
+      {
+        "session_id": 54825,
+        "status": "completed",
+        "evidence": "command-yield-numeric.json#/cases/1/cleanup"
+      },
+      {
+        "session_id": 62990,
+        "status": "completed",
+        "evidence": "command-yield-numeric.json#/cases/2/cleanup"
+      },
+      {
+        "session_id": 92399,
+        "status": "completed",
+        "evidence": "command-yield-numeric.json#/cases/3/cleanup"
+      },
+      {
+        "session_id": 7239,
+        "status": "completed",
+        "evidence": "command-yield-numeric.json#/cases/4/cleanup"
+      },
+      {
+        "session_id": 99053,
+        "status": "completed",
+        "evidence": "command-io-lifecycle.json#/cases/1/steps/1/result"
+      },
+      {
+        "session_id": 61485,
+        "status": "completed",
+        "evidence": "command-io-lifecycle.json#/cases/2/steps/0/result"
+      },
+      {
+        "session_id": 31872,
+        "status": "completed",
+        "evidence": "command-long-waits.json#/cases/0/cleanup"
+      },
+      {
+        "session_id": 36523,
+        "status": "completed",
+        "evidence": "command-long-waits.json#/cases/1/cleanup"
+      },
+      {
+        "session_id": 45492,
+        "status": "completed",
+        "evidence": "command-output-and-poll-bounds.json#/cases/0/cleanup"
+      },
+      {
+        "session_id": 15145,
+        "status": "completed",
+        "evidence": "post-exit-handles.json#/cases/0/steps/0/result"
+      },
+      {
+        "session_id": 79753,
+        "status": "completed",
+        "evidence": "post-exit-handles.json#/cases/1/steps/1/result"
+      },
+      {
+        "session_id": 72674,
+        "status": "completed",
+        "evidence": "post-exit-handles.json#/cases/2/steps/0/result"
+      },
+      {
+        "session_id": 78362,
+        "status": "completed",
+        "evidence": "post-exit-handles.json#/cases/3/steps/0/result"
+      },
+      {
+        "session_id": 21853,
+        "status": "completed",
+        "evidence": "pty-interrupt.json#/cases/0/steps/0/result"
+      },
+      {
+        "session_id": 72649,
+        "status": "completed",
+        "evidence": "empty-poll-upper-bound.json#/cases/0/cleanup/result"
+      },
+      {
+        "session_id": 36024,
+        "status": "completed",
+        "evidence": "command-pty-boundaries.json#/cases/1/cleanup"
+      },
+      {
+        "session_id": 65974,
+        "status": "completed_then_stale",
+        "evidence": "concurrent-process-polls.json#/cases/0/steps/0/results"
+      },
+      {
+        "session_id": 70773,
+        "status": "completed",
+        "evidence": "concurrent-process-input.json#/cases/0/steps/1"
+      }
+    ],
+    "scripts": [
+      {
+        "cell_id": "25",
+        "status": "completed_then_stale",
+        "evidence": "script-yield-wait-and-store.json#/cases/2"
+      },
+      {
+        "cell_id": "40",
+        "status": "completed",
+        "evidence": "script-yield-wait-and-store.json#/cases/0"
+      },
+      {
+        "cell_id": "41",
+        "status": "terminated_then_stale",
+        "evidence": "script-yield-wait-and-store.json#/cases/3"
+      },
+      {
+        "cell_id": "45",
+        "status": "completed",
+        "evidence": "script-yield-wait-and-store.json#/cases/4"
+      },
+      {
+        "cell_id": "48",
+        "status": "completed",
+        "evidence": "outer-numeric-validation.json#/cases/5"
+      }
+    ],
+    "remaining_live_handles": 0,
+    "verification": "Every owned yielded handle has a terminal response in the observed transcript; no process-wide enumeration or unrelated-handle access was used."
+  },
+  "unverified": [
+    "Exact current runtime build identity.",
+    "Original outer result transport content-part boundaries.",
+    "Cancellation behavior of nested host commands when the enclosing script is terminated.",
+    "Output policy caps beyond requested budgets.",
+    "Exact omitted outer wait duration; only the declaration default and explicit samples are available.",
+    "Provider retained-history attribution; no additional lifetime matrix was run."
+  ],
+  "validation": {
+    "all_files_parse_as_json": true,
+    "neutral_content_check": "passed",
+    "machine_specific_source_paths_absent": true
+  }
+}
