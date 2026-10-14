@@ -233,13 +233,13 @@ Support for the configured external editor inside Create from text… is a later
 
 ## Further Notes
 
-Work is integrated on the consumer branch `pi-attachments/integration` and the upstream branch `pi-attachments/host-integration`. The upstream work starts from `3daa20280f6a7c7cbe0935680c9a38fdc3863005`. Its package version is 1.2.0, but that version number does not identify a published build containing these changes. The new public interfaces remain unreleased. A clean installation using the consumer's pinned Pi 1.0.2 dependencies cannot run the complete integration; update the dependency floor only after an upstream release containing the required interfaces exists.
+Work is integrated on `main` in both the consumer and upstream repositories. The upstream work starts from `3daa20280f6a7c7cbe0935680c9a38fdc3863005`. Its package version is 1.2.0, but that version number does not identify a published build containing these changes. The new public interfaces remain unreleased. A clean installation using the consumer's pinned Pi 1.0.2 dependencies cannot run the complete integration; update the dependency floor only after an upstream release containing the required interfaces exists.
 
 Pi owns named extension actions, effective bindings, and enum settings in its standard menu. Its public targeted-edit and text-identity contracts preserve the requesting editor state through asynchronous capture, undo, prompt history, and collapsed native pastes. A submission-preparation boundary receives the actual editor identity and awaits existing captures before ordinary input transformations. It does not infer a draft from matching text or create a snapshot on Send. Editor submissions preserve receipt order through preparation without waiting for provider responses; queued message identity remains intact for other extensions. A separate delivery boundary prepares images using current policy and can reject one submission while unrelated work continues. Local image-visibility, resize, width, and padding fixes remain independently usable.
 
 Markdown destinations decode named and numeric character references while preserving escaped ampersands, local file autolinks, and literal `%20` in ordinary paths. Generated destinations escape Markdown syntax. Historical `Attachment:` references, including renamed labels and image syntax, reuse an existing literal retained filename before normalizing the destination. That compatibility lookup occurs when the reference enters the draft; previews wait for it and redraws reuse its result.
 
-Build and install one coherent set of public packages from the upstream integration branch for local verification. The existing packaging tools keep direct and transitive Pi dependencies together. After hydrating the checkouts' locked dependencies, use:
+Build and install one coherent set of public packages from the upstream `main` branch containing this work for local verification. The existing packaging tools keep direct and transitive Pi dependencies together. After hydrating the checkouts' locked dependencies, use:
 
 ```sh
 cd /path/to/pi
