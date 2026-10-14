@@ -817,8 +817,7 @@ for (const failure of [
 
 test("autocomplete updates and native application actions survive the paste decorator", async (t) => {
   const host = await nativePi(t)
-  const factory = host.ui.getEditorComponent()
-  host.ui.setEditorComponent((...args) => factory(...args))
+  assert.equal(host.ui.getEditorComponent(), undefined)
   host.ui.setEditorText("!echo draft")
   host.input("\x1b")
   assert.equal(host.ui.getEditorText(), "")

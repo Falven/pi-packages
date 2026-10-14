@@ -364,8 +364,12 @@ for (const view of ["formatted", "source"]) {
         for (let i = 0; i < 3; i++) host.input("\x1b[1;2D")
       }
       if (position === "inside") {
-        await host.runtime.session.prompt("/attachments")
-        assert.match(host.render(), /No attachments in this draft/)
+        const pending = host.runtime.session.prompt("/attachments")
+        await waitFor(() => assert.match(host.render(), /Manage attachments/))
+        assert.match(host.render(), /Settings/)
+        assert.doesNotMatch(host.render(), /Choose attachment/)
+        host.input("\x1b")
+        await pending
         assert.equal(host.ui.getEditorText(), before)
         host.input("chosen")
         assert.equal(

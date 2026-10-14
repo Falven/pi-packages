@@ -256,7 +256,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
     },
     change(editorAccess, _ctx, origin, replaced) {
       if (access !== editorAccess || removingReferences) return
-      revision++
+      if (origin !== undefined) revision++
       if (restoration) {
         const apply = restoration
         restoration = undefined
@@ -293,25 +293,31 @@ export default function piAttachments(pi: ExtensionAPI): void {
         const range = capture.edit.snapshot()
         if (!range) return []
         capture.submitted = true
-        return [{ ...range, result: capture.result }]
+        return [{ insert: range.insert, result: capture.result }]
       })
       const preparation = markdown.prepare(request)
       const [prepared, additions] = await Promise.all([
         preparation,
         Promise.all(
-          insertions.map(async ({ result, ...range }) =>
-            Object.assign(range, { text: await result }),
-          ),
+          insertions.map(async ({ result, insert }) => {
+            const text = await result
+            return text === undefined ? [] : insert(text)
+          }),
         ),
       ])
+      const inserted = additions.flat()
       const edits = [
-        ...prepared.replacements,
-        ...additions.flatMap((addition) =>
-          addition.text === undefined
-            ? []
-            : [{ ...addition, text: addition.text }],
+        ...prepared.replacements.filter(
+          (replacement) =>
+            !inserted.some(
+              (edit) =>
+                edit.from < replacement.to && edit.to > replacement.from,
+            ),
         ),
-      ].toSorted((left, right) => right.from - left.from)
+        ...inserted,
+      ]
+        .toReversed()
+        .toSorted((left, right) => right.from - left.from)
       let text = request.text
       for (const edit of edits)
         text = text.slice(0, edit.from) + edit.text + text.slice(edit.to)

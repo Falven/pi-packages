@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { beforeEach, test } from "node:test"
 import { setTimeout as delay } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
+import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
 import { nativePi, waitFor } from "../fixtures/native-pi.mjs"
 
@@ -67,9 +68,10 @@ for (const [editor, extensions] of [
         (pi) => {
           pi.on("session_start", (_event, ctx) => {
             const previous = ctx.ui.getEditorComponent()
-            assert.ok(previous)
             ctx.ui.setEditorComponent((...args) => {
-              const component = previous(...args)
+              const component = previous
+                ? previous(...args)
+                : new CustomEditor(...args)
               component.onPasteImage = () => component.insertTextAtCursor(text)
               return component
             })

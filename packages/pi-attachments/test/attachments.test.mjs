@@ -201,6 +201,83 @@ for (const composer of [false, true]) {
   })
 }
 
+test("a pending path paste uses the composer's formatted selection when Send waits", async (t) => {
+  const host = await nativePi(t, [
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
+  ])
+  const source = join(host.directory, "selection.txt")
+  await writeFile(source, "Selection capture")
+  host.ui.setEditorText("Keep **old**")
+  for (let count = 0; count < 3; count++) host.input("\x1b[1;2D")
+  const held = holdFileRead(t, source)
+  host.input(`\x1b[200~${source}\x1b[201~`)
+  await held.started()
+  host.submit()
+  host.input("later")
+  held.release()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const sent = host.requests[0].messages
+    .findLast(({ role }) => role === "user")
+    .content.find(({ type }) => type === "text").text
+  assert.equal(
+    sent,
+    `Keep \n[Attachment: selection.txt](<${snapshotPath(sent)}>)`,
+  )
+  assert.equal(await readFile(snapshotPath(sent), "utf8"), "Selection capture")
+  assert.equal(host.ui.getEditorText(), "Keep **later**")
+})
+
+test("one Send retains concurrent path pastes in their original order", async (t) => {
+  const host = await nativePi(t)
+  const first = join(host.directory, "first.txt")
+  const second = join(host.directory, "second.txt")
+  await writeFile(first, "First capture")
+  await writeFile(second, "Second capture")
+  const held = holdFileRead(t, first)
+  host.input(`\x1b[200~${first}\x1b[201~`)
+  await held.started()
+  host.input(`\x1b[200~${second}\x1b[201~`)
+  host.submit()
+  held.release()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const sent = host.requests[0].messages
+    .findLast(({ role }) => role === "user")
+    .content.find(({ type }) => type === "text").text
+  assert.ok(sent.indexOf("first.txt") < sent.indexOf("second.txt"))
+  const paths = [...sent.matchAll(/\]\(<([^>]+)>\)/g)].map((match) => match[1])
+  assert.deepEqual(
+    await Promise.all(paths.map((path) => readFile(path, "utf8"))),
+    ["First capture", "Second capture"],
+  )
+})
+
+test("a pending selection paste replaces a captured Markdown destination without leaving its suffix", async (t) => {
+  const host = await nativePi(t, [
+    fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
+  ])
+  const previous = join(host.directory, "old.txt")
+  const next = join(host.directory, "new.txt")
+  await writeFile(previous, "Previous capture")
+  await writeFile(next, "New capture")
+  const previousRead = holdFileRead(t, previous)
+  const nextRead = holdFileRead(t, next)
+  host.ui.setEditorText("Replace [old](old.txt)")
+  await previousRead.started()
+  host.input("\x1b[97;9u")
+  host.input(`\x1b[200~${next}\x1b[201~`)
+  await nextRead.started()
+  host.submit()
+  previousRead.release()
+  nextRead.release()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const sent = host.requests[0].messages
+    .findLast(({ role }) => role === "user")
+    .content.find(({ type }) => type === "text").text
+  const path = snapshotPath(sent)
+  assert.equal(sent.trim(), `[Attachment: new.txt](<${path}>)`)
+  assert.equal(await readFile(path, "utf8"), "New capture")
+})
+
 test("Attach accepts local quoted, escaped, URL, home, and relative file paths", async (t) => {
   const host = await nativePi(t)
   const name = "source note.txt"
@@ -630,11 +707,11 @@ test("a programmatic clear to the original text cancels pending automatic attach
   )
 })
 
-test("a later transparent editor factory attaches to the unchanged native draft", async (t) => {
+test("a later native editor factory attaches to the unchanged draft", async (t) => {
   const host = await nativePi(t)
   host.ui.setEditorText("Current draft")
-  const previous = host.ui.getEditorComponent()
-  host.ui.setEditorComponent((...args) => previous(...args))
+  assert.equal(host.ui.getEditorComponent(), undefined)
+  host.ui.setEditorComponent((...args) => new CustomEditor(...args))
 
   await host.attachText("Composed snapshot")
   const path = snapshotPath(host.ui.getEditorText())
@@ -727,8 +804,7 @@ test("a later factory keeps composer selection replacement and undo when attachi
 
 test("native callbacks, ordinary text, and autocomplete updates survive attachment observation", async (t) => {
   const host = await nativePi(t)
-  const previous = host.ui.getEditorComponent()
-  host.ui.setEditorComponent((...args) => previous(...args))
+  assert.equal(host.ui.getEditorComponent(), undefined)
   host.ui.setEditorText("!echo draft")
   host.input("\x1b")
   assert.equal(
