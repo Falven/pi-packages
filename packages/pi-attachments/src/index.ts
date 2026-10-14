@@ -211,7 +211,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
           if (property === "onChange") {
             // Pi rewires callbacks on every installation, including reused editors.
             revision++
-            target.onChange = (text) => {
+            target.onChange = (text, origin) => {
               revision++
               if (removingReferences) return
               if (restoration) {
@@ -225,7 +225,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
                 }
                 text = target.getText()
               }
-              value?.(text)
+              value?.(text, origin)
             }
             return true
           }
