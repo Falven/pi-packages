@@ -92,6 +92,164 @@ test("a local file autolink preserves its visible source label when the destinat
   assert.match(host.render(), /Manage attachments/)
 })
 
+for (const spelling of [
+  "a&amp;b.txt",
+  "a&#38;b.txt",
+  "a&#x26;b.txt",
+  "a&copy;b.txt",
+]) {
+  test(`Markdown destination ${spelling} captures decoded contents and restores membership`, async (t) => {
+    const host = await nativePi(t)
+    const filename = spelling.includes("copy") ? "a©b.txt" : "a&b.txt"
+    await writeFile(join(host.directory, filename), "Decoded destination")
+    await writeFile(
+      join(host.directory, spelling),
+      "Wrong literal entity destination",
+    )
+    host.ui.setEditorText(
+      spelling.includes("copy")
+        ? `[notes][target]\n\n[target]: <${spelling}>`
+        : `[notes](<${spelling}>)`,
+    )
+    await waitFor(() =>
+      assert.match(host.ui.getEditorText(), /pi-attachments\/snapshot-/),
+    )
+    const [, escapedPath] = /<([^>]+)>/.exec(host.ui.getEditorText())
+    const path = escapedPath.replaceAll("\\&", "&")
+    assert.equal(await readFile(path, "utf8"), "Decoded destination")
+    host.ui.setEditorText(path)
+    assert.doesNotMatch(host.render(), /Manage attachments/)
+    const restored = `[notes](<${path.replace(filename, spelling)}>)`
+    host.ui.setEditorText(restored)
+    assert.match(host.render(), /Manage attachments/)
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    assert.equal(host.ui.getEditorText(), "")
+    assert.ok(
+      host.requests[0].messages.some(
+        (message) =>
+          message.role === "user" &&
+          message.content.some((content) => content.text === restored),
+      ),
+    )
+    assert.equal(await readFile(path, "utf8"), "Decoded destination")
+  })
+}
+
+for (const autolink of [false, true]) {
+  test(`${autolink ? "autolink" : "escaped ampersand"} preserves literal entity filename`, async (t) => {
+    const host = await nativePi(t)
+    const source = join(host.directory, "a&amp;b.txt")
+    await writeFile(source, "Literal entity destination")
+    await writeFile(
+      join(host.directory, "a&b.txt"),
+      "Wrong decoded destination",
+    )
+    const draft = autolink
+      ? `<${pathToFileURL(source).href}>`
+      : String.raw`[notes](a\&amp;b.txt)`
+    host.ui.setEditorText(draft)
+    await waitFor(() =>
+      assert.match(host.ui.getEditorText(), /pi-attachments\/snapshot-/),
+    )
+    const [, escapedPath] = /\]\(<([^>]+)>\)/.exec(host.ui.getEditorText())
+    const path = escapedPath.replaceAll("\\&", "&")
+    assert.equal(await readFile(path, "utf8"), "Literal entity destination")
+    assert.match(host.render(), /Manage attachments/)
+    await writeFile(
+      path.replace("a&amp;b.txt", "a&b.txt"),
+      "Wrong decoded retained contents",
+    )
+    const legacy = `[Attachment: a&amp;b.txt](<${path}>)`
+    host.ui.setEditorText(legacy)
+    await waitFor(() => assert.ok(host.ui.getEditorText().includes("\\&")))
+    const normalized = host.ui.getEditorText()
+    assert.match(host.render(), /Manage attachments/)
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    assert.ok(
+      host.requests[0].messages.some(
+        (message) =>
+          message.role === "user" &&
+          message.content.some((content) => content.text === normalized),
+      ),
+    )
+  })
+}
+
+for (const filename of ["a&b.txt", "a&amp;b.txt", "&copy;.txt"]) {
+  test(`Attach writes an unambiguous reference for ${filename}`, async (t) => {
+    const host = await nativePi(t)
+    const source = join(host.directory, filename)
+    await writeFile(source, "Generated reference contents")
+    await host.attachFile(source)
+    const draft = host.ui.getEditorText()
+    const [, escapedPath] = /\]\(<([^>]+)>\)/.exec(draft)
+    const path = escapedPath.replaceAll("\\&", "&")
+    assert.equal(await readFile(path, "utf8"), "Generated reference contents")
+    assert.ok(
+      draft.includes(`[Attachment: ${filename.replaceAll("&", "\\&")}]`),
+    )
+    assert.match(host.render(), /Manage attachments/)
+    if (filename === "a&b.txt") {
+      host.ui.setEditorText(
+        `[Attachment: a&amp;b.txt](<${path.replaceAll("&", "&amp;")}>)`,
+      )
+      await waitFor(() => assert.match(host.render(), /Manage attachments/))
+      await fs.mkdir(path.replaceAll("&", "&amp;"))
+      host.ui.setEditorText(host.ui.getEditorText())
+      await waitFor(() => assert.match(host.render(), /Manage attachments/))
+    }
+    const submitted = host.ui.getEditorText().trim()
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    assert.ok(
+      host.requests[0].messages.some(
+        (message) =>
+          message.role === "user" &&
+          message.content.some((content) => content.text === submitted),
+      ),
+    )
+  })
+}
+
+test("legacy normalization reuses its pending lookup across typing and redraws", async (t) => {
+  const host = await nativePi(t)
+  const directory = join(host.agentDir, "pi-attachments", "legacy")
+  await fs.mkdir(directory, { recursive: true })
+  const path = join(directory, "a&amp;b.txt")
+  await writeFile(path, "Legacy retained contents")
+  await writeFile(join(directory, "a&b.txt"), "Wrong decoded retained contents")
+  const ready = Promise.withResolvers()
+  const original = fs.stat
+  let lookups = 0
+  t.mock.method(fs, "stat", async (file, ...options) => {
+    if (file === path) {
+      lookups++
+      await ready.promise
+    }
+    return original(file, ...options)
+  })
+  syncBuiltinESMExports()
+  t.after(() => {
+    t.mock.restoreAll()
+    syncBuiltinESMExports()
+  })
+  host.ui.setEditorText(`[Attachment: a&amp;b.txt](<${path}>)`)
+  await waitFor(() => assert.equal(lookups, 1))
+  host.input(" tail")
+  host.resize(70)
+  host.render()
+  assert.equal(lookups, 1)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
+  ready.resolve()
+  await waitFor(() => assert.ok(host.ui.getEditorText().includes("\\&")))
+  assert.ok(host.ui.getEditorText().endsWith(" tail"))
+  assert.match(host.render(), /Manage attachments/)
+  assert.equal(lookups, 1)
+  assert.equal(await readFile(path, "utf8"), "Legacy retained contents")
+})
+
 test("local path characters and file-URL encoding preserve the actual filename", async (t) => {
   const host = await nativePi(t)
   const source = join(host.directory, "notes%20literal.txt")

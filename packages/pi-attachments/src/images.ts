@@ -228,11 +228,9 @@ export function registerImages(
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
           const settings = pi.getSettings()
-          const selectedSize = pi.getSetting(THUMBNAIL_SETTING)
-          const size: keyof typeof THUMBNAIL_BOUNDS =
-            selectedSize === "small" || selectedSize === "large"
-              ? selectedSize
-              : "medium"
+          const size = pi.getSetting(
+            THUMBNAIL_SETTING,
+          ) as keyof typeof THUMBNAIL_BOUNDS
           const bounds = THUMBNAIL_BOUNDS[size]
           const showImages = settings.terminal?.showImages ?? true
           const configuredWidth = settings.terminal?.imageWidthCells

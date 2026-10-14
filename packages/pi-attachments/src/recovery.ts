@@ -8,6 +8,7 @@ import {
   type InputEvent,
 } from "@earendil-works/pi-coding-agent"
 import { markUnused, type UnpublishedCapture } from "./cleanup.ts"
+import { attachmentLink } from "./references.ts"
 
 const unpublishedKey = Symbol.for("pi-attachments:unpublished-captures")
 type RequestContext = {
@@ -104,7 +105,7 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
         : [],
     )
     const reference = files
-      .map(({ name, path }) => `[Attachment: ${name}](<${path}>)`)
+      .map(({ name, path }) => attachmentLink(name, path))
       .join("\n")
     const recovery = files[0]
       ? `${files[0].path}.draft.md`
@@ -179,7 +180,7 @@ export async function saveRequest(
           mode: 0o600,
           flush: true,
         })
-        return `[Attachment: ${name}](<${path}>)`
+        return attachmentLink(name, path)
       }),
     )
     const references = writes.map((write) => {

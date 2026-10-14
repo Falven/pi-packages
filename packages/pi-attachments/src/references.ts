@@ -1,8 +1,24 @@
-import { resolve, sep } from "node:path"
+import { basename, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { Marked, type Token, type Tokens } from "@earendil-works/pi-tui"
+import { decodeHTMLStrict } from "entities"
 
 const parser = new Marked()
+const destinationEscape = new RegExp(
+  parser.Lexer.rules.inline.normal.escape.source.slice(1),
+  "g",
+)
+
+function markdownDestination(raw: string): string {
+  const href = raw.startsWith("<") ? raw.slice(1, -1) : raw
+  let decoded = ""
+  let offset = 0
+  for (const match of href.matchAll(destinationEscape)) {
+    decoded += decodeHTMLStrict(href.slice(offset, match.index)) + match[1]
+    offset = match.index + match[0].length
+  }
+  return decoded + decodeHTMLStrict(href.slice(offset))
+}
 const linkRule = parser.Lexer.rules.inline.normal.link
 const linkDestination = new RegExp(linkRule.source, `${linkRule.flags}d`)
 const definitionRule = parser.Lexer.rules.block.normal.def
@@ -141,13 +157,22 @@ function localPath(href: string, cwd: string): string | undefined {
   return resolve(cwd, href)
 }
 
-export function fileReferences(text: string, cwd: string) {
+export function fileDestination(path: string): string {
+  return `<${path.replace(/[\\&|]/g, "\\$&")}>`
+}
+
+export function attachmentLink(name: string, path: string): string {
+  return `[Attachment: ${name.replace(/[\\[\]&]/g, "\\$&")}](${fileDestination(path)})`
+}
+
+export function fileReferences(text: string, cwd: string, storage?: string) {
   const references: {
     path: string
     from: number
     to: number
     destination: Range
     label?: string
+    legacyPath?: string
   }[] = []
   const links: {
     token: Tokens.Link | Tokens.Image
@@ -237,9 +262,9 @@ export function fileReferences(text: string, cwd: string) {
     to: (offset) => offset,
   })
   for (const { token, map, from, to } of links) {
-    const path = localPath(token.href, cwd)
-    if (!path) continue
     if (token.raw.startsWith("<")) {
+      const path = localPath(token.href, cwd)
+      if (!path) continue
       references.push({
         path,
         from,
@@ -257,7 +282,28 @@ export function fileReferences(text: string, cwd: string) {
       const tag = (match?.[2] || match?.[1])?.replace(/\s+/g, " ").toLowerCase()
       range = tag ? definitions.get(tag) : undefined
     }
-    if (range) references.push({ path, from, to, destination: range })
+    if (!range) continue
+    const raw = text.slice(range.from, range.to)
+    const path = localPath(markdownDestination(raw), cwd)
+    const literal = raw.startsWith("<")
+      ? localPath(raw.slice(1, -1), cwd)
+      : undefined
+    const legacyPath =
+      storage &&
+      literal?.startsWith(storage + sep) &&
+      literal !== path &&
+      !basename(literal).includes("\\") &&
+      token.raw === `[Attachment: ${basename(literal)}](${raw})`
+        ? literal
+        : undefined
+    if (path)
+      references.push({
+        path,
+        from,
+        to,
+        destination: range,
+        ...(legacyPath ? { legacyPath } : {}),
+      })
   }
   return references
 }
@@ -267,7 +313,7 @@ export function attachmentReferences(
   storage: string,
   cwd = process.cwd(),
 ) {
-  return fileReferences(text, cwd).filter(({ path }) =>
+  return fileReferences(text, cwd, storage).filter(({ path }) =>
     path.startsWith(storage + sep),
   )
 }

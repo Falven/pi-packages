@@ -4,12 +4,18 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent"
-import { attachmentReferences, fileReferences } from "./references.ts"
+import {
+  attachmentReferences,
+  fileDestination,
+  fileReferences,
+} from "./references.ts"
 import { saveRequest, saveSnapshot } from "./recovery.ts"
 
 type Reference = ReturnType<typeof fileReferences>[number]
 type Outcome =
   | { saved: Awaited<ReturnType<typeof saveSnapshot>> }
+  | { retainedPath: string }
+  | { unchanged: true }
   | { error: string }
   | undefined
 type Capture = {
@@ -25,7 +31,7 @@ type Draft = {
 }
 
 function replacement(reference: Reference, path: string): string {
-  const destination = `<${path.replaceAll("\\", "\\\\").replaceAll("|", "\\|")}>`
+  const destination = fileDestination(path)
   return reference.label === undefined
     ? destination
     : `[${reference.label.replace(/[\\[\]`*_]/g, "\\$&")}](${destination})`
@@ -109,11 +115,14 @@ export function registerMarkdown(
       const errors = new Set<string>()
       for (const { reference, outcome } of results) {
         if (outcome && "error" in outcome) errors.add(outcome.error)
-        else if (outcome?.saved)
+        else if (outcome && !("unchanged" in outcome)) {
+          const path =
+            "saved" in outcome ? outcome.saved.paths[0]! : outcome.retainedPath
           destinations.set(reference.destination.from, {
             to: reference.destination.to,
-            text: replacement(reference, outcome.saved.paths[0]!),
+            text: replacement(reference, path),
           })
+        }
       }
       let text = draft.text
       for (const [from, edit] of [...destinations].toSorted(
@@ -168,11 +177,7 @@ export function registerMarkdown(
             draft = { text, sessionId, references: [] }
             const captures = new Map<string, Capture>()
             const destinations = new Set<number>()
-            for (const reference of fileReferences(text, ctx.cwd)) {
-              if (reference.path.startsWith(storage + sep)) {
-                draft.references.push({ reference })
-                continue
-              }
+            for (const reference of fileReferences(text, ctx.cwd, storage)) {
               const earlier =
                 !replaced &&
                 previous?.sessionId === sessionId &&
@@ -190,6 +195,45 @@ export function registerMarkdown(
                       )
                     })
                   : undefined
+              if (reference.legacyPath) {
+                if (
+                  earlier?.reference.legacyPath === reference.legacyPath &&
+                  earlier.capture
+                ) {
+                  draft.references.push({ reference, capture: earlier.capture })
+                  continue
+                }
+                const edit = ctx.ui.captureEditorEdit(
+                  reference.destination.from,
+                  reference.destination.to,
+                )
+                // Resolve historical literal-entity filenames on entry, never during rendering.
+                const promise: Promise<Outcome> = stat(reference.legacyPath)
+                  .then((file) => {
+                    if (!file.isFile()) return { unchanged: true } as const
+                    const path = reference.legacyPath!
+                    if (!signal.aborted)
+                      edit.replace(replacement(reference, path))
+                    return { retainedPath: path }
+                  })
+                  .catch((error: NodeJS.ErrnoException) => {
+                    if (error.code === "ENOENT" || error.code === "ENOTDIR")
+                      return { unchanged: true } as const
+                    const message = `Could not restore attachment ${reference.legacyPath}: ${String(error)}`
+                    if (!signal.aborted) ctx.ui.notify(message, "error")
+                    return { error: message }
+                  })
+                const capture: Capture = { promise, submitted: false }
+                void promise.then((outcome) => {
+                  capture.outcome = outcome
+                })
+                draft.references.push({ reference, capture })
+                continue
+              }
+              if (reference.path.startsWith(storage + sep)) {
+                draft.references.push({ reference })
+                continue
+              }
               let capture = earlier?.capture
               if (!capture && origin !== "undo" && origin !== "redo") {
                 capture = captures.get(reference.path)
@@ -269,10 +313,13 @@ export function registerMarkdown(
         return attachmentReferences(text, storage, ctx.cwd)
       return draft.references.flatMap(({ reference, capture }) => {
         const outcome = capture?.outcome
+        if (reference.legacyPath && (!outcome || "error" in outcome)) return []
         const path =
           outcome && "saved" in outcome
             ? outcome.saved.paths[0]!
-            : reference.path
+            : outcome && "retainedPath" in outcome
+              ? outcome.retainedPath
+              : reference.path
         return path.startsWith(storage + sep) ? [{ ...reference, path }] : []
       })
     },
