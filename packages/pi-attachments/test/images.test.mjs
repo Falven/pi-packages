@@ -47,7 +47,7 @@ async function chooseThumbnailSize(host, size) {
   const labels = { small: "Small", medium: "Medium", large: "Large" }
   const pending = host.runtime.session.prompt("/attachments")
   await waitFor(() => assert.match(host.render(), /Settings/))
-  host.input("\x1b[A")
+  host.input("\x1b[B")
   host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -325,21 +325,23 @@ test("native image-only follow-up resizes for the current model while retaining 
   assert.equal(host.ui.getEditorText(), "Keep this later draft")
 })
 
-test("an image preparation failure stops native submission and retains a readable request after the editor clears", async (t) => {
+test("an image preparation failure stops native submission before clearing and retains a readable request", async (t) => {
   const host = await nativePi(t)
   const source = join(host.directory, "broken.png")
   const broken = Buffer.from(PNG, "base64").subarray(0, 33)
   await writeFile(source, broken)
   await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
-  const draft = host.ui.getEditorText().trim()
+  const draft = host.ui.getEditorText()
   const sessionId = host.runtime.session.sessionId
   await rm(source)
   host.submit()
-  await waitFor(() => assert.match(host.render(), /Image request not sent/))
+  await waitFor(() =>
+    assert.match(host.render(), /Attachment request not sent/),
+  )
   assert.equal(host.requests.length, 0)
   assert.equal(host.users.length, 0)
-  assert.equal(host.ui.getEditorText(), "")
+  assert.equal(host.ui.getEditorText(), draft)
   const recovery = await retainedRequest(host, "Delivery:")
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(draft))
@@ -430,7 +432,7 @@ test("image preparation failure retains incoming images as readable snapshots wi
   await writeFile(source, Buffer.from(PNG, "base64").subarray(0, 33))
   await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
-  host.submit()
+  await host.runtime.session.prompt(draft)
   await waitFor(() => assert.match(host.render(), /Image request not sent/))
   assert.equal(host.requests.length, 0)
   const recovery = await retainedRequest(host, "Delivery:")
@@ -690,8 +692,8 @@ test("a native session switch during image preparation retains the old request w
   assert.notEqual(host.runtime.session.sessionId, sessionId)
   assert.equal(host.ui.getEditorText(), "New session's draft")
   assert.equal(host.requests.length, 0)
-  assert.deepEqual(recordedSessions, [sessionId])
-  assert.equal(host.users[0].content[0].text, draft)
+  assert.deepEqual(recordedSessions, [])
+  assert.equal(host.users.length, 0)
   assert.equal(
     host.runtime.session.messages.filter((message) => message.role === "user")
       .length,
@@ -794,8 +796,9 @@ test("a failed image recovery write stops delivery and preserves incoming images
   const storage = join(host.agentDir, "pi-attachments")
   await chmod(storage, 0o500)
   try {
-    host.submit()
+    const pending = host.runtime.session.prompt(draft)
     host.ui.setEditorText("Keep the new draft")
+    await pending
     await waitFor(() =>
       assert.match(host.render(), /Request retained in session memory/),
     )
@@ -836,8 +839,9 @@ test("failed image recovery and native append are durably retried in an already-
   await chmod(storage, 0o500)
   await chmod(sessionFile, 0o400)
   try {
-    host.submit()
+    const pending = host.runtime.session.prompt(draft.trim())
     host.ui.setEditorText("Later work after both writes failed")
+    await pending
     await waitFor(() =>
       assert.match(host.render(), /Could not checkpoint the request/),
     )
@@ -934,9 +938,13 @@ test("a snapshot reference cannot deliver an image through a symlink outside ret
   await mkdir(storage)
   const link = join(storage, "escape.png")
   await symlink(outside, link)
-  host.submit(`[Attachment: escape.png](<${link}>)`)
-  await waitFor(() => assert.match(host.render(), /Image request not sent/))
+  const draft = `[Attachment: escape.png](<${link}>)`
+  host.submit(draft)
+  await waitFor(() =>
+    assert.match(host.render(), /Attachment request not sent/),
+  )
   assert.equal(host.requests.length, 0)
   assert.equal(host.users.length, 0)
+  assert.equal(host.ui.getEditorText(), draft)
   assert.equal((await readFile(outside)).toString("base64"), PNG)
 })
