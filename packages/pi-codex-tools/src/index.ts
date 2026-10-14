@@ -8,6 +8,7 @@ import { Type, type TSchema } from "typebox"
 import { createCommand, createStdin } from "./command.ts"
 import { execute } from "./execution.ts"
 import { createImage } from "./image.ts"
+import { createPatch } from "./patch.ts"
 import { ProcessSessions } from "./process.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
@@ -120,6 +121,30 @@ export default function coreTools(pi: ExtensionAPI): void {
   }
   const image = createImage(pi, imageAvailable)
   pi.registerTool(image)
+  const patchAvailable = () => {
+    const active = new Set(pi.getActiveTools())
+    const stock = new Set(
+      pi
+        .getAllTools()
+        .filter((tool) => tool.sourceInfo.source === "builtin")
+        .map((tool) => tool.name),
+    )
+    return (
+      active.has("apply_patch") ||
+      ["edit", "write"].every((name) => active.has(name) && stock.has(name))
+    )
+  }
+  const patch = createPatch(patchAvailable, lifetime.signal)
+  pi.registerTool(patch)
+  const syncPatch = () => {
+    const current = pi.getAllTools().find((tool) => tool.name === patch.name)
+    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
+      return
+    const exposure = patchAvailable() ? "codemode" : "hidden"
+    if (current.exposure !== exposure) pi.registerTool({ ...patch, exposure })
+  }
+  pi.on("session_start", syncPatch)
+  pi.on("before_agent_start", syncPatch)
   const syncImage = () => {
     const current = pi.getAllTools().find((tool) => tool.name === image.name)
     if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
@@ -155,6 +180,10 @@ export default function coreTools(pi: ExtensionAPI): void {
               (names.has("exec_command") &&
                 stock.has(tool.name) &&
                 ["bash", "grep", "find", "ls"].includes(tool.name)) ||
+              (names.has("apply_patch") &&
+                (tool.name === "apply_patch" ||
+                  (stock.has(tool.name) &&
+                    ["edit", "write"].includes(tool.name)))) ||
               (names.has("view_image") &&
                 (tool.name === "view_image" ||
                   (names.has("exec_command") &&
