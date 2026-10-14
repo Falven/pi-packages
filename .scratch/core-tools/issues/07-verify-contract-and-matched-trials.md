@@ -6,16 +6,49 @@
 
 **Blocked by:** 06 — Preserve complete workflows in mixed Pi sessions (presentation delta).
 
-**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+**Status:** awaiting-review — presentation verification complete; independent reviews pending
 
 ## Presentation delta
 
-- [ ] Run all affected core-package checks, type checking, lint, formatting, and relevant existing integration checks. Verify the outgoing declarations, input/result encoding, hook redaction, and collection contract are unchanged by presentation.
-- [ ] Verify compact and expanded cards, early pipe/PTY output, origin ownership across cells, invisible retained journals, terminal-status precedence, late failures, no automatic alerts, and bounded large/mixed output through the approved seam.
-- [ ] Compare presentation-enabled completed calls and live output with the completed core baseline without model latency. Record bounded buffer/history behavior, no display polling or extra tool calls, native refresh batching, cleanup, and any material regression.
-- [ ] Run a configured Pi terminal smoke for live output, expansion, continuation, and reload where the terminal is available. State any physical-terminal or configured-runtime validation gap explicitly rather than treating source inspection or a controlled host as equivalent.
+- [x] Run all affected core-package checks, type checking, lint, formatting, and relevant existing integration checks. Verify the outgoing declarations, input/result encoding, hook redaction, and collection contract are unchanged by presentation.
+- [x] Verify compact and expanded cards, early pipe/PTY output, origin ownership across cells, invisible retained journals, terminal-status precedence, late failures, no automatic alerts, and bounded large/mixed output through the approved seam.
+- [x] Compare presentation-enabled completed calls and live output with the completed core baseline without model latency. Record bounded buffer/history behavior, no display polling or extra tool calls, native refresh batching, cleanup, and any material regression.
+- [x] Run a configured Pi terminal smoke for live output, expansion, continuation, and reload where the terminal is available. State any physical-terminal or configured-runtime validation gap explicitly rather than treating source inspection or a controlled host as equivalent.
 - [ ] Complete independent standards and spec reviews of the integration-branch delta and fix all actionable findings. Preserve the original seven tickets’ historical evidence and mark each new delta resolved only after its own acceptance is met or an explicit permitted verification limit is recorded.
-- [ ] Retain existing matched live-model results under their original revisions. Repeat affected deterministic contract checks; only rerun broader live-model trials if the agent interface or execution behavior changes. Do not add extra reports, source-product names, or runtime dependencies.
+- [x] Retain existing matched live-model results under their original revisions. Repeat affected deterministic contract checks; only rerun broader live-model trials if the agent interface or execution behavior changes. Do not add extra reports, source-product names, or runtime dependencies.
+
+## Presentation verification
+
+At integration revision `79c8205b0b55c66b4bbc2c290e34986471f7d8bb`, `node --test packages/pi-codex-tools/test/*.test.ts` passed **197/197** checks, with no failures, cancellations, skips, or todos, in 83.448 seconds. This includes the existing declaration, grammar, raw/custom input and replay, frame-only strings, incremental text/image collection, limits, actual file effects, selection, hook mutation/redaction, cancellation, and lifecycle regressions, alongside all new presentation checks. The frozen contract and all earlier observation files have no changes from pre-presentation revision `5ea9e15785728d479e18c19228ab08df09d7b7ac`; `src/contract.json` still hashes to `5cbe0ef5d62b854f8a5bb4776ab499636b30c467eef097d4d63760b18cac39c2`. Historical matched live-model trials remain attached to their original revisions. Presentation does not require another paid model comparison.
+
+Package type checking, package lint, formatting across 136 affected package/spec/ticket/decision files, and whitespace validation pass. Packing includes the manifest and all ten runtime source/contract files, including `presentation.ts` and `worker.mjs`. The presentation uses the already installed native terminal component package as a development and peer dependency; it adds no separate runtime library. The complete repository suite was not rerun because companion implementation and shared host fixtures are unchanged.
+
+The real-host checks cover compact/expanded cards, early pipe and PTY bytes before returned results, accumulated output in the originating card, later input and independent waits, terminal-status precedence after collection/reload/resume/fork/branch selection, invisible retained records, late failures without notifications or unsolicited turns, native image preferences and disclosure controls, Unicode width, and bounded large/mixed output. Returned hook changes remain authoritative. The accepted visibility limit remains: live process bytes can be seen before a later result hook redacts returned content. Native IDs/context after a yield and image normalization/detail limits remain as recorded in the completed baseline; presentation does not repair them.
+
+### Installed terminal
+
+Two external pipe/PTY checks pass on installed `/Users/fran/Library/pnpm/bin/pi` **1.1.0**, running the actual CLI in a PTY with isolated settings and the existing controlled provider. They load the six usable companions identified in ticket 06 from the tested snapshot, excluding only the pre-existing incompatible attachments extension. Each check observes early output before `exec_command` reaches its public result hook, then a late command exit 7 and script failure without calling `wait` or starting another model turn. A later prompt collects exactly the remaining output, its wait card reports failure without repeating the operation, and reload restores the known failed command. Native expansion is used for each new companion group. Each case makes exactly four provider requests. An initial screen assertion waited on a newly collapsed group; repeating the native expansion control corrected the probe without a package change.
+
+This verifies the installed CLI and real PTY transport, not a physical display or human interaction. The full configured inventory still cannot start because attachments requires an unavailable setting API, independently reproduced without this package in ticket 06. No companion source, user settings, or credentials were changed. The snapshot result does not cover concurrent changes in the primary checkout.
+
+### Presentation performance
+
+A fresh adjacent comparison runs pre-presentation `5ea9e15785728d479e18c19228ab08df09d7b7ac` and revised `79c8205b0b55c66b4bbc2c290e34986471f7d8bb` through the same Pi 1.0.2 native host, expanded 100-column cards, and controlled provider. Each workload has five warmups and twenty measured calls; native execution start/end excludes model transport. Live output emits twenty 4 KiB chunks at 5 ms intervals; the other output workload emits 256 KiB at once. Both use a separate 256-token model budget. Values below are milliseconds, baseline → revised.
+
+| Workload      | Median / p95 execution            | Host shutdown | Runtime cleanup within shutdown |
+| ------------- | --------------------------------- | ------------- | ------------------------------- |
+| Text          | 13.12 / 14.18 → 13.25 / 13.85     | 1.59 → 1.57   | 0.25 → 0.20                     |
+| Short command | 18.78 / 19.41 → 19.22 / 21.13     | 2.21 → 1.68   | 0.19 → 0.20                     |
+| Live output   | 182.46 / 185.88 → 183.64 / 185.68 | 18.38 → 60.86 | 2.73 → 1.17                     |
+| Burst output  | 51.08 / 52.40 → 54.22 / 56.79     | 8.16 → 49.78  | 0.20 → 0.21                     |
+
+Output-heavy presentation has a measured cost: roughly 3 ms median for burst execution and 42 ms more host shutdown in this pair. Native fullscreen shutdown renders the expanded conversation into its exit transcript; the new cards retain and display substantially more readable output than the former fallback. Timing places 59.70/49.57 ms of revised live/burst shutdown in UI stop, rather than runtime disposal. A separate native `resume-hint` exit control reduced those complete shutdowns to 1.55/0.24 ms, confirming the transcript-rendering cost. The package preserves the user's exit setting. Earlier adjacent samples varied, including short-command medians of 19.76 → 19.23 ms; these small runs establish neither a speed improvement nor a general performance guarantee.
+
+Each workload creates exactly 25 workers and 50 provider requests, with zero workers left after cleanup. Revised text/command/live/burst journals contain 50/50/75/75 records and 7,685/20,435/441,715/437,040 serialized data bytes across 25 calls. The largest observed record is 17,395 bytes. Live chunks do not each append a complete growing history snapshot: event observation updates the originating row, while retained snapshots flush at existing yield/collection/terminal boundaries. Process previews retain at most 8 KiB at each end, script previews are bounded to 16 KiB, and each card retains at most eight operations with explicit omissions. Model collection still has its independent bounded queue/storage and cursor.
+
+Sampled whole-process peak RSS for text/command/live/burst was 270.19/284.61/247.92/308.22 MiB baseline and 297.95/315.23/275.58/347.56 MiB revised. These sequential-workload figures include accumulated host/provider captures and native UI history, omit child RSS, and can miss peaks between 5 ms samples; they are not isolated per-cell memory or capacity claims. Revised main-thread delay p95/max ranges were 2.03–3.11/3.13–8.45 ms versus 1.59–2.24/3.05–8.69 ms baseline. Runtime presentation uses process/worker events and native invalidation batching, with no display timer, polling, extra tool call, or worker creation on wait. Existing wait/cancellation/large-output tests verify those lifecycle and collection properties separately.
+
+Temporary probes and raw measurements remain outside the repository. SHA-256 identities: performance probe `ce17006eebd91f11eaba2d3f3243adb4baa56b3c8a66083b9ba7d98ee6cc020b`; final baseline/revised measurements `9740b6f9b01d96153e20165698f989aa21f7cd259dd6accecda358303b8da85a` / `a593ba1dc7fc53c1d9bb8bdfbe7f36d8197c55ab758e60e62dc206711ba3fdc5`; resume-hint control `ef8248c79232731b69e0822676caea498a0634c9178059a05d737937720b6814`; installed live-terminal probe/result `8ced5823cc11d48385a8ff43fcc533d7031cb4c8b0dec063fbf498ab8eebe91a` / `5bf53b5302fc1a5ca26310e9b5641daa3edf83fffd324f5e63358a5895cf53d9`. The independent standards and specification reviews remain pending; this verification does not mark their acceptance complete.
 
 ## Completed baseline
 

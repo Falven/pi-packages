@@ -1,10 +1,10 @@
 # Core toolset
 
-**Status:** presentation corrections approved and ready for implementation
+**Status:** presentation corrections implemented and verified; independent reviews pending
 
-**Triage:** ready-for-agent
+**Triage:** awaiting-review
 
-**Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. That verification does not cover the presentation corrections below.
+**Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. Presentation verification at `79c8205` is recorded separately in ticket 07: 197 package checks pass, as do static checks and two installed-CLI live pipe/PTY checks with the six usable companions. Independent reviews remain pending. The existing attachments startup incompatibility, physical-display gap, and measured cost of rendering expanded output into the native exit transcript remain explicit.
 
 ## Problem Statement
 
