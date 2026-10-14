@@ -17,7 +17,7 @@ const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
 
-test("blocked image delivery skips unreadable attachment preparation and preserves native final enforcement", async (t) => {
+test("blocked images still undergo preparation and a failure keeps the requesting contents recoverable", async (t) => {
   const host = await nativePi(t, [inputExtension], {
     settings: { images: { blockImages: true } },
   })
@@ -30,19 +30,18 @@ test("blocked image delivery skips unreadable attachment preparation and preserv
   await rm(source)
 
   host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  const user = host.requests[0].messages.find(
-    (message) => message.role === "user",
-  )
-  assert.ok(user.content.some((part) => part.text?.includes(draft)))
-  assert.ok(user.content.every((part) => part.type !== "image_url"))
-  assert.deepEqual(host.inputs.at(-1).images, [
-    { type: "image", mimeType: "image/png", data: PNG },
-  ])
+  await waitFor(() => assert.match(host.render(), /Image request not sent/))
+  assert.equal(host.requests.length, 0)
+  assert.equal(host.users.length, 0)
+  assert.equal(host.runtime.session.pendingMessageCount, 0)
   assert.deepEqual(await readFile(path), broken)
-  assert.ok((await retainedRequest(host, "Delivery:")).text.includes(draft))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  assert.doesNotMatch(host.render(), /Image request not sent/)
+  const recovery = await retainedRequest(host, "Delivery:")
+  assert.ok(recovery.text.includes(draft))
+  const supplied = /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/.exec(
+    recovery.text,
+  )
+  assert.ok(supplied, "the earlier handler's image remains recoverable")
+  assert.equal((await readFile(supplied[1])).toString("base64"), PNG)
 })
 
 for (const behavior of ["steer", "followUp"]) {
@@ -51,18 +50,15 @@ for (const behavior of ["steer", "followUp"]) {
       const response = Promise.withResolvers()
       t.after(() => response.resolve())
       const host = await nativePi(t, [], {
-        settings: { images: { blockImages: blockedAtQueue } },
-      })
-      await host.runtime.session.setModel({
-        ...host.runtime.session.model,
-        inputLimits: { images: { resize: { maxWidth: 1, maxHeight: 1 } } },
+        settings: {
+          images: { blockImages: blockedAtQueue, autoResize: false },
+        },
       })
       host.replies.push(response.promise)
       host.submit("Finish the active request")
       await waitFor(() => assert.equal(host.requests.length, 1))
       const source = join(host.directory, "queued.png")
-      const original = Buffer.from(PNG, "base64")
-      const bytes = blockedAtQueue ? original : original.subarray(0, 33)
+      const bytes = Buffer.from(PNG, "base64")
       await writeFile(source, bytes)
       await host.attachFile(source)
       const draft = host.ui.getEditorText().trim()
@@ -71,9 +67,11 @@ for (const behavior of ["steer", "followUp"]) {
       await waitFor(() =>
         assert.equal(host.runtime.session.pendingMessageCount, 1),
       )
-      assert.equal(host.inputs.at(-1).images, undefined)
+      assert.deepEqual(host.inputs.at(-1).images, [
+        { type: "image", mimeType: "image/png", data: PNG },
+      ])
       host.runtime.session.settingsManager.applyOverrides({
-        images: { blockImages: !blockedAtQueue, autoResize: false },
+        images: { blockImages: !blockedAtQueue },
       })
       await rm(source)
       host.ui.setEditorText("Unrelated later work")
@@ -102,7 +100,7 @@ for (const behavior of ["steer", "followUp"]) {
     })
   }
 
-  test(`${behavior} delivery uses auto-resize enabled after queueing`, async (t) => {
+  test(`${behavior} keeps the resize policy used before queueing when settings change later`, async (t) => {
     const response = Promise.withResolvers()
     t.after(() => response.resolve())
     const host = await nativePi(t, [], {
@@ -136,15 +134,16 @@ for (const behavior of ["steer", "followUp"]) {
       user.content[1].image_url.url,
     )
     assert.deepEqual(getImageDimensions(data, mimeType), {
-      widthPx: 1,
+      widthPx: 2,
       heightPx: 1,
     })
-    assert.match(user.content[0].text, /original 2x1, displayed at 1x1/)
+    assert.equal(data, PNG)
+    assert.doesNotMatch(user.content[0].text, /displayed at/)
     assert.equal((await readFile(path)).toString("base64"), PNG)
     await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   })
 
-  test(`${behavior} preparation failure rejects only its submission and preserves draft history and recovery`, async (t) => {
+  test(`${behavior} preparation failure stops before queue acceptance and preserves active work, history, and recovery`, async (t) => {
     const response = Promise.withResolvers()
     t.after(() => response.resolve())
     const host = await nativePi(t)
@@ -158,14 +157,14 @@ for (const behavior of ["steer", "followUp"]) {
     const draft = host.ui.getEditorText().trim()
     const path = snapshotPath(draft)
     host.input(behavior === "steer" ? "\r" : "\x1b\r")
-    await waitFor(() =>
-      assert.equal(host.runtime.session.pendingMessageCount, 1),
-    )
-    const submissionId = host.inputs.at(-1).submissionId
+    await waitFor(() => assert.match(host.render(), /Image request not sent/))
+    assert.equal(host.runtime.session.pendingMessageCount, 0)
+    assert.equal(host.runtime.session.isStreaming, true)
+    assert.equal(host.requests.length, 1)
     host.ui.setEditorText("The next valid request")
     host.input(behavior === "steer" ? "\r" : "\x1b\r")
     await waitFor(() =>
-      assert.equal(host.runtime.session.pendingMessageCount, 2),
+      assert.equal(host.runtime.session.pendingMessageCount, 1),
     )
     host.ui.setEditorText("Unrelated later work")
     response.resolve()
@@ -183,16 +182,7 @@ for (const behavior of ["steer", "followUp"]) {
     assert.ok(!JSON.stringify(host.requests).includes(path))
     assert.equal(host.ui.getEditorText(), "Unrelated later work")
     assert.match(host.render(), /Image request not sent/)
-    const rejected = host.runtime.session.sessionManager
-      .getEntries()
-      .find(
-        (entry) =>
-          entry.type === "custom" && entry.customType === "input-rejected",
-      )
-    assert.equal(rejected.data.submissionId, submissionId)
-    assert.equal(rejected.data.text, draft)
-    assert.equal(rejected.data.streamingBehavior, behavior)
-    const recovery = await retainedRequest(host, `Submission: ${submissionId}`)
+    const recovery = await retainedRequest(host, `Delivery: ${behavior}`)
     assert.ok(recovery.text.includes(draft))
     assert.deepEqual(await readFile(path), bytes)
     host.ui.setEditorText("")
@@ -216,10 +206,7 @@ test("image failure retains its snapshot and request when session-file persisten
 
   assert.equal(host.requests.length, 0)
   assert.equal(host.runtime.session.sessionFile, undefined)
-  const recovery = await retainedRequest(
-    host,
-    `Submission: ${host.inputs.at(-1).submissionId}`,
-  )
+  const recovery = await retainedRequest(host, "Delivery: normal")
   assert.ok(recovery.text.includes(draft))
   await host.close()
   assert.deepEqual(await readFile(path), bytes)

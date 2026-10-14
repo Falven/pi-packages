@@ -18,11 +18,8 @@ type RequestContext = {
   text: string
   [unpublishedKey]?: UnpublishedCapture[]
 }
-type ImageRequest = Pick<
-  InputEvent,
-  "submissionId" | "text" | "images" | "streamingBehavior"
-> &
-  RequestContext
+type ImageRequest = Pick<InputEvent, "text" | "images" | "streamingBehavior"> &
+  RequestContext & { submissionId?: string }
 export type Snapshot =
   | { name: string; contents: string | Uint8Array; image?: true }
   | { name: string; path: string; contents?: Uint8Array | undefined }

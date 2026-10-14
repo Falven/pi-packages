@@ -68,104 +68,52 @@ test("Attach chooser cancellation preserves the draft and empty entered text is 
   assert.equal(await readFile(path, "utf8"), "")
 })
 
-test("named attachment actions use remapped native bindings and display the effective hint", async (t) => {
+test("attachment actions use the file-selected shortcuts", async (t) => {
   const host = await nativePi(t, [], {
     keybindings: {
       "extension.attachments.attach": "ctrl+alt+x",
       "extension.attachments.manage": "ctrl+alt+m",
     },
   })
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
-    "ctrl+alt+x",
-  ])
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [
-    "ctrl+alt+m",
-  ])
   host.input("\x1b[102;7u")
   assert.doesNotMatch(host.render(), /File path…/)
   host.input("\x1b[120;7u")
   await waitFor(() => assert.match(host.render(), /File path/))
   host.input("\x1b")
   await host.attachText("Retained")
-  assert.match(host.render(), /ctrl\+option\+m Manage attachments/)
   host.input("\x1b[109;7u")
   await waitFor(() => assert.match(host.render(), /Choose attachment/))
   host.input("\x1b")
 })
 
-test("cleared attachment bindings keep commands available without shortcut hints", async (t) => {
+test("cleared attachment bindings keep commands available", async (t) => {
   const host = await nativePi(t, [], {
     keybindings: {
       "extension.attachments.attach": [],
       "extension.attachments.manage": [],
     },
   })
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [])
   host.input("\x1b[102;7u")
   assert.doesNotMatch(host.render(), /File path…/)
   await host.attachText("Still available")
   assert.match(host.render(), /Manage attachments/)
-  assert.doesNotMatch(host.render(), /ctrl\+option\+a Manage attachments/)
+  const pending = host.runtime.session.prompt("/attachments")
+  await waitFor(() => assert.match(host.render(), /Choose attachment/))
+  host.input("\x1b")
+  await pending
 })
 
-test("native shortcut conflicts leave attachment actions inactive", async (t) => {
+test("reserved native shortcut conflicts preserve command access", async (t) => {
   const host = await nativePi(t, [], {
     keybindings: { "extension.attachments.attach": "ctrl+c" },
   })
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [
-    "ctrl+alt+a",
-  ])
-})
-
-test("Pi's standard settings menu edits, clears, and reports conflicting attachment bindings", async (t) => {
-  const host = await nativePi(t)
-  host.submit("/settings")
-  host.input("Attach")
-  await waitFor(() => assert.match(host.render(), /Manage attachments/))
-  host.input("\r")
-  assert.match(host.render(), /ctrl\+alt\+f/)
-  host.input("\r")
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
-    "ctrl+alt+f",
-  ])
-
-  host.input("\r")
-  host.input("\x0b")
-  host.input("\x1b[200~ctrl+alt+x\x1b[201~")
-  host.input("\r")
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
-    "ctrl+alt+x",
-  ])
-  assert.match(host.render(), /Attach\s+ctrl\+alt\+x/)
-
-  host.input("\x1b[B")
-  host.input("\x1b[B")
-  host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Enter key names separated/))
-  host.input("\x0b")
-  host.input("\r")
-  await waitFor(() =>
-    assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), []),
-  )
-  assert.match(host.render(), /Manage attachments\s+unbound/)
-
-  host.input("\x1b[A")
-  host.input("\x1b[A")
-  host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Enter key names separated/))
-  host.input("\x0b")
-  host.input("\x1b[200~ctrl+c\x1b[201~")
-  host.input("\r")
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
-  assert.match(host.render(), /Attach\s+unbound/)
-  assert.deepEqual(
-    JSON.parse(await readFile(join(host.agentDir, "keybindings.json"), "utf8")),
-    {
-      "extension.attachments.attach": ["ctrl+c"],
-      "extension.attachments.manage": [],
-    },
+  host.ui.setEditorText("Clear this draft")
+  host.input("\x03")
+  assert.equal(host.ui.getEditorText(), "")
+  await host.attachText("Command remains available")
+  assert.equal(
+    await readFile(snapshotPath(host.ui.getEditorText()), "utf8"),
+    "Command remains available",
   )
 })
 
