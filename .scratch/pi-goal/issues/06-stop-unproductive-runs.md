@@ -18,3 +18,14 @@
 - [ ] Verify threshold boundaries, counter resets, nonqualifying outcomes, retry exhaustion, quota failures, budget precedence, explicit resume, and stale events through controlled responses in real Pi sessions. Do not deliberately exhaust a paid provider quota for a test.
 - [ ] Capture failure and recovery exchanges in Phoenix with explicit evidence origin. Scripted failure responses and bundled-runtime checks remain distinguishable from actual-client observations; retrieve captures and record any unsupported error or mode classification here.
 - [ ] Keep public extension integration, unchanged Pi files, neutral terminology, and relevant validation intact. Mark unsupported stop predicates or missing evidence as pending rather than broadening the behavior silently.
+
+## Public runtime classification evidence
+
+Six isolated real-session probes passed on Pi 1.1.0, revision `6fb2e781`, and Node 24.13.1. The reproducer is `/tmp/pi-goal-public-failure.M8XFIf/probe.mjs`, using the existing native-host fixture and localhost responses. Independent verification reproduced all six results. No Pi or repository files changed.
+
+- Native retry recovery and exhaustion each make two requests with one configured retry. Only the final `agent_before_settle` outcome distinguishes `completed` from `error`; `agent_settled` follows once with `aborted: false`. An intermediate failed assistant response must not block a recovering run.
+- The effective built-in scripting tool identifies itself through `sourceInfo.path`, `sourceInfo.source`, and absent namespace. A returned script failure retains `result.isError: true`; an executed handler throw lacks that property; pre-handler schema rejection lacks `durationMs`.
+- Those clean-path fields are insufficient after supported result transformations. An earlier `tool_result` hook can turn a successful result into the same error shape as a handler throw, both in a later hook and in the final execution event. Exact failure counting needs immutable execution provenance before result hooks and normalization. Ordinary throwing result hooks are caught by Pi and do not establish this collision.
+- A structured failed response stream preserves the `insufficient_quota` code in `provider_stream_event`. The tested adapter's HTTP 429 path loses the same structured code before public response events and exposes only error text. Universal quota classification needs a terminal structured error category; status codes and text heuristics cannot supply it.
+
+Terminal-error handling can use the verified final boundary. Exact handler-failure counting and quota classification on transports that lose structured errors remain pending capabilities. The reference failure captures and their retrieved payload checks are recorded in ticket 07.
