@@ -18,8 +18,8 @@ export type Goal = {
   updatedAt: bigint
 }
 
-type GoalRow = Omit<Goal, "tokenBudget"> & {
-  generation: string
+type GoalRow = Omit<Goal, "objective" | "tokenBudget"> & {
+  objective: Uint8Array
   tokenBudget: bigint | null
 }
 
@@ -49,15 +49,18 @@ export class GoalStore {
   }
 
   read(threadId: string): Goal | null {
-    const statement = this.database.prepare(
-      "SELECT * FROM goals WHERE threadId = ?",
-    )
+    // Byte reads preserve embedded NULs on runtimes that truncate text reads.
+    const statement = this.database.prepare(`
+      SELECT threadId, CAST(objective AS BLOB) AS objective, status, tokenBudget,
+             tokensUsed, timeUsedSeconds, createdAt, updatedAt
+      FROM goals WHERE threadId = ?
+    `)
     statement.setReadBigInts(true)
     const row = statement.get(threadId) as GoalRow | undefined
     if (!row) return null
     return {
       threadId: row.threadId,
-      objective: row.objective,
+      objective: Buffer.from(row.objective).toString("utf8"),
       status: row.status,
       ...(row.tokenBudget === null ? {} : { tokenBudget: row.tokenBudget }),
       tokensUsed: row.tokensUsed,
@@ -112,22 +115,34 @@ export class GoalStore {
   }
 }
 
+function integer(value: bigint): number | string {
+  const number = Number(value)
+  return Number.isSafeInteger(number) ? number : value.toString()
+}
+
 export function goalResult(goal: Goal | null) {
   const remainder =
     goal?.tokenBudget === undefined ? null : goal.tokenBudget - goal.tokensUsed
   const result = {
-    goal,
-    remainingTokens: remainder !== null && remainder < 0n ? 0n : remainder,
+    goal: goal && {
+      threadId: goal.threadId,
+      objective: goal.objective,
+      status: goal.status,
+      ...(goal.tokenBudget === undefined
+        ? {}
+        : { tokenBudget: integer(goal.tokenBudget) }),
+      tokensUsed: integer(goal.tokensUsed),
+      timeUsedSeconds: integer(goal.timeUsedSeconds),
+      createdAt: integer(goal.createdAt),
+      updatedAt: integer(goal.updatedAt),
+    },
+    remainingTokens:
+      remainder === null ? null : integer(remainder < 0n ? 0n : remainder),
     completionBudgetReport: null,
   }
-  const rawJSON = (JSON as typeof JSON & { rawJSON(value: string): unknown })
-    .rawJSON
-  const text = JSON.stringify(result, (_key, value) =>
-    typeof value === "bigint" ? rawJSON(value.toString()) : value,
-  )
   return {
-    content: [{ type: "text" as const, text }],
-    structuredContent: JSON.parse(text),
+    content: [{ type: "text" as const, text: JSON.stringify(result) }],
+    structuredContent: result,
     details: undefined,
   }
 }

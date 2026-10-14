@@ -5,7 +5,6 @@ import { DatabaseSync } from "node:sqlite"
 import { join } from "node:path"
 import { createCodemodeExtension } from "@earendil-works/pi-coding-agent"
 import piGoal from "../src/index.ts"
-import creationCases from "../fixtures/create-goal-cases.json" with { type: "json" }
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const extension = new URL("../src/index.ts", import.meta.url).pathname
@@ -144,7 +143,7 @@ test("explicit creation persists its trimmed objective and native status across 
   assert.equal(savedText.text, text.text)
 })
 
-test("the full integer budget survives direct calls, native number conversion, and later reads", async (t) => {
+test("the full integer budget survives direct and native programmatic calls without rounding", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     extensionFactories: [createCodemodeExtension({ models: false })],
@@ -152,7 +151,7 @@ test("the full integer budget survives direct calls, native number conversion, a
     persistSession: true,
   })
   const raw =
-    '{"objective":"Preserve the whole budget","token_budget":9223372036854775807}'
+    '{"objective":"Preserve the whole budget","token_budget":"9223372036854775807"}'
   host.queueResponse(response("create_goal", raw), finish, done, end)
   await host.session.prompt("Create the explicitly budgeted goal")
   const result = host.session.messages.find(
@@ -162,8 +161,8 @@ test("the full integer budget survives direct calls, native number conversion, a
   assert.equal(result.isError, false, JSON.stringify(result.content))
   const content = result.content[0]
   assert(content?.type === "text")
-  assert.match(content.text, /"tokenBudget":9223372036854775807/)
-  assert.match(content.text, /"remainingTokens":9223372036854775807/)
+  assert.match(content.text, /"tokenBudget":"9223372036854775807"/)
+  assert.match(content.text, /"remainingTokens":"9223372036854775807"/)
   assert(JSON.stringify(host.requests[1]).includes(JSON.stringify(raw)))
   host.queueResponse(
     response(
@@ -187,9 +186,9 @@ test("the full integer budget survives direct calls, native number conversion, a
   const output = nested.content.at(-1)
   assert(output?.type === "text")
   const value = JSON.parse(output.text)
-  assert.equal(value.type, "number")
-  assert.equal(value.value.goal.tokenBudget, 9223372036854776000)
-  assert.equal(value.value.remainingTokens, 9223372036854776000)
+  assert.equal(value.type, "string")
+  assert.equal(value.value.goal.tokenBudget, "9223372036854775807")
+  assert.equal(value.value.remainingTokens, "9223372036854775807")
   host.queueResponse(
     response("get_goal", "{}", "exact-budget"),
     finish,
@@ -223,52 +222,240 @@ test("native goal presentation strips terminal controls without changing the obj
   assert.match(host.terminal.output, /active: Review the work/)
 })
 
-test("creation decodes the raw contract through the real provider and tool pipeline", async (t) => {
+test("objectives reject unpaired surrogates before persistence can change their value", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
   })
-  for (const example of creationCases) {
-    await t.test(example.id, async () => {
+  host.queueResponse(
+    response("create_goal", JSON.stringify({ objective: "a\ud800b" })),
+    finish,
+    done,
+    end,
+  )
+  await host.session.prompt("Create the explicitly requested goal")
+  assert.equal(lastResult(host).isError, true)
+  assert.match(
+    lastResult(host).text,
+    /goal objective must contain only Unicode scalar values/,
+  )
+  host.queueResponse(
+    response("get_goal", "{}", "after-invalid-objective"),
+    finish,
+    done,
+    end,
+  )
+  await host.session.prompt("Inspect the rejected goal")
+  assert.equal(JSON.parse(lastResult(host).text).goal, null)
+})
+
+test("objectives retain Unicode content and enforce the scalar limit", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  const examples = [
+    {
+      name: "Unicode whitespace",
+      objective: "\u0085\u2003 Finish 🌱 \u0085",
+      expected: "Finish 🌱",
+    },
+    {
+      name: "retained format character",
+      objective: "\ufeffWork\ufeff",
+      expected: "\ufeffWork\ufeff",
+    },
+    { name: "embedded null", objective: "a\0b", expected: "a\0b" },
+    {
+      name: "four thousand scalars",
+      objective: "🌱".repeat(4000),
+      expected: "🌱".repeat(4000),
+    },
+    {
+      name: "empty after trimming",
+      objective: "\u0085\u2003",
+      error: /must not be empty/,
+    },
+    {
+      name: "too many scalars",
+      objective: "🌱".repeat(4001),
+      error: /at most 4000/,
+    },
+  ]
+  for (const example of examples) {
+    await t.test(example.name, async () => {
       await host.runtime.newSession()
       host.queueResponse(
-        response("create_goal", example.arguments, example.id),
+        response(
+          "create_goal",
+          JSON.stringify({ objective: example.objective }),
+        ),
         finish,
         done,
         end,
       )
       await host.session.prompt("Create the explicitly requested goal")
-      const result = host.session.messages.findLast(
-        (message) => message.role === "toolResult",
-      )
-      assert(
-        result?.role === "toolResult",
-        JSON.stringify(host.session.messages.at(-1)),
-      )
-      const content = result.content[0]
-      assert(content?.type === "text")
-      if (example.error !== undefined) {
+      const result = lastResult(host)
+      if (example.error) {
         assert.equal(result.isError, true)
-        assert.equal(content.text, example.error)
+        assert.match(result.text, example.error)
       } else {
-        assert.equal(result.isError, false, content.text)
-        assert(example.ok)
-        const actual = JSON.parse(content.text)
-        assert.equal(actual.goal.objective, example.ok.objective)
-        if (example.ok.token_budget === null) {
+        assert.equal(result.isError, false, result.text)
+        assert.equal(JSON.parse(result.text).goal.objective, example.expected)
+      }
+      host.queueResponse(
+        response("get_goal", "{}", "inspect-objective"),
+        finish,
+        done,
+        end,
+      )
+      await host.session.prompt("Inspect the saved goal")
+      assert.equal(
+        JSON.parse(lastResult(host).text).goal?.objective,
+        example.expected,
+      )
+    })
+  }
+})
+
+test("Pi validates goal inputs and applies its native coercion", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  for (const [name, args] of [
+    ["get_goal", '{"extra":true}'],
+    ["create_goal", '{"objective":"Work","extra":true}'],
+  ]) {
+    assert(name && args)
+    host.queueResponse(response(name, args, name), finish, done, end)
+    await host.session.prompt("Inspect or create the explicitly requested goal")
+    assert.equal(lastResult(host).isError, true)
+    assert(
+      lastResult(host).text.startsWith(`Validation failed for tool "${name}":`),
+    )
+  }
+  host.queueResponse(
+    response("create_goal", '{"objective":42}', "native-coercion"),
+    finish,
+    done,
+    end,
+  )
+  await host.session.prompt("Create the explicitly requested goal")
+  assert.equal(lastResult(host).isError, false, lastResult(host).text)
+  assert.equal(JSON.parse(lastResult(host).text).goal.objective, "42")
+})
+
+test("native validation and domain rules preserve the full budget range", async (t) => {
+  const permitted: unknown[] = []
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    extension: (pi) => {
+      pi.on("tool_call", (event) => {
+        if (event.toolName === "create_goal") permitted.push(event.input)
+      })
+    },
+  })
+  const examples = [
+    { name: "minimum number", budget: "1", expected: 1 },
+    {
+      name: "safe numeric limit",
+      budget: "9007199254740991",
+      expected: 9007199254740991,
+    },
+    { name: "safe decimal string", budget: '"42"', expected: 42 },
+    {
+      name: "first larger integer",
+      budget: '"9007199254740992"',
+      expected: "9007199254740992",
+    },
+    {
+      name: "full allowance",
+      budget: '"9223372036854775807"',
+      expected: "9223372036854775807",
+    },
+    { name: "optional null", budget: "null", expected: null },
+    { name: "native boolean coercion", budget: "true", expected: 1 },
+    { name: "unsafe number", budget: "9007199254740992", nativeError: true },
+    {
+      name: "rounded unsafe number",
+      budget: "9007199254740993",
+      nativeError: true,
+    },
+    {
+      name: "unsafe full allowance",
+      budget: "9223372036854775807",
+      nativeError: true,
+    },
+    { name: "zero", budget: "0", nativeError: true },
+    { name: "negative", budget: "-1", nativeError: true },
+    { name: "fraction", budget: "1.5", nativeError: true },
+    { name: "fractional string", budget: '"1.5"', nativeError: true },
+    { name: "nondecimal string", budget: '"1e3"', nativeError: true },
+    { name: "zero string", budget: '"0"', nativeError: true },
+    {
+      name: "oversized string",
+      budget: '"10000000000000000000"',
+      nativeError: true,
+    },
+    {
+      name: "outside signed range",
+      budget: '"9223372036854775808"',
+      domainError: true,
+    },
+  ]
+  for (const example of examples) {
+    await t.test(example.name, async () => {
+      await host.runtime.newSession()
+      const before = permitted.length
+      host.queueResponse(
+        response(
+          "create_goal",
+          `{"objective":"Budgeted work","token_budget":${example.budget}}`,
+        ),
+        finish,
+        done,
+        end,
+      )
+      await host.session.prompt("Create the explicitly budgeted goal")
+      const result = lastResult(host)
+      if (example.nativeError || example.domainError) {
+        assert.equal(result.isError, true)
+        assert.match(
+          result.text,
+          example.nativeError
+            ? /^Validation failed for tool "create_goal":/
+            : /goal budgets must be between 1 and 9223372036854775807/,
+        )
+        assert.equal(permitted.length, before + (example.domainError ? 1 : 0))
+        host.queueResponse(
+          response("get_goal", "{}", "after-invalid-budget"),
+          finish,
+          done,
+          end,
+        )
+        await host.session.prompt("Inspect the rejected goal")
+        assert.equal(JSON.parse(lastResult(host).text).goal, null)
+      } else {
+        assert.equal(result.isError, false, result.text)
+        const actual = JSON.parse(result.text)
+        if (example.expected === null) {
           assert.equal("tokenBudget" in actual.goal, false)
         } else {
-          assert(
-            content.text.includes(`"tokenBudget":${example.ok.token_budget}`),
-          )
+          assert.equal(actual.goal.tokenBudget, example.expected)
         }
+        assert.equal(actual.remainingTokens, example.expected)
       }
     })
   }
 })
 
-test("ordinary tasks leave no goal, reads ignore raw input, and an unfinished goal cannot be replaced", async (t) => {
+test("ordinary tasks leave no goal and an unfinished goal cannot be replaced", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -276,7 +463,7 @@ test("ordinary tasks leave no goal, reads ignore raw input, and an unfinished go
   })
   await host.session.prompt("Explain how a queue works")
   host.queueResponse(
-    response("get_goal", "not json", "empty-read"),
+    response("get_goal", "{}", "empty-read"),
     finish,
     done,
     end,
@@ -307,7 +494,7 @@ test("ordinary tasks leave no goal, reads ignore raw input, and an unfinished go
     isError: true,
     text: "cannot create a new goal because this thread has an unfinished goal; complete the existing goal first",
   })
-  host.queueResponse(response("get_goal", "[]", "retained"), finish, done, end)
+  host.queueResponse(response("get_goal", "{}", "retained"), finish, done, end)
   await host.session.prompt("Read the saved goal")
   assert.deepEqual(JSON.parse(lastResult(host).text), original)
   assert.equal(
@@ -316,14 +503,14 @@ test("ordinary tasks leave no goal, reads ignore raw input, and an unfinished go
   )
 })
 
-test("ephemeral sessions fail before creation decoding and never fabricate missing state", async (t) => {
+test("ephemeral sessions cannot create a goal or report successful missing state", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
   })
   for (const [name, raw] of [
-    ["get_goal", "not json"],
-    ["create_goal", "{"],
+    ["get_goal", "{}"],
+    ["create_goal", '{"objective":"Requested work"}'],
   ]) {
     assert(name && raw)
     host.queueResponse(response(name, raw, name), finish, done, end)
@@ -385,14 +572,20 @@ test("native programmatic calls return JSON values, serialize mutations, and rej
     persistSession: true,
   })
   const code = `
-    const empty = await tools.get_goal({ extra: true });
-    const created = await tools.create_goal({ objective: "Nested work", ignored: 1 });
+    const invalid = await Promise.allSettled([
+      tools.create_goal({objective:"Unsafe allowance", token_budget:9007199254740993})
+    ]);
+    const empty = await tools.get_goal({});
+    const created = await tools.create_goal({ objective: "Nested work", token_budget:"9223372036854775807" });
     const failures = await Promise.allSettled([
       tools.create_goal({ objective: "Unfinished replacement" }),
       tools.create_goal({ objective: " " })
     ]);
     const inspected = await tools.get_goal({});
-    text({ empty, created, inspected, failures: failures.map(value => ({
+    text({ empty, created, inspected, invalid: invalid.map(value => ({
+      status:value.status,
+      ...(value.status === "rejected" ? {type:typeof value.reason, message:value.reason.message} : {})
+    })), failures: failures.map(value => ({
       status: value.status,
       ...(value.status === "rejected" ? {
         type: typeof value.reason,
@@ -424,6 +617,14 @@ test("native programmatic calls return JSON values, serialize mutations, and rej
     completionBudgetReport: null,
   })
   assert.equal(result.created.goal.objective, "Nested work")
+  assert.equal(result.created.goal.tokenBudget, "9223372036854775807")
+  assert.equal(result.created.remainingTokens, "9223372036854775807")
+  assert.equal(result.invalid[0].status, "rejected")
+  assert.equal(result.invalid[0].type, "object")
+  assert.match(
+    result.invalid[0].message,
+    /^Validation failed for tool "create_goal":/,
+  )
   assert.deepEqual(result.inspected, result.created)
   assert.deepEqual(result.failures, [
     {
@@ -496,7 +697,7 @@ test("a winning tool override remains effective and reports the goal-name collis
   })
 })
 
-test("permission handlers see real prepared inputs and can edit or block goal creation", async (t) => {
+test("permission handlers receive lossless inputs and can edit or block goal creation", async (t) => {
   let mode = "edit"
   const seen: unknown[] = []
   const host = await openNativeHost(t, {
@@ -514,16 +715,17 @@ test("permission handlers see real prepared inputs and can edit or block goal cr
           }
         event.input["objective"] = "Reviewed work"
         if (mode === "cap") event.input["token_budget"] = 100
+        if (mode === "unsafe") event.input["token_budget"] = 9007199254740992
         return undefined
       })
     },
   })
-  for (mode of ["edit", "cap", "deny"]) {
+  for (mode of ["edit", "cap", "unsafe", "deny"]) {
     await host.runtime.newSession()
     host.queueResponse(
       response(
         "create_goal",
-        '{"objective":"Original work","token_budget":9223372036854775807}',
+        '{"objective":"Original work","token_budget":"9223372036854775807"}',
         mode,
       ),
       finish,
@@ -532,25 +734,30 @@ test("permission handlers see real prepared inputs and can edit or block goal cr
     )
     await host.session.prompt("Create the explicitly budgeted goal")
     const result = lastResult(host)
-    if (mode === "deny") {
+    if (mode === "deny" || mode === "unsafe") {
       assert.equal(result.isError, true)
-      assert.match(result.text, /Creation denied by the permission handler/)
+      assert.match(
+        result.text,
+        mode === "deny"
+          ? /Creation denied by the permission handler/
+          : /use an exact decimal string/,
+      )
     } else {
       assert.equal(result.isError, false, result.text)
       assert.equal(JSON.parse(result.text).goal.objective, "Reviewed work")
       assert.match(
         result.text,
         mode === "edit"
-          ? /"tokenBudget":9223372036854775807/
+          ? /"tokenBudget":"9223372036854775807"/
           : /"tokenBudget":100/,
       )
     }
   }
   assert.deepEqual(
     seen,
-    Array.from({ length: 3 }, () => ({
+    Array.from({ length: 4 }, () => ({
       objective: "Original work",
-      token_budget: 9223372036854776000,
+      token_budget: "9223372036854775807",
     })),
   )
   host.queueResponse(
