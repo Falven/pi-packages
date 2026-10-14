@@ -66,7 +66,7 @@ test("the outgoing request declares the frozen raw execution contract", async (t
   const namespace = request.tools.find((tool) => tool.name === "functions")
   assert(namespace)
   assert.equal(namespace.type, "namespace")
-  assert.equal(namespace.tools?.length, 1)
+  assert.equal(namespace.tools?.length, 2)
   const declared = namespace.tools[0]!
   const { description: frozen, ...shape } = baseline.namespace.tools[0]
   assert.deepEqual(
@@ -79,10 +79,16 @@ test("the outgoing request declares the frozen raw execution contract", async (t
         frozen.split(`### \`${name}\`\n`)[1].split("\n### `")[0],
       ),
     )
-  assert.doesNotMatch(
-    declared.description,
-    /`(?:wait|store|load|notify|setTimeout|clearTimeout|yield_control)`/,
-  )
+  for (const helper of [
+    "store",
+    "load",
+    "notify",
+    "setTimeout",
+    "clearTimeout",
+    "yield_control",
+  ])
+    assert(declared.description.includes(`\`${helper}(`))
+  assert.deepEqual(namespace.tools[1], baseline.namespace.tools[1])
   assert(
     declared.description.includes(
       frozen.split("### `view_image`\n")[1].split("\n### `")[0],
@@ -94,7 +100,10 @@ test("the outgoing request declares the frozen raw execution contract", async (t
       frozen.split("### `write_stdin`\n")[1].split("\n### `")[0],
     ),
   )
-  assert.match(declared.description, /completed scripts/i)
+  assert.match(
+    declared.description,
+    /Cancelling a later wait preserves the cell/,
+  )
   assert.equal(
     request.tools.some((tool) =>
       [
@@ -558,7 +567,7 @@ test("the execution pragma bounds the combined emitted text", async (t) => {
   )
 })
 
-test("a script reaching its yield deadline reports the unsupported continuation", async (t) => {
+test("a script reaching its yield deadline keeps running until collected", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
@@ -569,13 +578,21 @@ test("a script reaching its yield deadline reports the unsupported continuation"
     ),
   )
   host.queueResponse(completed)
-  await host.session.prompt("Observe the completion-only limit")
-  assert.match(output(host), /partial/)
-  assert.match(
-    output(host),
-    /yield deadline.*retained execution is unavailable/,
+  await host.session.prompt("Collect a script at its yield deadline")
+  const initial = output(host)
+  const cell = initial.match(/Script running with cell ID (\S+)/)?.[1]
+  assert(cell)
+  assert.doesNotMatch(initial, /too-late/)
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: cell }, "deadline", "functions"),
   )
-  assert.doesNotMatch(output(host), /too-late/)
+  host.queueResponse(completed)
+  await host.session.prompt("Collect the final output")
+  assert.match(output(host, "deadline"), /Script completed/)
+  const combined = initial + output(host, "deadline")
+  assert.equal(combined.match(/partial/g)?.length, 1)
+  assert.equal(combined.match(/too-late/g)?.length, 1)
+  assert(combined.indexOf("partial") < combined.indexOf("too-late"))
 })
 
 test("fresh modules expose only the selected helpers and exit immediately", async (t) => {

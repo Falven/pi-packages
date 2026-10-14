@@ -1,0 +1,182 @@
+{
+  "evidence_format": 1,
+  "case_group": "wait-delivery",
+  "provenance": {
+    "observation_kind": "Supplemental current runtime observations",
+    "runtime_build_identity": "unverified",
+    "frozen_declaration_id": "local-tools-reference-20261013",
+    "frozen_declaration_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+    "capture_policy": "Existing frozen declarations remain unchanged",
+    "outer_results": "Reduced model-visible observations; original transport content-part boundaries are unavailable",
+    "nested_results": "Actual structured tool responses copied from observed results",
+    "timing": "Elapsed samples and rounded outer wall times are observations, not exact timing guarantees"
+  },
+  "cases": [
+    {
+      "id": "buffered-text-does-not-return-immediately",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1000}\nconst started = Date.now();\ntext({event:\"START\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,5000));\ntext({event:\"ORDINARY_TEXT\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,7000));\ntext({event:\"DONE\",elapsed_ms:Date.now()-started});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "139",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "139",
+            "yield_time_ms": 20000,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 5.6,
+          "output": "{\"event\":\"START\",\"elapsed_ms\":0}{\"event\":\"ORDINARY_TEXT\",\"elapsed_ms\":5002}{\"event\":\"DONE\",\"elapsed_ms\":12005}"
+        }
+      ],
+      "inference": "Based on the elapsed event times and wait duration, ordinary text was already buffered when wait began. The wait still returned only at completion."
+    },
+    {
+      "id": "ordinary-text-does-not-wake-active-wait",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1000}\nconst started = Date.now();\ntext({event:\"START\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,15000));\ntext({event:\"ORDINARY_TEXT\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,10000));\ntext({event:\"DONE\",elapsed_ms:Date.now()-started});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "140",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "140",
+            "yield_time_ms": 30000,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 21.8,
+          "output": "{\"event\":\"START\",\"elapsed_ms\":0}{\"event\":\"ORDINARY_TEXT\",\"elapsed_ms\":15002}{\"event\":\"DONE\",\"elapsed_ms\":25005}"
+        }
+      ],
+      "observed": "The wait remained pending across ordinary text emission and returned all three text items at script completion.",
+      "inference": "The event elapsed times and the 21.8-second wait place ordinary text emission inside the pending wait interval."
+    },
+    {
+      "id": "notify-and-explicit-yield",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1000}\nconst started = Date.now();\ntext({event:\"START\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,15000));\nnotify({event:\"NOTICE\",elapsed_ms:Date.now()-started});\ntext({event:\"AFTER_NOTICE\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,5000));\ntext({event:\"BEFORE_EXPLICIT_YIELD\",elapsed_ms:Date.now()-started});\nawait yield_control();\nawait new Promise(resolve => setTimeout(resolve,10000));\ntext({event:\"DONE\",elapsed_ms:Date.now()-started});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "142",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "142",
+            "yield_time_ms": 35000,
+            "max_tokens": 1000
+          },
+          "status": "running",
+          "wall_time_seconds": 17,
+          "output": "{\"event\":\"START\",\"elapsed_ms\":0}{\"event\":\"AFTER_NOTICE\",\"elapsed_ms\":15003}{\"event\":\"BEFORE_EXPLICIT_YIELD\",\"elapsed_ms\":20005}"
+        },
+        {
+          "event": "separate-extra-result",
+          "associated_tool": "exec",
+          "output": "{\"event\":\"NOTICE\",\"elapsed_ms\":15003}"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "142",
+            "yield_time_ms": 20000,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 4.9,
+          "output": "{\"event\":\"DONE\",\"elapsed_ms\":30007}"
+        }
+      ],
+      "observed": "The pending wait returned running at the explicit yield, before the 35000 ms deadline. Notification content arrived as a separate extra result, not inside the ordinary output buffer. The next wait returned only the later DONE item.",
+      "inference": "Notification occurred while wait was active and did not return that wait; explicit yield caused its return.",
+      "limits": "The event list follows model-visible transcript ordering. Exact transport injection timing and content-part boundaries were not captured."
+    },
+    {
+      "id": "sequential-wait-control",
+      "input": {
+        "tool": "exec",
+        "source": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1000}\nconst started = Date.now();\ntext({event:\"WAIT_OVERLAP_START\",elapsed_ms:Date.now()-started});\nawait new Promise(resolve => setTimeout(resolve,25000));\ntext({event:\"WAIT_OVERLAP_DONE\",elapsed_ms:Date.now()-started});"
+      },
+      "events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "141",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "141",
+            "yield_time_ms": 10000,
+            "max_tokens": 1000
+          },
+          "status": "running",
+          "wall_time_seconds": 11,
+          "output": "{\"event\":\"WAIT_OVERLAP_START\",\"elapsed_ms\":0}"
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "141",
+            "yield_time_ms": 1000,
+            "max_tokens": 1000
+          },
+          "status": "running",
+          "wall_time_seconds": 1,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "141",
+            "yield_time_ms": 0,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 0,
+          "output": "{\"event\":\"WAIT_OVERLAP_DONE\",\"elapsed_ms\":25002}"
+        }
+      ],
+      "observed": "The exposed calling surface executed these waits sequentially.",
+      "limits": "This case is not evidence of concurrent wait arbitration."
+    }
+  ],
+  "unverified": [
+    {
+      "id": "concurrent-waits",
+      "reason": "No available safe control could issue overlapping waits on one owned cell. The nested tool inventory does not expose exec or wait; direct wait calls block the next call.",
+      "accepted_package_rule": "Serialize collection on one cell. This is a selected contract rule, not measured reference parity."
+    },
+    {
+      "id": "caller-only-wait-cancellation",
+      "reason": "No available safe control can cancel only this wait request without cancelling or disrupting the enclosing user work.",
+      "accepted_package_rule": "Cancelling a wait preserves the cell. This is a selected contract rule, not measured reference parity."
+    }
+  ]
+}

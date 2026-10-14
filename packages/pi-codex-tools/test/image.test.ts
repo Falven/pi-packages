@@ -9,6 +9,7 @@ import {
   call,
   completed,
   extension,
+  functionCall,
   output,
   providerApi,
 } from "./fixtures/model-loop.ts"
@@ -531,7 +532,7 @@ test("explicit image selection works and read-only selection retains the native 
   }
 })
 
-test("text truncation preserves the emitted images in the next request", async (t) => {
+test("text truncation preserves image order between retained text ranges", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
@@ -540,11 +541,122 @@ test("text truncation preserves the emitted images in the next request", async (
     ...call(`// @exec: {"max_output_tokens": 5}
 const url = ${JSON.stringify(`data:image/png;base64,${tiny}`)};
 image(url);
-text("prefix-" + "x".repeat(100) + "-suffix");
-image(url);`),
+text("prefix-" + "x".repeat(100));
+image(url);
+text("x".repeat(100) + "-suffix");`),
   )
   host.queueResponse(completed)
   await host.session.prompt("Keep images when text is truncated")
   assert.match(output(host), /truncated output/)
   assert.equal(images(host.requests[1]).length, 2)
+  const request = host.requests[1] as unknown as {
+    input: {
+      call_id?: string
+      type: string
+      output?: { type: string; text?: string }[]
+    }[]
+  }
+  const parts = request.input.find(
+    (item) =>
+      item.type === "custom_tool_call_output" && item.call_id === "call_one",
+  )!.output!
+  const middle = parts.findLastIndex((part) => part.type === "input_image")
+  assert.match(
+    parts
+      .slice(0, middle)
+      .map((part) => part.text ?? "")
+      .join(""),
+    /prefix-/,
+  )
+  assert.doesNotMatch(
+    parts
+      .slice(0, middle)
+      .map((part) => part.text ?? "")
+      .join(""),
+    /-suffix/,
+  )
+  assert.match(
+    parts
+      .slice(middle + 1)
+      .map((part) => part.text ?? "")
+      .join(""),
+    /-suffix/,
+  )
+})
+
+test("wait results preserve duplicate image positions and later context redaction", async (t) => {
+  for (const mode of ["unchanged", "changed", "removed"] as const) {
+    await t.test(mode, async (caseContext) => {
+      const host = await openNativeHost(caseContext, {
+        extensionPaths: [extension],
+        providerApi,
+        extension(pi) {
+          if (mode !== "unchanged")
+            pi.on("context", (event) => ({
+              messages: event.messages.map((message) =>
+                message.role === "toolResult" && message.toolName === "wait"
+                  ? {
+                      ...message,
+                      content:
+                        mode === "changed"
+                          ? [
+                              { type: "text", text: "PUBLIC" },
+                              ...message.content
+                                .filter((part) => part.type === "image")
+                                .slice(0, 1),
+                            ]
+                          : [],
+                    }
+                  : message,
+              ),
+            }))
+        },
+      })
+      host.queueResponse(
+        ...call(
+          `await yield_control(); text("BEFORE"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)}); text("AFTER"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)});`,
+        ),
+      )
+      host.queueResponse(completed)
+      await host.session.prompt("Emit mixed output after yielding")
+      const id = output(host).match(/Script running with cell ID (\S+)/)?.[1]
+      assert(id)
+      host.queueResponse(
+        ...functionCall("wait", { cell_id: id }, "collected", "functions"),
+      )
+      host.queueResponse(completed)
+      await host.session.prompt("Collect only the allowed mixed output")
+      const request = host.requests.at(-1) as unknown as {
+        input: { type: string; call_id?: string; output?: unknown }[]
+      }
+      const result = request.input.find(
+        (item) =>
+          item.type === "function_call_output" &&
+          item.call_id === "call_collected",
+      )!
+      assert.equal(
+        images(result).length,
+        mode === "unchanged" ? 2 : mode === "changed" ? 1 : 0,
+      )
+      if (mode === "unchanged") {
+        const parts = result.output as { type: string; text?: string }[]
+        assert.deepEqual(
+          parts.map((part) => part.type),
+          [
+            "input_text",
+            "input_text",
+            "input_image",
+            "input_text",
+            "input_image",
+          ],
+        )
+        assert.equal(parts[1]!.text, "BEFORE")
+        assert.equal(parts[3]!.text, "AFTER")
+      } else {
+        assert.doesNotMatch(output(host, "collected"), /BEFORE|AFTER/)
+        if (mode === "changed")
+          assert.match(output(host, "collected"), /^PUBLIC/)
+      }
+    })
+  }
 })

@@ -65,12 +65,18 @@ export function call(input: string, id = "one") {
   ]
 }
 
-export function functionCall(name: string, args: unknown, id = "native") {
+export function functionCall(
+  name: string,
+  args: unknown,
+  id = "native",
+  namespace?: string,
+) {
   const item = {
     type: "function_call",
     id: `fc_${id}`,
     call_id: `call_${id}`,
     name,
+    ...(namespace ? { namespace } : {}),
     arguments: JSON.stringify(args),
     status: "completed",
   }
@@ -96,8 +102,9 @@ export function output(
   }
   const result = request.input.find(
     (item) =>
-      item["type"] === "custom_tool_call_output" &&
-      item["call_id"] === `call_${id}`,
+      ["custom_tool_call_output", "function_call_output"].includes(
+        String(item["type"]),
+      ) && item["call_id"] === `call_${id}`,
   )
   assert(result)
   const value = result["output"]

@@ -6,7 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent"
 import { Type, type TSchema } from "typebox"
 import { createCommand, createStdin } from "./command.ts"
-import { execute } from "./execution.ts"
+import { ExecutionCells, type WaitOptions } from "./execution.ts"
 import { createImage } from "./image.ts"
 import { createPatch } from "./patch.ts"
 import { ProcessSessions } from "./process.ts"
@@ -23,6 +23,7 @@ const contract = JSON.parse(
   }
 }
 const execution = contract.namespace.tools[0]!
+const waiting = contract.namespace.tools[1]!
 const [preamble, ...sections] = String(execution["description"]).split(
   /\n(?=### `)/,
 )
@@ -32,14 +33,15 @@ function description(names: ReadonlySet<string>): string {
     preamble!
       .split("\n")
       .filter(
-        (line) =>
-          !/^- `(?:store\(|load\(|notify\(|setTimeout\(|clearTimeout\(|yield_control\(|yield_time_ms`)/.test(
-            line,
-          ) &&
-          (!line.startsWith("- `image(") || names.has("view_image")),
+        (line) => !line.startsWith("- `image(") || names.has("view_image"),
+      )
+      .map((line) =>
+        line.startsWith("- `notify(")
+          ? "- `notify(value: string | number | boolean | undefined | null)`: sends a public session message without starting a turn. While the host is streaming, delivery waits for its safe turn boundary. Values are stringified like `text(...)`."
+          : line,
       )
       .join("\n"),
-    "Only completed scripts are supported. Await every tool call before the script ends. Command calls may yield a process session for later input or polling. Retained execution is unavailable. Reaching the script yield deadline returns an error and cancels pending calls.",
+    "Cells survive ordinary prompts and are cleared by session replacement or reload. Cancelling a later wait preserves the cell; explicit termination cancels its pending tool operations. A returned command process handle remains independent. Continuing activity uses public session records; native hook identifiers and attribution after a yield remain host-defined.",
     ...(names.has("view_image")
       ? [
           "Image emission uses Pi's native processing. Requested image detail is not preserved by this host's provider conversion.",
@@ -54,9 +56,23 @@ function description(names: ReadonlySet<string>): string {
 export default function coreTools(pi: ExtensionAPI): void {
   const lifetime = new AbortController()
   const processes = new ProcessSessions()
+  const availability = new Map<string, () => boolean>()
+  const cells = new ExecutionCells(
+    pi,
+    (name) => availability.get(name)?.() ?? false,
+  )
   pi.on("session_shutdown", async () => {
+    const closing = cells.close()
     lifetime.abort()
-    await processes.close()
+    const results = await Promise.allSettled([closing, processes.close()])
+    const errors = results.flatMap((result) =>
+      result.status === "rejected" ? [result.reason] : [],
+    )
+    if (errors.length)
+      throw new AggregateError(
+        errors,
+        `Session cleanup failed: ${errors.map((error) => (error instanceof Error ? error.message : String(error))).join("; ")}`,
+      )
   })
   const commandAvailable = (name: string) => {
     const active = new Set(pi.getActiveTools())
@@ -75,6 +91,7 @@ export default function coreTools(pi: ExtensionAPI): void {
     tool: ToolDefinition<T, undefined>,
     available: () => boolean,
   ) => {
+    availability.set(tool.name, available)
     pi.registerTool(tool)
     const sync = () => {
       const current = pi.getAllTools().find((entry) => entry.name === tool.name)
@@ -169,13 +186,25 @@ export default function coreTools(pi: ExtensionAPI): void {
           .map((tool) => tool.name),
       }
     },
-    execute(_id, args, signal, _onUpdate, ctx) {
-      return execute(
+    execute(id, args, signal, _onUpdate, ctx) {
+      return cells.start(
         args.input,
+        id,
         ctx,
         signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
-        pi,
       )
+    },
+  })
+  pi.registerTool({
+    name: waiting.name,
+    label: "Wait",
+    description: String(waiting["description"]),
+    parameters: Type.Unsafe<WaitOptions>(waiting["parameters"] as TSchema),
+    exposure: "model-only",
+    namespace: { name: contract.namespace.name },
+    executionMode: "sequential",
+    execute(_id, args, signal) {
+      return cells.wait(args, signal)
     },
   })
   pi.on("before_provider_request", (event, ctx) => {
@@ -183,16 +212,20 @@ export default function coreTools(pi: ExtensionAPI): void {
       tools?: Declaration[]
       input?: Record<string, unknown>[]
     }
-    const selected = payload.tools?.some((tool) => tool.name === execution.name)
+    const selected =
+      payload.tools?.filter((tool) =>
+        [execution.name, waiting.name].includes(tool.name),
+      ) ?? []
     let inserted = false
     const rawCalls = new Set<string>()
+    const ownedCalls = new Set<string>()
     const retained = new Map(
       ctx.sessionManager
         .getBranch()
         .flatMap((entry) =>
           entry.type === "message" &&
           entry.message.role === "toolResult" &&
-          entry.message.toolName === execution.name
+          [execution.name, waiting.name].includes(entry.message.toolName)
             ? [
                 [
                   entry.message.toolCallId.split("|")[0]!,
@@ -205,6 +238,12 @@ export default function coreTools(pi: ExtensionAPI): void {
     const input = payload.input?.map((item) => {
       if (
         item["type"] === "function_call" &&
+        [execution.name, waiting.name].includes(String(item["name"])) &&
+        item["namespace"] === contract.namespace.name
+      )
+        ownedCalls.add(String(item["call_id"]))
+      if (
+        item["type"] === "function_call" &&
         item["name"] === execution.name &&
         item["namespace"] === contract.namespace.name
       ) {
@@ -215,37 +254,88 @@ export default function coreTools(pi: ExtensionAPI): void {
       }
       if (
         item["type"] === "function_call_output" &&
-        rawCalls.has(String(item["call_id"]))
+        ownedCalls.has(String(item["call_id"]))
       ) {
         let output = item["output"]
+        const retainedParts = retained.get(String(item["call_id"]))
         if (typeof output === "string") {
-          const parts = retained
-            .get(String(item["call_id"]))
-            ?.filter((part) => part.type === "text")
+          const parts = retainedParts?.filter((part) => part.type === "text")
           // Restore text boundaries only when the processed request contains exactly the same text.
           output =
             parts?.map((part) => part.text).join("\n") === output
               ? parts.map((part) => ({ type: "input_text", text: part.text }))
               : [{ type: "input_text", text: output }]
+        } else if (Array.isArray(output) && retainedParts) {
+          const converted = output as Record<string, unknown>[]
+          const texts = converted.filter(
+            (part) => part["type"] === "input_text",
+          )
+          const images = converted.filter(
+            (part) => part["type"] === "input_image",
+          )
+          const savedImages = retainedParts.filter(
+            (part) => part.type === "image",
+          )
+          if (
+            texts.length <= 1 &&
+            texts.length + images.length === converted.length &&
+            retainedParts
+              .filter((part) => part.type === "text")
+              .map((part) => part.text)
+              .join("\n") === texts.map((part) => part["text"]).join("\n") &&
+            savedImages.length === images.length &&
+            savedImages.every(
+              (part, index) =>
+                images[index]!["image_url"] ===
+                `data:${part.mimeType};base64,${part.data}`,
+            )
+          ) {
+            let image = 0
+            // oxlint-disable-next-line no-map-spread -- Each boundary keeps the processed text metadata without mutating the shared part.
+            output = retainedParts.map((part) =>
+              part.type === "text"
+                ? { ...texts[0], type: "input_text", text: part.text }
+                : images[image++],
+            )
+          }
         }
-        return { ...item, type: "custom_tool_call_output", output }
+        return {
+          ...item,
+          ...(rawCalls.has(String(item["call_id"]))
+            ? { type: "custom_tool_call_output" }
+            : {}),
+          output,
+        }
       }
       return item
     })
-    if (!selected && rawCalls.size === 0) return
+    if (selected.length === 0 && ownedCalls.size === 0) return
     return {
       ...payload,
       ...(input ? { input } : {}),
       ...(payload.tools
         ? {
             tools: payload.tools.flatMap((tool) => {
-              if (tool.name !== execution.name) return [tool]
+              if (![execution.name, waiting.name].includes(tool.name))
+                return [tool]
               if (inserted) return []
               inserted = true
               return [
                 {
                   ...contract.namespace,
-                  tools: [{ ...execution, description: tool["description"] }],
+                  tools: contract.namespace.tools.flatMap((declaration) => {
+                    const current = selected.find(
+                      (entry) => entry.name === declaration.name,
+                    )
+                    return current
+                      ? [
+                          {
+                            ...declaration,
+                            description: current["description"],
+                          },
+                        ]
+                      : []
+                  }),
                 },
               ]
             }),

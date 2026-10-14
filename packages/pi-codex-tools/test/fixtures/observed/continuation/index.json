@@ -1,0 +1,126 @@
+{
+  "evidence_format": 1,
+  "observation_set": "continuation-observations",
+  "runtime_build_identity": "unverified",
+  "frozen_declaration_id": "local-tools-reference-20261013",
+  "frozen_declaration_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "relation_to_frozen_declarations": "Supplemental observations only; declarations remain unchanged",
+  "files": [
+    {
+      "file": "wait-delivery.json",
+      "sha256": "fde91ae435766ef792e9972c4cabe3e046080c9d5169098bb4ea1af1ad966ba8",
+      "cases": [
+        {
+          "id": "buffered-text-does-not-return-immediately",
+          "pointer": "/cases/0"
+        },
+        {
+          "id": "ordinary-text-does-not-wake-active-wait",
+          "pointer": "/cases/1"
+        },
+        {
+          "id": "notify-and-explicit-yield",
+          "pointer": "/cases/2"
+        },
+        {
+          "id": "sequential-wait-control",
+          "pointer": "/cases/3"
+        }
+      ]
+    },
+    {
+      "file": "host-operation-lifetime.json",
+      "sha256": "7ad11bd4d02a62dc8489e0e8208ce9d1d30db22c6c40d261ed9fbc26c185c1e6",
+      "cases": [
+        {
+          "id": "unawaited-host-operation-after-normal-return",
+          "pointer": "/cases/0"
+        },
+        {
+          "id": "awaited-host-operation-after-explicit-termination",
+          "pointer": "/cases/1"
+        },
+        {
+          "id": "unawaited-host-operation-after-explicit-termination",
+          "pointer": "/cases/2"
+        },
+        {
+          "id": "returned-process-handle-after-normal-return",
+          "pointer": "/cases/3"
+        },
+        {
+          "id": "returned-process-handle-after-explicit-termination",
+          "pointer": "/cases/4"
+        }
+      ]
+    }
+  ],
+  "owned_process_helper": {
+    "file": "owned-process.py",
+    "sha256": "fae94c2d79bc72a171a545595038b7f6b93be6a35eb14027574d4e28c0ddbe5e"
+  },
+  "recommended_semantics": [
+    {
+      "classification": "measured-current-behavior",
+      "rule": "Buffer ordinary text until a wait deadline, explicit yield, or cell completion; ordinary text alone did not wake a pending wait.",
+      "evidence": "wait-delivery.json#/cases/1"
+    },
+    {
+      "classification": "measured-current-behavior",
+      "rule": "Explicit yield wakes the current wait and drains accumulated ordinary output; a later wait receives only new output.",
+      "evidence": "wait-delivery.json#/cases/2"
+    },
+    {
+      "classification": "measured-current-behavior",
+      "rule": "Deliver notification output separately; it did not wake the pending wait in the measured case.",
+      "evidence": "wait-delivery.json#/cases/2"
+    },
+    {
+      "classification": "measured-current-command-behavior",
+      "rule": "Ending a cell stops its JavaScript continuations and callbacks while already dispatched command operations and returned process handles can continue independently. Do not claim the same lifetime for untested host operations.",
+      "evidence": "host-operation-lifetime.json#/cases"
+    },
+    {
+      "classification": "selected-package-rule",
+      "rule": "Serialize collection on one cell.",
+      "reference_observed": false,
+      "evidence": "wait-delivery.json#/unverified/0"
+    },
+    {
+      "classification": "selected-package-rule",
+      "rule": "Cancelling a wait preserves the cell.",
+      "reference_observed": false,
+      "evidence": "wait-delivery.json#/unverified/1"
+    }
+  ],
+  "normalization_allowlist": [
+    "cell_id bijective mapping within a case",
+    "session_id bijective mapping within a case",
+    "chunk_id",
+    "owned pid",
+    "elapsed and wall-time samples with scheduler tolerance"
+  ],
+  "preserve_exactly": [
+    "input numeric values",
+    "output text and order within ordinary collections",
+    "notification versus ordinary output separation",
+    "cell statuses",
+    "process completion exit codes when directly collected",
+    "causal handle relationships",
+    "file effect presence and content"
+  ],
+  "validation": {
+    "all_json_parsed": true,
+    "neutral_content_check": "passed",
+    "repository_or_global_configuration_edits": false,
+    "remaining_live_owned_processes": 0,
+    "remaining_live_known_cells": 0,
+    "remaining_live_known_process_handles": 0
+  },
+  "limits": [
+    "No exact build match is established.",
+    "Outer results are reduced model-visible observations, not raw transport captures.",
+    "Concurrent wait arbitration and caller-only wait cancellation remain unverified.",
+    "No model-provider parity claim follows from these tool observations."
+  ]
+}

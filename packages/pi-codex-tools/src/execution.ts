@@ -1,194 +1,806 @@
+/* eslint-disable no-await-in-loop -- Output ranges and producer pressure preserve collection order. */
+import { randomUUID } from "node:crypto"
 import { Worker } from "node:worker_threads"
-import { OutputBuffer } from "./output.ts"
+import { stripVTControlCharacters } from "node:util"
+import { OutputStore, type OutputCursor } from "./output.ts"
 import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent"
 
-export async function execute(
-  source: string,
-  ctx: ExtensionToolContext,
-  signal: AbortSignal | undefined,
-  pi: ExtensionAPI,
-): Promise<AgentToolResult<undefined>> {
-  const started = performance.now()
-  const pragma = source.match(/^[ \t]*\/\/ @exec:([^\r\n]*)/)
-  const options = pragma
-    ? (JSON.parse(pragma[1]!) as {
-        max_output_tokens?: number
-        yield_time_ms?: number
-      })
-    : {}
-  const maxTokens = options.max_output_tokens ?? 10000
-  if (!Number.isSafeInteger(maxTokens) || maxTokens < 0)
-    throw new Error("max_output_tokens must be a nonnegative integer")
-  const yieldTime = options.yield_time_ms ?? 30000
-  if (!Number.isSafeInteger(yieldTime) || yieldTime < 0)
-    throw new Error("yield_time_ms must be a nonnegative integer")
-  const deadline = new AbortController()
-  const callSignal = signal
-    ? AbortSignal.any([signal, deadline.signal])
-    : deadline.signal
-  const calls = new Set<Promise<unknown>>()
-  let timer: NodeJS.Timeout | undefined
-  const bounded = new OutputBuffer(maxTokens)
-  const tools = ctx.tools.filter((tool) =>
-    ["exec_command", "write_stdin", "apply_patch", "view_image"].includes(
-      tool.name,
-    ),
-  )
-  const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
-    workerData: {
-      source,
-      tools: tools.map(({ name, description }) => ({ name, description })),
-    },
-    execArgv: [
-      "--experimental-vm-modules",
-      "--disable-warning=ExperimentalWarning",
-    ],
-  })
-  const output: AgentToolResult<undefined>["content"] = []
-  let firstText: number | undefined
-  let emitted = false
-  let finished = false
-  let failure: unknown
-  const append = (text: string) => {
-    firstText ??= output.length
-    if (emitted) bounded.append("\n")
-    emitted = true
-    bounded.append(text)
-    if (!bounded.truncated) output.push({ type: "text", text })
-  }
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const finish = (error?: Error) => {
-        if (finished) return
-        finished = true
-        if (error) reject(error)
-        else resolve()
-      }
-      const abort = () => finish(new Error("Execution cancelled"))
-      timer = setTimeout(() => {
-        deadline.abort()
-        finish(
-          new Error(
-            "Execution reached its yield deadline; retained execution is unavailable",
-          ),
+export type WaitOptions = {
+  cell_id: string
+  max_tokens?: number
+  terminate?: boolean
+  yield_time_ms?: number
+}
+type Result = AgentToolResult<undefined>
+type Status = "running" | "completed" | "failed" | "terminated"
+type Part = {
+  id: number
+  type: "text" | "image"
+  from: OutputCursor
+  through: OutputCursor
+  sealed: boolean
+  mimeType?: string
+}
+type Activity = {
+  type: string
+  child_id?: string
+  name?: string
+  arguments?: string
+  error?: string
+}
+type Journal = {
+  cell_id: string
+  parent_call_id: string
+  session_id: string
+  status: Status
+  events: Activity[]
+}
+type Cutoff = {
+  status: Status
+  error: string | undefined
+  parts: Part[]
+  text: OutputCursor
+  images: OutputCursor
+  yielded: number
+}
+type Cell = {
+  id: string
+  parentId: string
+  sessionId: string
+  ctx: ExtensionToolContext
+  status: Status
+  error: string | undefined
+  collected: boolean
+  accepting: boolean
+  worker: Worker | undefined
+  release: Promise<unknown> | undefined
+  credits: Int32Array
+  replies: Map<number, number>
+  replyBytes: number
+  controller: AbortController
+  text: OutputStore
+  images: OutputStore
+  parts: Part[]
+  nextPart: number
+  textRead: OutputCursor
+  imagesRead: OutputCursor
+  hasText: boolean
+  yielded: number
+  collectedYield: number
+  wake: (() => void) | undefined
+  collection: Promise<void>
+  collectors: number
+  processing: Promise<void>
+  writing: Promise<void>
+  calls: Set<Promise<void>>
+  stopping: Promise<void> | undefined
+  events: Activity[]
+  eventBytes: number
+  eventCount: number
+  notificationBytes: number
+}
+const journalType = "core-tools.activity"
+const messageLimit = 8 * 1024 * 1024
+const queueLimit = 16 * 1024 * 1024
+const cleanupLimit = 2000
+const selectedNames = new Set([
+  "exec_command",
+  "write_stdin",
+  "apply_patch",
+  "view_image",
+])
+const brief = (value: unknown) =>
+  stripVTControlCharacters(String(value)).replaceAll(/\s+/g, " ").slice(0, 256)
+const failure = (message: string): Result => ({
+  content: [{ type: "text", text: `Script error:\n${message}` }],
+  details: undefined,
+  isError: true,
+})
+function integer(
+  value: number | undefined,
+  fallback: number,
+  name: string,
+): number {
+  const result = value ?? fallback
+  if (!Number.isSafeInteger(result) || result < 0)
+    throw new Error(`${name} must be a nonnegative integer`)
+  return result
+}
+
+export class ExecutionCells {
+  private readonly cells = new Map<string, Cell>()
+  private readonly values = new Map<string, string>()
+  private readonly workers = new Set<Worker>()
+  private closed = false
+  private closing = false
+
+  constructor(
+    private readonly pi: ExtensionAPI,
+    private readonly available: (name: string) => boolean,
+  ) {
+    pi.registerEntryRenderer<Journal>(journalType, (entry) => ({
+      render: (width) => {
+        const data = entry.data
+        if (!data) return ["Execution activity is unavailable"]
+        const terminal = data.events.findLast(
+          (event) =>
+            !event.child_id &&
+            ["completed", "failed", "terminated"].includes(event.type),
         )
-      }, yieldTime)
-      signal?.addEventListener("abort", abort, { once: true })
-      worker.once("exit", () => {
-        signal?.removeEventListener("abort", abort)
-        if (!finished) finish(new Error("Execution stopped before completion"))
-      })
-      worker.once("error", finish)
-      worker.on("message", async (serialized: string) => {
-        if (finished) return
-        const message = JSON.parse(serialized) as {
-          type: string
-          text: string
-          message: string
-          id: number
-          name: string
-          args: unknown
-          url: string
-        }
-        if (message.type === "text") {
-          append(message.text)
-        } else if (message.type === "image") {
-          if (pi.getSettings().images?.blockImages)
-            append("Image reading is disabled.")
-          else {
-            const comma = message.url.indexOf(",")
-            output.push({
-              type: "image",
-              mimeType: message.url.slice(5, comma).split(";")[0]!,
-              data: message.url.slice(comma + 1),
-            })
-          }
-        } else if (message.type === "done" || message.type === "exit") {
-          finish()
-        } else if (message.type === "error") {
-          finish(new Error(message.message))
-        } else if (message.type === "call") {
-          const call = ctx.executeTool(
-            message.name,
-            message.name === "apply_patch"
-              ? { input: message.args }
-              : message.args,
-            {
-              signal: callSignal,
-            },
-          )
-          calls.add(call)
-          try {
-            const outcome = await call
-            const blocked =
-              message.name === "view_image" &&
-              pi.getSettings().images?.blockImages
-            const text = blocked
-              ? "Image reading is disabled."
-              : outcome.result.content
-                  .filter((part) => part.type === "text")
-                  .map((part) => part.text)
-                  .join("\n")
-            if (finished) {
-              if (callSignal.aborted && text) append(text)
-              return
-            }
-            const response = JSON.stringify({
-              id: message.id,
-              ...(outcome.isError || blocked
-                ? { error: text }
-                : { result: outcome.result.structuredContent ?? text }),
-            })
-            // oxlint-disable-next-line require-post-message-target-origin -- This is a Node worker, not a browser window.
-            worker.postMessage(response)
-          } catch (error) {
-            finish(error instanceof Error ? error : new Error(String(error)))
-          } finally {
-            calls.delete(call)
-          }
-        }
-      })
-      if (signal?.aborted) abort()
-    })
-  } catch (error) {
-    failure = error
-  } finally {
-    clearTimeout(timer)
-    await worker.terminate()
-    if (callSignal.aborted) await Promise.allSettled(calls)
+        const status =
+          terminal?.type ??
+          this.cells.get(data.cell_id)?.status ??
+          (data.status && data.status !== "running"
+            ? data.status
+            : "interrupted or unknown")
+        return [
+          `Execution cell ${data.cell_id}`,
+          `Status: ${status}`,
+          ...data.events.flatMap((event) =>
+            event.child_id
+              ? [
+                  `${event.child_id} ${event.name ?? ""}: ${event.type}${event.error ? ` (${event.error})` : ""}`,
+                ]
+              : [],
+          ),
+        ].map((line) => line.slice(0, width))
+      },
+      invalidate() {},
+    }))
   }
-  const content: AgentToolResult<undefined>["content"] = bounded.truncated
-    ? output.filter((part) => part.type === "image")
-    : output
-  if (bounded.truncated)
-    content.splice(firstText!, 0, {
-      type: "text",
-      text: bounded.result().output,
+
+  async start(
+    source: string,
+    parentId: string,
+    ctx: ExtensionToolContext,
+    signal: AbortSignal | undefined,
+  ): Promise<Result> {
+    if (this.closed || this.closing)
+      return failure("Execution session is closed")
+    if (this.cells.size >= 32)
+      return failure("Execution has too many retained cells (32)")
+    if (this.workers.size >= 8)
+      return failure("Execution has too many live workers (8)")
+    if (Buffer.byteLength(source) > 1024 * 1024)
+      return failure("Execution source exceeds 1 MiB")
+    const pragma = source.match(/^[ \t]*\/\/ @exec:([^\r\n]*)/)
+    let maxTokens: number
+    let yieldTime: number
+    try {
+      const options = pragma
+        ? (JSON.parse(pragma[1]!) as {
+            max_output_tokens?: number
+            yield_time_ms?: number
+          })
+        : {}
+      maxTokens = integer(options.max_output_tokens, 10000, "max_output_tokens")
+      yieldTime = integer(options.yield_time_ms, 30000, "yield_time_ms")
+    } catch (error) {
+      return failure(error instanceof Error ? error.message : String(error))
+    }
+    const credits = new Int32Array(new SharedArrayBuffer(4))
+    Atomics.store(credits, 0, queueLimit)
+    const cell: Cell = {
+      id: randomUUID(),
+      parentId,
+      sessionId: ctx.sessionManager.getSessionId(),
+      ctx,
+      status: "running",
+      error: undefined,
+      collected: false,
+      accepting: true,
+      worker: undefined,
+      release: undefined,
+      credits,
+      replies: new Map(),
+      replyBytes: 0,
+      controller: new AbortController(),
+      text: new OutputStore((error) => void this.stop(cell, String(error))),
+      images: new OutputStore((error) => void this.stop(cell, String(error))),
+      parts: [],
+      nextPart: 0,
+      textRead: { bytes: 0, lines: 0, lastByte: undefined },
+      imagesRead: { bytes: 0, lines: 0, lastByte: undefined },
+      hasText: false,
+      yielded: 0,
+      collectedYield: 0,
+      wake: undefined,
+      collection: Promise.resolve(),
+      collectors: 0,
+      processing: Promise.resolve(),
+      writing: Promise.resolve(),
+      calls: new Set(),
+      stopping: undefined,
+      events: [],
+      eventBytes: 0,
+      eventCount: 0,
+      notificationBytes: 0,
+    }
+    this.cells.set(cell.id, cell)
+    this.record(cell, { type: "created" })
+    const tools = ctx.tools.filter(
+      (tool) => selectedNames.has(tool.name) && this.available(tool.name),
+    )
+    const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
+      workerData: {
+        source,
+        tools: tools.map(({ name, description }) => ({ name, description })),
+        values: [...this.values],
+        credits: credits.buffer,
+      },
+      execArgv: [
+        "--experimental-vm-modules",
+        "--disable-warning=ExperimentalWarning",
+      ],
+      resourceLimits: { maxOldGenerationSizeMb: 128, stackSizeMb: 4 },
     })
-  return failure
-    ? {
-        content: [
-          ...content,
-          {
-            type: "text",
-            text: `Script error:\n${failure instanceof Error ? failure.message : String(failure)}`,
-          },
-        ],
-        details: undefined,
-        isError: true,
+    cell.worker = worker
+    this.workers.add(worker)
+    worker.once("error", (error) => void this.stop(cell, error.message))
+    worker.once("exit", () => {
+      this.workers.delete(worker)
+      if (cell.worker === worker) {
+        cell.worker = undefined
+        if (cell.status === "running" && !cell.stopping)
+          void this.stop(cell, "Execution stopped before completion")
       }
-    : {
-        content: [
-          {
-            type: "text",
-            text: `Script completed\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
-          },
-          ...content,
-        ],
-        details: undefined,
+    })
+    worker.on("message", (serialized: string) => {
+      const bytes = Buffer.byteLength(serialized)
+      cell.processing = cell.processing
+        .then(() => this.message(cell, serialized))
+        .catch((error: unknown) => {
+          void this.stop(
+            cell,
+            error instanceof Error ? error.message : String(error),
+          )
+        })
+        .finally(() => {
+          Atomics.add(credits, 0, bytes)
+          Atomics.notify(credits, 0)
+        })
+    })
+    const abort = () => void this.stop(cell, "Execution cancelled")
+    signal?.addEventListener("abort", abort, { once: true })
+    if (signal?.aborted) abort()
+    try {
+      return await this.collect(cell, yieldTime, maxTokens)
+    } finally {
+      signal?.removeEventListener("abort", abort)
+    }
+  }
+
+  async wait(
+    args: WaitOptions,
+    signal: AbortSignal | undefined,
+  ): Promise<Result> {
+    try {
+      const maxTokens = integer(args.max_tokens, 10000, "max_tokens")
+      const yieldTime = integer(args.yield_time_ms, 10000, "yield_time_ms")
+      const cell = this.cells.get(args.cell_id)
+      if (!cell || cell.collected)
+        return failure(`exec cell ${args.cell_id} not found`)
+      if (args.terminate) await this.stop(cell)
+      return await this.collect(cell, yieldTime, maxTokens, signal)
+    } catch (error) {
+      return failure(error instanceof Error ? error.message : String(error))
+    }
+  }
+
+  private async message(cell: Cell, serialized: string): Promise<void> {
+    if (!cell.accepting) return
+    const message = JSON.parse(serialized) as {
+      type: string
+      text: string
+      message: string
+      id: number
+      name: string
+      args: unknown
+      url: string
+      writes: [string, string][]
+    }
+    if (message.type === "text") await this.appendText(cell, message.text)
+    else if (message.type === "image") {
+      if (this.pi.getSettings().images?.blockImages)
+        await this.appendText(cell, "Image reading is disabled.")
+      else {
+        this.checkParts(cell)
+        const comma = message.url.indexOf(",")
+        const from = cell.images.snapshot()
+        await this.append(cell.images, message.url.slice(comma + 1))
+        cell.parts.push({
+          id: ++cell.nextPart,
+          type: "image",
+          from,
+          through: cell.images.snapshot(),
+          sealed: true,
+          mimeType: message.url.slice(5, comma).split(";")[0]!,
+        })
       }
+    } else if (message.type === "notify") {
+      cell.notificationBytes += Buffer.byteLength(message.text)
+      if (cell.notificationBytes > 1024 * 1024)
+        throw new Error("Execution notifications exceed 1 MiB")
+      this.record(cell, { type: "notified" })
+      this.pi.sendMessage(
+        {
+          customType: "core-tools.notice",
+          content: message.text,
+          display: true,
+        },
+        { triggerTurn: false },
+      )
+    } else if (message.type === "yield") {
+      cell.yielded++
+      this.flush(cell)
+      cell.wake?.()
+    } else if (message.type === "done" || message.type === "error") {
+      this.commit(message.writes)
+      cell.status = message.type === "done" ? "completed" : "failed"
+      cell.error = message.type === "error" ? message.message : undefined
+      cell.accepting = false
+      this.release(cell)
+      this.record(cell, {
+        type: cell.status,
+        ...(cell.error ? { error: brief(cell.error) } : {}),
+      })
+      this.flush(cell)
+      cell.wake?.()
+    } else if (message.type === "call") {
+      if (cell.calls.size >= 32)
+        throw new Error("Execution has too many pending tool calls (32)")
+      const call = this.dispatch(cell, message)
+        .catch((error: unknown) => {
+          void this.stop(
+            cell,
+            error instanceof Error ? error.message : String(error),
+          )
+        })
+        .finally(() => {
+          cell.calls.delete(call)
+          if (cell.collected && !cell.calls.size) this.cells.delete(cell.id)
+        })
+      cell.calls.add(call)
+    } else if (message.type === "received") {
+      cell.replyBytes -= cell.replies.get(message.id) ?? 0
+      cell.replies.delete(message.id)
+    }
+  }
+
+  private async dispatch(
+    cell: Cell,
+    message: {
+      id: number
+      name: string
+      args: unknown
+    },
+  ): Promise<void> {
+    const child = `${cell.id}/${message.id}`
+    try {
+      this.record(cell, {
+        type: "started",
+        child_id: child,
+        name: message.name,
+        arguments: brief(JSON.stringify(message.args)),
+      })
+      if (
+        !selectedNames.has(message.name) ||
+        !this.available(message.name) ||
+        !cell.ctx.tools.some((tool) => tool.name === message.name)
+      )
+        throw new Error(`Tool ${message.name} is not available`)
+      const outcome = await cell.ctx.executeTool(
+        message.name,
+        message.name === "apply_patch" ? { input: message.args } : message.args,
+        { signal: cell.controller.signal },
+      )
+      const blocked =
+        message.name === "view_image" &&
+        this.pi.getSettings().images?.blockImages
+      const text = blocked
+        ? "Image reading is disabled."
+        : outcome.result.content
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n")
+      this.record(cell, {
+        type: outcome.isError || blocked ? "failed" : "completed",
+        child_id: child,
+        name: message.name,
+        ...(outcome.isError || blocked ? { error: brief(text) } : {}),
+      })
+      if (cell.stopping && text) await this.appendText(cell, text)
+      if (cell.accepting)
+        this.reply(
+          cell,
+          message.id,
+          outcome.isError || blocked
+            ? { error: text }
+            : { result: outcome.result.structuredContent ?? text },
+        )
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error)
+      this.record(cell, {
+        type: "failed",
+        child_id: child,
+        name: message.name,
+        error: brief(text),
+      })
+      if (cell.accepting) this.reply(cell, message.id, { error: text })
+    } finally {
+      if (cell.status !== "running") this.flush(cell)
+    }
+  }
+
+  private reply(
+    cell: Cell,
+    id: number,
+    result: { error?: string; result?: unknown },
+  ): void {
+    const serialized = JSON.stringify({ id, ...result })
+    const bytes = Buffer.byteLength(serialized)
+    if (bytes > messageLimit || cell.replyBytes + bytes > queueLimit) {
+      void this.stop(cell, "Tool replies exceed the worker message limit")
+      return
+    }
+    cell.replyBytes += bytes
+    cell.replies.set(id, bytes)
+    // oxlint-disable-next-line require-post-message-target-origin -- This is a Node worker, not a browser window.
+    cell.worker?.postMessage(serialized)
+  }
+
+  private checkParts(cell: Cell): void {
+    if (cell.parts.length >= 4096)
+      throw new Error("Execution has too many unread output items (4096)")
+  }
+
+  private async append(
+    store: OutputStore,
+    value: string,
+    accepted?: () => void,
+  ): Promise<void> {
+    const bytes = Buffer.from(value)
+    for (let offset = 0; offset < bytes.length;) {
+      let through = Math.min(bytes.length, offset + 256 * 1024)
+      while (through < bytes.length && (bytes[through]! & 0xc0) === 0x80)
+        through--
+      const pressure = store.append(bytes.subarray(offset, through))
+      accepted?.()
+      await pressure
+      offset = through
+    }
+  }
+
+  private appendText(cell: Cell, text: string): Promise<void> {
+    cell.writing = cell.writing.then(async () => {
+      this.checkParts(cell)
+      if (cell.hasText) await cell.text.append("\n")
+      cell.hasText = true
+      const from = cell.text.snapshot()
+      const part: Part = {
+        id: ++cell.nextPart,
+        type: "text",
+        from,
+        through: from,
+        sealed: false,
+      }
+      cell.parts.push(part)
+      try {
+        await this.append(cell.text, text, () => {
+          part.through = cell.text.snapshot()
+        })
+      } finally {
+        part.sealed = true
+      }
+    })
+    return cell.writing
+  }
+
+  private commit(writes: [string, string][]): void {
+    const next = new Map(this.values)
+    for (const [key, value] of writes) next.set(key, value)
+    const bytes = [...next].reduce(
+      (size, [key, value]) =>
+        size + Buffer.byteLength(key) + Buffer.byteLength(value),
+      0,
+    )
+    if (next.size > 128 || bytes > 1024 * 1024)
+      throw new Error("Stored values exceed the session limit")
+    for (const [key, value] of writes) this.values.set(key, value)
+  }
+
+  private release(cell: Cell): void {
+    const worker = cell.worker
+    cell.worker = undefined
+    if (worker) cell.release = worker.terminate()
+    cell.replies.clear()
+    cell.replyBytes = 0
+  }
+
+  private stop(cell: Cell, error?: string): Promise<void> {
+    if (cell.stopping) return cell.stopping
+    if (cell.status !== "running" && cell.calls.size === 0)
+      return Promise.resolve()
+    cell.accepting = false
+    cell.controller.abort()
+    this.release(cell)
+    cell.stopping = (async () => {
+      let timer: NodeJS.Timeout | undefined
+      const complete = await Promise.race([
+        Promise.allSettled([
+          cell.release,
+          cell.processing,
+          cell.writing,
+          ...cell.calls,
+        ]).then(() => true),
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), cleanupLimit)
+        }),
+      ])
+      clearTimeout(timer)
+      cell.status = "terminated"
+      cell.error =
+        [
+          error,
+          ...(!complete
+            ? ["Execution cleanup did not finish within 2000 ms"]
+            : []),
+        ]
+          .filter(Boolean)
+          .join("\n") || undefined
+      this.record(cell, {
+        type: "terminated",
+        ...(cell.error ? { error: brief(cell.error) } : {}),
+      })
+      this.flush(cell)
+      cell.wake?.()
+    })()
+    return cell.stopping
+  }
+
+  private capture(cell: Cell): Cutoff {
+    const parts = cell.parts
+      .filter((part) => part.sealed || part.through.bytes > part.from.bytes)
+      // oxlint-disable-next-line no-map-spread -- The published cutoff must not change while producers append.
+      .map((part) => ({ ...part }))
+    return {
+      status: cell.status,
+      error: cell.error,
+      parts,
+      text:
+        parts.findLast((part) => part.type === "text")?.through ??
+        cell.textRead,
+      images:
+        parts.findLast((part) => part.type === "image")?.through ??
+        cell.imagesRead,
+      yielded: cell.yielded,
+    }
+  }
+
+  private async collect(
+    cell: Cell,
+    yieldTime: number,
+    maxTokens: number,
+    signal?: AbortSignal,
+  ): Promise<Result> {
+    if (signal?.aborted) return failure("Wait cancelled")
+    if (cell.collectors >= 32)
+      return failure("Execution has too many waiting collectors (32)")
+    cell.collectors++
+    const waiting = cell.collection
+      .then(async (): Promise<Result> => {
+        if (signal?.aborted) return failure("Wait cancelled")
+        if (cell.collected) return failure(`exec cell ${cell.id} not found`)
+        const started = performance.now()
+        let timer: NodeJS.Timeout | undefined
+        let cancelled = false
+        let abort: (() => void) | undefined
+        const cutoff = await new Promise<Cutoff>((resolve) => {
+          const capture = () => {
+            if (cell.stopping && cell.status === "running") return
+            resolve(this.capture(cell))
+          }
+          abort = () => {
+            cancelled = true
+            resolve(this.capture(cell))
+          }
+          cell.wake = capture
+          signal?.addEventListener("abort", abort, { once: true })
+          if (
+            cell.status !== "running" ||
+            cell.yielded > cell.collectedYield ||
+            yieldTime === 0
+          )
+            capture()
+          else timer = setTimeout(capture, Math.min(yieldTime, 2_147_483_647))
+          if (signal?.aborted) abort()
+        })
+        clearTimeout(timer)
+        cell.wake = undefined
+        if (abort) signal?.removeEventListener("abort", abort)
+        if (cancelled) return failure("Wait cancelled")
+        const content = await this.contents(cell, cutoff, maxTokens)
+        if (signal?.aborted) return failure("Wait cancelled")
+        let collectedIndex = 0
+        cell.parts = cell.parts.filter((part) => {
+          const collected = cutoff.parts[collectedIndex]
+          if (part.id !== collected?.id) return true
+          collectedIndex++
+          if (part.sealed && part.through.bytes === collected.through.bytes)
+            return false
+          part.from = collected.through
+          return true
+        })
+        cell.text.discardThrough(cutoff.text)
+        cell.images.discardThrough(cutoff.images)
+        cell.textRead = cutoff.text
+        cell.imagesRead = cutoff.images
+        cell.collectedYield = cutoff.yielded
+        this.flush(cell)
+        if (cutoff.status !== "running") {
+          cell.collected = true
+          await Promise.all([cell.text.close(), cell.images.close()])
+          if (!cell.calls.size) this.cells.delete(cell.id)
+        }
+        if (cutoff.status === "failed" || cutoff.error)
+          return {
+            content: [
+              ...content,
+              ...failure(cutoff.error ?? "Execution failed").content,
+            ],
+            details: undefined,
+            isError: true,
+          }
+        const status =
+          cutoff.status === "running"
+            ? `running with cell ID ${cell.id}`
+            : cutoff.status
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Script ${status}\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
+            },
+            ...content,
+          ],
+          details: undefined,
+        }
+      })
+      .catch((error: unknown) =>
+        failure(error instanceof Error ? error.message : String(error)),
+      )
+    cell.collection = waiting.then(() => {
+      cell.collectors--
+    })
+    if (!signal) return waiting
+    let abort: (() => void) | undefined
+    const cancelled = new Promise<Result>((resolve) => {
+      abort = () => resolve(failure("Wait cancelled"))
+      signal.addEventListener("abort", abort, { once: true })
+      if (signal.aborted) abort()
+    })
+    try {
+      return await Promise.race([waiting, cancelled])
+    } finally {
+      if (abort) signal.removeEventListener("abort", abort)
+    }
+  }
+
+  private async contents(
+    cell: Cell,
+    cutoff: Cutoff,
+    maxTokens: number,
+  ): Promise<Result["content"]> {
+    const texts = cutoff.parts.filter((part) => part.type === "text")
+    const first = texts[0]
+    const last = texts.at(-1)
+    const bounded =
+      first && last
+        ? await cell.text.read(first.from, last.through, maxTokens)
+        : undefined
+    const truncated = bounded && bounded.original_token_count > maxTokens
+    const mixed = cutoff.parts.some((part) => part.type === "image")
+    const headEnd = first ? first.from.bytes + maxTokens * 2 : 0
+    const tailStart = last ? last.through.bytes - maxTokens * 2 : 0
+    const content: Result["content"] = []
+    let addedText = false
+    let marked = false
+    for (const part of cutoff.parts) {
+      if (part.type === "image") {
+        content.push({
+          type: "image",
+          mimeType: part.mimeType!,
+          data: (
+            await cell.images.readRange(part.from.bytes, part.through.bytes)
+          ).toString(),
+        })
+      } else if (truncated && mixed) {
+        let text = addedText
+          ? ""
+          : bounded.output.slice(0, bounded.output.indexOf("\n\n") + 2)
+        if (part.from.bytes < headEnd) {
+          const head = await cell.text.readRange(
+            part.from.bytes,
+            Math.min(part.through.bytes, headEnd),
+          )
+          text += new TextDecoder().decode(head, { stream: true })
+        }
+        if (!marked && part.through.bytes >= headEnd) {
+          text += `…${bounded.original_token_count - maxTokens} tokens truncated…`
+          marked = true
+        }
+        if (part.through.bytes > tailStart) {
+          const tail = await cell.text.readRange(
+            Math.max(part.from.bytes, tailStart),
+            part.through.bytes,
+          )
+          let start = 0
+          while (start < tail.length && (tail[start]! & 0xc0) === 0x80) start++
+          text += tail.subarray(start).toString()
+        }
+        if (text) content.push({ type: "text", text })
+        addedText = true
+      } else if (truncated) {
+        if (!addedText) content.push({ type: "text", text: bounded.output })
+        addedText = true
+      } else
+        content.push({
+          type: "text",
+          text: (
+            await cell.text.readRange(part.from.bytes, part.through.bytes)
+          ).toString(),
+        })
+    }
+    return content
+  }
+
+  private record(cell: Cell, event: Activity): void {
+    if (this.closed) return
+    if (
+      cell.eventCount >= 4096 &&
+      (event.child_id ||
+        !["completed", "failed", "terminated"].includes(event.type))
+    )
+      throw new Error("Execution activity exceeds 4096 records")
+    cell.eventCount++
+    cell.events.push(event)
+    cell.eventBytes += Buffer.byteLength(JSON.stringify(event))
+    if (cell.events.length >= 16 || cell.eventBytes >= 8192) this.flush(cell)
+  }
+
+  private flush(cell: Cell): void {
+    if (!cell.events.length || this.closed) return
+    this.pi.appendEntry<Journal>(journalType, {
+      cell_id: cell.id,
+      parent_call_id: cell.parentId,
+      session_id: cell.sessionId,
+      status: cell.status,
+      events: cell.events.splice(0),
+    })
+    cell.eventBytes = 0
+  }
+
+  async close(): Promise<void> {
+    if (this.closed) return
+    this.closing = true
+    const cells = [...this.cells.values()]
+    for (const cell of cells) cell.accepting = false
+    await Promise.all(
+      cells.map((cell) => this.stop(cell, "Execution session closed")),
+    )
+    await Promise.all(cells.map((cell) => cell.collection))
+    const incomplete = cells.some((cell) => cell.calls.size > 0)
+    this.closed = true
+    this.values.clear()
+    this.cells.clear()
+    await Promise.all(
+      cells.flatMap((cell) => [cell.text.close(), cell.images.close()]),
+    )
+    if (incomplete)
+      throw new Error("Execution cleanup did not finish within 2000 ms")
+  }
 }
