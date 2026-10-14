@@ -213,6 +213,44 @@ for (const filename of ["a&b.txt", "a&amp;b.txt", "&copy;.txt"]) {
   })
 }
 
+for (const imageSyntax of [false, true]) {
+  test(`renamed historical ${imageSyntax ? "image" : "link"} label preserves literal retained image with a conflicting filename`, async (t) => {
+    const host = await nativePi(t, [], {
+      settings: {
+        images: { autoResize: false },
+        terminal: { showImages: false },
+      },
+    })
+    const directory = join(host.agentDir, "pi-attachments", "legacy")
+    await fs.mkdir(directory, { recursive: true })
+    const path = join(directory, "a&amp;b.png")
+    await writeFile(path, Buffer.from(PNG, "base64"))
+    await writeFile(
+      join(directory, "a&b.png"),
+      "Wrong decoded retained content",
+    )
+    const label = `${imageSyntax ? "!" : ""}[Attachment: Renamed diagram]`
+    host.ui.setEditorText(`Review ${label}(<${path}>)`)
+    await waitFor(() =>
+      assert.equal(
+        host.ui.getEditorText(),
+        `Review ${label}(<${path.replaceAll("&", "\\&")}>)`,
+      ),
+    )
+    const draft = host.ui.getEditorText()
+    assert.match(host.render(), /Manage attachments/)
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    const user = host.requests[0].messages.findLast(
+      (message) => message.role === "user",
+    )
+    assert.equal(user.content[0].text, draft)
+    assert.equal(user.content[1].type, "image_url")
+    assert.equal(user.content[1].image_url.url, `data:image/png;base64,${PNG}`)
+    assert.equal(await readFile(path, "base64"), PNG)
+  })
+}
+
 test("legacy normalization reuses its pending lookup across typing and redraws", async (t) => {
   const host = await nativePi(t)
   const directory = join(host.agentDir, "pi-attachments", "legacy")

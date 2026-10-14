@@ -293,7 +293,7 @@ export function fileReferences(text: string, cwd: string, storage?: string) {
       literal?.startsWith(storage + sep) &&
       literal !== path &&
       !basename(literal).includes("\\") &&
-      token.raw === `[Attachment: ${basename(literal)}](${raw})`
+      /^!?\[Attachment: [^[\]]+\]\(<[^<>]+>\)$/.test(token.raw)
         ? literal
         : undefined
     if (path)
