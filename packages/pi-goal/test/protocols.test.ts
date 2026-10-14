@@ -1,0 +1,145 @@
+/* eslint-disable no-await-in-loop -- Each native session must close before opening the next one. */
+import assert from "node:assert/strict"
+import test from "node:test"
+import { openNativeHost } from "../../../fixtures/native-host.ts"
+
+const extension = new URL("../src/index.ts", import.meta.url).pathname
+const end = { end: true } as const
+
+function call(name: string, raw: string, delta: boolean) {
+  const item = {
+    type: "function_call",
+    id: "goal-item",
+    call_id: "goal-call",
+    name,
+    arguments: raw,
+  }
+  return [
+    { event: { type: "response.created", response: { id: "goal-response" } } },
+    {
+      event: {
+        type: "response.output_item.added",
+        output_index: 0,
+        item: { ...item, arguments: "" },
+      },
+    },
+    ...(delta
+      ? [
+          {
+            event: {
+              type: "response.function_call_arguments.delta",
+              output_index: 0,
+              item_id: item.id,
+              delta: raw,
+            },
+          },
+        ]
+      : []),
+    { event: { type: "response.output_item.done", output_index: 0, item } },
+    {
+      event: {
+        type: "response.completed",
+        response: { id: "goal-response", status: "completed", output: [item] },
+      },
+    },
+    end,
+  ]
+}
+
+test("both provider protocols advertise the exact input contract and no output schema", async (t) => {
+  for (const providerProtocol of ["completions", "responses"] as const) {
+    await t.test(providerProtocol, async (caseT) => {
+      const host = await openNativeHost(caseT, {
+        providerProtocol,
+        extensionPaths: [extension],
+        noTools: "builtin",
+        persistSession: true,
+      })
+      await host.session.prompt("Explain goal controls")
+      assert.equal(host.requests.length, 1)
+      const payload = JSON.parse(host.requestBodies[0]!)
+      const declarations = payload.tools.map(
+        (tool: { function?: unknown }) => tool.function ?? tool,
+      )
+      assert.deepEqual(
+        declarations.map((tool: { name: string }) => tool.name).toSorted(),
+        ["create_goal", "get_goal"],
+      )
+      for (const tool of declarations) {
+        assert.equal(tool.strict, false)
+        assert.equal(tool.parameters.type, "object")
+        assert.equal(tool.parameters.additionalProperties, false)
+        assert.equal("outputSchema" in tool, false)
+        assert.equal("output_schema" in tool, false)
+        if (tool.name === "get_goal") {
+          assert.deepEqual(tool.parameters.properties, {})
+          assert.deepEqual(tool.parameters.required, [])
+        } else {
+          assert.deepEqual(tool.parameters.required, ["objective"])
+          assert.equal(tool.parameters.properties.objective.type, "string")
+          assert.equal(tool.parameters.properties.token_budget.type, "integer")
+          assert.match(tool.description, /explicit user request/)
+          assert.match(
+            tool.description,
+            /only when the budget was explicitly requested/,
+          )
+        }
+      }
+    })
+  }
+})
+
+test("streamed and finalized argument strings retain integer precision and replay after reopening", async (t) => {
+  for (const delta of [true, false]) {
+    await t.test(
+      delta ? "streamed arguments" : "finalized arguments",
+      async (caseT) => {
+        const host = await openNativeHost(caseT, {
+          providerProtocol: "responses",
+          extensionPaths: [extension],
+          noTools: "builtin",
+          persistSession: true,
+        })
+        const raw =
+          '{"objective":"Retain exact input","token_budget":9223372036854775807}'
+        host.queueResponse(...call("create_goal", raw, delta))
+        await host.session.prompt("Create the explicitly budgeted goal")
+        const result = host.session.messages.findLast(
+          (message) => message.role === "toolResult",
+        )
+        assert(result?.role === "toolResult")
+        const content = result.content[0]
+        assert(content?.type === "text")
+        assert.equal(result.isError, false, content.text)
+        assert.match(content.text, /"tokenBudget":9223372036854775807/)
+        const after = JSON.parse(host.requestBodies[1]!)
+        const replayed = after.input.find(
+          (item: { type: string }) => item.type === "function_call",
+        )
+        assert.equal(replayed.arguments, raw)
+        const output = after.input.find(
+          (item: { type: string }) => item.type === "function_call_output",
+        )
+        assert.match(output.output, /"remainingTokens":9223372036854775807/)
+        const sessionFile = host.session.sessionManager.getSessionFile()
+        assert(sessionFile)
+        await host.close()
+        const reopened = await openNativeHost(caseT, {
+          providerProtocol: "responses",
+          extensionPaths: [extension],
+          noTools: "builtin",
+          directory: host.directory,
+          sessionFile,
+        })
+        await reopened.session.prompt("Retain the current goal")
+        const restored = JSON.parse(reopened.requestBodies[0]!)
+        assert.equal(
+          restored.input.find(
+            (item: { type: string }) => item.type === "function_call",
+          ).arguments,
+          raw,
+        )
+      },
+    )
+  }
+})
