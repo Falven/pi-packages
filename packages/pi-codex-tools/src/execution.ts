@@ -31,7 +31,9 @@ export async function execute(
   const calls = new Set<Promise<unknown>>()
   let timer: NodeJS.Timeout | undefined
   const bounded = new OutputBuffer(maxTokens)
-  const tools = ctx.tools.filter((tool) => tool.name === "exec_command")
+  const tools = ctx.tools.filter((tool) =>
+    ["exec_command", "write_stdin"].includes(tool.name),
+  )
   const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
     workerData: {
       source,

@@ -1,9 +1,13 @@
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { Type } from "typebox"
-import { createCommand } from "./command.ts"
+import type {
+  ExtensionAPI,
+  ToolDefinition,
+} from "@earendil-works/pi-coding-agent"
+import { Type, type TSchema } from "typebox"
+import { createCommand, createStdin } from "./command.ts"
 import { execute } from "./execution.ts"
+import { ProcessSessions } from "./process.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
 const contract = JSON.parse(
@@ -32,7 +36,7 @@ function description(names: ReadonlySet<string>): string {
           ),
       )
       .join("\n"),
-    "Only completed scripts are supported. Await every tool call before the script ends. Command calls wait for completion; process sessions and interactive commands are unavailable. Retained execution is unavailable. Reaching the script yield deadline returns an error and cancels pending calls.",
+    "Only completed scripts are supported. Await every tool call before the script ends. Command calls may yield a process session for later input or polling. Retained execution is unavailable. Reaching the script yield deadline returns an error and cancels pending calls.",
     ...sections.filter((section) =>
       names.has(section.match(/^### `([^`]+)`/)![1]!),
     ),
@@ -41,11 +45,15 @@ function description(names: ReadonlySet<string>): string {
 
 export default function coreTools(pi: ExtensionAPI): void {
   const lifetime = new AbortController()
-  pi.on("session_shutdown", () => lifetime.abort())
-  const commandAvailable = () => {
+  const processes = new ProcessSessions()
+  pi.on("session_shutdown", async () => {
+    lifetime.abort()
+    await processes.close()
+  })
+  const commandAvailable = (name: string) => {
     const active = new Set(pi.getActiveTools())
     return (
-      active.has("exec_command") ||
+      active.has(name) ||
       (active.has("bash") &&
         pi
           .getAllTools()
@@ -55,18 +63,41 @@ export default function coreTools(pi: ExtensionAPI): void {
           ))
     )
   }
-  const command = createCommand(pi, commandAvailable, lifetime.signal)
-  pi.registerTool(command)
-  const syncCommand = () => {
-    const registered = pi.getAllTools()
-    const current = registered.find((tool) => tool.name === command.name)
-    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
-      return
-    const exposure = commandAvailable() ? "codemode" : "hidden"
-    if (current.exposure !== exposure) pi.registerTool({ ...command, exposure })
+  const registerProcessTool = <T extends TSchema>(
+    command: ToolDefinition<T, undefined>,
+  ) => {
+    pi.registerTool(command)
+    const sync = () => {
+      const current = pi
+        .getAllTools()
+        .find((tool) => tool.name === command.name)
+      if (
+        !current ||
+        current.sourceInfo.path !== fileURLToPath(import.meta.url)
+      )
+        return
+      const exposure = commandAvailable(command.name) ? "codemode" : "hidden"
+      if (current.exposure !== exposure)
+        pi.registerTool({ ...command, exposure })
+    }
+    pi.on("session_start", sync)
+    pi.on("before_agent_start", sync)
   }
-  pi.on("session_start", syncCommand)
-  pi.on("before_agent_start", syncCommand)
+  registerProcessTool(
+    createCommand(
+      pi,
+      () => commandAvailable("exec_command"),
+      lifetime.signal,
+      processes,
+    ),
+  )
+  registerProcessTool(
+    createStdin(
+      () => commandAvailable("write_stdin"),
+      lifetime.signal,
+      processes,
+    ),
+  )
   pi.registerTool({
     name: execution.name,
     label: "Execute",
@@ -85,16 +116,16 @@ export default function coreTools(pi: ExtensionAPI): void {
       )
       return {
         descriptions: { exec: description(names) },
-        hiddenDeclarations: names.has("exec_command")
-          ? loadout.declared
-              .filter(
-                (tool) =>
-                  tool.name === "exec_command" ||
-                  (stock.has(tool.name) &&
-                    ["bash", "grep", "find", "ls"].includes(tool.name)),
-              )
-              .map((tool) => tool.name)
-          : [],
+        hiddenDeclarations: loadout.declared
+          .filter(
+            (tool) =>
+              (["exec_command", "write_stdin"].includes(tool.name) &&
+                names.has(tool.name)) ||
+              (names.has("exec_command") &&
+                stock.has(tool.name) &&
+                ["bash", "grep", "find", "ls"].includes(tool.name)),
+          )
+          .map((tool) => tool.name),
       }
     },
     execute(_id, args, signal, _onUpdate, ctx) {

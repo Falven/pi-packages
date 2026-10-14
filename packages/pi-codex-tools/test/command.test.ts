@@ -80,7 +80,7 @@ test("the outgoing request declares the frozen raw execution contract", async (t
   )
   assert.doesNotMatch(
     declared.description,
-    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|view_image|write_stdin)`/,
+    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|view_image)`/,
   )
   assert.match(declared.description, /completed scripts/i)
   assert.equal(
