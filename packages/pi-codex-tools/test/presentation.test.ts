@@ -150,6 +150,55 @@ test("parent result redaction also controls the returned operation presentation"
   assert.doesNotMatch(output(host), /hidden-after-return/)
 })
 
+for (const edited of [true, false]) {
+  test(`parent result ${edited ? "edits" : "removal"} owns presentation after late activity and reload`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension],
+      providerApi,
+      rows: 100,
+      columns: 100,
+      extension(pi) {
+        pi.on("tool_result", (event) => {
+          if (event.toolName !== "exec") return undefined
+          if (!edited) return { details: {} }
+          const details = event.details as {
+            execution: Record<string, unknown>
+          }
+          return {
+            details: {
+              ...details,
+              execution: {
+                ...details.execution,
+                operations: [],
+                output: "PUBLIC-SUMMARY",
+              },
+            },
+          }
+        })
+      },
+    })
+    host.queueResponse(
+      ...call(
+        'await tools.exec_command({cmd:"printf PRIVATE-BEFORE",login:false}); text("RETURNED-SCRIPT"); await yield_control(); await new Promise(resolve=>setTimeout(resolve,120)); await tools.exec_command({cmd:"printf PRIVATE-AFTER",login:false}); text("PRIVATE-LATE");',
+      ),
+    )
+    host.queueResponse(completed)
+    await host.session.prompt("Use the returned presentation")
+    await host.key("\x0f")
+    await setTimeout(220)
+    const assertReturned = () => {
+      const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(frame, edited ? /PUBLIC-SUMMARY/ : /RETURNED-SCRIPT/)
+      assert.doesNotMatch(frame, /PRIVATE-BEFORE|PRIVATE-AFTER|PRIVATE-LATE/)
+    }
+    assertReturned()
+    assert.match(output(host), /RETURNED-SCRIPT/)
+    await host.reload()
+    await setTimeout(70)
+    assertReturned()
+  })
+}
+
 test("compact command status reports a nonzero exit without changing script success", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -214,6 +263,95 @@ test("large command previews show omissions and wrap within narrow terminal cell
   assert.doesNotMatch(expanded, /�|Wall time|chunk_id/)
   assert(host.screenLines().every((line) => visibleWidth(line) <= 24))
 })
+
+for (const sample of [
+  {
+    name: "head boundary",
+    source: 'process.stdout.write("x".repeat(8189)+"\\x1b[31mRED-END\\x1b[0m")',
+    expected: /RED-END/,
+    fragment: /1mRED-END/,
+  },
+  {
+    name: "tail boundary",
+    source:
+      'process.stdout.write("x".repeat(8192)+"a".repeat(1000)+"\\x1b[31m"+"R".repeat(8189))',
+    expected: /output omitted/,
+    fragment: /31mR/,
+  },
+  {
+    name: "split output events",
+    source:
+      'process.stdout.write("SPLIT-START\\n\\x1b[3"); setTimeout(()=>{process.stdout.write("1mSPLIT-END\\x1b[0m\\x1b]8;;hidden-link");setTimeout(()=>process.stdout.write("\\x1b\\\\LINK\\x1b]8;;\\x1b\\\\"),80)},80)',
+    expected: /SPLIT-ENDLINK/,
+    fragment: /1mSPLIT|hidden-link/,
+  },
+]) {
+  test(`command preview strips terminal controls before clipping at ${sample.name}`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension],
+      providerApi,
+      rows: 400,
+      columns: 100,
+    })
+    const producer = join(host.directory, "ansi-producer.cjs")
+    await writeFile(producer, sample.source)
+    host.queueResponse(
+      ...call(
+        `text(await tools.exec_command(${JSON.stringify({ cmd: `${process.execPath} ${producer}`, login: false, max_output_tokens: 10000 })}));`,
+      ),
+    )
+    host.queueResponse(completed)
+    await host.session.prompt("Show readable terminal output")
+    await host.key("\x0f")
+    await setTimeout(60)
+    const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(frame, sample.expected)
+    assert.doesNotMatch(frame, sample.fragment)
+    assert.match(output(host), /\\u001b\[31m/)
+  })
+}
+
+for (const sample of [
+  {
+    name: "combining mark",
+    prefix: "x".repeat(8191) + "e",
+    suffix: "\u0301",
+    split: /x+e\s*\n\s*… \[output omitted\]/,
+  },
+  {
+    name: "joined emoji",
+    prefix: "x".repeat(8188) + "👩",
+    suffix: "\u200d💻",
+    split: /👩\s*\n\s*… \[output omitted\]/,
+  },
+]) {
+  test(`streamed preview keeps a ${sample.name} whole across the head boundary`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension],
+      providerApi,
+      rows: 400,
+      columns: 100,
+    })
+    const producer = join(host.directory, "grapheme-producer.cjs")
+    await writeFile(
+      producer,
+      `process.stdout.write(${JSON.stringify(sample.prefix)}); setTimeout(()=>process.stdout.write(${JSON.stringify(sample.suffix)}+"y".repeat(10000)+"GRAPHEME-END"),80)`,
+    )
+    host.queueResponse(
+      ...call(
+        `await tools.exec_command(${JSON.stringify({ cmd: `${process.execPath} ${producer}`, login: false })});`,
+      ),
+    )
+    host.queueResponse(completed)
+    await host.session.prompt("Keep whole graphemes")
+    await host.key("\x0f")
+    await setTimeout(60)
+    const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(frame, /output omitted/)
+    assert.match(frame, /GRAPHEME-END/)
+    assert.doesNotMatch(frame, sample.split)
+  })
+}
 
 test("a failed wait shows its collection error without transport details", async (t) => {
   const host = await openNativeHost(t, {
@@ -327,6 +465,58 @@ test("late command completion stays in its original card without consuming model
     final.split("\n").filter((line) => line.trim() === "LAST-CHUNK").length,
     1,
   )
+})
+
+test("bounded operation history keeps active commands and their late failure in the originating card", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 180,
+    columns: 100,
+  })
+  const producer = join(host.directory, "origin-producer.cjs")
+  const release = join(host.directory, "release")
+  await writeFile(
+    producer,
+    `const fs=require("node:fs"); console.log("ORIGIN-EARLY"); const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(timer);console.log("ORIGIN-LATE-FAILURE");process.exitCode=9;}},10);`,
+  )
+  host.queueResponse(
+    ...call(
+      `const result=await tools.exec_command(${JSON.stringify({ cmd: `${process.execPath} ${producer}`, login: false, yield_time_ms: 250 })}); store("process",result.session_id); for(let index=0;index<8;index++) await tools.exec_command({cmd:":",login:false});`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Keep the background operation visible")
+  await host.key("\x0f")
+  await setTimeout(60)
+  assert.match(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /Command · running/,
+  )
+  const requests = host.requests.length
+  await writeFile(release, "")
+  await setTimeout(150)
+  const assertOrigin = () => {
+    const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(frame, /operations · failed/)
+    assert.match(frame, /ORIGIN-LATE-FAILURE/)
+    assert.match(frame, /Exit status: 9/)
+    assert.match(frame, /earlier operation details omitted/)
+  }
+  assertOrigin()
+  assert.equal(host.requests.length, requests)
+  host.queueResponse(
+    ...call(
+      'text(await tools.write_stdin({session_id:load("process")}));',
+      "collect",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect the process outcome")
+  assert.match(output(host, "collect"), /ORIGIN-LATE-FAILURE/)
+  await host.reload()
+  await setTimeout(70)
+  assertOrigin()
 })
 
 test("input in another execution updates the originating PTY card without duplicate output", async (t) => {
@@ -843,11 +1033,6 @@ test("legacy yielded cards recover recorded status without inventing operation o
     providerApi,
     rows: 100,
     columns: 100,
-    extension(pi) {
-      pi.on("tool_result", (event) =>
-        event.toolName === "exec" ? { details: null } : undefined,
-      )
-    },
   })
   await host.key("\x0f")
   host.queueResponse(
@@ -858,11 +1043,27 @@ test("legacy yielded cards recover recorded status without inventing operation o
   host.queueResponse(completed)
   await host.session.prompt("Read legacy status")
   await setTimeout(150)
+  const manager = host.session.sessionManager
+  const entries = manager.getBranch()
+  manager.newSession()
+  for (const entry of entries) {
+    if (entry.type === "custom")
+      manager.appendCustomEntry(entry.customType, structuredClone(entry.data))
+    else if (entry.type === "message") {
+      const message = structuredClone(entry.message)
+      if (message.role === "toolResult") {
+        delete message.details
+        manager.appendMessage(message)
+      } else if (message.role === "user" || message.role === "assistant")
+        manager.appendMessage(message)
+    }
+  }
   await host.reload()
   await setTimeout(70)
   const frame = stripVTControlCharacters(host.screenLines().join("\n"))
   assert.match(frame, /Execution · failed/)
   assert.match(frame, /LEGACY-TERMINAL/)
+  assert.match(frame, /Earlier operation details unavailable/)
   assert.doesNotMatch(frame, /Command ·|Exit status:/)
 })
 

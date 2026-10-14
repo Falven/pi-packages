@@ -33,6 +33,7 @@ export type OperationPresentation = {
 }
 export type ExecutionDetails = {
   contentHash: string
+  executionHash?: string
   execution: {
     cellId: string
     parentCallId: string
@@ -47,8 +48,12 @@ export type ExecutionDetails = {
     error?: string
     operations: OperationPresentation[]
     omitted?: boolean
+    omittedFailure?: boolean
   }
 }
+
+export const executionHash = (execution: ExecutionDetails["execution"]) =>
+  createHash("sha256").update(JSON.stringify(execution)).digest("hex")
 
 export const contentHash = (
   content: AgentToolResult<unknown>["content"],
@@ -187,19 +192,25 @@ export function createExecutionRenderers(
           details.contentHash === contentHash(result.content, true))
           ? details.execution
           : undefined
-      if (!details && result.content[0]?.type === "text") {
+      let follow =
+        execution !== undefined &&
+        details?.executionHash === executionHash(execution)
+      if (details === undefined && result.content[0]?.type === "text") {
         const cellId = result.content[0].text.match(
           /^Script running with cell ID ([^\n]+)/,
         )?.[1]
-        if (cellId)
+        if (cellId) {
           execution = {
             cellId,
             parentCallId: context.toolCallId,
             status: "running",
             operations: [],
           }
+          follow = true
+        }
       }
-      if (execution) {
+      if (!follow) delete context.state["execution"]
+      if (execution && follow) {
         if (context.state["owner"] !== owner) {
           delete context.state["execution"]
           context.state["owner"] = owner
@@ -225,6 +236,7 @@ export function createExecutionRenderers(
       const status =
         context.isError ||
         execution?.status === "failed" ||
+        execution?.omittedFailure ||
         operations.some((operation) => operation.status === "failed")
           ? "failed"
           : operations.some((operation) => operation.status === "running")

@@ -287,7 +287,7 @@ export function createPatch(
       "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
     parameters,
     exposure: "codemode",
-    async execute(_id, args, signal, onUpdate, ctx) {
+    async execute(_id, args, signal, _onUpdate, ctx) {
       const patchChanges: PatchChange[] = []
       let patchOmitted = false
       const changed = (change: PatchChange) => {
@@ -407,11 +407,11 @@ export function createPatch(
         }
       } catch (error) {
         const text = error instanceof Error ? error.message : String(error)
-        onUpdate?.({
+        return {
           content: [{ type: "text", text }],
           details: details(text),
-        })
-        throw error
+          isError: true,
+        }
       }
     },
   }

@@ -11,6 +11,7 @@ import {
   call,
   completed,
   extension,
+  functionCall,
   output,
   providerApi,
 } from "./fixtures/model-loop.ts"
@@ -210,6 +211,72 @@ test("native image display follows terminal visibility in compact and expanded c
     /Path: .*visible\.png/,
   )
   assert.match(JSON.stringify(host.requests.at(-1)), /"type":"input_image"/)
+})
+
+test("an image emitted after yielding keeps its operation in the origin and appears in its collecting result", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    settings: { terminal: { showImages: true } },
+  })
+  const capabilities = getCapabilities()
+  setCapabilities({ ...capabilities, images: "kitty" })
+  t.after(() => setCapabilities(capabilities))
+  await writeFile(join(host.directory, "late.png"), Buffer.from(tiny, "base64"))
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve=>setTimeout(resolve,100)); image(await tools.view_image({path:"late.png"}));',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Inspect an image after yielding")
+  await host.key("\x0f")
+  await setTimeout(200)
+  const cellId = output(host).match(/cell ID ([^\n]+)/)?.[1]
+  assert(cellId)
+  let screen = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(screen, /Image · completed/)
+  assert.match(screen, /Path: .*late\.png/)
+  assert(!host.terminal.output.includes("\x1b_G"))
+  assert.equal(host.requests.length, 2)
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: cellId }, "collect-image", "functions"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect the image")
+  await setTimeout(60)
+  screen = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(screen.match(/Path: .*late\.png/g)?.length, 1)
+  assert.match(screen, /Output collected/)
+  assert(host.terminal.output.includes("\x1b_G"))
+  const images = host.session.sessionManager.getBranch().flatMap((entry) =>
+    entry.type === "message" && entry.message.role === "toolResult"
+      ? [
+          {
+            tool: entry.message.toolName,
+            images: entry.message.content.filter(
+              (part) => part.type === "image",
+            ).length,
+          },
+        ]
+      : [],
+  )
+  assert.deepEqual(images, [
+    { tool: "exec", images: 0 },
+    { tool: "wait", images: 1 },
+  ])
+  assert.equal(
+    JSON.stringify(host.requests.at(-1)).match(/"type":"input_image"/g)?.length,
+    1,
+  )
+  const rows = screen.split("\n")
+  assert.equal(rows.filter((line) => line.startsWith("\x1b_G")).length, 1)
+  assert.doesNotMatch(
+    rows.filter((line) => !line.startsWith("\x1b_G")).join("\n"),
+    /image_url|base64|iVBOR/,
+  )
 })
 
 test("truncated serialized image results remain readable without exposing payload fragments", async (t) => {

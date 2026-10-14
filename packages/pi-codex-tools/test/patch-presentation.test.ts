@@ -199,6 +199,46 @@ test("redacting a partial patch failure suppresses its earlier file metadata", a
   assert.doesNotMatch(output(host), /private-parent|Failed to write/)
 })
 
+test("clearing returned patch details keeps partial file changes out of the card and reload", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 200,
+    extension(pi) {
+      pi.on("tool_result", (event) =>
+        event.toolName === "apply_patch" ? { details: {} } : undefined,
+      )
+    },
+  })
+  const patch =
+    "*** Begin Patch\n*** Add File: created-first\n+first\n*** Add File: created-first/child\n+second\n*** End Patch"
+  host.queueResponse(
+    ...call(
+      `try { await tools.apply_patch(${JSON.stringify(patch)}); } catch(error) { text(error); }`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Keep only the returned error")
+  await host.key("\x0f")
+  await setTimeout(60)
+  const assertReturned = () => {
+    const screen = stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(screen, /Patch · failed/)
+    assert.match(screen, /Failed to write file .*created-first\/child/)
+    assert.doesNotMatch(screen, /Added:|Updated:|Moved:|Deleted:/)
+  }
+  assertReturned()
+  assert.match(output(host), /Failed to write file .*created-first\/child/)
+  assert.equal(
+    await readFile(join(host.directory, "created-first"), "utf8"),
+    "first\n",
+  )
+  await host.reload()
+  await setTimeout(70)
+  assertReturned()
+})
+
 test("a self move reports its actual write and deletion rather than an existing destination", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],

@@ -9,6 +9,7 @@ import {
   createExecutionRenderers,
   type LivePresentation,
   contentHash,
+  executionHash,
   type ExecutionDetails,
   type OperationPresentation,
   type PatchDetails,
@@ -102,6 +103,7 @@ type Cell = {
   eventCount: number
   notificationBytes: number
   presentation: ExecutionDetails["execution"]
+  activeOperations: Set<OperationPresentation>
   onUpdate: AgentToolUpdateCallback<ExecutionDetails | undefined> | undefined
 }
 const journalType = "core-tools.activity"
@@ -241,6 +243,7 @@ export class ExecutionCells {
         status: "running",
         operations: [],
       },
+      activeOperations: new Set(),
       onUpdate,
     }
     cell.presentation.cellId = cell.id
@@ -411,16 +414,12 @@ export class ExecutionCells {
     },
   ): Promise<void> {
     const child = `${cell.id}/${message.id}`
-    let patchDetails: PatchDetails | undefined
     const operation: OperationPresentation = {
       id: child,
       name: message.name,
       status: "running",
     }
-    if (cell.presentation.operations.length >= 8) {
-      cell.presentation.operations.shift()
-      cell.presentation.omitted = true
-    }
+    cell.activeOperations.add(operation)
     cell.presentation.operations.push(operation)
     this.update(cell)
     let processId: number | undefined
@@ -430,6 +429,8 @@ export class ExecutionCells {
       operation.output = process.output
       operation.status = process.status
       if (process.exitCode !== undefined) operation.exitCode = process.exitCode
+      if (returned && process.status !== "running")
+        this.settleOperation(cell, operation)
       this.update(cell)
       if (returned && process.status !== "running") {
         this.record(cell, {
@@ -463,8 +464,6 @@ export class ExecutionCells {
         {
           signal: cell.controller.signal,
           onUpdate: (partial) => {
-            if (message.name === "apply_patch")
-              patchDetails = partial.details as PatchDetails | undefined
             const context = partial.details as
               | {
                   command?: string
@@ -536,8 +535,7 @@ export class ExecutionCells {
       if (typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code
       if (message.name === "apply_patch") {
-        const patchResult = outcome.result.details as PatchDetails | undefined
-        const details = patchResult?.contentHash ? patchResult : patchDetails
+        const details = outcome.result.details as PatchDetails | undefined
         if (details?.contentHash === contentHash(outcome.result.content)) {
           operation.patchChanges = details.patchChanges
           if (details.patchOmitted) operation.patchOmitted = true
@@ -554,6 +552,8 @@ export class ExecutionCells {
             : "completed"
       if (liveRedacted && processId !== undefined)
         this.processes.replacePresentation(processId, operation.output ?? "")
+      if (!operation.live || operation.status !== "running")
+        this.settleOperation(cell, operation)
       this.update(cell)
       this.record(cell, {
         presentation: { ...operation },
@@ -574,11 +574,8 @@ export class ExecutionCells {
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error)
       operation.status = "failed"
-      if (patchDetails?.contentHash === contentHash([{ type: "text", text }])) {
-        operation.patchChanges = patchDetails.patchChanges
-        if (patchDetails.patchOmitted) operation.patchOmitted = true
-      }
       operation.output = boundedPreview(text)
+      this.settleOperation(cell, operation)
       this.update(cell)
       this.record(cell, {
         presentation: { ...operation },
@@ -948,12 +945,16 @@ export class ExecutionCells {
     cell.presentation.status = cell.status
     return {
       contentHash: contentHash(content),
+      executionHash: executionHash(cell.presentation),
       execution: structuredClone(cell.presentation),
     }
   }
 
   private update(cell: Cell): void {
     cell.presentation.status = cell.status
+    this.trimOperations(cell.presentation, (operation) =>
+      cell.activeOperations.has(operation),
+    )
     const invalidates = [
       ...(this.presentations.get(cell.id)?.invalidates ?? []),
     ]
@@ -967,12 +968,34 @@ export class ExecutionCells {
     if (
       cell.status === "running" ||
       cell.onUpdate ||
-      cell.presentation.operations.some(
-        (operation) => operation.status === "running",
-      )
+      cell.activeOperations.size
     )
       return
     this.presentations.delete(cell.id)
+  }
+
+  private settleOperation(cell: Cell, operation: OperationPresentation): void {
+    if (!cell.activeOperations.delete(operation)) return
+    const index = cell.presentation.operations.indexOf(operation)
+    if (index >= 0) cell.presentation.operations.splice(index, 1)
+    cell.presentation.operations.push(operation)
+  }
+
+  private trimOperations(
+    execution: ExecutionDetails["execution"],
+    active: (operation: OperationPresentation) => boolean,
+  ): void {
+    let settled = execution.operations.filter(
+      (operation) => !active(operation),
+    ).length
+    if (settled <= 8) return
+    execution.operations = execution.operations.filter((operation) => {
+      if (settled <= 8 || active(operation)) return true
+      settled--
+      execution.omitted = true
+      if (operation.status === "failed") execution.omittedFailure = true
+      return false
+    })
   }
 
   private restore(
@@ -1013,13 +1036,17 @@ export class ExecutionCells {
           const index = execution.operations.findIndex(
             (operation) => operation.id === presentation.id,
           )
-          if (index < 0) {
-            if (execution.operations.length >= 8) {
-              execution.operations.shift()
-              execution.omitted = true
-            }
+          if (index < 0) execution.operations.push(presentation)
+          else if (presentation.status === "running")
+            execution.operations[index] = presentation
+          else {
+            execution.operations.splice(index, 1)
             execution.operations.push(presentation)
-          } else execution.operations[index] = presentation
+          }
+          this.trimOperations(
+            execution,
+            (operation) => operation.status === "running" && !operation.input,
+          )
         }
       }
     }

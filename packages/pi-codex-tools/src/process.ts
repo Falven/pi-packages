@@ -68,7 +68,10 @@ export class ProcessSessions {
         headFull = false
         tail = ""
         omitted = false
+        const continuation = control
+        control = ""
         remember(text)
+        control = continuation
       },
       observe: new Set(),
       presentation: { id: this.nextId - 1, output: "", status: "running" },
@@ -83,6 +86,41 @@ export class ProcessSessions {
     const segmenter = new Intl.Segmenter()
     let tail = ""
     let omitted = false
+    let control: "" | "escape" | "csi" | "string" | "string-escape" = ""
+    const plainOutput = (data: string) => {
+      // eslint-disable-next-line no-control-regex -- Terminal controls may span output events.
+      if (!control && !/[\x1b\x90\x98\x9b\x9d-\x9f]/.test(data)) return data
+      let plain = ""
+      let from = 0
+      // Keep only parser state between events; an unfinished control string can be arbitrarily long.
+      for (let index = 0; index < data.length; index++) {
+        const code = data.charCodeAt(index)
+        if (!control) {
+          if (code === 0x1b) control = "escape"
+          else if (code === 0x9b) control = "csi"
+          else if ([0x90, 0x98, 0x9d, 0x9e, 0x9f].includes(code))
+            control = "string"
+          else continue
+          plain += data.slice(from, index)
+        } else if (control === "escape") {
+          if (code === 0x5b) control = "csi"
+          else if ([0x5d, 0x50, 0x58, 0x5e, 0x5f].includes(code))
+            control = "string"
+          else if (code !== 0x1b && (code < 0x20 || code > 0x2f)) control = ""
+        } else if (control === "csi") {
+          if (code >= 0x40 && code <= 0x7e) control = ""
+          else if (code === 0x1b) control = "escape"
+        } else if (
+          code === 0x07 ||
+          code === 0x9c ||
+          (control === "string-escape" && code === 0x5c)
+        )
+          control = ""
+        else control = code === 0x1b ? "string-escape" : "string"
+        from = index + 1
+      }
+      return plain + data.slice(from)
+    }
     const publish = () => {
       child.presentation = {
         id: child.id,
@@ -101,16 +139,27 @@ export class ProcessSessions {
       for (const observer of child.observe) observer(child.presentation)
     }
     const remember = (data: string) => {
+      data = plainOutput(data)
+      if (data && head && !tail && !omitted) {
+        // The next event may extend the last displayed grapheme before the head cutoff.
+        const last = segmenter.segment(head).containing(head.length - 1)!
+        head = head.slice(0, last.index)
+        headBytes -= Buffer.byteLength(last.segment)
+        headFull = false
+        data = last.segment + data
+      }
       if (/^\p{ASCII}*$/u.test(tail + data)) {
         const incoming = tail + data
-        const through = headFull
-          ? 0
-          : Math.min(incoming.length, 8192 - headBytes)
+        let through = headFull ? 0 : Math.min(incoming.length, 8192 - headBytes)
+        if (incoming[through - 1] === "\r" && incoming[through] === "\n")
+          through--
         head += incoming.slice(0, through)
         headBytes += through
-        headFull ||= headBytes === 8192
+        headFull ||= headBytes === 8192 || through < incoming.length
         if (incoming.length - through > 8192) omitted = true
-        tail = incoming.slice(through).slice(-8192)
+        let start = Math.max(through, incoming.length - 8192)
+        if (incoming[start - 1] === "\r" && incoming[start] === "\n") start++
+        tail = incoming.slice(start)
         publish()
         return
       }
@@ -143,8 +192,10 @@ export class ProcessSessions {
       publish()
     }
     void done.then(() => {
-      if (child.error) remember(`\n${child.error.message}`)
-      else publish()
+      if (child.error) {
+        control = ""
+        remember(`\n${child.error.message}`)
+      } else publish()
       child.observe.clear()
     })
     let pause: (() => void) | undefined
