@@ -21,11 +21,16 @@ type Capture = {
   outcome?: Outcome
   submitted: boolean
 }
+type Replacement = { from: number; to: number; text: string }
 type Draft = {
   text: string
   sessionId: string
   references: { reference: Reference; capture?: Capture }[]
-  prepared?: Promise<{ text: string; errors: string[] }>
+  prepared?: Promise<{
+    text: string
+    errors: string[]
+    replacements: Replacement[]
+  }>
 }
 
 function replacement(reference: Reference, path: string): string {
@@ -119,11 +124,12 @@ export function registerMarkdown(storage: string, signal: AbortSignal) {
         }
       }
       let text = draft.text
-      for (const [from, edit] of [...destinations].toSorted(
-        ([left], [right]) => right - left,
-      ))
-        text = text.slice(0, from) + edit.text + text.slice(edit.to)
-      return { text, errors: [...errors] }
+      const replacements = [...destinations]
+        .map(([from, edit]) => ({ from, to: edit.to, text: edit.text }))
+        .toSorted((left, right) => right.from - left.from)
+      for (const edit of replacements)
+        text = text.slice(0, edit.from) + edit.text + text.slice(edit.to)
+      return { text, errors: [...errors], replacements }
     }))
   }
 
@@ -136,13 +142,13 @@ export function registerMarkdown(storage: string, signal: AbortSignal) {
     async prepare(
       request: AttachmentSubmission &
         Pick<Parameters<typeof saveRequest>[1], "images">,
-    ): Promise<string> {
+    ): Promise<{ text: string; replacements: Replacement[] }> {
       const draft = drafts.get(request.identity)
       if (
         draft?.sessionId !== request.sessionId ||
         !draft.references.some(({ capture }) => capture)
       )
-        return request.text
+        return { text: request.text, replacements: [] }
       const recovery = {
         sessionId: request.sessionId,
         sessionFile: request.sessionFile,
@@ -168,7 +174,7 @@ export function registerMarkdown(storage: string, signal: AbortSignal) {
         }
         throw new Error(reason)
       }
-      return prepared.text
+      return { text: prepared.text, replacements: prepared.replacements }
     },
     observe(ctx: ExtensionContext, access: AttachmentEditorAccess) {
       let previous: Draft | undefined
