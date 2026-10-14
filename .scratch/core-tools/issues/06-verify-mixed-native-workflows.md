@@ -20,7 +20,7 @@
 
 ## Partial composition evidence
 
-A temporary probe reused [the native host](../../../fixtures/native-host.ts) and [the shared model-loop fixture](../../../packages/pi-codex-tools/test/fixtures/model-loop.ts) with the configured composer, attachments, skill references, chat, prompt/lifecycle extension at 4.13.0, and web extension at 1.6.0. Four controlled checks passed at integration commit `5507b77`: a companion-only control, the core toolset loaded first, the core toolset loaded last, and raw call history after deselection.
+A temporary probe reused [the native host](../../../fixtures/native-host.ts) and [the shared model-loop fixture](../../../packages/pi-codex-tools/test/fixtures/model-loop.ts) with the configured composer, attachments, skill references, chat, prompt/lifecycle extension at 4.13.0, and web extension at 1.6.0. Four controlled checks passed again at integration commit `0d80487`: a companion-only control, the core toolset loaded first, the core toolset loaded last, and raw call history after deselection. Runtime code remained unchanged in `17c4c58`.
 
 Both core load orders completed a real command → patch → validation → image sequence. Checks covered all four selected names in `ALL_TOOLS`, native nested events and retained records, and image content in the next request. The observed requests also retained attachment image bytes, one expanded skill block, one prompt-extension section, the existing web-search declaration, and model-dependent URL-tool hiding. Native blocking preserved web-tool ownership, reload retained the draft and history, and a user-entered shell command stayed on its native path without a model request.
 
