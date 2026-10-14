@@ -268,3 +268,51 @@ test("an image policy change after the read is shown even when script code catch
   assert.match(screen, /Image reading is disabled/)
   assert.doesNotMatch(screen, /base64|image_url/)
 })
+
+test("formatted image results do not copy encoded bytes into activity presentation", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "view_image")
+          return {
+            content: event.content.map((part) =>
+              part.type === "text"
+                ? {
+                    type: "text" as const,
+                    text: JSON.stringify(JSON.parse(part.text), null, 2),
+                  }
+                : part,
+            ),
+          }
+        return undefined
+      })
+    },
+  })
+  await writeFile(
+    join(host.directory, "image.png"),
+    Buffer.from(tiny, "base64"),
+  )
+  host.queueResponse(
+    ...call('text(await tools.view_image({path:"image.png"}));'),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Inspect the formatted result")
+  await host.key("\x0f")
+  await setTimeout(60)
+  assert.doesNotMatch(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /image_url|base64|iVBOR/,
+  )
+  const records = host.session.sessionManager
+    .getBranch()
+    .filter(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "core-tools.activity",
+    )
+  assert.doesNotMatch(JSON.stringify(records), /iVBOR|base64/)
+  assert.match(output(host), /image_url/)
+})

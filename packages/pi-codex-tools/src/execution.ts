@@ -440,7 +440,10 @@ export class ExecutionCells {
         | { output?: unknown; exit_code?: unknown; image_url?: unknown }
         | undefined
       operation.output = boundedPreview(
-        !blocked && typeof structured?.image_url === "string"
+        !blocked &&
+          (typeof structured?.image_url === "string" ||
+            (message.name === "view_image" &&
+              /"image_url"\s*:\s*"data:/.test(text)))
           ? ""
           : typeof structured?.output === "string"
             ? structured.output
