@@ -22,8 +22,8 @@ import {
 } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 import { attachmentPaths } from "./references.ts"
+import type { ThumbnailSize } from "./settings.ts"
 
-const THUMBNAIL_SETTING = "pi-attachments.thumbnailSize"
 const THUMBNAIL_BOUNDS = {
   small: { columns: 12, rows: 2 },
   medium: { columns: 24, rows: 4 },
@@ -58,18 +58,8 @@ export function registerImages(
   storage: string,
   signal: AbortSignal,
   draftPaths: (ctx: ExtensionContext) => string[],
+  thumbnailSize: () => ThumbnailSize,
 ): void {
-  pi.registerSetting({
-    id: THUMBNAIL_SETTING,
-    label: "Attachment thumbnail size",
-    description: "Maximum width and height of attachment previews",
-    defaultValue: "medium",
-    values: [
-      { value: "small", label: "Small" },
-      { value: "medium", label: "Medium" },
-      { value: "large", label: "Large" },
-    ],
-  })
   registerRecovery(pi, storage, signal)
 
   async function retain(
@@ -228,9 +218,7 @@ export function registerImages(
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
           const settings = pi.getSettings()
-          const size = pi.getSetting(
-            THUMBNAIL_SETTING,
-          ) as keyof typeof THUMBNAIL_BOUNDS
+          const size = thumbnailSize()
           const bounds = THUMBNAIL_BOUNDS[size]
           const showImages = settings.terminal?.showImages ?? true
           const configuredWidth = settings.terminal?.imageWidthCells

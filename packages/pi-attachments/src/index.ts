@@ -18,6 +18,7 @@ import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
 import { registerPaste, sourcePath } from "./paste.ts"
 import { TextPreview } from "./preview.ts"
+import { thumbnailSettings } from "./settings.ts"
 
 function mergeRanges(ranges: { from: number; to: number }[]) {
   const merged: { from: number; to: number }[] = []
@@ -40,6 +41,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   let restoreInline: ((path: string, contents: string) => void) | undefined
   let insertText: ((text: string) => void) | undefined
   const lifetime = new AbortController()
+  const thumbnails = thumbnailSettings(storage, lifetime.signal)
   const withPaste = registerPaste(attach, lifetime.signal, () => {
     revision++
   })
@@ -47,8 +49,12 @@ export default function piAttachments(pi: ExtensionAPI): void {
   const paths = (text: string, ctx: ExtensionContext) => [
     ...new Set(markdown.references(text, ctx).map(({ path }) => path)),
   ]
-  registerImages(pi, storage, lifetime.signal, (ctx) =>
-    paths(ctx.ui.getEditorText(), ctx),
+  registerImages(
+    pi,
+    storage,
+    lifetime.signal,
+    (ctx) => paths(ctx.ui.getEditorText(), ctx),
+    () => thumbnails.size,
   )
   registerCleanup(pi, storage)
 
@@ -510,10 +516,6 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const sessionId = ctx.sessionManager.getSessionId()
     const submission = submissions
     const attached = paths(draft, ctx)
-    if (attached.length === 0) {
-      ctx.ui.notify("No attachments in this draft", "info")
-      return
-    }
     function unchanged(): boolean {
       if (lifetime.signal.aborted) return false
       readObserved = false
@@ -536,10 +538,14 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const choices = attached.map(
       (path, index) => `${index + 1}. ${basename(path)}`,
     )
-    const choice = await ctx.ui.select("Choose attachment", choices, {
-      signal: lifetime.signal,
-    })
-    if (choice === undefined || !unchanged()) return
+    const choice = await ctx.ui.select(
+      attached.length ? "Choose attachment" : "Manage attachments",
+      [...choices, "Settings"],
+      { signal: lifetime.signal },
+    )
+    if (choice === undefined || lifetime.signal.aborted) return
+    if (choice === "Settings") return thumbnails.show(ctx)
+    if (!unchanged()) return
     const path = attached[choices.indexOf(choice)]!
     const action = await ctx.ui.select(
       basename(path),
