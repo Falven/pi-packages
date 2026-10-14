@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Verify asynchronous attachment editing on unmodified Pi.
 
-**Status:** ready-for-agent
+**Status:** blocked — ticket 04's compatibility experiment failed; the necessary submission behavior decision is pending.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md), including its applicable architecture decisions.
 

@@ -4,15 +4,15 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** in-progress
+**Status:** in-progress — preference storage and the native menu are verified independently; full management and preview acceptance remain pending.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md), including its applicable architecture decisions.
 
 - [ ] Open Settings from Manage attachments… for populated and empty drafts. Use Pi's SettingsList and getSettingsListTheme() through ctx.ui.custom() for native appearance, navigation, acceptance, and cancellation. Preserve draft text, selection, and focus.
 - [ ] Offer Small at 12 columns by two rows, Medium at 24 by four as the default, and Large at 48 by eight. Preserve aspect ratio, terminal.showImages, Pi's image-width ceiling, and available terminal space.
-- [x] Save only the attachment-owned thumbnail preference in the package's user settings file. Apply changes, retain them across restarts, and reread manual edits on /reload. Keep native preferences under pi.getSettings(); package persistence is the accepted community fallback.
-- [x] Preserve an attachment preference already saved through the modified host when adopting package storage. Do not rewrite unrelated Pi preferences or bindings. Handle invalid saved values and persistence errors explicitly.
-- [x] Remove consumers of the locally added registerSetting() and getSetting() interfaces. Add no central /settings registration, shared settings framework, third primary action, or separate configurable shortcut.
+- [ ] Save only the attachment-owned thumbnail preference in the package's user settings file. Apply changes, retain them across restarts, and reread manual edits on /reload. Keep native preferences under pi.getSettings(); package persistence is the accepted community fallback.
+- [ ] Preserve an attachment preference already saved through the modified host when adopting package storage. Do not rewrite unrelated Pi preferences or bindings. Handle invalid saved values and persistence errors explicitly.
+- [ ] Remove consumers of the locally added registerSetting() and getSetting() interfaces. Add no central /settings registration, shared settings framework, third primary action, or separate configurable shortcut.
 - [ ] Changing thumbnail size affects rendering only: retain original bytes, Markdown membership, and delivered image dimensions, and never capture again because a setting changes.
 - [ ] Adapt existing checks for wide and tall images, narrow and wide terminals, visibility and width overrides, empty-draft access, keyboard controls, persistence, restart, manual edits, reload, and existing preference migration. Verify the native menu and resulting previews on unmodified Pi during ticket 07.
 

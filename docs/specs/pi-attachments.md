@@ -1,6 +1,6 @@
 # Attachments specification
 
-**Status:** design settled; portability implementation and the native-editor compatibility experiment remain pending. Delivery-time failure isolation is deferred.
+**Status:** portability implementation is in progress; the editor compatibility experiment failed, and follow-up decisions on submission behavior and shortcut hints are pending. Delivery-time failure isolation remains deferred.
 
 ## Problem Statement
 

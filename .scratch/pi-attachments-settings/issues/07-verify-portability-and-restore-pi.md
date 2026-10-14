@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Honor effective Pi settings through public input handling; 02: Configure attachment shortcuts through Pi's existing binding file; 03: Configure thumbnail size inside attachment management; 04: Verify asynchronous attachment editing on unmodified Pi; 05: Preserve immediate Markdown attachment capture without host hooks.
 
-**Status:** ready-for-agent
+**Status:** blocked — ticket 04's compatibility experiment failed and tickets 01–05 are incomplete. Installation restoration awaits complete compatibility verification.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md) and [Pi Composer](../../../docs/specs/pi-composer.md), including their applicable architecture decisions.
 
