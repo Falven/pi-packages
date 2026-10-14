@@ -13,6 +13,7 @@ import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
+import { getNativeClipboard } from "@earendil-works/pi-tui"
 import {
   assertAttachments,
   holdFileRead,
@@ -39,7 +40,7 @@ test("an unsaved native session keeps its captured attachment and requesting dra
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const sessionFile = host.runtime.session.sessionFile
   host.ui.setEditorText("Unsent native draft")
-  await host.runtime.session.prompt("/attach-text Captured before any reply")
+  await host.attachText("Captured before any reply")
   const path = snapshotPath(host.ui.getEditorText())
 
   await assert.rejects(readFile(sessionFile), { code: "ENOENT" })
@@ -65,7 +66,7 @@ test("old submitted references survive draft removal, source loss, native resume
   const source = join(host.directory, "retained.txt")
   await writeFile(source, "Captured file contents.\n")
   host.ui.setEditorText("Use the captured file")
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const recovery = await retainedRequest(host)
@@ -132,7 +133,7 @@ test("native fork prefills the submitted reference and the child survives restar
   const source = join(host.directory, "forked.txt")
   await writeFile(source, "Captured for the fork.\n")
   host.ui.setEditorText("Review the captured file")
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const recovery = await retainedRequest(host)
@@ -187,7 +188,7 @@ test("native clone retains submitted references after its parent and original so
   const host = await nativePi(t)
   const source = join(host.directory, "cloned.txt")
   await writeFile(source, "Captured for both sessions.\n")
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const recovery = await retainedRequest(host)
@@ -230,7 +231,7 @@ test("a pending capture keeps its original unsaved draft association after sessi
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const sessionFile = host.runtime.session.sessionFile
   const held = holdFileRead(t, source)
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await held.started()
   await rm(source)
   host.submit("/new")
@@ -291,7 +292,7 @@ test("a late snapshot write error preserves saved bytes and their original draft
     mocked.mock.restore()
     syncBuiltinESMExports()
   })
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await waitFor(() => assert.ok(started))
   await rm(source)
   await host.runtime.newSession()
@@ -328,12 +329,7 @@ test("a captured file remains recoverable when all snapshot writes fail after sh
   const storage = join(host.agentDir, "pi-attachments")
   await mkdir(storage)
   const held = holdFileRead(t, source)
-  const pending = host.runtime.session.sendUserMessage(
-    `/attach-file ${source}`,
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  const pending = host.attachFile(source)
   await held.started()
   await rm(source)
   await host.runtime.newSession()
@@ -378,12 +374,12 @@ test("a partial multi-file read retains captured members for recovery with the o
   const sessionId = host.runtime.session.sessionManager.getSessionId()
   const sessionFile = host.runtime.session.sessionFile
   await chmod(second, 0o000)
-  await host.runtime.session.sendUserMessage(
-    `/attach-file ${first}\n${second}`,
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  t.mock.method(getNativeClipboard(), "getFilePaths", async () => [
+    first,
+    second,
+  ])
+  host.input("\x16")
+  await waitFor(() => assert.match(host.render(), /EACCES/))
   assert.equal(host.ui.getEditorText(), original)
   assert.match(host.render(), /EACCES/)
   const partial = await retainedRequest(host, original)

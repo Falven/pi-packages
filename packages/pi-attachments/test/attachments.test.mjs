@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import { execFileSync } from "node:child_process"
 import { chmod, readFile, rm, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { homedir } from "node:os"
+import { join, relative } from "node:path"
 import { test } from "node:test"
-import { fileURLToPath } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
   assertAttachments,
@@ -14,9 +15,178 @@ import {
   waitFor,
 } from "../fixtures/native-pi.mjs"
 
+test("Attach chooser defaults to a file and captures entered text literally", async (t) => {
+  const host = await nativePi(t)
+  const source = join(host.directory, "chosen.txt")
+  await writeFile(source, "File bytes")
+  host.submit("/attach")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attach file/))
+  host.input(`\x1b[200~${source}\x1b[201~`)
+  host.input("\r")
+  const first = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  assert.equal(await readFile(first, "utf8"), "File bytes")
+  host.submit("/attach")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b[B")
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attach text/))
+  host.input("\x1b[200~./chosen.txt\n\x1b[201~")
+  host.input("\r")
+  await waitFor(() => assert.match(host.ui.getEditorText(), /text\.txt/))
+  const second = [...host.ui.getEditorText().matchAll(/\]\(<([^>]+)>\)/g)].at(
+    -1,
+  )?.[1]
+  assert.equal(await readFile(second, "utf8"), "./chosen.txt\n")
+})
+
+test("Attach chooser cancellation preserves the draft and empty entered text is captured", async (t) => {
+  const host = await nativePi(t)
+  host.ui.setEditorText("Keep this draft")
+  host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b")
+  await waitFor(() => assert.doesNotMatch(host.render(), /File path…/))
+  assert.equal(host.ui.getEditorText(), "Keep this draft")
+
+  host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attach file/))
+  host.input("\x1b")
+  await waitFor(() => assert.doesNotMatch(host.render(), /Attach file/))
+  assert.equal(host.ui.getEditorText(), "Keep this draft")
+
+  host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b[B")
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attach text/))
+  host.input("\r")
+  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  assert.equal(await readFile(path, "utf8"), "")
+})
+
+test("named attachment actions use remapped native bindings and display the effective hint", async (t) => {
+  const host = await nativePi(t, [], {
+    keybindings: {
+      "extension.attachments.attach": "ctrl+alt+x",
+      "extension.attachments.manage": "ctrl+alt+m",
+    },
+  })
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
+    "ctrl+alt+x",
+  ])
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [
+    "ctrl+alt+m",
+  ])
+  host.input("\x1b[102;7u")
+  assert.doesNotMatch(host.render(), /File path…/)
+  host.input("\x1b[120;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b")
+  await host.attachText("Retained")
+  assert.match(host.render(), /ctrl\+option\+m Manage attachments/)
+  host.input("\x1b[109;7u")
+  await waitFor(() => assert.match(host.render(), /Choose attachment/))
+  host.input("\x1b")
+})
+
+test("cleared attachment bindings keep commands available without shortcut hints", async (t) => {
+  const host = await nativePi(t, [], {
+    keybindings: {
+      "extension.attachments.attach": [],
+      "extension.attachments.manage": [],
+    },
+  })
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [])
+  host.input("\x1b[102;7u")
+  assert.doesNotMatch(host.render(), /File path…/)
+  await host.attachText("Still available")
+  assert.match(host.render(), /Manage attachments/)
+  assert.doesNotMatch(host.render(), /ctrl\+option\+a Manage attachments/)
+})
+
+test("native shortcut conflicts leave attachment actions inactive", async (t) => {
+  const host = await nativePi(t, [], {
+    keybindings: { "extension.attachments.attach": "ctrl+c" },
+  })
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [
+    "ctrl+alt+a",
+  ])
+})
+
+test("Pi's standard settings menu edits, clears, and reports conflicting attachment bindings", async (t) => {
+  const host = await nativePi(t)
+  host.submit("/settings")
+  host.input("Attach")
+  await waitFor(() => assert.match(host.render(), /Manage attachments/))
+  host.input("\r")
+  assert.match(host.render(), /ctrl\+alt\+f/)
+  host.input("\r")
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
+    "ctrl+alt+f",
+  ])
+
+  host.input("\r")
+  host.input("\x0b")
+  host.input("\x1b[200~ctrl+alt+x\x1b[201~")
+  host.input("\r")
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [
+    "ctrl+alt+x",
+  ])
+  assert.match(host.render(), /Attach\s+ctrl\+alt\+x/)
+
+  host.input("\x1b[B")
+  host.input("\r")
+  host.input("\x0b")
+  host.input("\r")
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [])
+  assert.match(host.render(), /Manage attachments\s+unbound/)
+
+  host.input("\x1b[A")
+  host.input("\r")
+  host.input("\x0b")
+  host.input("\x1b[200~ctrl+c\x1b[201~")
+  host.input("\r")
+  assert.deepEqual(host.ui.getActionKeys("extension.attachments.attach"), [])
+  assert.match(host.render(), /Attach\s+unbound/)
+  assert.deepEqual(
+    JSON.parse(await readFile(join(host.agentDir, "keybindings.json"), "utf8")),
+    {
+      "extension.attachments.attach": ["ctrl+c"],
+      "extension.attachments.manage": [],
+    },
+  )
+})
+
+test("retired attachment commands and shortcuts no longer invoke attachment actions", async (t) => {
+  const host = await nativePi(t)
+  host.ui.setEditorText("Keep this draft")
+  host.input("\x1b[116;7u")
+  host.input("\x1b[118;7u")
+  assert.equal(host.ui.getEditorText(), "Keep this draft")
+  assert.doesNotMatch(host.render(), /File path…|Attach text/)
+
+  async function expectOrdinaryPrompt(command) {
+    await host.runtime.session.prompt(command)
+    const user = host.requests
+      .at(-1)
+      ?.messages.findLast(({ role }) => role === "user")
+    assert.equal(user?.content[0]?.text, command)
+  }
+  await expectOrdinaryPrompt("/attach-file")
+  await expectOrdinaryPrompt("/attach-text")
+  await expectOrdinaryPrompt("/paste-inline")
+  assert.equal(host.requests.length, 3)
+})
+
 test("native Attach Text preserves text before inserting its snapshot reference", async (t) => {
   const host = await nativePi(t)
-  host.submit("/attach-text Captured text\nconst answer = 42;")
+  await host.attachText("Captured text\nconst answer = 42;")
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   assert.equal(
     await readFile(path, "utf8"),
@@ -28,13 +198,34 @@ test("native Attach File keeps captured bytes after the source changes or is rem
   const host = await nativePi(t)
   const source = join(host.directory, "source note.txt")
   await writeFile(source, "Original file\r\nSnowman: ☃\0\n")
-  host.submit(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   assert.notEqual(path, source)
   await writeFile(source, "Changed source")
   assert.equal(await readFile(path, "utf8"), "Original file\r\nSnowman: ☃\0\n")
   await rm(source)
   assert.equal(await readFile(path, "utf8"), "Original file\r\nSnowman: ☃\0\n")
+})
+
+test("Attach accepts local quoted, escaped, URL, home, and relative file paths", async (t) => {
+  const host = await nativePi(t)
+  const name = "source note.txt"
+  const source = join(host.directory, name)
+  await writeFile(source, "Known file bytes")
+  /* eslint-disable no-await-in-loop -- Each source spelling reuses the same native draft in order. */
+  for (const path of [
+    `'${source}'`,
+    `${host.directory}/source\\ note.txt`,
+    pathToFileURL(source).href,
+    `~/${relative(homedir(), source)}`,
+    `./${name}`,
+  ]) {
+    host.ui.setEditorText("")
+    await host.attachFile(path)
+    const captured = snapshotPath(host.ui.getEditorText())
+    assert.equal(await readFile(captured, "utf8"), "Known file bytes")
+  }
+  /* eslint-enable no-await-in-loop */
 })
 
 test(
@@ -45,19 +236,18 @@ test(
     const source = join(host.directory, "input.fifo")
     execFileSync("/usr/bin/mkfifo", [source])
     host.ui.setEditorText("Keep this draft")
-    await host.runtime.session.prompt("/attach-text Already captured")
+    await host.attachText("Already captured")
     const draft = host.ui.getEditorText()
     const retained = snapshotPath(draft)
     /* eslint-disable no-await-in-loop -- Recovery retries the same rejected attachment request. */
-    for (const command of [`/attach-file ${source}`, "/attachments-recover"]) {
+    for (const operation of [
+      () => host.attachFile(source),
+      () => host.runtime.session.prompt("/attachments-recover"),
+    ]) {
       let completed = false
-      const pending = host.runtime.session
-        .sendUserMessage(command, {
-          expandPromptTemplates: true,
-        })
-        .finally(() => {
-          completed = true
-        })
+      const pending = operation().finally(() => {
+        completed = true
+      })
       try {
         await waitFor(() =>
           assert.equal(
@@ -82,7 +272,7 @@ test(
 test("native draft membership follows references and coexists with other widgets and actions", async (t) => {
   const host = await nativePi(t)
   host.ui.setEditorText("Review the draft")
-  await host.runtime.session.prompt("/attach-text Supporting material")
+  await host.attachText("Supporting material")
   assert.match(host.ui.getEditorText(), /^Review the draft\n/)
   assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
   assert.match(host.render(), /Other extension widget/)
@@ -98,7 +288,10 @@ test("native draft membership follows references and coexists with other widgets
 
 test("Attach Text dialog preserves leading whitespace and final newlines", async (t) => {
   const host = await nativePi(t)
-  host.submit("/attach-text")
+  host.submit("/attach")
+  await waitFor(() => assert.match(host.render(), /File path…/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("\x1b[200~\n  const answer = 42;\n\n\x1b[201~")
   host.input("\r")
@@ -112,6 +305,8 @@ test("native attachment shortcuts add to the active draft and allow cancellation
   await writeFile(source, "Chosen file")
   host.ui.setEditorText("Existing draft")
   host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach file/))
   host.input(`\x1b[200~${source}\x1b[201~`)
   host.input("\r")
@@ -120,7 +315,10 @@ test("native attachment shortcuts add to the active draft and allow cancellation
   assert.match(host.ui.getEditorText(), /^Existing draft\n/)
 
   const draft = host.ui.getEditorText()
-  host.input("\x1b[116;7u")
+  host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("\x1b")
   await waitFor(() => assert.doesNotMatch(host.render(), /Attach text/))
@@ -132,7 +330,10 @@ test("a failed text snapshot write keeps the draft and entered text available fo
   host.ui.setEditorText("Keep this draft")
   await chmod(host.agentDir, 0o500)
   try {
-    host.input("\x1b[116;7u")
+    host.input("\x1b[102;7u")
+    await waitFor(() => assert.match(host.render(), /File path/))
+    host.input("\x1b[B")
+    host.input("\r")
     await waitFor(() => assert.match(host.render(), /Attach text/))
     host.input("\x1b[200~\n  Recover every byte.\n\x1b[201~")
     host.input("\r")
@@ -150,7 +351,7 @@ test("a failed text snapshot write keeps the draft and entered text available fo
 
 test("native attachment-only submission sends a reference and Pi reads its text on demand", async (t) => {
   const host = await nativePi(t)
-  host.submit("/attach-text This body stays out of the initial prompt.")
+  await host.attachText("This body stays out of the initial prompt.")
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const draft = host.ui.getEditorText().trim()
   host.replies.push({
@@ -193,7 +394,7 @@ test("ordinary file references still read the current source beside a submitted 
   const source = join(host.directory, "working.txt")
   await writeFile(source, "Captured version")
   host.ui.setEditorText(`Compare @${source}`)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   await writeFile(source, "Current working version")
   host.replies.push({
@@ -247,7 +448,7 @@ test("a delayed attachment cannot enter the fresh draft after native submission"
   await writeFile(source, "Bytes from the requesting draft")
   const held = holdFileRead(t, source)
   const requestingSession = host.runtime.session.sessionManager.getSessionId()
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await held.started()
   assert.equal(host.ui.getEditorText(), "")
   host.submit("An independent request")
@@ -272,7 +473,7 @@ test("a delayed snapshot stays with its requesting draft across native session r
   host.ui.setEditorText("Draft in the original session")
   const requestingSession = host.runtime.session.sessionManager.getSessionId()
   const held = holdFileRead(t, source)
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await held.started()
   await host.runtime.newSession()
   host.ui.setEditorText("Draft in the replacement session")
@@ -294,19 +495,19 @@ test("an unreadable file leaves the draft and existing snapshots intact", async 
   const source = join(host.directory, "unreadable.txt")
   await writeFile(source, "Available after permissions are repaired")
   host.ui.setEditorText("Keep this work")
-  await host.runtime.session.prompt("/attach-text Already attached")
+  await host.attachText("Already attached")
   const draft = host.ui.getEditorText()
   const retained = snapshotPath(draft)
   await chmod(source, 0o000)
   try {
-    await host.runtime.session.prompt(`/attach-file ${source}`)
+    await host.attachFile(source)
     assert.equal(host.ui.getEditorText(), draft)
     assert.match(host.render(), /Could not attach.*EACCES/)
     assert.equal(await readFile(retained, "utf8"), "Already attached")
   } finally {
     await chmod(source, 0o600)
   }
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   assertAttachments(host.ui.getEditorText(), host.render(), [
     "text.txt",
     "unreadable.txt",
@@ -318,7 +519,7 @@ test("clearing the native editor during a file read keeps the resulting snapshot
   const source = join(host.directory, "cancelled-draft.txt")
   await writeFile(source, "Recover after clearing")
   const held = holdFileRead(t, source)
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await held.started()
   host.input("\x03")
   held.release()
@@ -335,9 +536,12 @@ test("native session replacement closes the old attachment dialog", async (t) =>
   const host = await nativePi(t)
   host.ui.setEditorText("Original draft")
   let finished = false
-  const pending = host.runtime.session.prompt("/attach-text").then(() => {
+  const pending = host.runtime.session.prompt("/attach").then(() => {
     finished = true
   })
+  await waitFor(() => assert.match(host.render(), /File path…/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   await host.runtime.newSession()
   host.ui.setEditorText("Replacement draft")
@@ -361,7 +565,7 @@ test("retrying a failed file write uses the captured bytes even after the source
   await chmod(host.agentDir, 0o500)
   let pending
   try {
-    pending = host.runtime.session.prompt(`/attach-file ${source}`)
+    pending = host.attachFile(source)
     await waitFor(() => assert.match(host.render(), /Could not attach/))
     assert.equal(host.ui.getEditorText(), "Keep my draft")
     assert.match(host.render(), /Retry save/)
@@ -378,7 +582,10 @@ test("retrying a failed file write uses the captured bytes even after the source
 test("finishing the text dialog preserves subsequent edits to the main draft", async (t) => {
   const host = await nativePi(t)
   host.ui.setEditorText("Requesting draft")
-  const pending = host.runtime.session.prompt("/attach-text")
+  const pending = host.runtime.session.prompt("/attach")
+  await waitFor(() => assert.match(host.render(), /File path…/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("\x1b[200~Captured in the dialog\x1b[201~")
   host.ui.setEditorText("Later edits to preserve")
@@ -398,7 +605,7 @@ test("a programmatic clear to the original text cancels pending automatic attach
   const source = join(host.directory, "cleared-draft.txt")
   await writeFile(source, "Captured before the programmatic clear")
   const held = holdFileRead(t, source)
-  const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+  const pending = host.attachFile(source)
   await held.started()
   host.ui.setEditorText("A different draft")
   host.ui.setEditorText("")
@@ -418,7 +625,7 @@ test("a later transparent editor factory attaches to the unchanged native draft"
   const previous = host.ui.getEditorComponent()
   host.ui.setEditorComponent((...args) => previous(...args))
 
-  await host.runtime.session.prompt("/attach-text Composed snapshot")
+  await host.attachText("Composed snapshot")
   const path = snapshotPath(host.ui.getEditorText())
   assert.match(host.ui.getEditorText(), /^Current draft\n\[Attachment:/)
   assert.equal(await readFile(path, "utf8"), "Composed snapshot")
@@ -436,7 +643,7 @@ for (const replacement of ["before", "during"]) {
     const source = join(host.directory, "replaced-editor.txt")
     await writeFile(source, "Captured for the requesting editor")
     const held = holdFileRead(t, source)
-    const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+    const pending = host.attachFile(source)
     await held.started()
     if (replacement === "during") replace()
     host.ui.setEditorText("A different draft in the replacement editor")
@@ -468,7 +675,7 @@ for (const installation of ["recreated", "reused"]) {
     const source = join(host.directory, "reinstalled-editor.txt")
     await writeFile(source, "Captured before editor installation")
     const held = holdFileRead(t, source)
-    const pending = host.runtime.session.prompt(`/attach-file ${source}`)
+    const pending = host.attachFile(source)
     await held.started()
     host.ui.setEditorComponent(
       installation === "reused" ? () => editor : factory,
@@ -494,7 +701,7 @@ test("a later factory keeps composer selection replacement and undo when attachi
   host.ui.setEditorComponent((...args) => previous(...args))
   host.ui.setEditorText("Keep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
-  await host.runtime.session.prompt("/attach-text Selected snapshot")
+  await host.attachText("Selected snapshot")
   const path = snapshotPath(host.ui.getEditorText())
   assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
   assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])

@@ -3,7 +3,6 @@ import { homedir } from "node:os"
 import { basename, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type {
-  ExtensionAPI,
   ExtensionContext,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent"
@@ -17,57 +16,64 @@ import {
 } from "@earendil-works/pi-tui"
 import { readRegularFile, type Snapshot } from "./recovery.ts"
 
+export function sourcePath(text: string, cwd: string): string {
+  if (!text || /\p{Cc}/u.test(text)) throw new Error("Invalid file path")
+  if (
+    text.includes("\\") &&
+    statSync(resolve(cwd, text), { throwIfNoEntry: false })?.isFile()
+  )
+    return resolve(cwd, text)
+  let path = text
+  if (text.startsWith("'") && text.endsWith("'")) {
+    path = text.slice(1, -1)
+  } else if (text.startsWith('"') && text.endsWith('"')) {
+    path = text.slice(1, -1).replace(/\\(["\\$`])/gu, "$1")
+  } else {
+    path = text.replace(/\\(.)/gu, "$1")
+  }
+  if (!path || /\p{Cc}/u.test(path)) throw new Error("Invalid file path")
+  if (/^file:/iu.test(path)) {
+    const url = new URL(path)
+    if (url.hostname && url.hostname !== "localhost")
+      throw new Error("Invalid local file URL")
+    path = fileURLToPath(url)
+  } else if (path.startsWith("~/")) {
+    path = resolve(homedir(), path.slice(2))
+  }
+  return resolve(cwd, path)
+}
+
 function content(
   text: string,
   cwd: string,
-  forceInline = false,
 ): string | Snapshot[] | Promise<string | Snapshot[]> {
   const fallback =
-    forceInline || text.length < 5000
+    text.length < 5000
       ? text
       : [{ name: "paste.txt", contents: Buffer.from(text) }]
-  if (!forceInline && text && !/\p{Cc}/u.test(text)) {
-    let unquoted = text
-    if (text.startsWith("'") && text.endsWith("'")) {
-      unquoted = text.slice(1, -1)
-    } else if (text.startsWith('"') && text.endsWith('"')) {
-      unquoted = text.slice(1, -1).replace(/\\(["\\$`])/gu, "$1")
-    } else {
-      unquoted = text.replace(/\\(.)/gu, "$1")
-    }
-    for (let path of new Set([text, unquoted])) {
-      try {
-        if (/^file:/iu.test(path)) {
-          const url = new URL(path)
-          if (url.hostname && url.hostname !== "localhost") continue
-          path = fileURLToPath(url)
-        } else if (path.startsWith("~/")) {
-          path = resolve(homedir(), path.slice(2))
-        }
-        if (!path || /\p{Cc}/u.test(path)) continue
-        path = resolve(cwd, path)
-        // Keep ordinary text insertion synchronous without reading file bytes on the UI thread.
-        if (statSync(path).isFile()) {
-          return readRegularFile(path).then(
-            (contents) => [
-              {
-                name: basename(path).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
-                contents,
-              },
-            ],
-            () => fallback,
-          )
-        }
-      } catch {
-        // Unmatched paths follow ordinary text-paste policy.
+  if (text && !/\p{Cc}/u.test(text)) {
+    try {
+      const path = sourcePath(text, cwd)
+      // Keep ordinary text insertion synchronous without reading file bytes on the UI thread.
+      if (statSync(path).isFile()) {
+        return readRegularFile(path).then(
+          (contents) => [
+            {
+              name: basename(path).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
+              contents,
+            },
+          ],
+          () => fallback,
+        )
       }
+    } catch {
+      // Unmatched paths follow ordinary text-paste policy.
     }
   }
   return fallback
 }
 
 export function registerPaste(
-  pi: ExtensionAPI,
   attach: (
     ctx: ExtensionContext,
     capture: () => Promise<Snapshot[] | string | undefined>,
@@ -76,22 +82,6 @@ export function registerPaste(
   signal: AbortSignal,
   changed: () => void,
 ) {
-  let pasteInline: (() => Promise<void>) | undefined
-
-  async function inline(ctx: ExtensionContext): Promise<void> {
-    if (pasteInline) await pasteInline()
-    else ctx.ui.notify("Paste Inline requires an interactive editor", "error")
-  }
-
-  pi.registerCommand("paste-inline", {
-    description: "Paste clipboard text without attachment conversion",
-    handler: (_args, ctx) => inline(ctx),
-  })
-  pi.registerShortcut("ctrl+alt+v", {
-    description: "Paste Inline",
-    handler: inline,
-  })
-
   return function withPaste(
     editor: EditorComponent,
     ctx: ExtensionContext,
@@ -110,7 +100,7 @@ export function registerPaste(
       if (!signal.aborted) tui.requestRender()
     }
 
-    function clipboardPaste(forceInline = false): Promise<void> {
+    function clipboardPaste(): Promise<void> {
       const cwd = ctx.cwd
       // Capture the requesting draft before the first clipboard read.
       return attach(
@@ -119,7 +109,7 @@ export function registerPaste(
           try {
             const clipboard = getNativeClipboard()
             if (!clipboard) throw new Error("Native clipboard is unavailable")
-            const paths = forceInline ? null : await clipboard.getFilePaths?.()
+            const paths = await clipboard.getFilePaths?.()
             if (paths?.length) {
               return paths.map((path) => {
                 if (!path || /\p{Cc}/u.test(path))
@@ -133,14 +123,14 @@ export function registerPaste(
                 }
               })
             }
-            const image = forceInline ? null : await clipboard.getImage()
+            const image = await clipboard.getImage()
             if (image) {
               return [{ name: "clipboard-image", contents: image, image: true }]
             }
             const text = await clipboard.getText()
             if (text === undefined)
               throw new Error("Clipboard text is unavailable")
-            return text ? content(text, cwd, forceInline) : undefined
+            return text ? content(text, cwd) : undefined
           } catch (error) {
             if (!signal.aborted)
               ctx.ui.notify(`Could not paste: ${String(error)}`, "error")
@@ -151,7 +141,6 @@ export function registerPaste(
       )
     }
 
-    pasteInline = () => clipboardPaste(true)
     if (!Reflect.get(editor, "onPasteImage", editor)) {
       Reflect.set(editor, "onPasteImage", () => void clipboardPaste(), editor)
     }

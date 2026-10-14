@@ -227,7 +227,7 @@ test("one pasted path accepts terminal escaping, whole-path quotes, file URLs, a
   }
 })
 
-test("unsuitable single-path pastes stay text silently and Paste Inline leaves readable paths literal", async (t) => {
+test("unsuitable single-path pastes stay text silently and ordinary typing leaves readable paths literal", async (t) => {
   const host = await nativePi(t)
   const source = join(host.directory, "Readable file.txt")
   const unreadable = join(host.directory, "Unreadable file.txt")
@@ -253,10 +253,6 @@ test("unsuitable single-path pastes stay text silently and Paste Inline leaves r
       /Manage attachments|Could not (paste|attach)/,
     )
   }
-  t.mock.method(getNativeClipboard(), "getText", async () => source)
-  host.ui.setEditorText("")
-  await host.runtime.session.prompt("/paste-inline")
-  assert.equal(host.ui.getEditorText(), source)
   host.ui.setEditorText("")
   host.input(source)
   assert.equal(host.ui.getEditorText(), source)
@@ -543,13 +539,14 @@ for (const target of [
   })
 }
 
-test("Attach File accepts a user-entered list of paths as one native attachment action", async (t) => {
+test("Attach File accepts user-entered paths through the native chooser", async (t) => {
   const host = await nativePi(t)
   const first = join(host.directory, "First user file.txt")
   const second = join(host.directory, "Second user file 你好.txt")
   await writeFile(first, "First user body")
   await writeFile(second, "Second user body")
-  host.submit(`/attach-file ${first}\n${second}`)
+  await host.attachFile(first)
+  await host.attachFile(second)
   const paths = await waitFor(() => {
     const references = host.ui
       .getEditorText()
@@ -785,24 +782,16 @@ for (const priority of [
   })
 }
 
-test("Paste Inline bypasses file/image classification and measures no attachment cutoff", async (t) => {
+test("retired Ctrl+Alt+V does not read the clipboard", async (t) => {
   const clipboard = getNativeClipboard()
-  t.mock.method(clipboard, "getFilePaths", async () => {
+  const files = t.mock.method(clipboard, "getFilePaths", async () => {
     throw new Error("Must not classify files")
   })
-  t.mock.method(clipboard, "getImage", async () => {
-    throw new Error("Must not classify images")
-  })
-  const text = "\t".repeat(5001)
-  t.mock.method(clipboard, "getText", async () => text)
   const host = await nativePi(t, [composerPath])
-  host.ui.setEditorText("Keep selected")
-  for (let index = 0; index < 8; index++) host.input("\x1b[1;2D")
+  host.ui.setEditorText("Keep draft")
   host.input("\x1b[118;7u")
-  await waitFor(() => assert.equal(host.ui.getEditorText(), `Keep ${text}`))
-  assert.doesNotMatch(host.render(), /Manage attachments/)
-  host.input("\x1b[122;9u")
-  assert.equal(host.ui.getEditorText(), "Keep selected")
+  assert.equal(host.ui.getEditorText(), "Keep draft")
+  assert.equal(files.mock.calls.length, 0)
 })
 
 test("a failed snapshot save retries the whole copied set from captured bytes in one edit", async (t) => {

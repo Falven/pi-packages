@@ -250,6 +250,25 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
       if (text !== undefined) ui.setEditorText(text)
       input("\r")
     },
+    async attachFile(path) {
+      const pending = runtime.session.prompt("/attach")
+      await waitFor(() => assert.match(this.render(), /File path…/))
+      input("\r")
+      await waitFor(() => assert.match(this.render(), /Attach file/))
+      input(`\x1b[200~${path}\x1b[201~`)
+      input("\r")
+      await pending
+    },
+    async attachText(contents) {
+      const pending = runtime.session.prompt("/attach")
+      await waitFor(() => assert.match(this.render(), /File path…/))
+      input("\x1b[B")
+      input("\r")
+      await waitFor(() => assert.match(this.render(), /Attach text/))
+      input(`\x1b[200~${contents}\x1b[201~`)
+      input("\r")
+      await pending
+    },
     render() {
       output = ""
       tui.requestRender(true)

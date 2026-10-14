@@ -154,18 +154,21 @@ test("a delayed clipboard read preserves its requesting draft and leaves later t
   assert.equal(await readFile(snapshotPath(recovery.text), "utf8"), "Late text")
 })
 
-test("Paste Inline replaces a composer selection with long clipboard text in one edit", async (t) => {
-  const clipboard = getNativeClipboard()
-  assert.ok(clipboard)
+test("Create from text captures long content over a composer selection in one edit", async (t) => {
   const text = "i".repeat(5001)
-  t.mock.method(clipboard, "getImage", async () => null)
-  t.mock.method(clipboard, "getText", async () => text)
   const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("Keep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
-  host.input("\x1b[118;7u")
-  await waitFor(() => assert.equal(host.ui.getEditorText(), `Keep ${text}`))
-  assert.doesNotMatch(host.render(), /\[Attachment:|\[paste #/)
+  host.input("\x1b[102;7u")
+  await waitFor(() => assert.match(host.render(), /File path/))
+  host.input("\x1b[B")
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attach text/))
+  host.input(`\x1b[200~${text}\x1b[201~`)
+  host.input("\r")
+  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
+  assert.equal(await readFile(path, "utf8"), text)
+  assert.match(host.ui.getEditorText(), /^Keep \n\[Attachment:/)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "Keep draft")
 })
@@ -174,7 +177,7 @@ test("the paste decorator preserves Attach Text read observation and composer se
   const host = await nativePi(t, [composerPath])
   host.ui.setEditorText("```text\nKeep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
-  await host.runtime.session.prompt("/attach-text Small code context")
+  await host.attachText("Small code context")
   const path = snapshotPath(host.ui.getEditorText())
   assert.match(host.ui.getEditorText(), /^```text\nKeep \n\[Attachment:/)
   assert.equal(await readFile(path, "utf8"), "Small code context")
@@ -494,22 +497,22 @@ for (const composer of [false, true]) {
     assert.doesNotMatch(host.render(), /\[paste #|\[Attachment:/)
   })
 
-  test(`${composer ? "composer" : "native"} Paste Inline command and Attach Text shortcut work in prose and code`, async (t) => {
-    const clipboard = getNativeClipboard()
-    assert.ok(clipboard)
-    const text = `\t${"i".repeat(4998)}\r\n`
-    t.mock.method(clipboard, "getText", async () => text)
+  test(`${composer ? "composer" : "native"} small paste and Attach chooser text work in prose and code`, async (t) => {
+    const text = `\t${"i".repeat(4996)}\r\n`
     const host = await nativePi(t, composer ? [composerPath] : [])
     for (const prefix of ["Prose ", "```text\nCode "]) {
       host.ui.setEditorText(prefix)
-      await host.runtime.session.prompt("/paste-inline")
+      host.ui.pasteToEditor(text)
       assert.equal(
         host.ui.getEditorText(),
-        prefix + (composer ? "\t" : "    ") + "i".repeat(4998) + "\n",
+        prefix + (composer ? "\t" : "    ") + "i".repeat(4996) + "\n",
       )
       assert.doesNotMatch(host.render(), /\[paste #|\[Attachment:/)
       host.ui.setEditorText(prefix)
-      host.input("\x1b[116;7u")
+      host.input("\x1b[102;7u")
+      await waitFor(() => assert.match(host.render(), /File path/))
+      host.input("\x1b[B")
+      host.input("\r")
       await waitFor(() => assert.match(host.render(), /Attach text/))
       host.input("\x1b[200~\n  Short context\n\x1b[201~")
       host.input("\r")
