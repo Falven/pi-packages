@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop.
+**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
 
 **Status:** resolved — patch slice; runtime evidence limits recorded below
 

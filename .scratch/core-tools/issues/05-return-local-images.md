@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop.
+**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
 
 **Status:** resolved — image slice; native detail limitation remains
 

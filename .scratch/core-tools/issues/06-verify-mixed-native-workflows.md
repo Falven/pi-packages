@@ -4,9 +4,9 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi's image pipeline.
+**Dependencies (resolved):** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi's image pipeline.
 
-**Status:** verified for the configured controlled native-host workflow at `f415bae`; matched live-model trials remain ticket 07
+**Status:** resolved — configured controlled native-host workflow verified at `f415bae`; matched live-model verification is recorded in ticket 07
 
 - [x] Demonstrate a mixed workflow that inspects a project, changes a file, validates the change, and inspects a local image through the selected toolset.
 - [x] Verify normal package loading and reloading, activation in an existing conversation, and explicit tool inclusions/exclusions. Distinguish hidden declarations from callable-tool access and preserve historical calls.

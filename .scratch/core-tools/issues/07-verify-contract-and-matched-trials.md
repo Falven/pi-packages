@@ -6,7 +6,7 @@
 
 **Dependency:** [06 — Preserve complete workflows in mixed Pi sessions](06-verify-mixed-native-workflows.md), resolved.
 
-**Status:** verified — bounded core comparison complete at `c2adc1b`; native image and public-host limits remain explicit
+**Status:** resolved — bounded core comparison complete at `c2adc1b`; native image and public-host limits remain explicit
 
 - [x] Run the accumulated slice checks and close any missing selected-contract cases. Preserve the source capture identity and the separate scoped fixture identity.
 - [x] Compare actual outgoing names, namespaces, descriptions, grammar, schemas, defaults, optional fields, argument encoding, results, errors, truncation, and image content. Assert the absence of excluded tools and helper overloads.
@@ -85,3 +85,5 @@ The harness capped each arm at four minutes, each HTTP request at 90 seconds, sm
 - **Unverified behavior:** reference concurrent-wait arbitration and caller-only wait cancellation, exhaustive patch grammar and operating-system errors, extreme duration limits, malformed-image upstream acceptance, and image-helper combinations beyond the observed live case remain unverified. The simple text/image case now has literal model-bound ordering evidence; exhaustive cross-part parity is not claimed. Native automatic detail is a verified mismatch. The bundled core runtime comparison does not establish actual desktop-harness parity, immutable backend identity, deterministic outputs, general performance, or model superiority.
 
 The bounded verification is complete with these limits. Full raw evidence remains outside the repository, and the approved specification, tickets, and normal observation indices contain the resulting status and evidence links.
+
+**Final validation:** Independent Standards and Spec reviews of the whole-feature diff from `466376e` through `8429a138686307d4e0dbff1f1f4a8bdb48a480c4` each reported zero findings. Formatting passed for 322 files. Independent integration checks parsed 105 JSON artifacts, verified 96 indexed hashes, 76 case pointers, 92 literal source comparisons, and 60 documentation links, and confirmed both frozen identities and the naming invariant. Separate evidence-retention checks verified 721 external/indexed hashes. The package packed from `c2adc1b` contains the manifest and nine runtime files: runtime bytes match, and the manifest differs only in formatting. This tracker closure changes no runtime or tests.

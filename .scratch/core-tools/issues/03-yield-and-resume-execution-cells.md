@@ -4,9 +4,9 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop; 02 — Shared asynchronous output storage for commands and cells.
+**Dependencies (resolved):** 01 — Execute a command through the complete model loop; 02 — Shared asynchronous output storage for commands and cells.
 
-**Status:** implemented — focused and configured lifecycle checks verified; diagnostic performance comparison recorded for ticket 07
+**Status:** resolved — focused and configured lifecycle checks verified; diagnostic performance comparison recorded for ticket 07
 
 - [x] Probe public dispatch after the parent returns and during a later prompt with configured companions. Verify hook blocking, argument changes, result redaction, explicit cancellation, dynamic callable selection, custom-entry rendering/model exclusion, and notification timing. Record native identity/history limitations as accepted differences.
 - [x] Expose the captured `functions.wait` declaration, schema, defaults, and string cell identifier in the actual provider request. Preserve the distinction from numeric command-process identifiers.

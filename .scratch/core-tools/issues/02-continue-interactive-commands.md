@@ -4,9 +4,9 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop.
+**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
 
-**Status:** implemented — process continuation uses shared asynchronous output storage
+**Status:** resolved — process continuation uses shared asynchronous output storage
 
 - [x] Expose and execute the captured `write_stdin` contract through the existing orchestration and public dispatch path.
 - [x] Support both pipes and an explicitly requested PTY, with accurate input delivery, output, completion status, and process session identifier behavior.

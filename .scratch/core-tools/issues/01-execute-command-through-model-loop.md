@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None (can start immediately).
+**Dependencies:** None.
 
 **Status:** resolved — completed command slice; final contract verification is recorded in ticket 07
 
