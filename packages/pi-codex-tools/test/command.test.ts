@@ -294,6 +294,13 @@ test("raw result encoding preserves later context edits and removals", async (t)
       host.queueResponse(...call('text("discarded-secret");', "one", null))
       host.queueResponse(completed)
       await host.session.prompt("Keep only the processed result")
+      const request = host.requests.at(-1) as unknown as {
+        input: Record<string, unknown>[]
+      }
+      const result = request.input.find(
+        (item) => item["type"] === "custom_tool_call_output",
+      )
+      assert.equal(typeof result?.["output"], "string")
       assert.doesNotMatch(
         output(host),
         /discarded-secret|retained-first|retained-second/,
@@ -419,9 +426,7 @@ test("a blocked raw call keeps its custom result without a namespace", async (t)
     ["custom_tool_call", "custom_tool_call_output"],
   )
   assert.equal(calls[0]!["namespace"], undefined)
-  assert.deepEqual(calls[1]!["output"], [
-    { type: "input_text", text: "Outer call denied by the test policy" },
-  ])
+  assert.equal(calls[1]!["output"], "Outer call denied by the test policy")
   assert.doesNotMatch(output(host, "blocked"), /unreachable/)
 })
 

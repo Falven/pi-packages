@@ -40,6 +40,53 @@ function cellId(result: string) {
   return id
 }
 
+test("frame-only execution and waiting retain native string results", async (t) => {
+  const gate = Promise.withResolvers<void>()
+  t.after(() => gate.resolve())
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_call", async (event) => {
+        if (event.toolName === "exec_command") await gate.promise
+      })
+    },
+  })
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await tools.exec_command({cmd: "true", login: false});',
+      "empty-yield",
+      null,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Yield before emitting output")
+  const cell = cellId(output(host, "empty-yield"))
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: cell, yield_time_ms: 0 }, "empty-wait"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect while no output is ready")
+  assert.match(output(host, "empty-wait"), /Script running with cell ID/)
+  gate.resolve()
+  assert.match(await collect(host, cell, "empty-final"), /Script completed/)
+  assert.match(await execute(host, "void 0;", "empty-exec"), /Script completed/)
+  const request = host.requests.at(-1) as unknown as {
+    input: Record<string, unknown>[]
+  }
+  for (const id of ["empty-yield", "empty-wait", "empty-final", "empty-exec"]) {
+    const result = request.input.find(
+      (item) =>
+        item["call_id"] === `call_${id}` &&
+        ["custom_tool_call_output", "function_call_output"].includes(
+          String(item["type"]),
+        ),
+    )
+    assert(result)
+    assert.equal(typeof result["output"], "string", id)
+  }
+})
+
 test("raw execution yields once and structured wait collects late processed output", async (t) => {
   const calls: string[] = []
   const gate = Promise.withResolvers<void>()
@@ -111,6 +158,17 @@ text("FINAL_OUTPUT");`,
   assert.equal(waiting?.["type"], "function_call")
   assert.equal(waiting["namespace"], "functions")
   assert.deepEqual(JSON.parse(String(waiting["arguments"])), { cell_id: cell })
+  const result = request.input.find(
+    (item) =>
+      item["call_id"] === "call_collected" &&
+      item["type"] === "function_call_output",
+  )
+  assert(result && Array.isArray(result["output"]))
+  assert.deepEqual(
+    result["output"].map((part) => part.type),
+    ["input_text", "input_text", "input_text"],
+  )
+  assert.equal(result["output"][2].text, "FINAL_OUTPUT")
 })
 
 test("overlapping cells commit only changed keys and load independent copies", async (t) => {

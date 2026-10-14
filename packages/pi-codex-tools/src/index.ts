@@ -303,10 +303,15 @@ export default function coreTools(pi: ExtensionAPI): void {
         if (typeof output === "string") {
           const parts = retainedParts?.filter((part) => part.type === "text")
           // Restore text boundaries only when the processed request contains exactly the same text.
-          output =
-            parts?.map((part) => part.text).join("\n") === output
-              ? parts.map((part) => ({ type: "input_text", text: part.text }))
-              : [{ type: "input_text", text: output }]
+          if (
+            parts &&
+            parts.length > 1 &&
+            parts.map((part) => part.text).join("\n") === output
+          )
+            output = parts.map((part) => ({
+              type: "input_text",
+              text: part.text,
+            }))
         } else if (Array.isArray(output) && retainedParts) {
           const converted = output as Record<string, unknown>[]
           const texts = converted.filter(
