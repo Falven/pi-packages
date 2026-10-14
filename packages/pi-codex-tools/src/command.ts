@@ -6,7 +6,8 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent"
 import { Type } from "typebox"
-import type { ProcessSessions } from "./process.ts"
+import { contentHash } from "./presentation.ts"
+import type { ProcessPresentation, ProcessSessions } from "./process.ts"
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
 const nonnegativeInteger = Type.Number({ minimum: 0, multipleOf: 1 })
@@ -36,7 +37,15 @@ export function createCommand(
   available: () => boolean,
   lifetime: AbortSignal,
   processes: ProcessSessions,
-): ToolDefinition<typeof parameters, { command: string; cwd: string }> {
+): ToolDefinition<
+  typeof parameters,
+  {
+    command: string
+    cwd: string
+    process?: ProcessPresentation
+    outputHash?: string
+  }
+> {
   return {
     name: "exec_command",
     label: "Command",
@@ -96,11 +105,20 @@ export function createCommand(
         Math.min(30000, Math.max(250, args.yield_time_ms ?? 10000)),
         args.max_output_tokens ?? 10000,
         signal,
+        (snapshot) =>
+          onUpdate?.({
+            content: [],
+            details: { command, cwd, process: snapshot },
+          }),
       )
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
-        details: { command, cwd },
+        details: {
+          command,
+          cwd,
+          outputHash: contentHash([{ type: "text", text: result.output }]),
+        },
       }
     },
   }

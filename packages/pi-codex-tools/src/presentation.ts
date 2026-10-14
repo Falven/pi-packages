@@ -13,6 +13,8 @@ export type OperationPresentation = {
   command?: string
   cwd?: string
   output?: string
+  input?: boolean
+  live?: boolean
   exitCode?: number
 }
 export type ExecutionDetails = {
@@ -32,6 +34,16 @@ export const contentHash = (content: AgentToolResult<unknown>["content"]) =>
 const previewLimit = 16384
 export function boundedPreview(text: string): string {
   const plain = stripVTControlCharacters(text).replaceAll("\t", "    ")
+  if (/^\p{ASCII}*$/u.test(plain)) {
+    if (plain.length <= previewLimit - 20) return plain
+    return (
+      truncateToWidth(
+        plain.slice(0, previewLimit),
+        previewLimit - 20,
+        "… [output omitted]",
+      ) + (plain.length > previewLimit ? "\n… [output omitted]" : "")
+    )
+  }
   let length = 0
   let bytes = 0
   // Bound zero-width output without splitting a Unicode grapheme.
@@ -70,71 +82,95 @@ function readable(
           typeof parsed.wall_time_seconds === "number"
         ) {
           const output = boundedPreview(parsed.output)
-          return operations.some((operation) => operation.output === output)
+          return operations.some(
+            (operation) =>
+              operation.input || operation.live || operation.output === output,
+          )
             ? ""
             : output
         }
       } catch {
         /* Ordinary script text is already readable. */
       }
-      return text
+      return operations.some((operation) => operation.output === text)
+        ? ""
+        : text
     })
     .filter(Boolean)
     .join("\n")
 }
 
-export const executionRenderers: ToolRenderers = {
-  renderCall(_args, theme) {
-    return new Text(theme.fg("toolTitle", theme.bold("Execution")), 0, 0)
-  },
-  renderResult(result, options, theme, context) {
-    const details = result.details as ExecutionDetails | undefined
-    const execution =
-      details?.contentHash === contentHash(result.content)
-        ? details.execution
-        : undefined
-    const operations = execution?.operations ?? []
-    const status =
-      context.isError ||
-      operations.some((operation) => operation.status === "failed")
-        ? "failed"
-        : (execution?.status ?? "completed")
-    const label =
-      operations.length === 1 && operations[0]?.name === "exec_command"
-        ? "Command"
-        : operations.length
-          ? `${operations.length} operations`
-          : "Execution"
-    const lines = [
-      theme.fg(
-        status === "failed"
-          ? "error"
-          : status === "running"
-            ? "warning"
-            : "success",
-        `${label} · ${status}`,
-      ),
-    ]
-    if (options.expanded) {
-      for (const operation of operations) {
-        lines.push(
-          `${operation.name === "exec_command" ? "Command" : operation.name} · ${operation.status}`,
-        )
-        if (operation.command !== undefined)
-          lines.push(`$ ${operation.command}`)
-        if (operation.cwd !== undefined)
-          lines.push(`Directory: ${operation.cwd}`)
-        if (operation.output) lines.push(operation.output)
-        if (operation.exitCode !== undefined)
-          lines.push(`Exit status: ${operation.exitCode}`)
+export type LivePresentation = {
+  execution: ExecutionDetails["execution"]
+  invalidates: Set<() => void>
+}
+export function createExecutionRenderers(
+  live: Map<string, LivePresentation>,
+): ToolRenderers {
+  return {
+    renderCall(_args, theme) {
+      return new Text(theme.fg("toolTitle", theme.bold("Execution")), 0, 0)
+    },
+    renderResult(result, options, theme, context) {
+      const details = result.details as ExecutionDetails | undefined
+      let execution =
+        details?.contentHash === contentHash(result.content)
+          ? details.execution
+          : undefined
+      if (execution) {
+        const current = live.get(execution.cellId)
+        if (current) {
+          current.invalidates.clear()
+          current.invalidates.add(context.invalidate)
+          context.state["execution"] = current.execution
+        }
+        execution = context.state["execution"] ?? execution
       }
-      if (execution?.omitted)
-        lines.push("… [earlier operation details omitted]")
-      const output = readable(result.content, operations)
-      if (output) lines.push(boundedPreview(output))
-    }
-    return new Text(lines.join("\n"), 0, 0)
-  },
+      const operations = execution?.operations ?? []
+      const status =
+        context.isError ||
+        operations.some((operation) => operation.status === "failed")
+          ? "failed"
+          : operations.some((operation) => operation.status === "running")
+            ? "running"
+            : (execution?.status ?? "completed")
+      const label =
+        operations.length === 1 && operations[0]?.name === "exec_command"
+          ? "Command"
+          : operations.length
+            ? `${operations.length} operations`
+            : "Execution"
+      const lines = [
+        theme.fg(
+          status === "failed"
+            ? "error"
+            : status === "running"
+              ? "warning"
+              : "success",
+          `${label} · ${status}`,
+        ),
+      ]
+      if (options.expanded) {
+        for (const operation of operations) {
+          lines.push(
+            `${operation.name === "exec_command" ? "Command" : operation.name} · ${operation.status}`,
+          )
+          if (operation.command !== undefined)
+            lines.push(`$ ${operation.command}`)
+          if (operation.cwd !== undefined)
+            lines.push(`Directory: ${operation.cwd}`)
+          if (operation.output && !operation.input) lines.push(operation.output)
+          if (operation.exitCode !== undefined)
+            lines.push(`Exit status: ${operation.exitCode}`)
+        }
+        if (execution?.omitted)
+          lines.push("… [earlier operation details omitted]")
+        const output = readable(result.content, operations)
+        if (output) lines.push(boundedPreview(output))
+      }
+      return new Text(lines.join("\n"), 0, 0)
+    },
+  }
 }
 
 export const waitRenderers: ToolRenderers = {

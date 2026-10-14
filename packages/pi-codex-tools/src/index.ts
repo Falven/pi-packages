@@ -10,7 +10,7 @@ import { ExecutionCells, type WaitOptions } from "./execution.ts"
 import { createImage } from "./image.ts"
 import { createPatch } from "./patch.ts"
 import { ProcessSessions } from "./process.ts"
-import { executionRenderers, waitRenderers } from "./presentation.ts"
+import { waitRenderers } from "./presentation.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
 type OwnedCall = { id: string; name: string }
@@ -63,6 +63,7 @@ export default function coreTools(pi: ExtensionAPI): void {
   const cells = new ExecutionCells(
     pi,
     (name) => availability.get(name)?.() ?? false,
+    processes,
   )
   pi.on("session_shutdown", async () => {
     const closing = cells.close()
@@ -152,7 +153,7 @@ export default function coreTools(pi: ExtensionAPI): void {
   )
   pi.registerTool({
     name: execution.name,
-    ...executionRenderers,
+    ...cells.renderers,
     label: "Execute",
     description: description(new Set()),
     parameters: Type.Object({ input: Type.String() }),

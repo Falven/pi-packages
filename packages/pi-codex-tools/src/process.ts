@@ -1,10 +1,20 @@
 import { spawn } from "node:child_process"
 import { randomBytes, randomInt } from "node:crypto"
 import * as pty from "node-pty"
+import { boundedPreview } from "./presentation.ts"
 import { OutputStore, type OutputCursor } from "./output.ts"
+
+export type ProcessPresentation = {
+  id: number
+  output: string
+  status: "running" | "completed" | "failed"
+  exitCode?: number
+}
 
 type Process = {
   id: number
+  observe: Set<(snapshot: ProcessPresentation) => void>
+  presentation: ProcessPresentation
   pid?: number
   output: OutputStore
   cursor: OutputCursor
@@ -36,6 +46,7 @@ export class ProcessSessions {
     yieldTime: number,
     maxTokens: number,
     signal: AbortSignal,
+    onUpdate?: (snapshot: ProcessPresentation) => void,
   ) {
     signal.throwIfAborted()
     if (this.processes.size >= 32)
@@ -50,17 +61,90 @@ export class ProcessSessions {
     const { promise: done, resolve } = Promise.withResolvers<void>()
     const child: Process = {
       id: this.nextId++,
+      observe: new Set(),
+      presentation: { id: this.nextId - 1, output: "", status: "running" },
       output,
       cursor: output.snapshot(),
       done,
       collected: Promise.resolve(),
     }
+    let head = ""
+    let headBytes = 0
+    let headFull = false
+    const segmenter = new Intl.Segmenter()
+    let tail = ""
+    let omitted = false
+    const publish = () => {
+      child.presentation = {
+        id: child.id,
+        output:
+          boundedPreview(head) +
+          (omitted ? "\n… [output omitted]\n" : "") +
+          boundedPreview(tail),
+        status:
+          child.error || (child.exitCode !== undefined && child.exitCode !== 0)
+            ? "failed"
+            : child.exitCode === undefined
+              ? "running"
+              : "completed",
+        ...(child.exitCode === undefined ? {} : { exitCode: child.exitCode }),
+      }
+      for (const observer of child.observe) observer(child.presentation)
+    }
+    const remember = (data: string) => {
+      if (/^\p{ASCII}*$/u.test(tail + data)) {
+        const incoming = tail + data
+        const through = headFull
+          ? 0
+          : Math.min(incoming.length, 8192 - headBytes)
+        head += incoming.slice(0, through)
+        headBytes += through
+        headFull ||= headBytes === 8192
+        if (incoming.length - through > 8192) omitted = true
+        tail = incoming.slice(through).slice(-8192)
+        publish()
+        return
+      }
+      const ending: string[] = []
+      const lengths: number[] = []
+      let start = 0
+      let tailBytes = 0
+      for (const { segment } of segmenter.segment(tail + data)) {
+        const bytes = Buffer.byteLength(segment)
+        if (!headFull && headBytes + bytes <= 8192) {
+          head += segment
+          headBytes += bytes
+          continue
+        }
+        headFull = true
+        ending.push(segment)
+        lengths.push(bytes)
+        tailBytes += bytes
+        while (tailBytes > 8192) {
+          tailBytes -= lengths[start++]!
+          omitted = true
+        }
+        if (start >= 8192) {
+          ending.splice(0, start)
+          lengths.splice(0, start)
+          start = 0
+        }
+      }
+      tail = ending.slice(start).join("")
+      publish()
+    }
+    void done.then(() => {
+      if (child.error) remember(`\n${child.error.message}`)
+      publish()
+      child.observe.clear()
+    })
     let pause: (() => void) | undefined
     let waiting: Promise<void> | undefined
     const append = (data: string) => {
       if (child.error) return
       try {
         const pressure = output.append(data)
+        remember(data)
         if (pressure && pressure !== waiting) {
           waiting = pressure
           pause!()
@@ -128,7 +212,16 @@ export class ProcessSessions {
       throw error
     }
     this.processes.set(child.id, child)
+    onUpdate?.(child.presentation)
     return this.collect(child, yieldTime, maxTokens, signal)
+  }
+
+  observe(id: number, observer: (snapshot: ProcessPresentation) => void): void {
+    const child = this.processes.get(id)
+    if (child) {
+      child.observe.add(observer)
+      observer(child.presentation)
+    }
   }
 
   async write(

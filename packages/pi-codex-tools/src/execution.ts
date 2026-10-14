@@ -5,10 +5,13 @@ import { stripVTControlCharacters } from "node:util"
 import { truncateToWidth } from "@earendil-works/pi-tui"
 import {
   boundedPreview,
+  createExecutionRenderers,
+  type LivePresentation,
   contentHash,
   type ExecutionDetails,
   type OperationPresentation,
 } from "./presentation.ts"
+import type { ProcessSessions, ProcessPresentation } from "./process.ts"
 import { OutputStore, type OutputCursor } from "./output.ts"
 import type {
   AgentToolResult,
@@ -126,6 +129,8 @@ function integer(
 }
 
 export class ExecutionCells {
+  private readonly presentations = new Map<string, LivePresentation>()
+  readonly renderers = createExecutionRenderers(this.presentations)
   private readonly cells = new Map<string, Cell>()
   private readonly values = new Map<string, string>()
   private readonly workers = new Set<Worker>()
@@ -135,6 +140,7 @@ export class ExecutionCells {
   constructor(
     private readonly pi: ExtensionAPI,
     private readonly available: (name: string) => boolean,
+    private readonly processes: ProcessSessions,
   ) {
     pi.registerEntryRenderer<Journal>(journalType, () => undefined)
   }
@@ -215,6 +221,10 @@ export class ExecutionCells {
       onUpdate,
     }
     cell.presentation.cellId = cell.id
+    this.presentations.set(cell.id, {
+      execution: cell.presentation,
+      invalidates: new Set(),
+    })
     this.cells.set(cell.id, cell)
     this.record(cell, { type: "created" })
     const tools = ctx.tools.filter(
@@ -386,6 +396,28 @@ export class ExecutionCells {
     }
     cell.presentation.operations.push(operation)
     this.update(cell)
+    let observing = false
+    const observe = (process: ProcessPresentation) => {
+      if (!liveRedacted) {
+        operation.live = true
+        operation.output = process.output
+      }
+      operation.status = process.status
+      if (process.exitCode !== undefined) operation.exitCode = process.exitCode
+      this.update(cell)
+      if (returned && process.status !== "running") {
+        this.record(cell, {
+          type: "process-completed",
+          child_id: child,
+          name: message.name,
+          presentation: { ...operation },
+        })
+        this.flush(cell)
+        this.releasePresentation(cell)
+      }
+    }
+    let returned = false
+    let liveRedacted = false
     try {
       this.record(cell, {
         type: "started",
@@ -406,16 +438,25 @@ export class ExecutionCells {
           signal: cell.controller.signal,
           onUpdate: (partial) => {
             const context = partial.details as
-              | { command?: string; cwd?: string }
+              | {
+                  command?: string
+                  cwd?: string
+                  process?: ProcessPresentation
+                }
               | undefined
             if (typeof context?.command === "string")
               operation.command = boundedPreview(context.command)
             if (typeof context?.cwd === "string")
               operation.cwd = boundedPreview(context.cwd)
+            if (context?.process && !observing) {
+              observing = true
+              this.processes.observe(context.process.id, observe)
+            }
             this.update(cell)
           },
         },
       )
+      returned = true
       const blocked =
         message.name === "view_image" &&
         this.pi.getSettings().images?.blockImages
@@ -426,18 +467,26 @@ export class ExecutionCells {
             .map((part) => part.text)
             .join("\n")
       const context = outcome.result.details as
-        | { command?: string; cwd?: string }
+        | { command?: string; cwd?: string; outputHash?: string }
         | undefined
       if (typeof context?.command === "string")
         operation.command = boundedPreview(context.command)
       if (typeof context?.cwd === "string")
         operation.cwd = boundedPreview(context.cwd)
       const structured = outcome.result.structuredContent as
-        | { output?: unknown; exit_code?: unknown }
+        | { output?: unknown; exit_code?: unknown; session_id?: unknown }
         | undefined
-      operation.output = boundedPreview(
-        typeof structured?.output === "string" ? structured.output : text,
-      )
+      operation.input = message.name === "write_stdin" && !outcome.isError
+      liveRedacted =
+        operation.live === true &&
+        (typeof structured?.output !== "string" ||
+          context?.outputHash !==
+            contentHash([{ type: "text", text: structured.output }]))
+      if (!operation.live || liveRedacted)
+        operation.output = boundedPreview(
+          typeof structured?.output === "string" ? structured.output : text,
+        )
+      if (liveRedacted) delete operation.exitCode
       if (typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code
       operation.status =
@@ -445,7 +494,9 @@ export class ExecutionCells {
         blocked ||
         (operation.exitCode !== undefined && operation.exitCode !== 0)
           ? "failed"
-          : "completed"
+          : typeof structured?.session_id === "number"
+            ? "running"
+            : "completed"
       this.update(cell)
       this.record(cell, {
         presentation: { ...operation },
@@ -687,6 +738,7 @@ export class ExecutionCells {
         cell.collectedYield = cutoff.yielded
         this.flush(cell)
         cell.onUpdate = undefined
+        this.releasePresentation(cell)
         if (cutoff.status !== "running") {
           cell.collected = true
           await Promise.all([cell.text.close(), cell.images.close()])
@@ -819,7 +871,25 @@ export class ExecutionCells {
   }
 
   private update(cell: Cell): void {
-    cell.onUpdate?.({ content: [], details: this.details(cell) })
+    cell.presentation.status = cell.status
+    const invalidates = [
+      ...(this.presentations.get(cell.id)?.invalidates ?? []),
+    ]
+    if (!invalidates.length)
+      cell.onUpdate?.({ content: [], details: this.details(cell) })
+    for (const invalidate of invalidates) invalidate()
+    this.releasePresentation(cell)
+  }
+
+  private releasePresentation(cell: Cell): void {
+    if (
+      cell.onUpdate ||
+      cell.presentation.operations.some(
+        (operation) => operation.status === "running",
+      )
+    )
+      return
+    this.presentations.delete(cell.id)
   }
 
   private record(cell: Cell, event: Activity): void {
@@ -860,6 +930,7 @@ export class ExecutionCells {
     const incomplete = cells.some((cell) => cell.calls.size > 0)
     this.closed = true
     this.values.clear()
+    this.presentations.clear()
     this.cells.clear()
     await Promise.all(
       cells.flatMap((cell) => [cell.text.close(), cell.images.close()]),

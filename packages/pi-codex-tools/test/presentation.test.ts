@@ -1,5 +1,8 @@
+/* eslint-disable no-await-in-loop -- Real producers must reach their synchronized output phase before release. */
 import assert from "node:assert/strict"
 import test from "node:test"
+import { access, writeFile } from "node:fs/promises"
+import { join } from "node:path"
 import { setTimeout } from "node:timers/promises"
 import { stripVTControlCharacters } from "node:util"
 import { visibleWidth } from "@earendil-works/pi-tui"
@@ -231,4 +234,283 @@ test("a failed wait shows its collection error without transport details", async
     /exec cell missing not found/,
   )
   assert.match(output(host, "missing"), /exec cell missing not found/)
+})
+
+for (const tty of [false, true]) {
+  test(`command output appears before ${tty ? "PTY" : "pipe"} collection returns`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension],
+      providerApi,
+      rows: 100,
+      columns: 100,
+    })
+    await host.key("\x0f")
+    const ready = join(host.directory, "ready")
+    const release = join(host.directory, "release")
+    const command = `printf 'EARLY-OUTPUT\\n'; touch '${ready}'; until test -f '${release}'; do sleep 0.02; done; printf 'FINAL-OUTPUT\\n'`
+    host.queueResponse(
+      ...call(
+        `text(await tools.exec_command(${JSON.stringify({ cmd: command, login: false, tty, yield_time_ms: 30000 })}));`,
+      ),
+    )
+    host.queueResponse(completed)
+    let finished = false
+    const pending = host.session.prompt("Run live command").then(() => {
+      finished = true
+    })
+    try {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        if (
+          await access(ready).then(
+            () => true,
+            () => false,
+          )
+        )
+          break
+        await setTimeout(10)
+      }
+      await setTimeout(80)
+      assert.equal(finished, false)
+      const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(frame, /\n\s*EARLY-OUTPUT\s*\n/)
+      assert.match(frame, /Command · running/)
+    } finally {
+      await writeFile(release, "")
+      await pending
+    }
+    assert.match(output(host), /EARLY-OUTPUT/)
+    assert.match(output(host), /FINAL-OUTPUT/)
+  })
+}
+
+test("late command completion stays in its original card without consuming model output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 160,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  const release = join(host.directory, "release")
+  const command = `printf 'FIRST-CHUNK\\n'; until test -f '${release}'; do sleep 0.02; done; printf 'LAST-CHUNK\\n'; exit 7`
+  host.queueResponse(
+    ...call(
+      `const process = await tools.exec_command(${JSON.stringify({ cmd: command, login: false, yield_time_ms: 250 })}); store("process", process.session_id); text(process);`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start command")
+  const initial = output(host)
+  assert.match(initial, /FIRST-CHUNK/)
+  const requestsBefore = host.requests.length
+  await writeFile(release, "")
+  await setTimeout(150)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Command · failed/)
+  assert.match(frame, /Exit status: 7/)
+  assert.match(frame, /\n\s*LAST-CHUNK\s*\n/)
+  assert.equal(host.requests.length, requestsBefore)
+  host.queueResponse(
+    ...call(
+      'text(await tools.write_stdin({session_id:load("process")}));',
+      "collect",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect command")
+  const collected = output(host, "collect")
+  assert.match(collected, /LAST-CHUNK/)
+  assert.doesNotMatch(collected, /FIRST-CHUNK/)
+  await setTimeout(60)
+  const final = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(
+    final.split("\n").filter((line) => line.trim() === "LAST-CHUNK").length,
+    1,
+  )
+})
+
+test("input in another execution updates the originating PTY card without duplicate output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 160,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'const process = await tools.exec_command({cmd:"printf \'PTY-READY\\n\'; read answer; printf \'PTY-ANSWER:%s\\n\' \\"$answer\\"",tty:true,login:false,yield_time_ms:250}); store("process",process.session_id); text(process);',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start terminal")
+  host.queueResponse(
+    ...call(
+      'text(await tools.write_stdin({session_id:load("process"),chars:"hello\\n"}));',
+      "input",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Send input")
+  assert.match(output(host, "input"), /PTY-ANSWER:hello/)
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(
+    frame.split("\n").filter((line) => line.trim() === "PTY-ANSWER:hello")
+      .length,
+    1,
+  )
+  assert.match(frame, /write_stdin · completed/)
+  assert.match(frame, /Exit status: 0/)
+})
+
+test("live previews retain trailing large output independently of a small model budget", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 1000,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'text(await tools.exec_command({cmd:"node -e \'process.stdout.write(\\\"BEGIN\\\\n\\\" + \\\"X\\\".repeat(262144) + \\\"\\\\nTRAILING\\\\n\\\")\'",login:false,max_output_tokens:32}));',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Run large output")
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /\n\s*BEGIN\s*\n/)
+  assert.match(frame, /\n\s*TRAILING\s*\n/)
+  assert.match(frame, /output omitted/)
+  const model = output(host)
+  assert.match(model, /tokens truncated/)
+  assert.match(model, /TRAILING/)
+})
+
+test("returned redaction replaces earlier visible command output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) =>
+        event.toolName === "exec_command"
+          ? { content: [{ type: "text", text: "REMOVED-BY-HOOK" }] }
+          : undefined,
+      )
+    },
+  })
+  await host.key("\x0f")
+  const ready = join(host.directory, "ready")
+  const release = join(host.directory, "release")
+  const command = `printf 'VISIBLE-BEFORE-HOOK\\n'; touch '${ready}'; until test -f '${release}'; do sleep 0.02; done`
+  host.queueResponse(
+    ...call(
+      `text(await tools.exec_command(${JSON.stringify({ cmd: command, login: false, yield_time_ms: 30000 })}));`,
+    ),
+  )
+  host.queueResponse(completed)
+  const pending = host.session.prompt("Run with output hook")
+  try {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      if (
+        await access(ready).then(
+          () => true,
+          () => false,
+        )
+      )
+        break
+      await setTimeout(10)
+    }
+    await setTimeout(60)
+    assert.match(
+      stripVTControlCharacters(host.screenLines().join("\n")),
+      /\n\s*VISIBLE-BEFORE-HOOK\s*\n/,
+    )
+  } finally {
+    await writeFile(release, "")
+    await pending
+  }
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.doesNotMatch(frame, /\n\s*VISIBLE-BEFORE-HOOK\s*\n/)
+  assert.match(frame, /REMOVED-BY-HOOK/)
+  assert.match(output(host), /REMOVED-BY-HOOK/)
+  assert.doesNotMatch(output(host), /VISIBLE-BEFORE-HOOK/)
+})
+
+test("cancelled command presentation preserves live output and its terminal failure", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  const ready = join(host.directory, "ready")
+  const command = `printf 'BEFORE-CANCEL\\n'; touch '${ready}'; sleep 30`
+  host.queueResponse(
+    ...call(
+      `text(await tools.exec_command(${JSON.stringify({ cmd: command, login: false, yield_time_ms: 30000 })}));`,
+    ),
+  )
+  host.queueResponse(completed)
+  const pending = host.session.prompt("Cancel running command")
+  for (let attempt = 0; attempt < 200; attempt++) {
+    if (
+      await access(ready).then(
+        () => true,
+        () => false,
+      )
+    )
+      break
+    await setTimeout(10)
+  }
+  await host.session.abort()
+  await pending
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Command · failed/)
+  assert.match(frame, /\n\s*BEFORE-CANCEL\s*\n/)
+  assert.match(frame, /Exit status: 1/)
+})
+
+test("structured command result edits replace the live presentation snapshot", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName !== "exec_command") return undefined
+        const result = {
+          output: "FILTERED-OUTPUT",
+          wall_time_seconds: 0,
+          exit_code: 0,
+        }
+        return {
+          content: [{ type: "text", text: JSON.stringify(result) }],
+          structuredContent: result,
+        }
+      })
+    },
+  })
+  host.queueResponse(
+    ...call(
+      "text(await tools.exec_command({cmd:\"printf 'ORIGINAL-OUTPUT\\n'\",login:false}));",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Run with structured result hook")
+  await host.key("\x0f")
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /\n\s*FILTERED-OUTPUT\s*\n/)
+  assert.doesNotMatch(frame, /\n\s*ORIGINAL-OUTPUT\s*\n/)
+  assert.match(output(host), /FILTERED-OUTPUT/)
+  assert.doesNotMatch(output(host), /ORIGINAL-OUTPUT/)
 })
