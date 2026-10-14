@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** ready-for-agent
+**Status:** blocked — public nested-call lifetime
 
 - [ ] First prove through public APIs that an execution cell can continue after the initial result and that subsequent nested calls retain context, hook processing, cancellation, native events, and attribution. Report a demonstrated API blocker without private integration or Pi source changes.
 - [ ] Expose the captured `functions.wait` declaration, schema, defaults, and string cell identifier in the actual provider request. Preserve the distinction from numeric command-process identifiers.
@@ -19,3 +19,7 @@
 - [ ] Verify failed scripts, invalid/stale cells, repeated waiting, and termination while work is pending. Distinguish declared behavior from cases still requiring baseline measurement.
 - [ ] Preserve live cells and stored values across ordinary prompts, and clear them with the agreed native session lifecycle while keeping file effects and retained history.
 - [ ] Demonstrate the complete behavior through the existing host seam using short commands and controlled asynchronous scripts, without requiring the interactive-process slice.
+
+**Implementation evidence:** A controlled real-host probe on the installed 1.0.2 dependency reproduced the lifetime problem. Returning the parent result snapshots and removes its nested-call scope. An in-flight child stays recorded as `unfinished` after it completes; a later call through the saved context reuses the parent's `/1` identifier and adds no record to retained history. Original result-update callbacks deliver no events after the parent returns. On a later prompt, native cancellation aborts the current signal but leaves the saved context's default signal active. Hooks still modify arguments and results, including dropping removed structured content.
+
+Dispatch through an active waiting tool receives that waiting tool's attribution, but cannot account for work between waits. The public call options expose only a signal and an update callback, with no durable scope or reparenting operation. The inspected 1.1.0 source has the same scope-consumption behavior. This blocks the agreed behavior without changing Pi or introducing private integration. The probe passed its seven observable checks; the remaining implementation criteria are open.

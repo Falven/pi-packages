@@ -8,7 +8,7 @@
 
 **Status:** ready-for-agent
 
-- [ ] Expose the captured `view_image` parameters and result shape: absolute path, default high detail or requested original detail, returned detail, and base64 data URL.
+- [ ] Expose the captured `view_image` parameters and result shape: local filesystem path, default high detail or requested original detail, returned detail, and base64 data URL. Resolve relative paths in the owning context.
 - [ ] Support the selected `image` helper's data-URL and ordinary result-object forms and explicit-detail override. Add no network URL support, protocol image metadata, audio, or generated-image surface.
 - [ ] Check effective image blocking before the tool reads or returns image bytes. Verify that serializing the blocked result as text also exposes no image bytes or data URL.
 - [ ] Emit allowed images through normal Pi result processing, preserving result-hook changes, effective auto-resize settings, and the routed model's limits. Avoid a second normalization pass based on stale model metadata.

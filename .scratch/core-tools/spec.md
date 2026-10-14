@@ -1,6 +1,6 @@
 # Core toolset
 
-**Status:** ready-for-agent
+**Status:** implementation in progress; yielded execution blocked by public host API
 
 ## Problem Statement
 
@@ -106,7 +106,7 @@ Verification uses the existing real Pi host with controlled provider responses. 
    | `exec_command` | Required string `cmd`. Optional `workdir`, `shell`, `login`, `tty`, `max_output_tokens`, `yield_time_ms`, `sandbox_permissions`, `justification`, and `prefix_rule`. `login` defaults to true, `tty` to false, output budget to 10,000, and yield time to 10,000 ms with a declared effective range of 250–30,000 ms. |
    | `write_stdin`  | Required numeric `session_id`. Omitted `chars` means an empty-input poll. Output budget defaults to 10,000. Nonempty writes default to a 250 ms wait capped at 30,000 ms. Empty polls are described as using 5,000–300,000 ms by default; the capture does not establish one exact default within that range.         |
    | `apply_patch`  | One raw patch string. The declaration does not specify the full grammar, result schema, or exact error messages; verify these against the fixed behavior baseline rather than inventing them.                                                                                                                         |
-   | `view_image`   | Required absolute `path`; `detail` is `high` or `original`, defaulting to `high`. Returns `image_url` as a base64 data URL and the returned `detail`. Pi processing may subsequently change the emitted image.                                                                                                        |
+   | `view_image`   | Required local filesystem `path`; `detail` is `high` or `original`, defaulting to `high`. Returns `image_url` as a base64 data URL and the returned `detail`. Relative paths resolve in the owning context. Pi processing may subsequently change the emitted image.                                                  |
 
 10. **Command results.** Preserve the command APIs' required `output` and `wall_time_seconds` fields and optional `chunk_id`, `exit_code`, `original_token_count`, and `session_id` fields. A completion during the call has an exit code; a continuing process has a process session identifier. Preserve field absence instead of fabricating values. Nonzero exits are ordinary command results where the baseline uses that form. Keep partial output and the distinction between launch errors, command exits, tool failures, and script exceptions.
 
@@ -161,6 +161,9 @@ Verification uses the existing real Pi host with controlled provider responses. 
 - Extra comparison reports, general design documents, or other documentation beyond the four requested workflows.
 
 ## Further Notes
+
+- Implementation has established a public-API blocker for yielded execution. The real-host probe on the installed dependency confirmed stale nested-call records, reused call identifiers, missing late updates, and a stale default cancellation signal after the parent returns. Ticket 03 records the evidence; independent completed-call, process, patch, and image slices can proceed. No private adapter or change to Pi is authorized.
+- Re-reading the frozen image declaration corrected the earlier absolute-path assumption: it requires a local filesystem path. A supplemental runtime probe accepted a relative path. The implementation follows that local-path contract and the owning context's working directory.
 
 - The design, verification seam, local tracker, and seven-ticket breakdown are approved. This specification and its tickets are ready for implementation; they do not report an implemented package or completed runtime parity checks.
 - The captured baseline dates from 2026-10-13. The source checksum above is independently verified. The selected sample contains completed execution outputs and command results, including nonzero exits. It does not itself establish yielded-cell behavior, retained process sessions, patch execution, local image handling, or boundary truncation. Those are explicit verification work in the corresponding slices.
