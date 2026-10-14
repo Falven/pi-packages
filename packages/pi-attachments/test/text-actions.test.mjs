@@ -474,7 +474,7 @@ for (const editor of ["native", "composer"]) {
   })
 }
 
-test("the attachment widget exposes its shortcut and composer preview scrolls without editing", async (t) => {
+test("the attachment widget exposes its command and composer preview scrolls without editing", async (t) => {
   const host = await nativePi(t, [composerPath])
   const source = join(host.directory, "long.txt")
   const contents =
@@ -489,7 +489,7 @@ test("the attachment widget exposes its shortcut and composer preview scrolls wi
   host.ui.setEditorText(before)
   for (let i = 0; i < 3; i++) host.input("\x1b[1;2D")
   assert.match(host.render(), /Manage attachments/)
-  assert.doesNotMatch(host.render(), /\/attachments/)
+  assert.match(host.render(), /\/attachments Manage attachments/)
   host.input("\x1b[97;7u")
   await waitFor(() => assert.match(host.render(), /Choose attachment/))
   host.input("\r")

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** in-progress — file resolution and native shortcut dispatch are verified independently; the accepted command hint and full-extension acceptance remain to verify.
+**Status:** in-progress — file resolution, native shortcut dispatch, and the accepted command hint are verified independently; full-extension acceptance remains open.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md), including its applicable architecture decisions.
 
@@ -24,6 +24,8 @@
 
 Native conflict dispatch was observed directly: remapping reserved `app.clear` to the Attach key makes Pi skip that attachment shortcut; a Manage binding can override nonreserved `tui.editor.deleteCharBackward`; a later competing extension registration wins. Each handled key invoked one action, and `/hotkeys` showed only the native winner. The package does not copy Pi's conflict table or inspect its private shortcut state.
 
-**Accepted hint decision:** Released Pi exposes concrete registration but no public query for the final accepted extension shortcuts. `getCommands()` returns command information, and the supplied keybinding manager describes native bindings; neither exposes the native shortcut winners used by `/hotkeys`. Showing configured keys as accepted shortcuts would be inaccurate after the observed conflicts. Use the accepted `/attachments` command hint, with `/hotkeys` for effective shortcuts. Remove the obsolete `getActionKeys()` widget call without copying conflict rules or inspecting private shortcut state. Hint runtime verification and full-extension acceptance remain pending.
+**Accepted hint decision:** Released Pi exposes concrete registration but no public query for the final accepted extension shortcuts. `getCommands()` returns command information, and the supplied keybinding manager describes native bindings; neither exposes the native shortcut winners used by `/hotkeys`. Showing configured keys as accepted shortcuts would be inaccurate after the observed conflicts. The widget now uses the accepted `/attachments` command hint, with `/hotkeys` for effective shortcuts. The obsolete `getActionKeys()` call is removed without copying conflict rules or inspecting private shortcut state.
+
+**Hint verification (2026-10-14):** The native preview check first failed with `getActionKeys is not a function`. Six focused checks now pass through the real image widget, shortcut registration, native editor, and resource lifecycle on unmodified Pi 1.0.2. They verify the compact command hint, unchanged retained image and draft, remapping, unbinding, reserved native conflicts, competing extension ownership, `/hotkeys`, and reload with the existing image. Together with the shortcut checks, `node --test packages/pi-attachments/test/hint.test.mjs packages/pi-attachments/test/shortcuts.test.mjs` passes all 19 checks. Scoped TypeScript, lint, formatting, and diff checks pass. The composer preview expectation is updated to the command hint; full-extension and composer acceptance remain pending the editor compatibility gate. Physical terminal behavior was not observed.
 
 **Historical verification (2026-10-14):** The previous checks exercised source flows, cancellation, paste, recovery, retired commands, and modified-host action configuration through /settings. Attachment, composer, chat, and 31 composer viewport cases passed, with type, lint, and format checks. The modified host's configuration menu and action APIs are being removed; those results do not establish file-based remapping, reload, conflicts, or hints on unmodified Pi. Physical clipboard gestures and terminal rendering were not observed.

@@ -225,10 +225,7 @@ export function registerImages(
                 )
               : text
           const lines = truncateToVisualLines(
-            rawKeyHint(
-              ctx.ui.getActionKeys("extension.attachments.manage").join("/"),
-              "Manage attachments",
-            ),
+            rawKeyHint("/attachments", "Manage attachments"),
             2,
             width,
           ).visualLines
