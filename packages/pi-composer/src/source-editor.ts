@@ -80,6 +80,7 @@ export class SourceEditor extends CustomEditor {
   private future: Draft[] = []
   private editGroup: { kind: EditKind; time: number } | undefined
   private transaction: { draft: Draft; recorded: boolean } | undefined
+  private notifyingDraft = false
   private pendingPaste: string | undefined
   private retained: string[] = []
   private deletionSource: { text: string; removed: SourceRange[] } | undefined
@@ -357,8 +358,7 @@ export class SourceEditor extends CustomEditor {
     const current = this.getText()
     if (text === current) {
       this.draft = withIdentity({ ...this.draft }, {})
-      this.onChange?.(current)
-      this.onDraftChange?.(current, "replacement")
+      this.notifyChange("replacement")
       return
     }
     if (!text) this.onDraftClear?.(current)
@@ -643,9 +643,20 @@ export class SourceEditor extends CustomEditor {
     this.revealCaret = true
     this.preferredCell = undefined
     this.completions.update(autocomplete)
-    this.onChange?.(current)
-    this.onDraftChange?.(this.getText(), origin)
+    this.notifyChange(origin)
     this.tui.requestRender()
+  }
+
+  private notifyChange(origin: "edit" | "replacement" | "undo" | "redo"): void {
+    const outer = !this.notifyingDraft
+    this.notifyingDraft = true
+    try {
+      this.onDraftChange?.(this.getText(), origin)
+    } finally {
+      if (outer) this.notifyingDraft = false
+    }
+    // Package observers may finish a transaction before native consumers see it.
+    if (outer) this.onChange?.(this.getText())
   }
 
   private moveTo(position: number, select: boolean): void {

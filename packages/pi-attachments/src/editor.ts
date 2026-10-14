@@ -592,9 +592,13 @@ export function registerEditor(
           wrap(
             composer,
             "onDraftChange",
-            function (text: string, origin?: string) {
+            function (_text: string, origin?: string) {
               changed(origin)
-              originalDraftChange?.call(composer, text, origin)
+              originalDraftChange?.call(
+                composer,
+                originalExpandedText.call(editor),
+                origin,
+              )
             },
           )
         } else {
