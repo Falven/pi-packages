@@ -2,7 +2,7 @@
 
 **What to build:** Use the complete pi-chat workflow with native Pi and the existing composition extensions through a full session and lifecycle changes.
 
-**Blocked by:** 09: Collapse work as a qualifying final response streams; 11: Find and reveal retained pre-compaction content.
+**Blocked by:** 09: Collapse work as a qualifying final response streams; 11: Find and reveal retained pre-compaction content; the correction delta in 07: Fold settled work while keeping the final response visible.
 
 **Status:** in-progress
 
@@ -16,6 +16,15 @@
 - [ ] Perform actual-terminal image, resize, selection, keyboard/mouse, overlay, and lifecycle acceptance; record evidence and keep unperformed physical checks pending.
 - [x] Document delivered support and material limits in the allowed spec/ADRs and this ticket; add no separate research notes or unrequested documentation.
 - [x] Resolve local tickets only according to their demonstrated acceptance, preserve borrowed native ownership, and leave all implementation on the single integration branch.
+
+Correction delta:
+
+- [ ] Verify native custom-entry append and streaming insertion together with work folding, retained-user/notice order, tool-group boundaries, replay, reload, branch/fork changes, and compaction through the existing real-host seam.
+- [ ] Load the separately revised native `exec` renderer through normal extension loading and verify execution status inside its initiating tool activity under both fold levels, including later updates, later requests, and reload; keep the final visible without an extra standalone execution-status row.
+- [ ] Complete focused regression checks, typechecking, formatting, and a standards/spec review for the correction integration branch; fix substantiated findings and record exact evidence separately from baseline results.
+- [ ] Record any unavailable combined-renderer or physical-terminal acceptance explicitly and leave the corresponding criterion open; do not certify it through a simulated chat host or chat-owned execution-journal parser.
+
+The combined execution-status criterion depends on the native `exec` presentation specified in ADR 0024, owned by the separate tool-package work. Correcting or committing that package is outside this ticket's scope. This dependency does not block tickets 02 and 07 or independent native-host verification. Preserve all earlier pending physical acceptance below; the correction does not reopen completed implementation unrelated to these deltas.
 
 Earlier mixed native-host tests covered both load orders and live tool/thought workflows with native and custom renderers, steering and follow-ups, folding, copy, search, retry, interruption, reload, compaction, session replacement, themes, and mode switches. Historical verification before the Hide thinking change: after activity-heading extraction, `node --test packages/pi-chat/test/*.test.ts` passed 116/116 against each of Pi 1.0.2 and 1.1.0 with no failures, cancellations, or skips; heading presentation, working-label cleanup, canonical preservation, and hidden-heading search reveal were covered by modified existing cases. TypeScript, oxlint, and full formatting checks passed. The full repository suite passed 833/833 before the heading change and was not rerun this turn. Standards review found a trailing `.trim()` that could remove first-line code indentation; stripping only separator newlines fixed it, focused verification passed, and rereview found no remaining concrete issue. The Markdown link-label search defect from earlier spec review was fixed and rechecked. The implementation is on `main`. Existing print-mode fixtures check emitted scrollback, but no physical printed-exit acceptance has been completed, so the lifecycle criterion remains pending.
 

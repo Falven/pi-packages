@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Make the native-host fixture independent of companion extensions.
 
-**Status:** done
+**Status:** ready-for-agent
 
 - [x] Create the loadable pi-chat package with required-capability checks rather than a version allowlist; missing hooks or conflicting chat ownership prevent activation explicitly. Target Pi 1.1.0 and later, verify 1.1.0, and retain secondary coverage for 1.0.2.
 - [x] Acquire the host and install the scoped adapter before native history construction, including normal startup, reload, and session replacement.
@@ -19,5 +19,13 @@
 - [x] Index source references incrementally and preserve canonical messages/model input; no second history buffer or unnecessary hashing.
 - [x] Native-host tests demonstrate live and replayed output, duplicate content identity, custom rendering, dock preservation, lifecycle rebinding, and safe activation/cleanup.
 - [x] Verify short, long, resized, and transformed user messages plus pointer, selection, search, and marker behavior through the real host; physical terminal pixels remain pending under ticket 12.
+
+Correction delta:
+
+- [ ] Associate original native custom-entry components with their actual source entries on both ordinary append and direct insertion before a streaming assistant, during live use and native replay.
+- [ ] Preserve source identity separately from work membership, retain native renderer state and insertion order, and reuse the existing adapter's lifecycle and cleanup without an extra history rebuild or message changes.
+- [ ] Update existing native-host coverage to verify the observable live/replay behavior and source preservation; do not add test cases, files, or a separate test seam.
+
+The completed checklist and earlier results below describe the baseline. This ticket is reopened only for custom-entry association; it introduces no execution-journal parser or tool-package change. Work folding around unrelated notices is the dependent correction in ticket 07.
 
 After the scrollbar and padding corrections, the chat suite passed 116/116 against each of Pi 1.1.0 and 1.0.2. Modified existing cases cover all scrollbar modes and live changes, native styles and pointer behavior, automatic hiding, gutter selection/copy, zero padding, live header updates, retained user/thought/tool padding, and cleanup after a later owner takes over. Existing rendering, source preservation, interaction, and lifecycle checks also pass. TypeScript, scoped lint, and formatting checks pass. Physical-terminal appearance remains pending under ticket 12.
