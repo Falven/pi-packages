@@ -3,6 +3,9 @@ import { basename, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   type ExtensionAPI,
+  type ExtensionContext,
+  type InputDeliveryEvent,
+  type InputEvent,
   convertToPng,
   detectSupportedImageMimeTypeFromFile,
   formatDimensionNote,
@@ -86,31 +89,64 @@ export function registerImages(
     ],
   })
   registerRecovery(pi, storage, signal)
-  pi.on("input", async (event, ctx) => {
-    const paths = attachmentPaths(event.text, storage)
-    if (paths.length === 0) return undefined
-    const sessionId = ctx.sessionManager.getSessionId()
+
+  async function retain(
+    event: InputEvent | InputDeliveryEvent,
+    ctx: ExtensionContext,
+  ) {
     const request = {
       ...event,
       ...(event.images
         ? { images: event.images.map((image) => ({ ...image })) }
         : {}),
-      sessionId,
+      sessionId: ctx.sessionManager.getSessionId(),
       sessionFile: ctx.sessionManager.getSessionFile(),
       cwd: ctx.cwd,
     }
+    try {
+      return await saveRequest(storage, request)
+    } catch (error) {
+      let message = `Could not save recovery: ${String(error)}`
+      message +=
+        "\nContents retained in memory until Pi exits; use /attachments-recover."
+      if (!signal.aborted) {
+        try {
+          pi.appendEntry("pi-attachments-request", request)
+          message += "\nRequest retained in session memory."
+        } catch (sessionError) {
+          message += `\nCould not checkpoint the request: ${String(sessionError)}`
+        }
+      }
+      throw new Error(message, { cause: error })
+    }
+  }
+
+  pi.on("input", async (event, ctx) => {
+    if (attachmentPaths(event.text, storage).length === 0) return undefined
+    try {
+      // Save the requesting draft before authentication, queueing, or editor clearing.
+      await retain(event, ctx)
+      return signal.aborted ? { action: "handled" } : undefined
+    } catch (error) {
+      if (!signal.aborted)
+        ctx.ui.notify(`Image request not sent: ${String(error)}`, "error")
+      return { action: "handled" }
+    }
+  })
+
+  pi.on("input_delivery", async (event, ctx) => {
+    const settings = pi.getSettings().images
+    if (settings?.blockImages) return undefined
+    const paths = attachmentPaths(event.text, storage)
+    if (paths.length === 0) return undefined
     const resizeOptions = ctx.model?.inputLimits?.images?.resize
-    const autoResize = pi.getSettings().images?.autoResize ?? true
-    let recovery: Promise<string> | undefined
-    const retain = () => (recovery ??= saveRequest(storage, request))
+    const autoResize = settings?.autoResize ?? true
     try {
       const captured = await Promise.all(
         paths.map((path) => readImage(path, storage)),
       )
       const images = captured.filter((image) => image !== undefined)
       if (images.length === 0) return undefined
-      // Native clears and queued sends have no delivery acknowledgement; keep a recovery copy.
-      await retain()
       const attachments = await Promise.all(
         images.map(async (image) => {
           if (!autoResize) return { image, note: undefined }
@@ -131,7 +167,8 @@ export function registerImages(
           }
         }),
       )
-      if (signal.aborted) return { action: "handled" }
+      if (signal.aborted)
+        throw new Error("The attachment session ended during image preparation")
       const notes = attachments.flatMap(({ note }) => (note ? [note] : []))
       return {
         action: "transform",
@@ -142,24 +179,13 @@ export function registerImages(
         ],
       }
     } catch (error) {
-      let message = `Image request not sent: ${String(error)}`
+      let reason = `Image request not sent: ${String(error)}`
       try {
-        message += `\nRequest saved: ${await retain()}`
+        reason += `\nRequest saved: ${await retain(event, ctx)}`
       } catch (recoveryError) {
-        message += `\nCould not save recovery: ${String(recoveryError)}`
-        message +=
-          "\nContents retained in memory until Pi exits; use /attachments-recover."
-        if (!signal.aborted) {
-          try {
-            pi.appendEntry("pi-attachments-request", request)
-            message += "\nRequest retained in session memory."
-          } catch (sessionError) {
-            message += `\nCould not checkpoint the request: ${String(sessionError)}`
-          }
-        }
+        reason += `\n${String(recoveryError)}`
       }
-      if (!signal.aborted) ctx.ui.notify(message, "error")
-      return { action: "handled" }
+      return { action: "reject", reason }
     }
   })
 

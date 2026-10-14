@@ -229,7 +229,7 @@ test("native submission keeps original attachment dimensions when effective auto
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })
 
-test("native image-only steering converts the captured image before queueing it for the intended request", async (t) => {
+test("native image-only steering converts the captured image at delivery for the intended request", async (t) => {
   const response = Promise.withResolvers()
   t.after(() => response.resolve())
   const host = await nativePi(t)
@@ -388,7 +388,7 @@ test("native image delivery preserves earlier images, handler order, and unique 
     data: PNG,
     mimeType: "image/png",
   })
-  assert.equal(host.inputs[0].images.length, 2)
+  assert.equal(host.inputs[0].images.length, 1)
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
 })
 
@@ -640,15 +640,21 @@ test("delayed image delivery uses the submitted references while a newer draft i
 })
 
 test("a native session switch during image preparation retains the old request without sending into the new session", async (t) => {
+  const recordedSessions = []
   const host = await nativePi(t, [], {
     extensionFactories: [
-      (pi) =>
+      (pi) => {
         pi.registerCommand("new-test-session", {
           description: "Switch the native session during an image read",
           handler: async (_args, ctx) => {
             await ctx.newSession()
           },
-        }),
+        })
+        pi.on("message_end", (event, ctx) => {
+          if (event.message.role === "user")
+            recordedSessions.push(ctx.sessionManager.getSessionId())
+        })
+      },
     ],
   })
   const source = join(host.directory, "old-session.png")
@@ -659,16 +665,23 @@ test("a native session switch during image preparation retains the old request w
   const held = holdFileRead(t, snapshotPath(draft))
   host.submit()
   await held.started()
-  await host.runtime.session.prompt("/new-test-session")
-  host.ui.setEditorText("New session's draft")
+  const switching = host.runtime.session.prompt("/new-test-session")
   held.release()
+  await switching
+  host.ui.setEditorText("New session's draft")
   const recovery = await waitFor(() => retainedRequest(host, "Delivery:"))
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(draft))
   assert.notEqual(host.runtime.session.sessionId, sessionId)
   assert.equal(host.ui.getEditorText(), "New session's draft")
   assert.equal(host.requests.length, 0)
-  assert.equal(host.users.length, 0)
+  assert.deepEqual(recordedSessions, [sessionId])
+  assert.equal(host.users[0].content[0].text, draft)
+  assert.equal(
+    host.runtime.session.messages.filter((message) => message.role === "user")
+      .length,
+    0,
+  )
   host.submit("A request in the new session")
   await waitFor(() => assert.equal(host.requests.length, 1))
   const user = host.requests[0].messages.find(

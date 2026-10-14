@@ -185,9 +185,11 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
   const runtime = await createAgentSessionRuntime(createRuntime, {
     cwd: directory,
     agentDir,
-    sessionManager: state.sessionFile
-      ? SessionManager.open(state.sessionFile, undefined, directory)
-      : SessionManager.create(directory, join(agentDir, "sessions")),
+    sessionManager: state.noSession
+      ? SessionManager.inMemory(directory)
+      : state.sessionFile
+        ? SessionManager.open(state.sessionFile, undefined, directory)
+        : SessionManager.create(directory, join(agentDir, "sessions")),
   })
   let input
   let resize
