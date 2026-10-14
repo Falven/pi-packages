@@ -7,6 +7,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent"
 import { GoalStore, goalResult, type Goal, type StoredGoal } from "./state.ts"
+import { createGoalStop } from "./stop.ts"
 
 function displayObjective(objective: string): string {
   return stripVTControlCharacters(objective).replace(/\p{Cc}/gu, " ")
@@ -218,6 +219,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     try {
       const goal = read(ctx)
       if (!eligible(goal)) return
+      stop.install(ctx)
       const candidate = {
         nonce: randomUUID(),
         threadId: goal.threadId,
@@ -244,8 +246,17 @@ export default function piGoal(pi: ExtensionAPI): void {
     revision++
     cancelContinuation()
     present(ctx, goal)
-    if (eligible(goal)) requestContinuation(ctx)
+    if (eligible(goal)) {
+      stop.install(ctx)
+      requestContinuation(ctx)
+    }
   }
+  const stop = createGoalStop((ctx) => {
+    if (lifetime.signal.aborted) return
+    const goal = read(ctx)
+    if (goal?.status === "active")
+      changed(ctx, storage().update(goal, "paused"))
+  })
 
   pi.registerTool({
     name: "get_goal",
@@ -342,6 +353,7 @@ export default function piGoal(pi: ExtensionAPI): void {
           return
         const goal = read(ctx)
         if (!eligible(goal) || goal.generation !== candidate.generation) return
+        stop.install(ctx)
         const activeTools = pi.getActiveTools()
         const hasPlan = pi
           .getAllTools()
@@ -508,9 +520,16 @@ export default function piGoal(pi: ExtensionAPI): void {
     lifetime.abort()
     cancelContinuation()
     running = false
+    runSignal = undefined
     ctx.ui.setStatus("pi-goal", undefined)
     store?.close()
     store = undefined
+    stop.dispose()
+  })
+
+  pi.on("before_agent_start", (_event, ctx) => {
+    if (ctx.sessionManager.getSessionFile() && eligible(read(ctx)))
+      stop.install(ctx)
   })
 
   pi.on("agent_start", (_event, ctx) => {
