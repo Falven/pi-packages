@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite"
 import { join } from "node:path"
 import piGoal from "../src/index.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
+import { toolResponse } from "./tool-response.ts"
 
 const extension = new URL("../src/index.ts", import.meta.url).pathname
 type Host = Awaited<ReturnType<typeof openNativeHost>>
@@ -23,37 +24,7 @@ function response(
   id: string,
   usage: unknown = reported,
 ) {
-  return [
-    {
-      event: {
-        choices: [
-          {
-            index: 0,
-            delta: {
-              role: "assistant",
-              tool_calls: [
-                {
-                  index: 0,
-                  id,
-                  type: "function",
-                  function: { name, arguments: JSON.stringify(args) },
-                },
-              ],
-            },
-            finish_reason: null,
-          },
-        ],
-      },
-    },
-    {
-      event: {
-        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
-        usage,
-      },
-    },
-    { event: "[DONE]" },
-    { end: true } as const,
-  ]
+  return toolResponse(name, args, id, usage)
 }
 
 function answer(usage: unknown = reported) {
