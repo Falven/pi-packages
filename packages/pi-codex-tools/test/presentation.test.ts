@@ -591,3 +591,403 @@ test("input result redaction preserves prior origin observations and controls th
   )
   assert.match(frame, /write_stdin · completed/)
 })
+
+test("a yielded script keeps its original card through late output, failure, collection and reload", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 160,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'text("BEFORE-YIELD"); await yield_control(); await new Promise(resolve => setTimeout(resolve,150)); text("AFTER-YIELD"); throw new Error("LATE-SCRIPT-FAILURE");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start script")
+  const id = output(host).match(/cell ID ([^\n]+)/)?.[1]
+  assert(id)
+  const requests = host.requests.length
+  await setTimeout(250)
+  let frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Execution · failed/)
+  assert.match(frame, /AFTER-YIELD/)
+  assert.match(frame, /LATE-SCRIPT-FAILURE/)
+  assert.equal(host.requests.length, requests)
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: id }, "collect", "functions"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect script")
+  assert.match(output(host, "collect"), /AFTER-YIELD/)
+  assert.doesNotMatch(output(host, "collect"), /BEFORE-YIELD/)
+  frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(
+    frame.split("\n").filter((line) => line.trim() === "AFTER-YIELD").length,
+    1,
+  )
+  await host.reload()
+  await setTimeout(80)
+  frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Execution · failed/)
+  assert.match(frame, /AFTER-YIELD/)
+  assert.doesNotMatch(frame, /interrupted or unknown/)
+})
+
+test("later operations and collected completion remain owned by their originating execution", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 160,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve => setTimeout(resolve,120)); await tools.exec_command({cmd:"printf LATE-OPERATION",login:false}); text("LATE-SCRIPT-NOTE");',
+      "origin",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start later operation")
+  const id = output(host, "origin").match(/cell ID ([^\n]+)/)?.[1]
+  assert(id)
+  host.queueResponse(...call('text("UNRELATED-SCRIPT");', "other"))
+  host.queueResponse(completed)
+  await host.session.prompt("Another prompt")
+  await t.waitFor(
+    () =>
+      assert.match(
+        stripVTControlCharacters(host.screenLines().join("\n")),
+        /LATE-SCRIPT-NOTE/,
+      ),
+    { timeout: 5000, interval: 20 },
+  )
+  let frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Command · completed/)
+  assert.match(frame, /LATE-OPERATION/)
+  assert.match(frame, /LATE-SCRIPT-NOTE/)
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: id }, "collect", "functions"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect later operation")
+  assert.match(output(host, "collect"), /LATE-SCRIPT-NOTE/)
+  await host.reload()
+  await setTimeout(70)
+  frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Command · completed/)
+  assert.match(frame, /LATE-OPERATION/)
+  assert.equal(
+    frame.split("\n").filter((line) => line.trim() === "LATE-SCRIPT-NOTE")
+      .length,
+    1,
+  )
+})
+
+test("explicit termination is shown without duplicating already displayed script output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'text("ONLY-ORIGIN"); await yield_control(); await new Promise(() => {});',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start retained script")
+  const id = output(host).match(/cell ID ([^\n]+)/)?.[1]
+  assert(id)
+  host.queueResponse(
+    ...functionCall(
+      "wait",
+      { cell_id: id, terminate: true },
+      "stop",
+      "functions",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Terminate script")
+  await setTimeout(70)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Execution · terminated/)
+  assert.match(frame, /Execution terminated/)
+  assert.equal(
+    frame.split("\n").filter((line) => line.trim() === "ONLY-ORIGIN").length,
+    1,
+  )
+  await host.reload()
+  await setTimeout(70)
+  assert.match(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /Execution · terminated/,
+  )
+})
+
+test("recorded process failure survives reload after its JavaScript cell was collected", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  const release = join(host.directory, "release")
+  const cmd = `printf 'PROCESS-START\\n'; until test -f '${release}'; do sleep 0.02; done; printf 'LATE-PROCESS-FAILURE\\n'; exit 9`
+  host.queueResponse(
+    ...call(
+      `await tools.exec_command(${JSON.stringify({ cmd, login: false, yield_time_ms: 250 })});`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start independent process")
+  await writeFile(release, "")
+  await setTimeout(150)
+  await host.reload()
+  await setTimeout(70)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Command · failed/)
+  assert.match(frame, /LATE-PROCESS-FAILURE/)
+  assert.match(frame, /Exit status: 9/)
+  assert.doesNotMatch(frame, /interrupted or unknown/)
+})
+
+test("restoration uses the selected branch and does not borrow a terminal result from another branch", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 120,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve=>setTimeout(resolve,150)); text("BRANCH-TERMINAL");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start branch script")
+  const early = host.session.sessionManager.getLeafId()
+  assert(early)
+  await setTimeout(250)
+  const late = host.session.sessionManager.getLeafId()
+  assert(late)
+  assert.notEqual(late, early)
+  await host.reload()
+  await host.session.navigateTree(early, { summarize: false })
+  await host.reload()
+  await setTimeout(80)
+  let frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /interrupted or unknown/)
+  assert.doesNotMatch(frame, /BRANCH-TERMINAL/)
+  await host.session.navigateTree(late, { summarize: false })
+  await host.reload()
+  await setTimeout(80)
+  frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Execution · completed/)
+  assert.match(frame, /BRANCH-TERMINAL/)
+  assert.doesNotMatch(frame, /interrupted or unknown/)
+})
+
+test("recorded completion is restored when a retained session is resumed and forked", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 120,
+    columns: 100,
+    persistSession: true,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve=>setTimeout(resolve,100)); text("RESUMED-OUTCOME");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start resumable script")
+  await setTimeout(200)
+  const file = host.session.sessionManager.getSessionFile()
+  assert(file)
+  const leaf = host.session.sessionManager.getLeafId()
+  assert(leaf)
+  await host.close()
+  const resumed = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 120,
+    columns: 100,
+    sessionFile: file,
+  })
+  await resumed.key("\x0f")
+  await setTimeout(70)
+  let frame = stripVTControlCharacters(resumed.screenLines().join("\n"))
+  assert.match(frame, /Execution · completed/)
+  assert.match(frame, /RESUMED-OUTCOME/)
+  await resumed.runtime.fork(leaf, { position: "at" })
+  await resumed.reload()
+  await setTimeout(70)
+  frame = stripVTControlCharacters(resumed.screenLines().join("\n"))
+  assert.match(frame, /Execution · completed/)
+  assert.match(frame, /RESUMED-OUTCOME/)
+})
+
+test("legacy yielded cards recover recorded status without inventing operation output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) =>
+        event.toolName === "exec" ? { details: null } : undefined,
+      )
+    },
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve=>setTimeout(resolve,80)); throw new Error("LEGACY-TERMINAL");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Read legacy status")
+  await setTimeout(150)
+  await host.reload()
+  await setTimeout(70)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /Execution · failed/)
+  assert.match(frame, /LEGACY-TERMINAL/)
+  assert.doesNotMatch(frame, /Command ·|Exit status:/)
+})
+
+test("cancelling a wait leaves its originating card live and preserves later collection", async (t) => {
+  let waiting: (() => void) | undefined
+  const ready = new Promise<void>((resolve) => {
+    waiting = resolve
+  })
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 120,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_execution_start", (event) => {
+        if (event.toolName === "wait") waiting?.()
+      })
+    },
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await yield_control(); await new Promise(resolve=>setTimeout(resolve,500)); text("AFTER-CANCELLED-WAIT");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start cancellable wait")
+  const id = output(host).match(/cell ID ([^\n]+)/)?.[1]
+  assert(id)
+  host.queueResponse(
+    ...functionCall(
+      "wait",
+      { cell_id: id, yield_time_ms: 5000 },
+      "cancel",
+      "functions",
+    ),
+  )
+  const pending = host.session.prompt("Wait then cancel")
+  await ready
+  await host.session.abort()
+  await pending
+  await setTimeout(70)
+  assert.match(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /Wait cancelled/,
+  )
+  await setTimeout(500)
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: id }, "later", "functions"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect after cancellation")
+  assert.match(output(host, "later"), /AFTER-CANCELLED-WAIT/)
+  await setTimeout(70)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(
+    frame.split("\n").filter((line) => line.trim() === "AFTER-CANCELLED-WAIT")
+      .length,
+    1,
+  )
+  assert.match(frame, /Execution · completed/)
+})
+
+test("clipped incremental script previews restore the same omission and terminal failure", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 800,
+    columns: 80,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'text("PREVIEW-START\\n"+"a".repeat(12000)); await yield_control(); await new Promise(resolve=>setTimeout(resolve,100)); text("b".repeat(12000)); throw new Error("PREVIEW-FAILURE");',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start clipped script")
+  await setTimeout(200)
+  const preview = () =>
+    stripVTControlCharacters(host.screenLines().join("\n"))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) =>
+        /^(?:[ab]+|.*output omitted.*|PREVIEW-START|Error: PREVIEW-FAILURE)$/.test(
+          line,
+        ),
+      )
+      .join("\n")
+  const before = preview()
+  assert.match(before, /output omitted/)
+  assert.match(before, /PREVIEW-FAILURE/)
+  await host.reload()
+  await setTimeout(70)
+  assert.equal(preview(), before)
+})
+
+test("restoring an incomplete process discloses uncertainty without mutating retained records", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'await tools.exec_command({cmd:"printf STILL-RUNNING; sleep 30",login:false,yield_time_ms:250});',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start incomplete process")
+  const records = host.session.sessionManager
+    .getBranch()
+    .filter(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "core-tools.activity",
+    )
+  const saved = structuredClone(records)
+  await host.reload()
+  await setTimeout(80)
+  assert.match(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /Command · interrupted or unknown/,
+  )
+  for (const entry of saved)
+    assert.deepEqual(host.session.sessionManager.getEntry(entry.id), entry)
+})

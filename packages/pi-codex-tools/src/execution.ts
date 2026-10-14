@@ -5,6 +5,7 @@ import { stripVTControlCharacters } from "node:util"
 import { truncateToWidth } from "@earendil-works/pi-tui"
 import {
   boundedPreview,
+  readable,
   createExecutionRenderers,
   type LivePresentation,
   contentHash,
@@ -18,6 +19,7 @@ import type {
   AgentToolResult,
   AgentToolUpdateCallback,
   ExtensionAPI,
+  ExtensionContext,
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent"
 
@@ -43,6 +45,8 @@ type Activity = {
   name?: string
   arguments?: string
   error?: string
+  output?: string
+  replace_output?: boolean
   presentation?: OperationPresentation
 }
 type Journal = {
@@ -93,6 +97,8 @@ type Cell = {
   stopping: Promise<void> | undefined
   events: Activity[]
   eventBytes: number
+  scriptOutput: string
+  scriptOutputReset: boolean
   eventCount: number
   notificationBytes: number
   presentation: ExecutionDetails["execution"]
@@ -131,7 +137,12 @@ function integer(
 
 export class ExecutionCells {
   private readonly presentations = new Map<string, LivePresentation>()
-  readonly renderers = createExecutionRenderers(this.presentations)
+  readonly renderers = createExecutionRenderers(
+    this.presentations,
+    (execution, invalidate) => this.restore(execution, invalidate),
+  )
+  private context: ExtensionContext | undefined
+  private readonly pendingRenders = new Set<() => void>()
   private readonly cells = new Map<string, Cell>()
   private readonly values = new Map<string, string>()
   private readonly workers = new Set<Worker>()
@@ -144,6 +155,14 @@ export class ExecutionCells {
     private readonly processes: ProcessSessions,
   ) {
     pi.registerEntryRenderer<Journal>(journalType, () => undefined)
+    pi.on("session_start", (_event, ctx) => {
+      this.context = ctx
+      for (const invalidate of this.pendingRenders) invalidate()
+      this.pendingRenders.clear()
+    })
+    pi.on("session_tree", (_event, ctx) => {
+      this.context = ctx
+    })
   }
 
   async start(
@@ -211,11 +230,14 @@ export class ExecutionCells {
       stopping: undefined,
       events: [],
       eventBytes: 0,
+      scriptOutput: "",
+      scriptOutputReset: false,
       eventCount: 0,
       notificationBytes: 0,
       presentation: {
         cellId: "",
         parentCallId: parentId,
+        sessionId: ctx.sessionManager.getSessionId(),
         status: "running",
         operations: [],
       },
@@ -349,6 +371,9 @@ export class ExecutionCells {
       cell.status = message.type === "done" ? "completed" : "failed"
       cell.error = message.type === "error" ? message.message : undefined
       cell.accepting = false
+      if (cell.error) cell.presentation.error = boundedPreview(cell.error)
+      else delete cell.presentation.error
+      this.update(cell)
       this.release(cell)
       this.record(cell, {
         type: cell.status,
@@ -608,6 +633,24 @@ export class ExecutionCells {
   }
 
   private appendText(cell: Cell, text: string): Promise<void> {
+    const previous = cell.presentation.output ?? ""
+    const shown = readable(
+      [{ type: "text", text }],
+      cell.presentation.operations,
+    )
+    const output = shown
+      ? boundedPreview(previous + (previous ? "\n" : "") + shown)
+      : previous
+    if (output !== previous) {
+      cell.presentation.output = output
+      if (output.startsWith(previous))
+        cell.scriptOutput += output.slice(previous.length)
+      else {
+        cell.scriptOutput = output
+        cell.scriptOutputReset = true
+      }
+      this.update(cell)
+    }
     cell.writing = cell.writing.then(async () => {
       this.checkParts(cell)
       if (cell.hasText) await cell.text.append("\n")
@@ -684,6 +727,9 @@ export class ExecutionCells {
         ]
           .filter(Boolean)
           .join("\n") || undefined
+      if (cell.error) cell.presentation.error = boundedPreview(cell.error)
+      else delete cell.presentation.error
+      this.update(cell)
       this.record(cell, {
         type: "terminated",
         ...(cell.error ? { error: brief(cell.error) } : {}),
@@ -919,6 +965,7 @@ export class ExecutionCells {
 
   private releasePresentation(cell: Cell): void {
     if (
+      cell.status === "running" ||
       cell.onUpdate ||
       cell.presentation.operations.some(
         (operation) => operation.status === "running",
@@ -928,10 +975,72 @@ export class ExecutionCells {
     this.presentations.delete(cell.id)
   }
 
+  private restore(
+    original: ExecutionDetails["execution"],
+    invalidate: () => void,
+  ): ExecutionDetails["execution"] | undefined {
+    if (!this.context) {
+      this.pendingRenders.add(invalidate)
+      return undefined
+    }
+    const records = this.context?.sessionManager
+      .getBranch()
+      .filter(
+        (entry) =>
+          entry.type === "custom" &&
+          entry.customType === journalType &&
+          (entry.data as Journal)?.cell_id === original.cellId &&
+          (entry.data as Journal)?.parent_call_id === original.parentCallId &&
+          (!original.sessionId ||
+            (entry.data as Journal)?.session_id === original.sessionId),
+      )
+    if (!records?.length) return undefined
+    const execution = structuredClone(original)
+    delete execution.output
+    for (const entry of records) {
+      if (entry.type !== "custom") continue
+      const record = entry.data as Journal
+      execution.status = record.status
+      for (const event of record.events) {
+        if (event.output !== undefined)
+          execution.output = boundedPreview(
+            (event.replace_output ? "" : (execution.output ?? "")) +
+              event.output,
+          )
+        if (event.error && !event.child_id) execution.error = event.error
+        if (event.presentation) {
+          const presentation = structuredClone(event.presentation)
+          const index = execution.operations.findIndex(
+            (operation) => operation.id === presentation.id,
+          )
+          if (index < 0) {
+            if (execution.operations.length >= 8) {
+              execution.operations.shift()
+              execution.omitted = true
+            }
+            execution.operations.push(presentation)
+          } else execution.operations[index] = presentation
+        }
+      }
+    }
+    if (execution.status === "running")
+      execution.status = "interrupted or unknown"
+    for (const operation of execution.operations)
+      if (operation.status === "running") {
+        operation.status = "interrupted or unknown"
+        operation.output = boundedPreview(
+          (operation.output ? operation.output + "\n" : "") +
+            "[Interrupted or unknown]",
+        )
+      }
+    return execution
+  }
+
   private record(cell: Cell, event: Activity): void {
     if (this.closed) return
     if (
       cell.eventCount >= 4096 &&
+      event.type !== "process-completed" &&
       (event.child_id ||
         !["completed", "failed", "terminated"].includes(event.type))
     )
@@ -943,6 +1052,15 @@ export class ExecutionCells {
   }
 
   private flush(cell: Cell): void {
+    if (cell.scriptOutput) {
+      cell.events.push({
+        type: "script-output",
+        output: cell.scriptOutput,
+        ...(cell.scriptOutputReset ? { replace_output: true } : {}),
+      })
+      cell.scriptOutput = ""
+      cell.scriptOutputReset = false
+    }
     if (!cell.events.length || this.closed) return
     this.pi.appendEntry<Journal>(journalType, {
       cell_id: cell.id,
@@ -967,6 +1085,7 @@ export class ExecutionCells {
     this.closed = true
     this.values.clear()
     this.presentations.clear()
+    this.pendingRenders.clear()
     this.cells.clear()
     await Promise.all(
       cells.flatMap((cell) => [cell.text.close(), cell.images.close()]),

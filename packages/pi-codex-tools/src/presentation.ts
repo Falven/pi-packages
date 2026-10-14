@@ -20,7 +20,7 @@ export type PatchDetails = {
 export type OperationPresentation = {
   id: string
   name: string
-  status: "running" | "completed" | "failed"
+  status: "running" | "completed" | "failed" | "interrupted or unknown"
   command?: string
   cwd?: string
   path?: string
@@ -36,7 +36,15 @@ export type ExecutionDetails = {
   execution: {
     cellId: string
     parentCallId: string
-    status: "running" | "completed" | "failed" | "terminated"
+    status:
+      | "running"
+      | "completed"
+      | "failed"
+      | "terminated"
+      | "interrupted or unknown"
+    sessionId?: string
+    output?: string
+    error?: string
     operations: OperationPresentation[]
     omitted?: boolean
   }
@@ -97,7 +105,7 @@ export function boundedPreview(text: string): string {
   )
 }
 
-function readable(
+export function readable(
   content: AgentToolResult<unknown>["content"],
   operations: OperationPresentation[] = [],
 ): string {
@@ -161,7 +169,12 @@ export type LivePresentation = {
 }
 export function createExecutionRenderers(
   live: Map<string, LivePresentation>,
+  restore: (
+    execution: ExecutionDetails["execution"],
+    invalidate: () => void,
+  ) => ExecutionDetails["execution"] | undefined,
 ): ToolRenderers {
+  const owner = {}
   return {
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("Execution")), 0, 0)
@@ -174,23 +187,53 @@ export function createExecutionRenderers(
           details.contentHash === contentHash(result.content, true))
           ? details.execution
           : undefined
+      if (!details && result.content[0]?.type === "text") {
+        const cellId = result.content[0].text.match(
+          /^Script running with cell ID ([^\n]+)/,
+        )?.[1]
+        if (cellId)
+          execution = {
+            cellId,
+            parentCallId: context.toolCallId,
+            status: "running",
+            operations: [],
+          }
+      }
       if (execution) {
+        if (context.state["owner"] !== owner) {
+          delete context.state["execution"]
+          context.state["owner"] = owner
+        }
         const current = live.get(execution.cellId)
         if (current) {
           current.invalidates.clear()
           current.invalidates.add(context.invalidate)
           context.state["execution"] = current.execution
         }
-        execution = context.state["execution"] ?? execution
+        const restored =
+          current || context.state["execution"]
+            ? undefined
+            : restore(execution, context.invalidate)
+        execution =
+          current?.execution ??
+          restored ??
+          context.state["execution"] ??
+          execution
+        if (current || restored) context.state["execution"] = execution
       }
       const operations = execution?.operations ?? []
       const status =
         context.isError ||
+        execution?.status === "failed" ||
         operations.some((operation) => operation.status === "failed")
           ? "failed"
           : operations.some((operation) => operation.status === "running")
             ? "running"
-            : (execution?.status ?? "completed")
+            : operations.some(
+                  (operation) => operation.status === "interrupted or unknown",
+                )
+              ? "interrupted or unknown"
+              : (execution?.status ?? "completed")
       const label =
         operations.length === 1 && operations[0]?.name === "view_image"
           ? "Image"
@@ -212,6 +255,7 @@ export function createExecutionRenderers(
         ),
       ]
       if (options.expanded) {
+        if (!details) lines.push("[Earlier operation details unavailable]")
         for (const operation of operations) {
           lines.push(
             `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name === "apply_patch" ? "Patch" : operation.name} · ${operation.status}`,
@@ -240,8 +284,16 @@ export function createExecutionRenderers(
         }
         if (execution?.omitted)
           lines.push("… [earlier operation details omitted]")
-        const output = readable(result.content, operations)
+        const output = readable(
+          execution?.output !== undefined
+            ? execution.output
+                .split("\n")
+                .map((text) => ({ type: "text" as const, text }))
+            : result.content,
+          operations,
+        )
         if (output) lines.push(boundedPreview(output))
+        if (execution?.error) lines.push(execution.error)
       }
       return new Text(lines.join("\n"), 0, 0)
     },
@@ -256,14 +308,23 @@ export const waitRenderers: ToolRenderers = {
     const error = result.content.findLast((part) => part.type === "text")
     const status = context.isError
       ? error?.type === "text"
-        ? error.text.replace(/^Script error:\n/, "")
+        ? error.text === "Operation aborted"
+          ? "Wait cancelled"
+          : (result.details as ExecutionDetails | undefined)?.execution
+            ? "Execution failed"
+            : error.text.replace(/^Script error:\n/, "")
         : "Execution failed"
       : (result.content[0]?.type === "text"
             ? result.content[0].text
             : ""
           ).startsWith("Script running")
         ? "Execution running"
-        : "Output collected"
+        : result.content[0]?.type === "text" &&
+            result.content[0].text.startsWith("Script terminated")
+          ? "Execution terminated"
+          : context.isPartial
+            ? "Waiting"
+            : "Output collected"
     return new Text(
       theme.fg(context.isError ? "error" : "muted", boundedPreview(status)),
       0,
