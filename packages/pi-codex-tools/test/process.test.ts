@@ -935,6 +935,94 @@ test("normal shutdown awaits pipe children and keeps the active call's partial o
   assert.match(JSON.stringify(retained.content), /PARTIAL/)
 })
 
+test("shutdown releases inherited pipe readers within two seconds and reports incomplete cleanup", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  const spills = await outputDirectory(t, host)
+  const errors: string[] = []
+  await host.session.bindExtensions({
+    onError(error) {
+      if (error.event === "session_shutdown") errors.push(error.error)
+    },
+  })
+  const pidFile = join(host.directory, "owned.pids")
+  const program = join(host.directory, "inherited-pipes.mjs")
+  const partial = "PARTIAL-START\n" + "x".repeat(2 ** 20) + "\nPARTIAL-END\n"
+  await writeFile(
+    program,
+    `
+import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+const child = spawn(process.execPath, ["-e", "setTimeout(() => process.exit(0), 4000)"], { detached: true, stdio: ["ignore", "inherit", "inherit"] });
+writeFileSync(${JSON.stringify(pidFile)}, process.pid + " " + child.pid);
+await new Promise((resolve) => process.stdout.write("PARTIAL-START\\n" + "x".repeat(2 ** 20) + "\\nPARTIAL-END\\n", resolve));
+setTimeout(() => process.exit(0), 6000);
+`,
+  )
+  const session = host.session
+  host.queueResponse(
+    ...call(
+      `text(await tools.exec_command(${JSON.stringify({
+        cmd: `exec node '${program}'`,
+        shell: "/bin/sh",
+        login: false,
+        max_output_tokens: 32,
+      })}));`,
+      "inherited",
+    ),
+  )
+  const running = session.prompt("Start a finite command with inherited pipes")
+  const pids = await readPids(t, pidFile, 2)
+  try {
+    await t.waitFor(async () => {
+      const directories = await readdir(spills)
+      assert.equal(directories.length, 1)
+      assert.equal(
+        (await stat(join(spills, directories[0]!, "output"))).size,
+        Buffer.byteLength(partial),
+      )
+    })
+    const started = performance.now()
+    await host.close()
+    const closedAfter = performance.now() - started
+    await running
+    const elapsed = performance.now() - started
+    t.diagnostic(JSON.stringify({ closedAfter, settledAfter: elapsed, errors }))
+    assert(elapsed < 2750, `Shutdown took ${elapsed.toFixed(0)} ms`)
+    assert.throws(() => process.kill(pids[0]!, 0), { code: "ESRCH" })
+    assert.doesNotThrow(() => process.kill(pids[1]!, 0))
+    assert.equal(errors.length, 1)
+    assert.match(errors[0]!, /Process cleanup incomplete after 1500 ms/)
+    assert.match(errors[0]!, /detached descendants may remain/)
+    const retained = session.messages.find(
+      (message) =>
+        message.role === "toolResult" &&
+        message.toolCallId.startsWith("call_inherited"),
+    )
+    assert(retained?.role === "toolResult")
+    assert.match(JSON.stringify(retained.content), /PARTIAL-START/)
+    assert.match(JSON.stringify(retained.content), /PARTIAL-END/)
+    assert.match(JSON.stringify(retained.content), /tokens truncated/)
+    assert.deepEqual(await readdir(spills), [])
+  } finally {
+    for (const pid of pids) {
+      try {
+        process.kill(-pid, "SIGKILL")
+      } catch (error) {
+        assert.equal((error as NodeJS.ErrnoException).code, "ESRCH")
+      }
+    }
+    await host.close()
+    await running
+    for (const pid of pids)
+      await t.waitFor(() =>
+        assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }),
+      )
+  }
+})
+
 test("a completed PTY ignores late input while returning its unread final output", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],

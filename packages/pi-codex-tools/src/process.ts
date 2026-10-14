@@ -14,6 +14,8 @@ type Process = {
   error?: Error
   write?: (chars: string) => void
   resume?: () => void
+  release?: () => void
+  stopped?: boolean
 }
 
 type CommandOptions = {
@@ -107,6 +109,10 @@ export class ProcessSessions {
           command.stdout.resume()
           command.stderr.resume()
         }
+        child.release = () => {
+          command.stdout.destroy()
+          command.stderr.destroy()
+        }
         command.stdout.setEncoding("utf8").on("data", append)
         command.stderr.setEncoding("utf8").on("data", append)
         command.once("error", (error) => {
@@ -141,15 +147,40 @@ export class ProcessSessions {
   async close(): Promise<void> {
     const children = [...this.processes.values()]
     for (const child of children) this.stop(child)
-    await Promise.all(children.map((child) => child.done))
+    const done = Promise.all(children.map((child) => child.done))
+    let timer: NodeJS.Timeout | undefined
+    const complete = await Promise.race([
+      done.then(() => true),
+      new Promise<false>((resolve) => {
+        // Leave time for public result processing and collection before the cell's 2000 ms deadline.
+        timer = setTimeout(() => resolve(false), 1500)
+      }),
+    ])
+    clearTimeout(timer)
+    const error = complete
+      ? undefined
+      : new Error(
+          "Process cleanup incomplete after 1500 ms; output readers released; detached descendants may remain",
+        )
+    if (error) {
+      for (const child of children) {
+        if (child.exitCode !== undefined) continue
+        child.error ??= error
+        child.release?.()
+      }
+      await done
+    }
     await Promise.allSettled(children.map((child) => child.collected))
     await Promise.all(children.map((child) => child.output.close()))
     this.processes.clear()
+    if (error) throw error
   }
 
   private stop(child: Process): void {
     child.resume?.()
+    if (child.stopped) return
     if (!child.pid) return
+    child.stopped = true
     try {
       process.kill(-child.pid, "SIGKILL")
     } catch (error) {
