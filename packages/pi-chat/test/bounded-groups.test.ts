@@ -203,7 +203,7 @@ test("action summaries combine native categories and distinct paths while execut
     extensionFactories: [
       (pi) => {
         pi.on("tool_execution_update", async (event) => {
-          if (event.toolName !== "bash" || waiting) return
+          if (event.toolCallId !== "action-3") return
           waiting = true
           await gate.promise
         })
@@ -230,7 +230,7 @@ test("action summaries combine native categories and distinct paths while execut
   try {
     await host.key("\r")
     await t.waitFor(() => assert(waiting))
-    assert.match(await host.frame(), /▶ Running printf first-command/)
+    assert.match(await host.frame(), /▶ Running printf second-command/)
   } finally {
     gate.resolve()
   }
