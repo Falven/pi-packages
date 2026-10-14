@@ -40,3 +40,15 @@ The continuation evidence is under `/tmp/pi-goal-engine-probe-hqcuo5vd/20261014-
 The three runtime-context kinds use user role and persisted `goal.internal_context` provenance. Continuation follows the previous final; running-edit and budget context follow the relevant tool output. Each persists into subsequent history without being regenerated for every request. The semantic blocked audit was scripted model behavior; the empty-final safeguard was exercised as runtime behavior.
 
 Reported usage is 100 input, 20 cached input, 12 output, four reasoning tokens, and 112 total per response, yielding 92 chargeable tokens. All seven dedicated goals were cleared, both test engines exited, and the shared configuration and authentication files retained their hashes and modes. No live provider was used. Actual desktop controls, completion-display cleanup, Stop, frontend queue timing, pending-admission races, compaction, reload, forks, provider limits, and execution-failure predicates remain outside this batch. The corresponding Pi implementation and matched captures remain acceptance work; this evidence alone closes no ticket.
+
+## Native terminal startup captures
+
+Three startup checks use Pi 1.1.0 with its unmodified `ProcessTerminal` in an OS PTY, Node 24.13.1, isolated state, and a localhost scripted provider. The public loader loads the goal package alone, before all four companions, and after them. Each run accepts `/goal`, completes ordinary input without creating a goal, accepts `/goal` again, and exits through native Ctrl+D with code zero. Native raw mode, alternate screen, and bracketed paste are entered and restored; extension loading reports no errors.
+
+| Load order | Phoenix trace                      | Verified payload fields |
+| ---------- | ---------------------------------- | ----------------------- |
+| Goal only  | `68b290e2f4934d2dbcabb0cb52c0b67f` | 2                       |
+| Goal first | `a6750020313b40e48b66aa856e866449` | 2                       |
+| Goal last  | `f95bc70b8bf24eb4b865d57789d8fe03` | 2                       |
+
+Evidence is under `/tmp/pi-goal-native-pty-v4kUiXAl`, with runs `20261014-005457-native-17104b19`, `20261014-005507-first-6b17680d`, and `20261014-005507-last-a8096954`. Saved raw terminal output, exact input bytes, lifecycle events, request bodies, response streams, source hashes, and retrieved spans identify the capture as `native-process-terminal-pty-scripted`. All six complete Phoenix payloads and three terminal transcript hashes were independently checked. These runs use package revision `5ecd3297`; they prove startup, ordinary input, and native exit, not goal continuation or Stop. Emulator-specific negotiation and the remaining terminal scenarios are unverified.
