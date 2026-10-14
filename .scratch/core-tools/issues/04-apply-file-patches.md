@@ -6,14 +6,22 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
 
-**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+**Status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
 
 ## Presentation delta
 
-- [ ] Show compact patch action/status and expanded readable file-change outcomes within the parent card, using effective input after argument hooks and actual execution outcomes. Do not display JavaScript orchestration or raw result framing.
-- [ ] Represent creation, update, move, deletion, blocking, validation failure, and partial runtime failure accurately; never infer a successful file change merely from requested patch text.
-- [ ] Retain bounded presentation details through the existing public history mechanism while preserving raw input, result hooks, file coordination, cancellation, and exact model-visible patch results. Do not add a new diff viewer or parse arbitrary shell commands.
-- [ ] Use red-before-green real-host cases with temporary files to verify visible outcomes alongside actual file contents and the subsequent model request, including an argument replacement and a redacted result. Keep changes limited to this package.
+- [x] Show compact patch action/status and expanded readable file-change outcomes within the parent card, using effective input after argument hooks and actual execution outcomes. Do not display JavaScript orchestration or raw result framing.
+- [x] Represent creation, update, move, deletion, blocking, validation failure, and partial runtime failure accurately; never infer a successful file change merely from requested patch text.
+- [x] Retain bounded presentation details through the existing public history mechanism while preserving raw input, result hooks, file coordination, cancellation, and exact model-visible patch results. Do not add a new diff viewer or parse arbitrary shell commands.
+- [x] Use red-before-green real-host cases with temporary files to verify visible outcomes alongside actual file contents and the subsequent model request, including an argument replacement and a redacted result. Keep changes limited to this package.
+
+## Presentation implementation evidence
+
+- A real-host red check first reproduced generic patch names and repeated `{}` results without affected files. The green checks now show completed Add, Update, Move, and Delete outcomes inside the originating execution card, beside actual temporary-file contents and unchanged subsequent model results.
+- Presentation records changes only after successful writes or deletions. A later failed write retains the earlier successful file outcome and omits unexecuted requests. A separate red-to-green self-move check preserves the measured write-then-delete behavior and presents both actual effects rather than implying that a destination remains.
+- Public argument replacement determines the displayed effective path. Blocking and validation failures show their processed errors without claiming changes. Success-result and partial-failure redaction checks suppress stale file metadata while preserving actual file effects and the processed next request.
+- Each patch retains at most sixteen bounded file-change previews and marks omitted earlier details. A real eighteen-file patch verifies the marker and unchanged file effects. Returned success remains `{}`; native dispatch, mutation queues, errors, cancellation, and model conversion remain unchanged.
+- Verification on the workspace's Pi 1.0.2 host: all 69 checks in the focused patch, patch-presentation, and parent-presentation suites pass, including existing queued cancellation, permission, overlap, and symlink coordination cases. Package type checking, package lint, changed-file formatting, and whitespace checks pass. Live configured-terminal and restored-history integration remain ticket 06/07 verification work.
 
 ## Completed baseline
 

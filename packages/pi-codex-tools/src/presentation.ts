@@ -6,6 +6,17 @@ import type {
   ToolRenderers,
 } from "@earendil-works/pi-coding-agent"
 
+export type PatchChange = {
+  action: "Added" | "Updated" | "Moved" | "Deleted"
+  path: string
+  destination?: string
+}
+export type PatchDetails = {
+  contentHash: string
+  patchChanges: PatchChange[]
+  patchOmitted?: boolean
+}
+
 export type OperationPresentation = {
   id: string
   name: string
@@ -15,6 +26,8 @@ export type OperationPresentation = {
   path?: string
   output?: string
   exitCode?: number
+  patchChanges?: PatchChange[]
+  patchOmitted?: boolean
 }
 export type ExecutionDetails = {
   contentHash: string
@@ -79,10 +92,12 @@ function readable(
   return content
     .filter((part) => part.type === "text")
     .map((part) => {
-      const text = part.text.replace(
-        /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
-        "",
-      )
+      const text = part.text
+        .replace(
+          /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
+          "",
+        )
+        .replace(/^Exit code: 1\nWall time: [^\n]+\nOutput:\n/, "")
       // Aggregate truncation loses text boundaries, including serialized image envelopes.
       if (
         text.startsWith("Warning: truncated output") &&
@@ -112,6 +127,11 @@ function readable(
       } catch {
         /* Ordinary script text is already readable. */
       }
+      if (
+        text.split("\n").every((line) => line === "{}") &&
+        operations.some((operation) => operation.patchChanges)
+      )
+        return ""
       return text
     })
     .filter(Boolean)
@@ -141,9 +161,11 @@ export const executionRenderers: ToolRenderers = {
         ? "Image"
         : operations.length === 1 && operations[0]?.name === "exec_command"
           ? "Command"
-          : operations.length
-            ? `${operations.length} operations`
-            : "Execution"
+          : operations.length === 1 && operations[0]?.name === "apply_patch"
+            ? "Patch"
+            : operations.length
+              ? `${operations.length} operations`
+              : "Execution"
     const lines = [
       theme.fg(
         status === "failed"
@@ -157,14 +179,26 @@ export const executionRenderers: ToolRenderers = {
     if (options.expanded) {
       for (const operation of operations) {
         lines.push(
-          `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name} · ${operation.status}`,
+          `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name === "apply_patch" ? "Patch" : operation.name} · ${operation.status}`,
         )
         if (operation.command !== undefined)
           lines.push(`$ ${operation.command}`)
         if (operation.cwd !== undefined)
           lines.push(`Directory: ${operation.cwd}`)
         if (operation.path !== undefined) lines.push(`Path: ${operation.path}`)
-        if (operation.output) lines.push(operation.output)
+        for (const change of operation.patchChanges ?? [])
+          lines.push(
+            `${change.action}: ${change.path}${change.destination ? ` → ${change.destination}` : ""}`,
+          )
+        if (operation.patchOmitted)
+          lines.push("… [earlier file changes omitted]")
+        if (operation.output)
+          lines.push(
+            operation.output.replace(
+              /^Exit code: 1\nWall time: [^\n]+\nOutput:\n/,
+              "",
+            ),
+          )
         if (operation.exitCode !== undefined)
           lines.push(`Exit status: ${operation.exitCode}`)
       }
