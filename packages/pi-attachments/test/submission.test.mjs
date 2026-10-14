@@ -5,6 +5,7 @@ import { test } from "node:test"
 import { fileURLToPath } from "node:url"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { holdFileRead, retainedRequest } from "../fixtures/native-pi.mjs"
+import { nativePi } from "../fixtures/native-pi.mjs"
 import piAttachments from "../src/index.ts"
 import { fileReferences } from "../src/references.ts"
 
@@ -20,6 +21,20 @@ function userText(request) {
     .content.filter(({ type }) => type === "text")
     .map(({ text }) => text)
     .join("\n")
+}
+
+for (const composer of [false, true]) {
+  test(`${composer ? "composer" : "native"} plain-text Send clears before immediately typed text`, async (t) => {
+    const host = await nativePi(t, composer ? [composerPath] : [])
+    host.ui.setEditorText("First")
+    host.submit()
+    host.input("N")
+    assert.equal(host.ui.getEditorText(), "N")
+    await t.waitFor(() => assert.equal(host.requests.length, 1))
+    assert.equal(userText(host.requests[0]), "First")
+    await t.waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+    assert.equal(host.ui.getEditorText(), "N")
+  })
 }
 
 for (const composer of [false, true]) {

@@ -676,6 +676,13 @@ export function registerEditor(
             : followUp
               ? "followUp"
               : "steer"
+          if (
+            !handlers.hasPending(snapshot.identity) &&
+            !submissions.has(route)
+          )
+            return followUp
+              ? originalFollowUp()
+              : originalSubmitValue.call(editor)
           const sessionFile = ctx.sessionManager.getSessionFile()
           const request: AttachmentSubmission = {
             ...snapshot,
@@ -759,6 +766,8 @@ export function registerEditor(
                   )
               } finally {
                 if (!stopped) ctx.ui.setStatus("attachment-send", undefined)
+                if (submissions.get(route) === submitted)
+                  submissions.delete(route)
               }
             },
           )
