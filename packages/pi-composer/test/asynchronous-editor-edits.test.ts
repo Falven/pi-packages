@@ -121,13 +121,36 @@ test("a captured edit cannot cross a session switch", async (t) => {
   assert.equal(edit.replace("wrong.txt"), false)
 })
 
+test("a frozen composer insertion preserves formatted selection semantics without editing a later draft", async (t) => {
+  const host = await openAttachmentEditor(t)
+  host.ui.setEditorText("Keep **old**")
+  for (let index = 0; index < 3; index++) {
+    // eslint-disable-next-line no-await-in-loop -- Selection changes follow terminal input order.
+    await host.key("\x1b[1;2D")
+  }
+  const draft = host.access.snapshot()
+  const edit = host.access.captureEdit(draft.range.from, draft.range.to)
+  const frozen = edit.snapshot()
+  assert.ok(frozen)
+  await host.key("\x1b[109;10u")
+  host.ui.setEditorText("Later draft")
+  const patches = frozen.insert("\n[Attachment: new](</tmp/retained>)\n")
+  let prepared = draft.text
+  for (const patch of patches.toSorted((left, right) => right.from - left.from))
+    prepared =
+      prepared.slice(0, patch.from) + patch.text + prepared.slice(patch.to)
+  assert.equal(prepared, "Keep \n[Attachment: new](</tmp/retained>)\n")
+  assert.equal(host.ui.getEditorText(), "Later draft")
+})
+
 for (const composer of [false, true]) {
   test(`${composer ? "composer" : "native"} pending insertion exposes its current range and can be cancelled`, async (t) => {
     const host = await openAttachmentEditor(t, { composer })
     host.ui.setEditorText("Draft")
     const insertion = host.access.captureEdit(5, 5)
     await host.type("!")
-    assert.deepEqual(insertion.snapshot(), { from: 6, to: 6 })
+    assert.equal(insertion.snapshot()?.from, 6)
+    assert.equal(insertion.snapshot()?.to, 6)
     assert.equal(insertion.replace(" [note](retained.txt)"), true)
     assert.equal(host.ui.getEditorText(), "Draft! [note](retained.txt)")
     assert.equal(insertion.snapshot(), undefined)

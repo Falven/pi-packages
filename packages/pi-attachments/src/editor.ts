@@ -13,6 +13,9 @@ import type {
 } from "@earendil-works/pi-tui"
 
 type Range = { from: number; to: number }
+type Insertion = Range & {
+  insert(text: string): (Range & { text: string })[]
+}
 export type AttachmentDraftSnapshot = {
   identity: object
   text: string
@@ -25,7 +28,7 @@ export type AttachmentSubmission = AttachmentDraftSnapshot & {
   streamingBehavior?: "steer" | "followUp"
 }
 export type AttachmentEditorEdit = {
-  snapshot(): Range | undefined
+  snapshot(): Insertion | undefined
   cancel(): void
   replace(text: string): boolean
 }
@@ -61,6 +64,7 @@ type ComposerEditor = PromptEditor & {
     from: number,
     to: number,
   ): { cancel(): void; replace(text: string): boolean }
+  captureInsertion(from: number, to: number): Insertion["insert"]
   submitDraft(): void
   onDraftChange: ((text: string, origin?: string) => void) | undefined
 }
@@ -80,6 +84,7 @@ type NativeEditor = PromptEditor & {
   navigateHistory(direction: number): void
   submitValue(): void
   expandPasteMarkers(text: string): string
+  normalizeText(text: string): string
   cancelAutocomplete(): void
   exitHistoryBrowsing(): void
   pushUndoSnapshot(): void
@@ -498,10 +503,27 @@ export function registerEditor(
                 pendingEdits.delete(edit)
                 edit.operation?.cancel()
               },
-              snapshot: () =>
-                !stopped && pendingEdits.has(edit)
-                  ? { from: edit.from, to: edit.to }
-                  : undefined,
+              snapshot() {
+                if (stopped || !pendingEdits.has(edit)) return undefined
+                const { from: start, to: end } = edit
+                return {
+                  from: start,
+                  to: end,
+                  insert: composer
+                    ? composer.captureInsertion(start, end)
+                    : (replacement) =>
+                        replacement
+                          ? [
+                              {
+                                from: start,
+                                to: end,
+                                // Public insertion normalizes text but would mutate the live draft.
+                                text: native!.normalizeText(replacement),
+                              },
+                            ]
+                          : [],
+                }
+              },
               replace(replacement) {
                 if (
                   !pendingEdits.delete(edit) ||
@@ -724,7 +746,10 @@ export function registerEditor(
         })
         const detach = handlers.attach(editor, access, ctx, tui)
         if (detach) restorations.push(detach)
-        handlers.change(access, ctx)
+        // Native dialog restoration may still copy its saved text in this stack.
+        queueMicrotask(() => {
+          if (!stopped) handlers.change(access, ctx)
+        })
         const change = editor.onChange
         const draftChange = composer?.onDraftChange
         const submitValue = Reflect.get(editor, submitName)
@@ -786,16 +811,9 @@ export function registerEditor(
                 installed?.attached()
               )
                 installed.reinsert(customPrompt.state)
-              if (selected !== component || !installed?.attached()) {
-                installed?.dispose()
-                installed = undefined
-                selected = undefined
-              }
-              // Native custom-dialog restoration copies saved text after reinserting the editor.
-              queueMicrotask(() => {
-                if (!ended && observed.children.includes(component))
-                  attach(component)
-              })
+              // Wiring is complete here; input may follow setEditorComponent synchronously.
+              if (!ended && observed.children.includes(component))
+                attach(component)
             }
             return result
           }

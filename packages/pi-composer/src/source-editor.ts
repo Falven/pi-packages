@@ -209,6 +209,33 @@ export class SourceEditor extends CustomEditor {
     }
   }
 
+  captureInsertion(
+    from: number,
+    to: number,
+  ): (text: string) => { from: number; to: number; text: string }[] {
+    const source = this.getText()
+    const formatted = this.formatted
+    const width = this.sourceWidth
+    return (text) => {
+      if (!text) return []
+      text = text.replace(/\r\n?/g, "\n")
+      if (!formatted || from === to) return [{ from, to, text }]
+      const edit = new Projection(source, width, true).replace(from, to, text)
+      const removed: SourceRange[] = []
+      for (const range of edit.removed.toSorted((a, b) => a.from - b.from)) {
+        const previous = removed.at(-1)
+        if (previous && range.from <= previous.to)
+          previous.to = Math.max(previous.to, range.to)
+        else removed.push({ ...range })
+      }
+      return removed.map((range, index) => ({
+        from: range.from,
+        to: range.to,
+        text: index === 0 ? text : "",
+      }))
+    }
+  }
+
   override invalidate(): void {
     super.invalidate()
     this.projection = undefined
