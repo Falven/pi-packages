@@ -73,19 +73,29 @@ test("the outgoing request declares the frozen raw execution contract", async (t
     { ...declared, description: undefined },
     { ...shape, description: undefined },
   )
-  assert(
-    declared.description.includes(
-      frozen.split("### `exec_command`\n")[1].split("\n### `")[0],
-    ),
-  )
+  for (const name of ["exec_command", "apply_patch"])
+    assert(
+      declared.description.includes(
+        frozen.split(`### \`${name}\`\n`)[1].split("\n### `")[0],
+      ),
+    )
   assert.doesNotMatch(
     declared.description,
-    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|view_image|write_stdin)`/,
+    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|view_image|write_stdin)`/,
   )
   assert.match(declared.description, /completed scripts/i)
   assert.equal(
     request.tools.some((tool) =>
-      ["bash", "grep", "find", "ls", "exec_command"].includes(tool.name),
+      [
+        "bash",
+        "grep",
+        "find",
+        "ls",
+        "exec_command",
+        "edit",
+        "write",
+        "apply_patch",
+      ].includes(tool.name),
     ),
     false,
   )
@@ -379,11 +389,13 @@ test("excluded or extension-owned command tools cannot be bypassed through execu
         },
       })
       host.queueResponse(
-        ...call("text(ALL_TOOLS); text(typeof tools.exec_command);"),
+        ...call(
+          "text(ALL_TOOLS.map(({name}) => name)); text(typeof tools.exec_command);",
+        ),
       )
       host.queueResponse(completed)
       await host.session.prompt("Keep the selected tools")
-      assert.match(output(host), /\[\]\nundefined/)
+      assert.match(output(host), /\["apply_patch"\]\nundefined/)
       const request = host.requests[0] as unknown as {
         tools: {
           name: string

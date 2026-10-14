@@ -199,6 +199,12 @@ test("patch matching follows the measured priority and preserves unrelated bytes
       hunk: "@@\n-first",
       after: "",
     },
+    {
+      name: "large unchanged prefix",
+      before: "keep\n".repeat(200000) + "old\n",
+      hunk: "@@\n-old\n+new",
+      after: "keep\n".repeat(200000) + "new\n",
+    },
   ]
   for (const sample of cases) {
     await t.test(sample.name, async (caseContext) => {

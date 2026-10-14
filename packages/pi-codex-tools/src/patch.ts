@@ -225,7 +225,8 @@ function update(
       throw new Error(
         `apply_patch verification failed: Failed to find expected lines in ${operation.path}:\n${expected.join("\n")}`,
       )
-    result.push(...source.slice(cursor, index))
+    for (let unchanged = cursor; unchanged < index; unchanged++)
+      result.push(source[unchanged]!)
     for (const line of hunk.lines) {
       if (line.kind === "+") result.push({ text: line.text, ending })
       else {
@@ -235,7 +236,7 @@ function update(
     }
     cursor = index
   }
-  result.push(...source.slice(cursor))
+  for (; cursor < source.length; cursor++) result.push(source[cursor]!)
   return result.map((line) => line.text + (line.ending || ending)).join("")
 }
 
