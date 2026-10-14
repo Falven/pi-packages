@@ -34,6 +34,8 @@ const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
 const BMP =
   "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA=="
+const TALL_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAIAAAAW4yFwAAAADUlEQVR4nGP4zwAC/wEIAAH/2ZC7NQAAAABJRU5ErkJggg=="
 const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
@@ -513,6 +515,84 @@ test("effective image width caps native preview graphics without recapturing the
   assert.equal(host.ui.getEditorText(), draft)
   assert.deepEqual(await readFile(path), bytes)
 })
+
+test("Pi standard settings offers the registered attachment thumbnail sizes", async (t) => {
+  const host = await nativePi(t)
+  const setting = host.runtime.session.extensionRunner
+    .getExtensionSettings()
+    .find(({ id }) => id === "pi-attachments.thumbnailSize")
+  assert.ok(setting)
+  assert.equal(
+    host.runtime.session.settingsManager.getExtensionSetting(setting),
+    "medium",
+  )
+  host.submit("/settings")
+  await waitFor(() => assert.match(host.render(), /Auto-compact/))
+  for (const character of setting.label) host.input(character)
+  await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
+  host.input("\r")
+  assert.equal(
+    host.runtime.session.settingsManager.getExtensionSetting(setting),
+    "large",
+  )
+})
+
+for (const [shape, image, expected] of [
+  ["wide", PNG, { small: [8, 2], medium: [16, 4], large: [32, 8] }],
+  ["tall", TALL_PNG, { small: [2, 2], medium: [4, 4], large: [8, 8] }],
+]) {
+  test(`${shape} native thumbnails follow the effective size and width ceilings without changing the snapshot`, async (t) => {
+    const caps = getCapabilities()
+    setCapabilities({ ...caps, images: "kitty" })
+    t.after(() => setCapabilities(caps))
+    const host = await nativePi(t, [], {
+      settings: { images: { autoResize: false } },
+    })
+    const source = join(host.directory, `${shape}.png`)
+    const bytes = Buffer.from(image, "base64")
+    await writeFile(source, bytes)
+    await host.runtime.session.prompt(`/attach-file ${source}`)
+    const draft = host.ui.getEditorText()
+    const path = snapshotPath(draft)
+    const dimensions = () => {
+      host.render()
+      const match = /\x1b_Ga=p,[^;]*c=(\d+),r=(\d+)/.exec(host.output)
+      assert.ok(match, "native preview emitted image graphics")
+      return [Number(match[1]), Number(match[2])]
+    }
+
+    assert.deepEqual(await waitFor(dimensions), expected.medium)
+    for (const size of ["small", "large", "medium"]) {
+      host.runtime.session.settingsManager.applyOverrides({
+        extensionSettings: { "pi-attachments.thumbnailSize": size },
+      })
+      // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
+      assert.deepEqual(await waitFor(dimensions), expected[size])
+    }
+    host.runtime.session.settingsManager.applyOverrides({
+      extensionSettings: { "pi-attachments.thumbnailSize": "large" },
+      terminal: { imageWidthCells: 6 },
+    })
+    assert.ok((await waitFor(dimensions))[0] <= 6)
+    host.runtime.session.settingsManager.applyOverrides({
+      terminal: { imageWidthCells: 60 },
+    })
+    host.resize(14, 40)
+    for (const size of ["small", "medium", "large"]) {
+      host.runtime.session.settingsManager.applyOverrides({
+        extensionSettings: { "pi-attachments.thumbnailSize": size },
+      })
+      // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
+      await waitFor(() => {
+        const [columns, rows] = dimensions()
+        assert.ok(columns <= Math.min(14, expected[size][0]))
+        assert.ok(rows <= expected[size][1])
+      })
+    }
+    assert.equal(host.ui.getEditorText(), draft)
+    assert.deepEqual(await readFile(path), bytes)
+  })
+}
 /* eslint-enable no-control-regex */
 
 test("a delayed image preview cannot replace previews for the current draft", async (t) => {

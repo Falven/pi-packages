@@ -19,6 +19,13 @@ import {
 } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 
+const THUMBNAIL_SETTING = "pi-attachments.thumbnailSize"
+const THUMBNAIL_BOUNDS = {
+  small: { columns: 12, rows: 2 },
+  medium: { columns: 24, rows: 4 },
+  large: { columns: 48, rows: 8 },
+}
+
 export function attachmentReferences(text: string, storage: string) {
   const references: { path: string; from: number; to: number }[] = []
   for (const match of text.matchAll(/\[Attachment: [^[\]]+\]\(<([^<>]+)>\)/g)) {
@@ -67,6 +74,17 @@ export function registerImages(
   storage: string,
   signal: AbortSignal,
 ): void {
+  pi.registerSetting({
+    id: THUMBNAIL_SETTING,
+    label: "Attachment thumbnail size",
+    description: "Maximum width and height of attachment previews",
+    defaultValue: "medium",
+    values: [
+      { value: "small", label: "Small" },
+      { value: "medium", label: "Medium" },
+      { value: "large", label: "Large" },
+    ],
+  })
   registerRecovery(pi, storage, signal)
   pi.on("input", async (event, ctx) => {
     const paths = attachmentPaths(event.text, storage)
@@ -149,7 +167,15 @@ export function registerImages(
     ctx.ui.setWidget("pi-attachments", (tui, theme) => {
       const previews = new Map<
         string,
-        { image: Image; fallback: string } | string | null
+        | {
+            data: string
+            mimeType: string
+            image?: Image
+            size?: string
+            fallback: string
+          }
+        | string
+        | null
       >()
       async function loadPreview(path: string) {
         try {
@@ -159,8 +185,8 @@ export function registerImages(
               Buffer.from(image.data, "base64"),
               image.mimeType,
               {
-                maxWidth: 320,
-                maxHeight: 160,
+                maxWidth: 640,
+                maxHeight: 320,
               },
             )
             if (!thumbnail)
@@ -168,16 +194,8 @@ export function registerImages(
             const png = await convertToPng(thumbnail.data, thumbnail.mimeType)
             if (!png) throw new Error("Could not convert the image for preview")
             previews.set(path, {
-              image: new Image(
-                png.data,
-                png.mimeType,
-                { fallbackColor: (text) => theme.fg("dim", text) },
-                {
-                  filename: basename(path),
-                  maxWidthCells: 24,
-                  maxHeightCells: 4,
-                },
-              ),
+              data: png.data,
+              mimeType: png.mimeType,
               fallback: imageFallback(
                 png.mimeType,
                 getImageDimensions(png.data, png.mimeType) ?? undefined,
@@ -201,10 +219,16 @@ export function registerImages(
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
           const settings = pi.getSettings()
+          const selectedSize = pi.getSetting(THUMBNAIL_SETTING)
+          const size: keyof typeof THUMBNAIL_BOUNDS =
+            selectedSize === "small" || selectedSize === "large"
+              ? selectedSize
+              : "medium"
+          const bounds = THUMBNAIL_BOUNDS[size]
           const showImages = settings.terminal?.showImages ?? true
           const configuredWidth = settings.terminal?.imageWidthCells
           const imageWidth = Math.min(
-            24,
+            bounds.columns,
             typeof configuredWidth === "number" &&
               Number.isFinite(configuredWidth)
               ? Math.max(1, Math.floor(configuredWidth))
@@ -240,6 +264,23 @@ export function registerImages(
                   .visualLines,
               )
             } else if (preview) {
+              let image = preview.image
+              if (!image || preview.size !== size) {
+                const imageId = image?.getImageId()
+                image = new Image(
+                  preview.data,
+                  preview.mimeType,
+                  { fallbackColor: (text) => theme.fg("dim", text) },
+                  {
+                    filename: basename(path),
+                    maxWidthCells: bounds.columns,
+                    maxHeightCells: bounds.rows,
+                    ...(imageId === undefined ? {} : { imageId }),
+                  },
+                )
+                preview.image = image
+                preview.size = size
+              }
               // Native hyperlinks need text cells beneath the image graphics.
               const graphics = showImages && capabilities.images
               const cells = graphics
@@ -247,7 +288,7 @@ export function registerImages(
                 : ""
               lines.push(
                 ...(graphics
-                  ? preview.image.render(Math.min(width, imageWidth + 2))
+                  ? image.render(Math.min(width, imageWidth + 2))
                   : truncateToVisualLines(
                       theme.fg("dim", preview.fallback),
                       1,
@@ -262,7 +303,7 @@ export function registerImages(
         invalidate() {
           for (const preview of previews.values()) {
             if (preview && typeof preview !== "string")
-              preview.image.invalidate()
+              preview.image?.invalidate()
           }
         },
       }
