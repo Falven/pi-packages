@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Account for usage and budgets.
 
-**Status:** in progress — public preservation behavior passes the real-session regression suite; conditional inheritance, deletion notifications, actual-client provenance, and final captures remain open.
+**Status:** partial — public preservation behavior and captures verified; conditional inheritance, deletion notifications, actual-client provenance, and the native active-EOF limit remain open.
 
 - [x] Reopen each saved goal with its objective, effective status, allowance, counters, timestamps, ownership, and generation intact. Restoring an active loaded session can admit eligible continuation; inactive statuses remain inactive and downtime adds no elapsed usage.
 - [x] Preserve the current durable goal through compaction and history rewind. Do not replay a historical goal event into current state, reset accounting, refund consumed tokens, or resurrect a cleared objective from transcript history.
@@ -18,7 +18,7 @@
 - [x] Verify extension removal separately from pausing or clearing a goal while loaded. Removing a command handler can leave a host-retained continuation command without a cancellation handle. Preserve the reproduced limitation unless a public solution is demonstrated; do not describe loaded pause/clear tests as proof of removal safety.
 - [ ] Clear or delete current goal and deferral records at supported lifecycle boundaries while retaining the required conversation history. Verify the host's deletion notification before claiming automatic orphan cleanup.
 - [ ] Verify active and inactive restoration, compaction, rewind, source/target fork races, missing baselines, hidden versus unloaded runtimes, and all supported disposal modes through real sessions. A public capability gap remains an explicit blocker for the affected behavior.
-- [ ] Capture lifecycle-related instructions, persisted counters, continuation admission, and subsequent provider requests in Phoenix. Distinguish actual-client, scripted, and replay evidence, verify retrieval, and record the material results here.
+- [x] Capture lifecycle-related instructions, persisted counters, continuation admission, and subsequent provider requests in Phoenix. Distinguish actual-client, scripted, and replay evidence, verify retrieval, and record the material results here.
 - [x] Preserve Pi source and installed files, native ownership, neutral terminology, and the chosen public integration boundary; complete the relevant checks without claiming unsupported lifecycle coverage.
 
 ## Real-session preservation coverage
@@ -46,7 +46,20 @@ All 20 cases pass on primary Pi 1.1 source `6fb2e7815167e6b19006fc526d1a5d0f5f99
   --test packages/pi-goal/test/preservation.test.ts
 ```
 
-The fixture uses native session behavior with a recording terminal or headless bindings. It does not establish actual process exit, RPC, print, or JSON lifetime acceptance. Those final process checks remain assigned to ticket 07. The native command reload is covered; a bare headless `session.reload()` with no UI, command, shutdown, or error bindings does not emit the same reinitialization events and is not treated as an equivalent lifecycle.
+The fixture uses native session behavior with a recording terminal or headless bindings. [Ticket 07](07-phoenix-terminal-acceptance.md) supplies separate actual-process evidence for terminal, RPC, print, and JSON lifetimes, including the native active-EOF limit. The native command reload is covered; a bare headless `session.reload()` with no UI, command, shutdown, or error bindings does not emit the same reinitialization events and is not treated as an equivalent lifecycle. The final integrated goal suite passes all 177 cases, including these 20 preservation cases.
+
+## Native preservation captures
+
+Four scenarios at frozen production revision `f89f03aecb18736432c1cc3f81e76390993b7106` make 47 endpoint requests across 51 Phoenix spans. All 102 full input/output fields were independently retrieved and matched as strings, SHA-256 hashes, and byte counts: 6,777,686 bytes. The five production files and shared fixture match their committed hashes. The evidence root is `/tmp/pi-goal-preservation-capture.mPUNn8/20261014T072735014Z-b7cea3c1`.
+
+| Scenario                               | Phoenix trace                      | Verified result                                                                                                                                              |
+| -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Shutdown and restoration               | `2418ed643a8608383e9579fbf62addc5` | Active state retains 92 tokens and four seconds. An unloaded hour adds no time. Reopening admits one continuation, then explicit pause preserves the cutoff. |
+| Active manual compaction               | `882dd7be846a11a4aeab3c7114023c09` | Existing 92 tokens plus 92 reported summary tokens reach 184. An automatic read sees 184 without an edit or resume; pause retains it.                        |
+| History rewind and clear               | `22e991688ab60435bb1d4632e51fb9fb` | Rewind preserves the current edited objective and paused 184-token record. Clear followed by older history returns no goal.                                  |
+| Switch, retaining reload, generic fork | `44878ed79ca2fa505baa1faaabedc073` | Source and target remain independent; reload admits once, unloaded time is excluded, and a generic fork starts without a goal.                               |
+
+Forty-six endpoint requests match public request observations and have parsed response events. One standalone summary bypasses both ordinary public hooks; its endpoint request, scripted response, and successful combined usage report are retained without inventing hook correlation. These captures use a local scripted provider and native sessions. They establish neither actual-client provenance nor conditional inheritance. Shared files remained unchanged. The earlier recorder attempt is retained separately with its observer-count failure and excluded from acceptance.
 
 ## Remaining capability and evidence gates
 
@@ -56,5 +69,4 @@ The fixture uses native session behavior with a recording terminal or headless b
 - Successful public compaction reports may aggregate multiple internal summary calls. This verifies the stable active-goal total, not creation or pause cutoffs inside that aggregate or missing usage from an aborted summary. Ticket 04 records the accounting limit.
 - Loaded pause, clear, and Stop are verified separately from extension removal. Ticket 03 retains the reproduced host-command limitation after its handler is removed. This suite adds no private queue access or removal-safety claim.
 - Source/target late-event accounting already has ownership and generation checks. Exact inherited-copy races and deferred targets cannot be accepted until the required conditional mode has a demonstrated public path.
-
-Four bounded preservation captures are prepared in `/tmp/pi-goal-preservation-capture.mPUNn8/capture.mjs`: shutdown/restoration, active manual compaction after raw interruption, history rewind/clear, and a combined session-switch/reload/generic-fork scenario. They will run after tickets 05 and 06 are integrated and source hashes are frozen. They preserve native requests, scripted and parsed provider responses, current context, lifecycle ownership, goal snapshots, and the reported compaction aggregate; full Phoenix field retrieval remains pending.
+- Native RPC EOF can disconnect before an unfinished assistant settles. A fresh command-created goal can therefore retain its SQLite row without a session JSONL file. Ticket 07 reproduces the lost assistant boundary through the unchanged native CLI with no goal extension. Settling an explicit abort before EOF preserves the assistant. This host limitation prevents claiming every active-EOF goal is reopenable.

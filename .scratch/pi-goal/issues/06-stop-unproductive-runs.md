@@ -4,7 +4,7 @@
 
 **Dependency:** 04: Account for usage and budgets, integrated.
 
-**Status:** in-progress; supported public paths implemented, missing classifications and capture acceptance remain open.
+**Status:** partial — supported public paths and captures verified; unavailable activity, execution, and provider classifications remain open.
 
 - [x] Block a goal after the specified three consecutive automatic turns with an empty final and no qualifying activity. Record automatic-turn identity only after admission; a rejected or ordinary user turn is not an automatic empty attempt.
 - [ ] Preserve the observed activity definition for text, reasoning summaries, questions, all delivered tool outcomes, and other completed turn items. A missing final is not an empty final; blank text needs a final or absent phase. Preserve latched activity and empty-final flags. Do not infer emptiness from visible chat rendering alone.
@@ -17,7 +17,7 @@
 - [x] Resolve stop ownership from the current turn's accounting binding, then guard the persisted mutation by session and generation. Activation/replacement can rebind an ongoing turn; stale goal-bound writes cannot stop another generation. Do not infer planning or specialized child modes from prompt wording.
 - [x] Stop future automatic continuation and expose the effective reason in stored state, model results, and native controls. Preserve eligible final accounting and the existing resume actions without fabricating separate goal pause, blocked, or usage-limit templates.
 - [ ] Verify threshold boundaries, counter resets, nonqualifying outcomes, retry exhaustion, quota failures, budget precedence, explicit resume, and stale events through controlled responses in real Pi sessions. Do not deliberately exhaust a paid provider quota for a test.
-- [ ] Capture failure and recovery exchanges in Phoenix with explicit evidence origin. Scripted failure responses and bundled-runtime checks remain distinguishable from actual-client observations; retrieve captures and record any unsupported error or mode classification here.
+- [x] Capture failure and recovery exchanges in Phoenix with explicit evidence origin. Scripted failure responses and bundled-runtime checks remain distinguishable from actual-client observations; retrieve captures and record any unsupported error or mode classification here.
 - [x] Keep public extension integration, unchanged Pi files, neutral terminology, and relevant validation intact. Mark unsupported stop predicates or missing evidence as pending rather than broadening the behavior silently.
 
 ## Public runtime classification evidence
@@ -65,15 +65,31 @@ The immutable executed-handler provenance needed for the separate orchestration-
 
 Transports that discard structured quota codes or response identities cannot produce a confirmed usage-limit classification. Successful compaction exposes combined usage only at completion; partial or aborted summary requests and activation between internal summary requests lack the required public reporting granularity. No synthetic report fills those gaps.
 
-Failure and recovery captures remain pending against the frozen implementation. Existing public probes establish integration capabilities; they do not substitute for package tests or matched client observations.
+The five package captures below verify the supported failure and recovery paths against the frozen implementation. They do not establish unavailable classifications or actual-client behavior.
+
+## Native guard captures
+
+The evidence root is `/private/tmp/pi-goal-guard-capture-i6ox7ajy/20261014T072705813Z-c8859e53`, at frozen production revision `f89f03aecb18736432c1cc3f81e76390993b7106`. Five scenarios make 27 requests across 32 Phoenix spans. Independent retrieval verified all 64 full fields, totaling 5,029,679 bytes, against saved strings, SHA-256 hashes, and byte counts. Request wire bytes and the 27 saved response bodies were also checked; 14 reference response bodies were replayed byte-for-byte.
+
+| Scenario                   | Phoenix trace                      | Verified result                                                                                                             |
+| -------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Empty finals and resume    | `dc0261504e091a2b183c1de505324881` | Three empty automatic attempts block at 276 tokens. Explicit resume starts a fresh three-attempt sequence, blocking at 552. |
+| Retry exhaustion           | `5023ea22e5c64e82b19eb917c8c5e2d1` | Three failed requests exhaust native retries inside one outer run; the goal becomes blocked with zero charged tokens.       |
+| Retry recovery             | `7250c19c72a11fa8725b1288b8ebadc9` | The third request succeeds; the goal remains active at 92 tokens until explicit pause.                                      |
+| Quota after budget         | `76521cc826e3e29bace7299663c39d92` | A matching structured quota changes `budgetLimited` to `usageLimited`, preserving 184 tokens against a 100-token allowance. |
+| Unrelated background quota | `71ee464f98a0e996c483de4908c300f1` | A different response ID prevents quota attribution. The ordinary foreground terminal error blocks the goal with zero usage. |
+
+All 27 requests have public request observations. The captures retain 22 response-metadata events, 63 stream events, 26 persisted turn-end messages, seven tool exchanges, 19 agent starts, and 15 outer settlements. Five HTTP failures have no public stream events; their exact bodies remain recorded without invented usage. Parsed replay events match structurally; object-key order is not treated as byte equality.
+
+The reference scenarios create goals through backend controls. Native captures add an explicit authorization prompt and two zero-usage setup responses. Resume repetition, retry recovery, and the background-quota negative control are labeled additions. Model, maximum output, reasoning and service settings, instruction stacks, policy wording, and native tool/result framing differ. Retry delays are controlled at one millisecond. Both hosts send continuation context with user role, and recorded counters advance at the corresponding boundaries. All isolated goals were cleared; shared files, production sources, and previous evidence retained their hashes. The earlier key-order-sensitive recorder failure remains separate and is excluded from acceptance.
 
 ## Package validation
 
 Checks ran on the primary source runtime at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`, version `1.1.0`, with Node `24.13.1`. The package's secondary workspace dependency is not the full-runtime acceptance target.
 
-The full package command passed all 157 checks, including all 37 guard cases and all 13 current Stop cases. Its complete output is `/tmp/goal-production-tests-qgaldc1s.log`.
+The final integrated package command passed all 177 checks, including all 37 guard cases, 20 preservation cases, and 13 current Stop cases. Its complete output is `/tmp/pi-goal-final-integrated-tests.log`.
 
-The superseded `stop-probe.test.ts` was removed because it exercised a copied feasibility implementation rather than production Stop. Before removal it failed during module loading: `packages/pi-chat/src/native-host.ts` imported the unavailable `/Users/fran/Source/pi/packages/tui/src/components/stack.js`. The isolated failure is retained at `/tmp/goal-stop-probe-4d0fgai0.log`; its checks did not execute. The production Stop suite covers the actual controls, companions, retries, compaction, failure handling, and teardown. No host or companion source changed.
+The superseded `stop-probe.test.ts` was removed after production Stop acquired persisted-state, bounded-callback, and actual-terminal coverage. Its historical feasibility evidence remains identified in ticket 03. The current tests cover controls, companions, retries, compaction, failure handling, and teardown. No host or companion source changed.
 
 ```sh
 /Users/fran/.nvm/versions/node/v24.13.1/bin/node --import /Users/fran/Source/pi/packages/coding-agent/src/experimental/source-resolver.ts --experimental-transform-types --test --test-concurrency=1 --test-timeout=10000 packages/pi-goal/test/*.test.ts
@@ -85,7 +101,7 @@ The final guard cases passed within that run. Their focused command is:
 /Users/fran/.nvm/versions/node/v24.13.1/bin/node --import /Users/fran/Source/pi/packages/coding-agent/src/experimental/source-resolver.ts --experimental-transform-types --test --test-timeout=10000 packages/pi-goal/test/guards.test.ts
 ```
 
-Eight current preservation cases passed against these production files, including activation during manual compaction, pause/clear/Stop cancellation of its wait, reported compaction usage, continuation after raw abort, and pending-editor cancellation on session switch. Verification used a temporary copy of the separately owned test file with only its fixture and extension imports redirected; its original file was unchanged.
+The integrated preservation suite includes activation during manual compaction, pause/clear/Stop cancellation of its wait, reported compaction usage, continuation after raw abort, and pending-editor cancellation on session switch. Ticket 07 adds physical terminal and RPC checks against the same production files.
 
 Type checking, targeted lint and formatting, and whitespace checks passed:
 

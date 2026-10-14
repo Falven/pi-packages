@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: Continue safely and honor Stop.
 
-**Status:** in progress — implementation and reported-usage captures verified; provider-limit integration and the public capability limits below remain open.
+**Status:** partial — implementation, reported-usage captures, compaction, and supported provider-limit precedence verified; the public capability limits below remain open.
 
 - [x] Charge uncached input plus output using the provider's reported usage. Verify Pi's input-plus-cache-write-plus-output mapping against original provider counters; exclude cache reads and avoid counting reasoning again when included in output.
 - [x] Establish accounting when the goal becomes active. Creating a goal partway through a turn excludes previously reported work; replacement establishes a fresh baseline excluding descendant usage already reported. A later descendant report can contribute to the current active goal even when that child started earlier; do not add an originating-goal filter to the shared report counter.
@@ -21,7 +21,7 @@
 - [x] Show current persisted usage and effective stop reason in native goal controls and all relevant model results. Emit completion reporting guidance only under the specified conditions, without adding final-response tokens that were unavailable to the completed snapshot.
 - [x] Protect replacement goals and other sessions from stale goal-bound mutations and checkpoint writes by both ownership and generation. Distinguish a stale checkpoint from a newly arriving descendant report into the shared counter. Repeated events, resume, objective edits, and session restoration must not create refunds or fresh allowances.
 - [x] Verify cache variants, reasoning, large integers, pre-creation baselines, nested usage, concurrency, soft overshoot, failed persistence, time carry, pause/resume, and late reports through the agreed seam. Use narrower controlled checks only for precision, clock, or failure cases that the real-session boundary cannot express clearly.
-- [ ] Capture original usage, normalized usage, checkpoints, budget messages, and final results in Phoenix. Correlate nested and background work, retrieve captures to verify completeness, and record any attribution or timing gap before claiming delegated parity.
+- [x] Capture original usage, normalized usage, checkpoints, budget messages, and final results in Phoenix. Correlate nested and background work, retrieve captures to verify completeness, and record any attribution or timing gap before claiming delegated parity.
 - [x] Preserve public extension boundaries and neutral terminology, complete relevant checks, and leave all unreported-usage and unsupported-provider limitations explicit.
 
 ## Implementation verification
@@ -34,7 +34,7 @@ The native cases verify pre-creation usage exclusion; 12 charged tokens versus a
 
 Real SQLite write failures retain pending usage for a later successful checkpoint. Failed settlement suppresses automatic continuation, and failed shutdown still invalidates the extension lifetime, cancels admission, disposes Stop, and closes storage. An unsafe reported number fails visibly and suspends automatic continuation for that session and generation within the loaded extension; later valid checkpoints cannot erase that missing usage. The package cannot recover precision already lost by a provider or tool.
 
-The nine native accounting captures below passed, and all 100 captured input/output fields were independently retrieved and verified. Exact child-abort qualification and cutoffs inside opaque programmatic model calls remain the public capability limits described below. Tools and subprocesses without usage reports remain outside the accounting claim. No configured host maximum is exposed by the inspected extension API, and this change invents no maximum or setting. Confirmed provider-limit classification remains part of ticket 06; full restoration and fork acceptance remain part of ticket 05.
+The nine native accounting captures below passed, and all 100 captured input/output fields were independently retrieved and verified. Exact child-abort qualification and cutoffs inside opaque programmatic model calls remain the public capability limits described below. Tools and subprocesses without usage reports remain outside the accounting claim. No configured host maximum is exposed by the inspected extension API, and this change invents no maximum or setting. [Ticket 06](06-stop-unproductive-runs.md) verifies correlated provider-limit precedence and excludes an unrelated background quota. [Ticket 05](05-preserve-session-goals.md) verifies restoration while retaining the conditional-fork capability gate.
 
 ## Native accounting captures
 
@@ -64,7 +64,7 @@ The raw tool-call IDs, arguments, original usage, and final text are unchanged i
 
 ## Accounting boundary evidence
 
-An additional active-compaction capture identifies a missing accounting source in the initial implementation. On the pinned local streaming route, a goal at 92 tokens remains at 92 while its manual summary is held, reaches 184 when that summary reports another 92 chargeable tokens, and remains at 184 after explicit pause and interruption of the held follow-up. Successful compaction also admits the next eligible continuation. Implementation and native regression coverage are being integrated with tickets 05–06 through the public `session_compact.compactionEntry.usage` report.
+On the pinned reference local streaming route, a goal at 92 tokens remains at 92 while its manual summary is held, reaches 184 when that summary reports another 92 chargeable tokens, and remains at 184 after explicit pause and interruption of the held follow-up. Successful compaction also admits the next eligible continuation. The integrated package charges the public `session_compact.compactionEntry.usage` report once. Ticket 05 reproduces the 92-to-184 transition and automatic continuation without an edit or resume. Ticket 07 verifies both provider protocols through RPC: two summary requests contribute a combined 184 tokens, advancing the existing 92-token goal to 276 before its next automatic request.
 
 Trace `673549f09f6e41be85595cea9c6a0b09` has five spans and ten complete fields, independently retrieved and matched against saved payloads, hashes, and byte counts. Evidence is under `/tmp/pi-goal-compaction-zdw10nzm/20261014-025221-e1895706/active_manual_compaction`. Four requests were observed; two completed and two closed without a response. The final snapshots and ten relevant source blobs were independently verified against the pinned source tree. The engine exited zero; checked shared settings and earlier scripts remained unchanged.
 
