@@ -191,7 +191,7 @@ function referenceReplacement(reference, path) {
     : `[${reference.label.replace(/[\\[\]`*_]/g, "\\$&")}](${destination})`
 }
 
-export function preclearProbe() {
+export function preclearProbe({ waitForStreamingAtEnd = false } = {}) {
   return (pi) => {
     let dispose
     const originals = new WeakMap()
@@ -235,8 +235,48 @@ export function preclearProbe() {
           draftRegistries.set(editor, drafts)
           let current = { text: editor.getExpandedText(), references: [] }
           const submissions = new Map()
+          const completions = new Map()
           const idleWaits = new Set()
           const pendingEdits = new Set()
+          if (waitForStreamingAtEnd)
+            restorations.push(
+              pi.on("input", async () => {
+                const request = dispatch.getStore()
+                await request?.beforeInput
+                if (stopped || request?.signal?.aborted)
+                  return { action: "handled" }
+                return undefined
+              }),
+            )
+          if (waitForStreamingAtEnd)
+            restorations.push(
+              pi.on("agent_end", async (_endEvent, runContext) => {
+                const signal = runContext.signal
+                for (;;) {
+                  if (stopped || signal?.aborted) return
+                  const steering = submissions.get("steer")
+                  const followUp = submissions.get("followUp")
+                  if (!steering && !followUp) return
+                  // Keep the native streaming route until already-requested Sends finish preparation.
+                  // eslint-disable-next-line no-await-in-loop -- Newly requested Sends may join before this run settles.
+                  await new Promise((resolve) => {
+                    const finish = () => {
+                      signal?.removeEventListener("abort", finish)
+                      idleWaits.delete(finish)
+                      resolve()
+                    }
+                    signal?.addEventListener("abort", finish, { once: true })
+                    idleWaits.add(finish)
+                    void Promise.all([steering, followUp]).then(finish)
+                  })
+                  if (
+                    submissions.get("steer") === steering &&
+                    submissions.get("followUp") === followUp
+                  )
+                    return
+                }
+              }),
+            )
           function wrap(name, value, target = editor) {
             const descriptor = Object.getOwnPropertyDescriptor(target, name)
             if (
@@ -488,6 +528,10 @@ export function preclearProbe() {
               : followUp
                 ? "followUp"
                 : "steer"
+            const requestSignal =
+              waitForStreamingAtEnd && route !== "normal"
+                ? ctx.signal
+                : undefined
             const requestContext = {
               sessionId: ctx.sessionManager.getSessionId(),
               sessionFile: ctx.sessionManager.getSessionFile(),
@@ -498,6 +542,8 @@ export function preclearProbe() {
               "attachment-send-experiment",
               "Preparing attachments…",
             )
+            const handoff = Promise.withResolvers()
+            const beforeInput = completions.get(route)
             const submitted = (
               submissions.get(route) ?? Promise.resolve()
             ).then(async () => {
@@ -520,7 +566,7 @@ export function preclearProbe() {
                       referenceReplacement(reference, saved.paths[0]) +
                       text.slice(reference.destination.to)
                 }
-                if (stopped) return
+                if (stopped || requestSignal?.aborted) return
                 if (attachmentPaths(text, storage, ctx.cwd).length)
                   await prepare(
                     {
@@ -530,7 +576,7 @@ export function preclearProbe() {
                     ctx,
                   )
                 else await saveRequest(storage, { ...requestContext, text })
-                if (stopped) return
+                if (stopped || requestSignal?.aborted) return
                 while (!ctx.isIdle()) {
                   if (route !== "normal" || stopped) break
                   ctx.ui.setStatus(
@@ -551,7 +597,7 @@ export function preclearProbe() {
                     idleWaits.add(finish)
                   })
                 }
-                if (stopped) return
+                if (stopped || requestSignal?.aborted) return
                 const preserve = revision !== requestedRevision
                 if (!preserve && !followUp) {
                   editor.onSubmit = undefined
@@ -561,13 +607,21 @@ export function preclearProbe() {
                     editor.onSubmit = originalSubmit
                   }
                 }
-                await dispatch.run(
-                  { preserve, text, readOnce: followUp },
+                const dispatched = dispatch.run(
+                  {
+                    preserve,
+                    text,
+                    readOnce: followUp,
+                    beforeInput,
+                    signal: requestSignal,
+                  },
                   () =>
                     followUp
                       ? originalFollowUp()
                       : originalSubmit.call(editor, text),
                 )
+                handoff.resolve()
+                await dispatched
               } catch (error) {
                 if (!stopped)
                   ctx.ui.notify(
@@ -575,11 +629,18 @@ export function preclearProbe() {
                     "error",
                   )
               } finally {
+                handoff.resolve()
                 if (!stopped)
                   ctx.ui.setStatus("attachment-send-experiment", undefined)
               }
             })
-            submissions.set(route, submitted)
+            if (waitForStreamingAtEnd && route !== "normal") {
+              submissions.set(route, handoff.promise)
+              completions.set(
+                route,
+                Promise.all([beforeInput, submitted]).then(() => {}),
+              )
+            } else submissions.set(route, submitted)
           }
           wrap(submitName, () => submit())
           const followUp = () => submit(true)
