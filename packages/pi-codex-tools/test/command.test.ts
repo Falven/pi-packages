@@ -508,6 +508,37 @@ test("commands use effective settings, current session environment, and per-call
   assert.doesNotMatch(text, /stale-value|initial/)
 })
 
+test("commands resolve relative workdirs from the owning context", async (t) => {
+  for (const tty of [false, true]) {
+    await t.test(tty ? "PTY" : "pipes", async (subtest) => {
+      const host = await openNativeHost(subtest, {
+        extensionPaths: [extension],
+        providerApi,
+      })
+      const directory = join(host.directory, "command-directory")
+      await mkdir(directory)
+      host.queueResponse(
+        ...call(
+          `text((await tools.exec_command(${JSON.stringify({
+            cmd: "printf directory-effect > effect.txt; cat effect.txt",
+            workdir: "command-directory",
+            shell: "/bin/sh",
+            login: false,
+            tty,
+          })})).output);`,
+        ),
+      )
+      host.queueResponse(completed)
+      await host.session.prompt("Run the command in the relative workdir")
+      assert.match(output(host), /directory-effect$/)
+      assert.equal(
+        await readFile(join(directory, "effect.txt"), "utf8"),
+        "directory-effect",
+      )
+    })
+  }
+})
+
 test("the execution pragma bounds the combined emitted text", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],

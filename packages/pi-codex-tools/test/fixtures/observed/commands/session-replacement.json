@@ -1,0 +1,217 @@
+{
+  "case_group": "session-replacement",
+  "tested_commit": "5507b777ce96028af19b91683b0a01a9f8e2f8eb",
+  "seam": "Public native runtime with the existing controlled-provider fixture",
+  "history_comparison_projection": "For reloaded history only, omit top-level tool-result details and usage properties whose value was undefined; retain every other field exactly",
+  "cases": [
+    {
+      "operation": "new",
+      "mode": "idle-handle",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.newSession()",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66353, 66354],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "exact",
+        "replacement_history": "empty",
+        "fork_later_file_preserved": null,
+        "fork_later_history_excluded": null,
+        "active_poll_partial_output": null,
+        "active_poll_nested_summary_complete": null,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "new"
+          },
+          {
+            "event": "session_start",
+            "reason": "new"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 311780454",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true
+      }
+    },
+    {
+      "operation": "new",
+      "mode": "active-poll",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.newSession()",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66376, 66377],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "unchanged prefix with settled active call appended",
+        "replacement_history": "empty",
+        "fork_later_file_preserved": null,
+        "fork_later_history_excluded": null,
+        "active_poll_partial_output": "ACTIVE",
+        "active_poll_nested_summary_complete": true,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "new"
+          },
+          {
+            "event": "session_start",
+            "reason": "new"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 257702989",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true
+      }
+    },
+    {
+      "operation": "resume",
+      "mode": "idle-handle",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.switchSession(savedSessionFile)",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66416, 66417],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "exact",
+        "replacement_history": "saved destination restored with the explicit persistence projection",
+        "fork_later_file_preserved": null,
+        "fork_later_history_excluded": null,
+        "active_poll_partial_output": null,
+        "active_poll_nested_summary_complete": null,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "resume"
+          },
+          {
+            "event": "session_start",
+            "reason": "resume"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 694073722",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true,
+        "restored_original_history_did_not_restore_handle": true,
+        "restored_original_allows_fresh_command": true
+      }
+    },
+    {
+      "operation": "resume",
+      "mode": "active-poll",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.switchSession(savedSessionFile)",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66441, 66442],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "unchanged prefix with settled active call appended",
+        "replacement_history": "saved destination restored with the explicit persistence projection",
+        "fork_later_file_preserved": null,
+        "fork_later_history_excluded": null,
+        "active_poll_partial_output": "ACTIVE",
+        "active_poll_nested_summary_complete": true,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "resume"
+          },
+          {
+            "event": "session_start",
+            "reason": "resume"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 320724609",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true,
+        "restored_original_history_did_not_restore_handle": true,
+        "restored_original_allows_fresh_command": true
+      }
+    },
+    {
+      "operation": "fork",
+      "mode": "idle-handle",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.fork(anchorEntryId, {position:\"at\"})",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66456, 66457],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "exact",
+        "replacement_history": "copied through selected anchor with the explicit persistence projection",
+        "fork_later_file_preserved": true,
+        "fork_later_history_excluded": true,
+        "active_poll_partial_output": null,
+        "active_poll_nested_summary_complete": null,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "fork"
+          },
+          {
+            "event": "session_start",
+            "reason": "fork"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 937167106",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true
+      }
+    },
+    {
+      "operation": "fork",
+      "mode": "active-poll",
+      "outcome": "passed",
+      "observed": {
+        "native_operation": "runtime.fork(anchorEntryId, {position:\"at\"})",
+        "native_result": {
+          "cancelled": false
+        },
+        "owned_pids": [66470, 66471],
+        "owned_processes_stopped_on_return": true,
+        "completed_file_preserved": true,
+        "original_history_prefix_preserved": true,
+        "original_journal_preserved": "unchanged prefix with settled active call appended",
+        "replacement_history": "copied through selected anchor with the explicit persistence projection",
+        "fork_later_file_preserved": true,
+        "fork_later_history_excluded": true,
+        "active_poll_partial_output": "ACTIVE",
+        "active_poll_nested_summary_complete": true,
+        "lifecycle": [
+          {
+            "event": "session_shutdown",
+            "reason": "fork"
+          },
+          {
+            "event": "session_start",
+            "reason": "fork"
+          }
+        ],
+        "old_handle_error": "write_stdin failed: Unknown process id 139592554",
+        "fresh_command_exit_code": 0,
+        "fresh_command_works_in_replacement": true
+      }
+    }
+  ],
+  "unverified": ["Retained execution cells", "Other dependency versions"]
+}

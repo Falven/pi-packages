@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** implemented patch slice; runtime evidence limits recorded below
+**Status:** resolved — patch slice; runtime evidence limits recorded below
 
 - [x] Expose the captured raw-string `apply_patch` interface through the selected nested tools and preserve the model-facing declaration.
 - [x] Establish patch grammar, matching, returned change information, errors, validation order, and partial-failure behavior using the frozen declaration and supplemental runtime observations, with their different provenance recorded below.

@@ -23,6 +23,8 @@
 
 The [command observations](../../../packages/pi-codex-tools/test/fixtures/observed/commands/index.json) and [file observations](../../../packages/pi-codex-tools/test/fixtures/observed/files/index.json) preserve supplemental inputs and outcomes separately from the frozen contract. Their runtime identity, formatting, hash validation, and observation limits are recorded in the specification.
 
-Accumulated repository validation at integration commit `5507b77` passed: `pnpm test` completed 948 tests with no failures, cancellations, skips, or todos; formatting checked 216 files, and lint and type checking passed. The separate four-check configured-companion probe is recorded in ticket 06 and is outside that test count.
+Accumulated repository validation at integration commit `5507b77` passed: `pnpm test` completed 948 tests with no failures, cancellations, skips, or todos; formatting checked 216 files, and lint and type checking passed. The separate four-check configured-companion probe and six-check [native-host process lifecycle probe](../../../packages/pi-codex-tools/test/fixtures/observed/commands/session-replacement.json) are recorded in ticket 06 and are outside that test count.
+
+Review follow-up reproduced and fixed relative command directories in pipe and PTY calls, then consolidated the repeated nested-tool registration logic. All 117 package tests passed, including the new regression and the existing selection, ownership, hook, settings, and lifecycle checks. Package type checking, targeted lint, formatting, and whitespace checks passed. The frozen contract and existing observations remain unchanged.
 
 These are partial accumulated checks. They do not complete full conformance or matched live-model trials. [Ticket 06](06-verify-mixed-native-workflows.md) remains blocked by ticket 03, and this ticket remains blocked by 06.

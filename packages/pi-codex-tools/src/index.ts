@@ -71,40 +71,33 @@ export default function coreTools(pi: ExtensionAPI): void {
           ))
     )
   }
-  const registerProcessTool = <T extends TSchema>(
-    command: ToolDefinition<T, undefined>,
+  const registerNestedTool = <T extends TSchema>(
+    tool: ToolDefinition<T, undefined>,
+    available: () => boolean,
   ) => {
-    pi.registerTool(command)
+    pi.registerTool(tool)
     const sync = () => {
-      const current = pi
-        .getAllTools()
-        .find((tool) => tool.name === command.name)
+      const current = pi.getAllTools().find((entry) => entry.name === tool.name)
       if (
         !current ||
         current.sourceInfo.path !== fileURLToPath(import.meta.url)
       )
         return
-      const exposure = commandAvailable(command.name) ? "codemode" : "hidden"
-      if (current.exposure !== exposure)
-        pi.registerTool({ ...command, exposure })
+      const exposure = available() ? "codemode" : "hidden"
+      if (current.exposure !== exposure) pi.registerTool({ ...tool, exposure })
     }
     pi.on("session_start", sync)
     pi.on("before_agent_start", sync)
   }
-  registerProcessTool(
-    createCommand(
-      pi,
-      () => commandAvailable("exec_command"),
-      lifetime.signal,
-      processes,
-    ),
+  const execCommandAvailable = () => commandAvailable("exec_command")
+  registerNestedTool(
+    createCommand(pi, execCommandAvailable, lifetime.signal, processes),
+    execCommandAvailable,
   )
-  registerProcessTool(
-    createStdin(
-      () => commandAvailable("write_stdin"),
-      lifetime.signal,
-      processes,
-    ),
+  const stdinAvailable = () => commandAvailable("write_stdin")
+  registerNestedTool(
+    createStdin(stdinAvailable, lifetime.signal, processes),
+    stdinAvailable,
   )
   const imageAvailable = () => {
     const active = new Set(pi.getActiveTools())
@@ -119,8 +112,7 @@ export default function coreTools(pi: ExtensionAPI): void {
           ))
     )
   }
-  const image = createImage(pi, imageAvailable)
-  pi.registerTool(image)
+  registerNestedTool(createImage(pi, imageAvailable), imageAvailable)
   const patchAvailable = () => {
     const active = new Set(pi.getActiveTools())
     const stock = new Set(
@@ -134,26 +126,10 @@ export default function coreTools(pi: ExtensionAPI): void {
       ["edit", "write"].every((name) => active.has(name) && stock.has(name))
     )
   }
-  const patch = createPatch(patchAvailable, lifetime.signal)
-  pi.registerTool(patch)
-  const syncPatch = () => {
-    const current = pi.getAllTools().find((tool) => tool.name === patch.name)
-    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
-      return
-    const exposure = patchAvailable() ? "codemode" : "hidden"
-    if (current.exposure !== exposure) pi.registerTool({ ...patch, exposure })
-  }
-  pi.on("session_start", syncPatch)
-  pi.on("before_agent_start", syncPatch)
-  const syncImage = () => {
-    const current = pi.getAllTools().find((tool) => tool.name === image.name)
-    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
-      return
-    const exposure = imageAvailable() ? "codemode" : "hidden"
-    if (current.exposure !== exposure) pi.registerTool({ ...image, exposure })
-  }
-  pi.on("session_start", syncImage)
-  pi.on("before_agent_start", syncImage)
+  registerNestedTool(
+    createPatch(patchAvailable, lifetime.signal),
+    patchAvailable,
+  )
   pi.registerTool({
     name: execution.name,
     label: "Execute",

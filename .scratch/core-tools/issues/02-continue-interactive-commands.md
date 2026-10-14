@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** implemented process slice; full contract not claimed
+**Status:** resolved — process continuation slice; full contract remains blocked
 
 - [x] Expose and execute the captured `write_stdin` contract through the existing orchestration and public dispatch path.
 - [x] Support both pipes and an explicitly requested PTY, with accurate input delivery, output, completion status, and process session identifier behavior.
@@ -47,4 +47,6 @@ Evidence is retained in the [command index](../../../packages/pi-codex-tools/tes
 
 Process continuation is independent of the blocked execution-cell work in ticket 03. The outer script deadline still reports unavailable retained execution and cancels pending calls. Long polls require a sufficient outer script budget. No old execution context, daemon, or history-based handle restoration is added.
 
-Explicit cancellation retains processed partial output and complete native nested-call records. Normal quit also preserves the active call's partial output and awaits owned processes, but the installed host's direct runtime disposal omits that call's nested summary after invalidation. This native behavior is not repaired with synthetic history. Output produced while no call is collecting it is cleared during session cleanup; already returned results remain in history. New/resume/fork and combined companion workflows remain for ticket 06.
+Explicit cancellation retains processed partial output and complete native nested-call records. Normal quit also preserves the active call's partial output and awaits owned processes, but the installed host's direct runtime disposal omits that call's nested summary after invalidation. This native behavior is not repaired with synthetic history. Output produced while no call is collecting it is cleared during session cleanup; already returned results remain in history.
+
+The separate [native-host session replacement observations](../../../packages/pi-codex-tools/test/fixtures/observed/commands/session-replacement.json) passed six cases at `5507b77`: new, resume, and fork, each with an idle handle and an active poll. Owned shell and child processes stopped before replacement returned; stale handles failed, fresh commands worked, and completed files remained. Active polls retained their partial output and complete nested-call records. The evidence records native history behavior and the persistence comparison projection. It verifies process lifecycle only; retained execution cells remain blocked by ticket 03, and ticket 06 owns complete mixed workflows.

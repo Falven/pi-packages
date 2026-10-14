@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** implemented image slice; native detail limitation remains
+**Status:** resolved — image slice; native detail limitation remains
 
 - [x] Expose the captured `view_image` parameters and result shape: local filesystem path, default high detail or requested original detail, returned detail, and base64 data URL. Resolve relative paths in the owning context.
 - [x] Support the selected `image` helper's data-URL and ordinary result-object forms and explicit-detail override. Add no network URL support, protocol image metadata, audio, or generated-image surface.

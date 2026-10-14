@@ -1,5 +1,5 @@
 import { userInfo } from "node:os"
-import { delimiter, join } from "node:path"
+import { delimiter, join, resolve } from "node:path"
 import {
   getAgentDir,
   type ExtensionAPI,
@@ -86,7 +86,10 @@ export function createCommand(
           shell,
           command,
           login: args.login !== false,
-          cwd: args.workdir ?? ctx.cwd,
+          cwd:
+            args.workdir === undefined
+              ? ctx.cwd
+              : resolve(ctx.cwd, args.workdir),
           env,
           tty: args.tty ?? false,
         },
