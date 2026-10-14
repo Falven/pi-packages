@@ -43,6 +43,22 @@ const composerPath = fileURLToPath(
   new URL("../../pi-composer/src/index.ts", import.meta.url),
 )
 
+async function chooseThumbnailSize(host, size) {
+  const labels = { small: "Small", medium: "Medium", large: "Large" }
+  const pending = host.runtime.session.prompt("/attachments")
+  await waitFor(() => assert.match(host.render(), /Settings/))
+  host.input("\x1b[A")
+  host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (host.render().includes(labels[size])) break
+    host.input("\r")
+  }
+  assert.ok(host.render().includes(labels[size]))
+  host.input("\x1b")
+  await pending
+}
+
 for (const [name, extensions] of [
   ["native", []],
   ["composer", [composerPath]],
@@ -516,25 +532,61 @@ test("effective image width caps native preview graphics without recapturing the
   assert.deepEqual(await readFile(path), bytes)
 })
 
-test("Pi standard settings offers the registered attachment thumbnail sizes", async (t) => {
+test("attachment management offers native thumbnail settings for an empty draft", async (t) => {
   const host = await nativePi(t)
-  const setting = host.runtime.session.extensionRunner
-    .getExtensionSettings()
-    .find(({ id }) => id === "pi-attachments.thumbnailSize")
-  assert.ok(setting)
-  assert.equal(
-    host.runtime.session.settingsManager.getExtensionSetting(setting),
-    "medium",
-  )
-  host.submit("/settings")
-  await waitFor(() => assert.match(host.render(), /Auto-compact/))
-  for (const character of setting.label) host.input(character)
-  await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
+  const pending = host.runtime.session.prompt("/attachments")
+  await waitFor(() => assert.match(host.render(), /Manage attachments/))
+  assert.match(host.render(), /Settings/)
   host.input("\r")
-  assert.equal(
-    host.runtime.session.settingsManager.getExtensionSetting(setting),
-    "large",
+  await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
+  assert.match(host.render(), /Medium/)
+  host.input("\r")
+  assert.match(host.render(), /Large/)
+  host.input(" ")
+  assert.match(host.render(), /Small/)
+  host.input("\x1b")
+  await pending
+  assert.equal(host.ui.getEditorText(), "")
+  host.input("After settings")
+  assert.equal(host.ui.getEditorText(), "After settings")
+  assert.equal(host.requests.length, 0)
+})
+
+test("attachment thumbnail settings persist and reread manual edits on reload", async (t) => {
+  const host = await nativePi(t)
+  async function settings() {
+    const pending = host.runtime.session.prompt("/attachments")
+    await waitFor(() => assert.match(host.render(), /Manage attachments/))
+    host.input("\r")
+    await waitFor(() =>
+      assert.match(host.render(), /Attachment thumbnail size/),
+    )
+    return { pending }
+  }
+  let dialog = await settings()
+  host.input("\r")
+  host.input("\x1b")
+  await dialog.pending
+  await host.runtime.session.reload()
+  dialog = await settings()
+  assert.match(host.render(), /Large/)
+  host.input("\x1b")
+  await dialog.pending
+
+  await writeFile(
+    join(host.agentDir, "pi-attachments", "settings.json"),
+    JSON.stringify({ thumbnailSize: "small" }),
   )
+  dialog = await settings()
+  assert.match(host.render(), /Large/)
+  host.input("\x1b")
+  await dialog.pending
+  await host.runtime.session.reload()
+  dialog = await settings()
+  assert.match(host.render(), /Small/)
+  host.input("\x1b")
+  await dialog.pending
+  assert.equal(host.ui.getEditorText(), "")
 })
 
 for (const [shape, image, expected] of [
@@ -563,14 +615,13 @@ for (const [shape, image, expected] of [
 
     assert.deepEqual(await waitFor(dimensions), expected.medium)
     for (const size of ["small", "large", "medium"]) {
-      host.runtime.session.settingsManager.applyOverrides({
-        extensionSettings: { "pi-attachments.thumbnailSize": size },
-      })
+      // eslint-disable-next-line no-await-in-loop -- Each choice changes the same native dialog.
+      await chooseThumbnailSize(host, size)
       // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
       assert.deepEqual(await waitFor(dimensions), expected[size])
     }
+    await chooseThumbnailSize(host, "large")
     host.runtime.session.settingsManager.applyOverrides({
-      extensionSettings: { "pi-attachments.thumbnailSize": "large" },
       terminal: { imageWidthCells: 6 },
     })
     assert.ok((await waitFor(dimensions))[0] <= 6)
@@ -579,9 +630,10 @@ for (const [shape, image, expected] of [
     })
     host.resize(14, 40)
     for (const size of ["small", "medium", "large"]) {
-      host.runtime.session.settingsManager.applyOverrides({
-        extensionSettings: { "pi-attachments.thumbnailSize": size },
-      })
+      host.resize(100, 40)
+      // eslint-disable-next-line no-await-in-loop -- Each choice changes the same native dialog.
+      await chooseThumbnailSize(host, size)
+      host.resize(14, 40)
       // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
       await waitFor(() => {
         const [columns, rows] = dimensions()
