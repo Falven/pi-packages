@@ -10,6 +10,7 @@ import { ExecutionCells, type WaitOptions } from "./execution.ts"
 import { createImage } from "./image.ts"
 import { createPatch } from "./patch.ts"
 import { ProcessSessions } from "./process.ts"
+import { executionRenderers, waitRenderers } from "./presentation.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
 type OwnedCall = { id: string; name: string }
@@ -89,8 +90,8 @@ export default function coreTools(pi: ExtensionAPI): void {
           ))
     )
   }
-  const registerNestedTool = <T extends TSchema>(
-    tool: ToolDefinition<T, undefined>,
+  const registerNestedTool = <T extends TSchema, D>(
+    tool: ToolDefinition<T, D>,
     available: () => boolean,
   ) => {
     availability.set(tool.name, available)
@@ -151,6 +152,7 @@ export default function coreTools(pi: ExtensionAPI): void {
   )
   pi.registerTool({
     name: execution.name,
+    ...executionRenderers,
     label: "Execute",
     description: description(new Set()),
     parameters: Type.Object({ input: Type.String() }),
@@ -188,17 +190,19 @@ export default function coreTools(pi: ExtensionAPI): void {
           .map((tool) => tool.name),
       }
     },
-    execute(id, args, signal, _onUpdate, ctx) {
+    execute(id, args, signal, onUpdate, ctx) {
       return cells.start(
         args.input,
         id,
         ctx,
         signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
+        onUpdate,
       )
     },
   })
   pi.registerTool({
     name: waiting.name,
+    ...waitRenderers,
     label: "Wait",
     description: String(waiting["description"]),
     parameters: Type.Unsafe<WaitOptions>(waiting["parameters"] as TSchema),

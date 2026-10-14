@@ -36,7 +36,7 @@ export function createCommand(
   available: () => boolean,
   lifetime: AbortSignal,
   processes: ProcessSessions,
-): ToolDefinition<typeof parameters, undefined> {
+): ToolDefinition<typeof parameters, { command: string; cwd: string }> {
   return {
     name: "exec_command",
     label: "Command",
@@ -44,7 +44,7 @@ export function createCommand(
       "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
     parameters,
     exposure: "codemode",
-    async execute(_id, args, signal, _onUpdate, ctx) {
+    async execute(_id, args, signal, onUpdate, ctx) {
       signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime
       signal.throwIfAborted()
       if (!available())
@@ -81,15 +81,15 @@ export function createCommand(
         env["PI_MODEL"] = ctx.model.id
       }
       if (ctx.thinkingLevel) env["PI_REASONING_LEVEL"] = ctx.thinkingLevel
+      const cwd =
+        args.workdir === undefined ? ctx.cwd : resolve(ctx.cwd, args.workdir)
+      onUpdate?.({ content: [], details: { command, cwd } })
       const result = await processes.start(
         {
           shell,
           command,
           login: args.login !== false,
-          cwd:
-            args.workdir === undefined
-              ? ctx.cwd
-              : resolve(ctx.cwd, args.workdir),
+          cwd,
           env,
           tty: args.tty ?? false,
         },
@@ -100,7 +100,7 @@ export function createCommand(
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
-        details: undefined,
+        details: { command, cwd },
       }
     },
   }

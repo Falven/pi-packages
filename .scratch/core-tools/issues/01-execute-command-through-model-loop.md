@@ -6,16 +6,22 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+**Status:** resolved — completed command presentation delta; completed baseline retained below
 
 ## Presentation delta
 
-- [ ] Register parent call/result renderers for execution and waiting using native components, themes, expansion controls, and terminal-width utilities. Show a compact summary and status by default; expanded execution shows operations and readable results, never orchestration source or transport envelopes.
-- [ ] Carry stable operation identity, effective command context after settings and argument hooks, and processed results through tool-owned presentation details and complete pending updates. Keep nested operations in their parent execution card; do not rely on native nested-call IDs or independent child transcript rows.
-- [ ] Preserve original source and transport results in retained history and leave model declarations, result content, encoding, hook processing, and output collection unchanged. Returned presentation must respect hook edits instead of recovering removed results.
-- [ ] Retain compact incremental presentation records through public entries and make routine activity entries invisible in the chat view. Completed command presentation remains recoverable from available history; no separate history store or chat-package changes.
-- [ ] Keep command errors, script errors before any child, and script-emitted text readable. Distinguish command exit status from script success. Bound presentation data and show omissions using display-cell-aware clipping and wrapping.
-- [ ] Use the approved real-host seam for red-before-green checks of compact/expanded command cards, hook changes and redaction, retained original content, invisible routine records, and unchanged next model request. Existing callers and selected core behavior remain valid.
+- [x] Register parent call/result renderers for execution and waiting using native components, themes, expansion controls, and terminal-width utilities. Show a compact summary and status by default; expanded execution shows operations and readable results, never orchestration source or transport envelopes.
+- [x] Carry stable operation identity, effective command context after settings and argument hooks, and processed results through tool-owned presentation details and complete pending updates. Keep nested operations in their parent execution card; do not rely on native nested-call IDs or independent child transcript rows.
+- [x] Preserve original source and transport results in retained history and leave model declarations, result content, encoding, hook processing, and output collection unchanged. Returned presentation must respect hook edits instead of recovering removed results.
+- [x] Retain compact incremental presentation records through public entries and make routine activity entries invisible in the chat view. Completed command presentation remains recoverable from available history; no separate history store or chat-package changes.
+- [x] Keep command errors, script errors before any child, and script-emitted text readable. Distinguish command exit status from script success. Bound presentation data and show omissions using display-cell-aware clipping and wrapping.
+- [x] Use the approved real-host seam for red-before-green checks of compact/expanded command cards, hook changes and redaction, retained original content, invisible routine records, and unchanged next model request. Existing callers and selected core behavior remain valid.
+
+## Presentation evidence
+
+- Seven real-host/provider/native-screen checks verify compact and expanded completed-command cards, effective argument mutation, child and parent result redaction, readable emitted command envelopes alongside script text and errors, nonzero command status distinct from successful script completion, failures before dispatch, retained completed presentation after reload, hidden routine records, and bounded Unicode output at a narrow terminal width. Original orchestration and the next model request remain unchanged.
+- Effective command and directory metadata cross the public nested-update/result boundary. Presentation records use package-owned operation identity, retain bounded processed results incrementally, and omit routine chat rows. The returned card checks its original content fingerprint before using retained details, so a parent result hook cannot leave stale operation output visible merely by replacing content.
+- Validation: the seven presentation checks, the two affected existing cell checks, package type checking, and targeted lint pass. The first full package run passed 152 of 154 checks; its two failures asserted superseded visible-journal/no-result-retention behavior and pass after correction. Live process streaming, continued ownership, and history reconciliation are delivered by the following tickets; a physical-terminal check has not been run in this slice.
 
 ## Completed baseline
 

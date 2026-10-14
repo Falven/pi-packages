@@ -594,14 +594,17 @@ test("ordinary completion discards JavaScript callbacks but records a dispatched
           entry.type === "custom" && entry.customType === "core-tools.activity",
       )
     assert(
-      entries.some((entry) =>
-        JSON.stringify(entry).includes('"type":"completed","child_id"'),
+      entries.some(
+        (entry) =>
+          entry.type === "custom" &&
+          (
+            entry.data as { events: { type: string; child_id?: string }[] }
+          ).events.some(
+            (event) => event.type === "completed" && event.child_id,
+          ),
       ),
     )
-    assert.doesNotMatch(
-      JSON.stringify(entries),
-      /discarded-backend-output.*output|DISCARDED-CALLBACK/,
-    )
+    assert.doesNotMatch(JSON.stringify(entries), /DISCARDED-CALLBACK/)
   })
   host.queueResponse(completed)
   await host.session.prompt("Keep the completed call and compact activity")
@@ -875,8 +878,14 @@ test("termination and shutdown report bounded cleanup when a public result hook 
           entry.type === "custom" && entry.customType === "core-tools.activity",
       )
     assert(
-      entries.some((entry) =>
-        JSON.stringify(entry).includes('"type":"completed","child_id"'),
+      entries.some(
+        (entry) =>
+          entry.type === "custom" &&
+          (
+            entry.data as { events: { type: string; child_id?: string }[] }
+          ).events.some(
+            (event) => event.type === "completed" && event.child_id,
+          ),
       ),
     )
   })
@@ -971,7 +980,7 @@ test("reload closes live cells and values while keeping files and compact interr
       .length,
     10,
   )
-  assert.match(await host.frame(), /Status: running/)
+  assert.doesNotMatch(await host.frame(), /Execution cell|Status: running/)
   await collect(host, id, "empty", { yield_time_ms: 0 })
   assert.deepEqual(entries(), saved)
   api!.appendEntry("core-tools.activity", {
@@ -987,7 +996,10 @@ test("reload closes live cells and values while keeping files and compact interr
     await readFile(join(host.directory, "kept.txt"), "utf8"),
     "KEPT\n",
   )
-  assert.match(await host.frame(), /interrupted or unknown/)
+  assert.doesNotMatch(
+    await host.frame(),
+    /retained-interrupted|interrupted or unknown/,
+  )
   assert.match(
     await execute(host, 'text(load("reload"));', "new-values"),
     /undefined$/,

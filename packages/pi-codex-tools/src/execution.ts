@@ -2,9 +2,17 @@
 import { randomUUID } from "node:crypto"
 import { Worker } from "node:worker_threads"
 import { stripVTControlCharacters } from "node:util"
+import { truncateToWidth } from "@earendil-works/pi-tui"
+import {
+  boundedPreview,
+  contentHash,
+  type ExecutionDetails,
+  type OperationPresentation,
+} from "./presentation.ts"
 import { OutputStore, type OutputCursor } from "./output.ts"
 import type {
   AgentToolResult,
+  AgentToolUpdateCallback,
   ExtensionAPI,
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent"
@@ -15,7 +23,7 @@ export type WaitOptions = {
   terminate?: boolean
   yield_time_ms?: number
 }
-type Result = AgentToolResult<undefined>
+type Result = AgentToolResult<ExecutionDetails | undefined>
 type Status = "running" | "completed" | "failed" | "terminated"
 type Part = {
   id: number
@@ -31,6 +39,7 @@ type Activity = {
   name?: string
   arguments?: string
   error?: string
+  presentation?: OperationPresentation
 }
 type Journal = {
   cell_id: string
@@ -82,6 +91,8 @@ type Cell = {
   eventBytes: number
   eventCount: number
   notificationBytes: number
+  presentation: ExecutionDetails["execution"]
+  onUpdate: AgentToolUpdateCallback<ExecutionDetails | undefined> | undefined
 }
 const journalType = "core-tools.activity"
 const messageLimit = 8 * 1024 * 1024
@@ -94,7 +105,10 @@ const selectedNames = new Set([
   "view_image",
 ])
 const brief = (value: unknown) =>
-  stripVTControlCharacters(String(value)).replaceAll(/\s+/g, " ").slice(0, 256)
+  truncateToWidth(
+    stripVTControlCharacters(String(value)).replaceAll(/\s+/g, " "),
+    256,
+  )
 const failure = (message: string): Result => ({
   content: [{ type: "text", text: `Script error:\n${message}` }],
   details: undefined,
@@ -122,35 +136,7 @@ export class ExecutionCells {
     private readonly pi: ExtensionAPI,
     private readonly available: (name: string) => boolean,
   ) {
-    pi.registerEntryRenderer<Journal>(journalType, (entry) => ({
-      render: (width) => {
-        const data = entry.data
-        if (!data) return ["Execution activity is unavailable"]
-        const terminal = data.events.findLast(
-          (event) =>
-            !event.child_id &&
-            ["completed", "failed", "terminated"].includes(event.type),
-        )
-        const status =
-          terminal?.type ??
-          this.cells.get(data.cell_id)?.status ??
-          (data.status && data.status !== "running"
-            ? data.status
-            : "interrupted or unknown")
-        return [
-          `Execution cell ${data.cell_id}`,
-          `Status: ${status}`,
-          ...data.events.flatMap((event) =>
-            event.child_id
-              ? [
-                  `${event.child_id} ${event.name ?? ""}: ${event.type}${event.error ? ` (${event.error})` : ""}`,
-                ]
-              : [],
-          ),
-        ].map((line) => line.slice(0, width))
-      },
-      invalidate() {},
-    }))
+    pi.registerEntryRenderer<Journal>(journalType, () => undefined)
   }
 
   async start(
@@ -158,6 +144,7 @@ export class ExecutionCells {
     parentId: string,
     ctx: ExtensionToolContext,
     signal: AbortSignal | undefined,
+    onUpdate?: AgentToolUpdateCallback<ExecutionDetails | undefined>,
   ): Promise<Result> {
     if (this.closed || this.closing)
       return failure("Execution session is closed")
@@ -219,7 +206,15 @@ export class ExecutionCells {
       eventBytes: 0,
       eventCount: 0,
       notificationBytes: 0,
+      presentation: {
+        cellId: "",
+        parentCallId: parentId,
+        status: "running",
+        operations: [],
+      },
+      onUpdate,
     }
+    cell.presentation.cellId = cell.id
     this.cells.set(cell.id, cell)
     this.record(cell, { type: "created" })
     const tools = ctx.tools.filter(
@@ -380,6 +375,17 @@ export class ExecutionCells {
     },
   ): Promise<void> {
     const child = `${cell.id}/${message.id}`
+    const operation: OperationPresentation = {
+      id: child,
+      name: message.name,
+      status: "running",
+    }
+    if (cell.presentation.operations.length >= 8) {
+      cell.presentation.operations.shift()
+      cell.presentation.omitted = true
+    }
+    cell.presentation.operations.push(operation)
+    this.update(cell)
     try {
       this.record(cell, {
         type: "started",
@@ -396,7 +402,19 @@ export class ExecutionCells {
       const outcome = await cell.ctx.executeTool(
         message.name,
         message.name === "apply_patch" ? { input: message.args } : message.args,
-        { signal: cell.controller.signal },
+        {
+          signal: cell.controller.signal,
+          onUpdate: (partial) => {
+            const context = partial.details as
+              | { command?: string; cwd?: string }
+              | undefined
+            if (typeof context?.command === "string")
+              operation.command = boundedPreview(context.command)
+            if (typeof context?.cwd === "string")
+              operation.cwd = boundedPreview(context.cwd)
+            this.update(cell)
+          },
+        },
       )
       const blocked =
         message.name === "view_image" &&
@@ -407,7 +425,30 @@ export class ExecutionCells {
             .filter((part) => part.type === "text")
             .map((part) => part.text)
             .join("\n")
+      const context = outcome.result.details as
+        | { command?: string; cwd?: string }
+        | undefined
+      if (typeof context?.command === "string")
+        operation.command = boundedPreview(context.command)
+      if (typeof context?.cwd === "string")
+        operation.cwd = boundedPreview(context.cwd)
+      const structured = outcome.result.structuredContent as
+        | { output?: unknown; exit_code?: unknown }
+        | undefined
+      operation.output = boundedPreview(
+        typeof structured?.output === "string" ? structured.output : text,
+      )
+      if (typeof structured?.exit_code === "number")
+        operation.exitCode = structured.exit_code
+      operation.status =
+        outcome.isError ||
+        blocked ||
+        (operation.exitCode !== undefined && operation.exitCode !== 0)
+          ? "failed"
+          : "completed"
+      this.update(cell)
       this.record(cell, {
+        presentation: { ...operation },
         type: outcome.isError || blocked ? "failed" : "completed",
         child_id: child,
         name: message.name,
@@ -424,7 +465,11 @@ export class ExecutionCells {
         )
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error)
+      operation.status = "failed"
+      operation.output = boundedPreview(text)
+      this.update(cell)
       this.record(cell, {
+        presentation: { ...operation },
         type: "failed",
         child_id: child,
         name: message.name,
@@ -641,33 +686,37 @@ export class ExecutionCells {
         cell.imagesRead = cutoff.images
         cell.collectedYield = cutoff.yielded
         this.flush(cell)
+        cell.onUpdate = undefined
         if (cutoff.status !== "running") {
           cell.collected = true
           await Promise.all([cell.text.close(), cell.images.close()])
           if (!cell.calls.size) this.cells.delete(cell.id)
         }
-        if (cutoff.status === "failed" || cutoff.error)
+        if (cutoff.status === "failed" || cutoff.error) {
+          const failed = [
+            ...content,
+            ...failure(cutoff.error ?? "Execution failed").content,
+          ]
           return {
-            content: [
-              ...content,
-              ...failure(cutoff.error ?? "Execution failed").content,
-            ],
-            details: undefined,
+            content: failed,
+            details: this.details(cell, failed),
             isError: true,
           }
+        }
         const status =
           cutoff.status === "running"
             ? `running with cell ID ${cell.id}`
             : cutoff.status
+        const resultContent: Result["content"] = [
+          {
+            type: "text",
+            text: `Script ${status}\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
+          },
+          ...content,
+        ]
         return {
-          content: [
-            {
-              type: "text",
-              text: `Script ${status}\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
-            },
-            ...content,
-          ],
-          details: undefined,
+          content: resultContent,
+          details: this.details(cell, resultContent),
         }
       })
       .catch((error: unknown) =>
@@ -756,6 +805,21 @@ export class ExecutionCells {
         })
     }
     return content
+  }
+
+  private details(
+    cell: Cell,
+    content: Result["content"] = [],
+  ): ExecutionDetails {
+    cell.presentation.status = cell.status
+    return {
+      contentHash: contentHash(content),
+      execution: structuredClone(cell.presentation),
+    }
+  }
+
+  private update(cell: Cell): void {
+    cell.onUpdate?.({ content: [], details: this.details(cell) })
   }
 
   private record(cell: Cell, event: Activity): void {
