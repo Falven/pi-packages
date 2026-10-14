@@ -18,11 +18,12 @@ import { readRegularFile, type Snapshot } from "./recovery.ts"
 
 export function sourcePath(text: string, cwd: string): string {
   if (!text || /\p{Cc}/u.test(text)) throw new Error("Invalid file path")
-  if (
-    text.includes("\\") &&
-    statSync(resolve(cwd, text), { throwIfNoEntry: false })?.isFile()
-  )
-    return resolve(cwd, text)
+  const literal = resolve(cwd, text)
+  try {
+    if (statSync(literal, { throwIfNoEntry: false })?.isFile()) return literal
+  } catch {
+    // A quoted or URL spelling can still resolve after decoding.
+  }
   let path = text
   if (text.startsWith("'") && text.endsWith("'")) {
     path = text.slice(1, -1)

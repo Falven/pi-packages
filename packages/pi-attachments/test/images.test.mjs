@@ -56,7 +56,7 @@ for (const [name, extensions] of [
     })
     const source = join(host.directory, "hidden.png")
     await writeFile(source, Buffer.from(PNG, "base64"))
-    await host.runtime.session.prompt(`/attach-file ${source}`)
+    await host.attachFile(source)
     const draft = host.ui.getEditorText()
     const path = snapshotPath(draft)
     await waitFor(() => assert.match(host.render(), /\[Image: hidden\.png/))
@@ -214,7 +214,7 @@ test("native submission keeps original attachment dimensions when effective auto
   })
   const source = join(host.directory, "unresized.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   host.runtime.session.settingsManager.applyOverrides({
     images: { autoResize: false },
@@ -490,7 +490,7 @@ test("effective image width caps native preview graphics without recapturing the
   const bytes = await readFile(new URL("../fixtures/wide.png", import.meta.url))
   const source = join(host.directory, "wide.png")
   await writeFile(source, bytes)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   const dimensions = () => {
@@ -551,7 +551,7 @@ for (const [shape, image, expected] of [
     const source = join(host.directory, `${shape}.png`)
     const bytes = Buffer.from(image, "base64")
     await writeFile(source, bytes)
-    await host.runtime.session.prompt(`/attach-file ${source}`)
+    await host.attachFile(source)
     const draft = host.ui.getEditorText()
     const path = snapshotPath(draft)
     const dimensions = () => {

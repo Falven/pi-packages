@@ -141,14 +141,20 @@ test("Pi's standard settings menu edits, clears, and reports conflicting attachm
   assert.match(host.render(), /Attach\s+ctrl\+alt\+x/)
 
   host.input("\x1b[B")
+  host.input("\x1b[B")
   host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Enter key names separated/))
   host.input("\x0b")
   host.input("\r")
-  assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), [])
+  await waitFor(() =>
+    assert.deepEqual(host.ui.getActionKeys("extension.attachments.manage"), []),
+  )
   assert.match(host.render(), /Manage attachments\s+unbound/)
 
   host.input("\x1b[A")
+  host.input("\x1b[A")
   host.input("\r")
+  await waitFor(() => assert.match(host.render(), /Enter key names separated/))
   host.input("\x0b")
   host.input("\x1b[200~ctrl+c\x1b[201~")
   host.input("\r")
@@ -226,6 +232,23 @@ test("Attach accepts local quoted, escaped, URL, home, and relative file paths",
     assert.equal(await readFile(captured, "utf8"), "Known file bytes")
   }
   /* eslint-enable no-await-in-loop */
+})
+
+test("Attach preserves an existing literal filename before decoding quoted spelling", async (t) => {
+  const host = await nativePi(t)
+  await writeFile(join(host.directory, "report.txt"), "decoded")
+  await writeFile(join(host.directory, "'report.txt'"), "single literal")
+  await writeFile(join(host.directory, '"report.txt"'), "double literal")
+  async function expectCapture(spelling, expected) {
+    host.ui.setEditorText("")
+    await host.attachFile(spelling)
+    assert.equal(
+      await readFile(snapshotPath(host.ui.getEditorText()), "utf8"),
+      expected,
+    )
+  }
+  await expectCapture("'report.txt'", "single literal")
+  await expectCapture('"report.txt"', "double literal")
 })
 
 test(

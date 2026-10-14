@@ -399,5 +399,32 @@ export async function openNativeHost(
         assert(requests.length > 0 && !runtime.session.isStreaming)
       })
     },
+    async attachFile(path: string) {
+      const pending = runtime.session.prompt("/attach")
+      await t.waitFor(async () =>
+        assert.match(await this.frame(), /File path…/),
+      )
+      await this.key("\r")
+      await t.waitFor(async () =>
+        assert.match(await this.frame(), /Attach file/),
+      )
+      await this.key(`\x1b[200~${path}\x1b[201~`)
+      await this.key("\r")
+      await pending
+    },
+    async attachText(contents: string) {
+      const pending = runtime.session.prompt("/attach")
+      await t.waitFor(async () =>
+        assert.match(await this.frame(), /File path…/),
+      )
+      await this.key("\x1b[B")
+      await this.key("\r")
+      await t.waitFor(async () =>
+        assert.match(await this.frame(), /Attach text/),
+      )
+      await this.key(`\x1b[200~${contents}\x1b[201~`)
+      await this.key("\r")
+      await pending
+    },
   }
 }

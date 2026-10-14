@@ -30,9 +30,10 @@ test("Create from text follows effective editor padding and preserves entered by
   })
   host.runtime.session.settingsManager.applyOverrides({ editorPaddingX: 3 })
   host.ui.setEditorText("Keep this draft")
-  const pending = host.runtime.session.sendUserMessage("/attach-text", {
-    expandPromptTemplates: true,
-  })
+  const pending = host.runtime.session.prompt("/attach")
+  await waitFor(() => assert.match(host.render(), /File path…/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("Entered text")
   host.render()

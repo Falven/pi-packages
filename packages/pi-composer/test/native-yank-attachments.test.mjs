@@ -14,12 +14,7 @@ for (const view of ["formatted", "source"]) {
   test(`${view} yank-pop changes attachment membership in one recoverable edit`, async (t) => {
     const host = await nativePi(t, [composer])
     if (view === "source") host.input("\x1b[109;10u")
-    await host.runtime.session.sendUserMessage(
-      "/attach-text First retained bytes",
-      {
-        expandPromptTemplates: true,
-      },
-    )
+    await host.attachText("First retained bytes")
     const first = host.ui.getEditorText().trim()
     host.ui.setEditorText(first)
     host.input("\x1b[97;9u")
@@ -27,12 +22,7 @@ for (const view of ["formatted", "source"]) {
     assert.equal(host.ui.getEditorText(), "")
     assert.doesNotMatch(host.render(), /Manage attachments/)
 
-    await host.runtime.session.sendUserMessage(
-      "/attach-text Second retained bytes",
-      {
-        expandPromptTemplates: true,
-      },
-    )
+    await host.attachText("Second retained bytes")
     const second = host.ui.getEditorText().trim()
     host.ui.setEditorText(second)
     host.input("\x1b[97;9u")

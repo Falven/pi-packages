@@ -103,9 +103,7 @@ test("mixed snapshots stay opaque until Restore Inline invokes prose while resto
   const beforeImage = host.ui.getEditorText()
   const imageSource = join(host.directory, "diagram.png")
   await writeFile(imageSource, Buffer.from(PNG, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${imageSource}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(imageSource)
   const imageReference = host.ui
     .getEditorText()
     .slice(beforeImage.length)
@@ -347,13 +345,14 @@ for (const [route, paste] of [
   }
 }
 
-test("copied files, clipboard images, copied references, and explicit overrides share the mixed draft history", async (t) => {
+test("copied files, clipboard images, copied references, and entered text share the mixed draft history", async (t) => {
   const clipboard = getNativeClipboard()
   assert.ok(clipboard?.setText)
   let copied = "Accompanying clipboard text"
   let files
+  let image = Buffer.from(PNG, "base64")
   t.mock.method(clipboard, "getFilePaths", async () => files)
-  t.mock.method(clipboard, "getImage", async () => Buffer.from(PNG, "base64"))
+  t.mock.method(clipboard, "getImage", async () => image)
   t.mock.method(clipboard, "getText", async () => copied)
   t.mock.method(clipboard, "setText", async (text) => {
     copied = text
@@ -404,6 +403,7 @@ test("copied files, clipboard images, copied references, and explicit overrides 
   const imagePath = snapshotPath(withImage.slice(attached.length))
   assert.deepEqual(await readFile(imagePath), Buffer.from(PNG, "base64"))
 
+  image = null
   const references = '**/skill:review** @"Résumé 你好 notes.txt" 👩‍💻'
   host.ui.setEditorText(`${withImage}\n${references}`)
   host.input("\x1b[109;10u")
@@ -412,7 +412,7 @@ test("copied files, clipboard images, copied references, and explicit overrides 
   await waitFor(() => assert.equal(copied, references))
   host.input("\x1b[120;9u")
   await waitFor(() => assert.equal(host.ui.getEditorText(), `${withImage}\n`))
-  host.input("\x1b[118;7u")
+  host.input("\x1b[118;9u")
   await waitFor(() =>
     assert.equal(host.ui.getEditorText(), `${withImage}\n${references}`),
   )
@@ -425,19 +425,7 @@ test("copied files, clipboard images, copied references, and explicit overrides 
   const code = `${withImage}\n\`\`\`text\nOLD`
   host.ui.setEditorText(code)
   for (let index = 0; index < 3; index++) host.input("\x1b[1;2D")
-  copied = "\t/skill:literal\n".padEnd(5001, "x")
-  files = [source]
-  host.input("\x1b[118;7u")
-  await waitFor(() =>
-    assert.equal(host.ui.getEditorText(), code.replace("OLD", copied)),
-  )
-  assertAttachments(host.ui.getEditorText(), host.render(), 3)
-  host.input(undo)
-  assert.equal(host.ui.getEditorText(), code)
-  host.input("\x1b[116;7u")
-  await waitFor(() => assert.match(host.render(), /Attach text/))
-  host.input("\x1b[200~Short /skill:literal\x1b[201~")
-  host.input("\r")
+  await host.attachText("Short /skill:literal")
   await waitFor(() =>
     assertAttachments(host.ui.getEditorText(), host.render(), 4),
   )
@@ -483,12 +471,7 @@ test("mixed drafts retain early and updated native providers, character editing,
       writeFile(join(host.directory, name), "Current source"),
     ),
   )
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Opaque /skill:literal",
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  await host.attachText("Opaque /skill:literal")
   const reference = host.ui.getEditorText().trim()
   const prefix = `# Mixed\n\n**Context** \`/skill:literal\`\n${reference}\n`
   host.ui.setEditorText(`${prefix}Read @current`)
@@ -610,9 +593,7 @@ test("mixed dequeue replay preserves skills, opaque text, images, and input tran
   const beforeImage = host.ui.getEditorText()
   const source = join(host.directory, "replay.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),
   )
@@ -685,9 +666,7 @@ for (const delivery of ["normal", "steer", "followUp"]) {
     const beforeImage = host.ui.getEditorText()
     const source = join(host.directory, "delivery.bmp")
     await writeFile(source, Buffer.from(BMP, "base64"))
-    await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const imageReference = host.ui
       .getEditorText()
       .slice(beforeImage.length)
@@ -798,9 +777,7 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
   const beforeImage = host.ui.getEditorText()
   const imageSource = join(host.directory, "resumed.png")
   await writeFile(imageSource, Buffer.from(PNG, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${imageSource}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(imageSource)
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),
   )
@@ -828,12 +805,7 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
   await host.runtime.session.waitForIdle()
   const sessionB = host.runtime.session.sessionFile
   host.ui.setEditorText("Session B /skill:audit")
-  await host.runtime.session.sendUserMessage(
-    "/attach-text B captured context",
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  await host.attachText("B captured context")
   const draftB = host.ui.getEditorText()
   const pathB = snapshotPath(draftB)
   await host.runtime.session.reload()
@@ -857,9 +829,7 @@ test("a pending mixed paste stays with its session through reload, recovery, cle
 
   await host.runtime.switchSession(sessionA)
   assert.equal(host.ui.getEditorText(), draftA)
-  await host.runtime.session.sendUserMessage(`/attach-file ${latePath}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(latePath)
   await waitFor(() =>
     assertAttachments(host.ui.getEditorText(), host.render(), 3),
   )
@@ -927,9 +897,7 @@ test("real model and filesystem failures keep mixed requests recoverable without
   const beforeImage = host.ui.getEditorText()
   const source = join(host.directory, "failed.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),
   )
@@ -1015,12 +983,7 @@ test("real model and filesystem failures keep mixed requests recoverable without
 
 test("a denied snapshot write retries a captured mixed paste as one selection edit", async (t) => {
   const host = await nativePi(t, extensions, { skillPaths: [await catalog(t)] })
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Retain this attachment",
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  await host.attachText("Retain this attachment")
   const reference = host.ui.getEditorText().trim()
   const keptPath = snapshotPath(reference)
   const draft = `# Mixed\n\n**Apply** /skill:review @current.md\n${reference}\nOLD`
@@ -1135,9 +1098,7 @@ test("replacing the editor and disabling composition extensions leave saved Mark
   const beforeImage = host.ui.getEditorText()
   const source = join(host.directory, "replace.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),
   )

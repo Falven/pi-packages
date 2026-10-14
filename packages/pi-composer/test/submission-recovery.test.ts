@@ -22,9 +22,7 @@ async function attachDraft(
   const source = join(host.directory, `${name}.txt`)
   await writeFile(source, contents)
   host.ui.setEditorText(`  ${name} request\t\n`)
-  await host.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const text = host.ui.getEditorText()
   const path = /\[Attachment: [^\]]+\]\(<([^>]+)>\)/.exec(text)?.[1]
   assert(path, "The native attachment action must publish a readable snapshot")
@@ -72,9 +70,7 @@ for (const mode of ["normal", "idleFollowUp", "steer", "followUp"] as const) {
     const source = join(host.directory, "original.txt")
     await writeFile(source, "Captured before submission.\n\tExact bytes.\r\n")
     host.ui.setEditorText("  Original request\t\n")
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const original = host.ui.getEditorText()
     const snapshot = /\[Attachment: original.txt\]\(<([^>]+)>\)/.exec(
       original,
@@ -166,9 +162,7 @@ test("a first preflight failure keeps the original and later draft recoverable a
   const source = join(host.directory, "preflight.txt")
   await writeFile(source, "Snapshot survives a preflight failure.\n")
   host.ui.setEditorText("  First preflight draft\t\n")
-  await host.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const original = host.ui.getEditorText()
   const snapshot = /\[Attachment: preflight.txt\]\(<([^>]+)>\)/.exec(
     original,
@@ -615,9 +609,7 @@ for (const mode of ["steer", "followUp"] as const) {
     const source = join(host.directory, "image.png")
     await writeFile(source, Buffer.from(imageData, "base64"))
     host.ui.setEditorText(`  Image ${mode} request\t\n`)
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const original = host.ui.getEditorText()
     const snapshot = /\[Attachment: image.png\]\(<([^>]+)>\)/.exec(
       original,

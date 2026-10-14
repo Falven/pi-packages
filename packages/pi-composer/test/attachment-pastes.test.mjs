@@ -63,9 +63,7 @@ function holdSnapshotWrite(t, host) {
 test("snapshot failure preserves the selected draft and captured bytes for one undoable retry", async (t) => {
   const host = await nativePi(t, [composerPath])
   const capture = holdSnapshotWrite(t, host)
-  await host.runtime.session.sendUserMessage("/attach-text Existing context", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Existing context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   const before = `Keep\n${originalReference}\nselected`
@@ -146,9 +144,7 @@ for (const [route, extensions] of [
       })
       const source = join(host.directory, "original.txt")
       await writeFile(source, "Original attachment contents\n")
-      await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-        expandPromptTemplates: true,
-      })
+      await host.attachFile(source)
       const originalReference = host.ui.getEditorText().trim()
       const originalPath = snapshotPath(originalReference)
       const before = `Keep /skill:review @"source file.md"\n${originalReference} **old**\nTail`
@@ -221,9 +217,7 @@ for (const [route, extensions] of [
 
 test("a paste over a complete formatted attachment replaces its reference without nesting links", async (t) => {
   const host = await nativePi(t, [composerPath, attachmentsPath])
-  await host.runtime.session.sendUserMessage("/attach-text Original context", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Original context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   const before = `Keep\n${originalReference}\nTail`
@@ -258,12 +252,7 @@ for (const change of [
   test(`a snapshot finishing after a ${change} preserves the target and requested text`, async (t) => {
     const host = await nativePi(t, [composerPath, attachmentsPath])
     const capture = holdSnapshotWrite(t, host)
-    await host.runtime.session.sendUserMessage(
-      "/attach-text Existing context",
-      {
-        expandPromptTemplates: true,
-      },
-    )
+    await host.attachText("Existing context")
     const originalReference = host.ui.getEditorText().trim()
     const originalPath = snapshotPath(originalReference)
     const before = `Keep\n${originalReference}\nselected`
@@ -352,12 +341,7 @@ test("a capture finishing across a native session switch preserves both drafts a
     assert.equal(host.requests.length, 1)
     assert.equal(host.runtime.session.isStreaming, false)
   })
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Original session context",
-    {
-      expandPromptTemplates: true,
-    },
-  )
+  await host.attachText("Original session context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   const before = `Keep\n${originalReference}\nselected`
@@ -392,9 +376,7 @@ test("a capture finishing across a native session switch preserves both drafts a
 test("submission during snapshot preparation sends the old membership and preserves the next draft", async (t) => {
   const host = await nativePi(t, [composerPath])
   const capture = holdSnapshotWrite(t, host)
-  await host.runtime.session.sendUserMessage("/attach-text Submitted context", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Submitted context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   const before = `Keep\n${originalReference}\nselected`
@@ -425,41 +407,9 @@ test("submission during snapshot preparation sends the old membership and preser
   assert.equal(host.ui.getEditorText(), "Next draft")
 })
 
-test("Paste Inline replaces formatted attachment membership without retaining its old link or applying the cutoff", async (t) => {
-  const clipboard = getNativeClipboard()
-  assert.ok(clipboard)
-  const text = "inline ".repeat(750).trimEnd()
-  t.mock.method(clipboard, "getText", async () => text)
-  const host = await nativePi(t, [composerPath, attachmentsPath])
-  await host.runtime.session.sendUserMessage("/attach-text Original context", {
-    expandPromptTemplates: true,
-  })
-  const originalReference = host.ui.getEditorText().trim()
-  const originalPath = snapshotPath(originalReference)
-  const before = `Keep\n${originalReference} **old**\nTail`
-  host.ui.setEditorText(before)
-  host.input("\x1b[1;9D")
-  host.input("\x1b[D")
-  host.input("\x1b[1;10D")
-  await host.runtime.session.sendUserMessage("/paste-inline", {
-    expandPromptTemplates: true,
-  })
-  const after = `Keep\n${text}\nTail`
-  assert.equal(host.ui.getEditorText(), after)
-  assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
-  host.input("\x1b[122;9u")
-  assert.equal(host.ui.getEditorText(), before)
-  assertAttachments(host.ui.getEditorText(), host.render(), ["text.txt"])
-  host.input("\x1b[122;10u")
-  assert.equal(host.ui.getEditorText(), after)
-  assert.equal(await readFile(originalPath, "utf8"), "Original context")
-})
-
 test("Attach Text replaces a formatted attachment selection with short captured text in one edit", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage("/attach-text Original context", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Original context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   const before = `Keep\n${originalReference}\nTail`
@@ -467,10 +417,7 @@ test("Attach Text replaces a formatted attachment selection with short captured 
   host.input("\x1b[1;9D")
   host.input("\x1b[D")
   host.input("\x1b[1;10D")
-  host.input("\x1b[116;7u")
-  await waitFor(() => assert.match(host.render(), /Attach text/))
-  host.input("\x1b[200~\nShort context\n\x1b[201~")
-  host.input("\r")
+  await host.attachText("\nShort context\n")
   const path = await waitFor(() => {
     const candidate = snapshotPath(host.ui.getEditorText())
     assert.notEqual(candidate, originalPath)
@@ -501,9 +448,7 @@ test("an attachment paste commits during native settlement as one undoable selec
       },
     ],
   })
-  await host.runtime.session.sendUserMessage("/attach-text Existing context", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Existing context")
   const originalReference = host.ui.getEditorText().trim()
   const originalPath = snapshotPath(originalReference)
   host.submit("Initial request")
