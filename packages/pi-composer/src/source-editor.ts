@@ -610,6 +610,13 @@ export class SourceEditor extends CustomEditor {
     return this.project().wordBoundary(this.draft.head, direction)
   }
 
+  submitDraft(): void {
+    const text = this.getText()
+    const identity = this.getEditorTextIdentity()
+    this.setText("")
+    this.onSubmit?.(text, identity)
+  }
+
   private moveVertically(direction: -1 | 1, select: boolean): void {
     const projection = this.project()
     const row = projection.rowAt(this.draft.head) + direction
@@ -892,10 +899,7 @@ export class SourceEditor extends CustomEditor {
     }
     if (keys.matches(data, "tui.input.submit") || submitAlias) {
       if (this.disableSubmit || !this.getText().trim()) return
-      const text = this.getText()
-      const identity = this.getEditorTextIdentity()
-      this.setText("")
-      this.onSubmit?.(text, identity)
+      this.submitDraft()
       return
     }
     if (movementMatches("tui.editor.cursorUp")) {
