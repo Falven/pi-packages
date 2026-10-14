@@ -6,16 +6,28 @@
 
 **Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi’s image pipeline (presentation deltas).
 
-**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+**Status:** resolved — presentation workflow checks complete with the companion compatibility limit below; completed baseline retained below
 
 ## Presentation delta
 
-- [ ] Exercise mixed operations and consecutive calls using the existing real-host fixture with the configured companion setup. Parent cards own nested output; invisible routine entries add no standalone rows while unrelated notices and final responses remain intact.
-- [ ] Verify rendering during streaming, work after yielding and during a later prompt, input from another execution, late failures, and waits with unchanged model result collection and hook handling.
-- [ ] Verify reload, resume, fork or branch selection, shutdown, cancellation, and retained history. Later terminal records must win; old work must not acquire the active request’s identity or restore workers and processes.
-- [ ] Check native themes, image preferences, manual/global expansion, and terminal-width behavior. Generic extension labels and native tool shells remain unchanged.
-- [ ] Keep all implementation and test changes within the tool package or the minimal existing host-fixture seam it owns. Pi source and every chat-package correction are explicitly out of scope, including its work-folding and insertion-identity defects.
-- [ ] Run the configured-runtime smoke available through the existing host seam. Record exact runtime versions and pre-existing companion incompatibilities separately; do not alter unrelated packages to make a suite pass.
+- [x] Exercise mixed operations and consecutive calls using the existing real-host fixture with the configured companion setup. Parent cards own nested output; invisible routine entries add no standalone rows while unrelated notices and final responses remain intact.
+- [x] Verify rendering during streaming, work after yielding and during a later prompt, input from another execution, late failures, and waits with unchanged model result collection and hook handling.
+- [x] Verify reload, resume, fork or branch selection, shutdown, cancellation, and retained history. Later terminal records must win; old work must not acquire the active request’s identity or restore workers and processes.
+- [x] Check native themes, image preferences, manual/global expansion, and terminal-width behavior. Generic extension labels and native tool shells remain unchanged.
+- [x] Keep all implementation and test changes within the tool package or the minimal existing host-fixture seam it owns. Pi source and every chat-package correction are explicitly out of scope, including its work-folding and insertion-identity defects.
+- [x] Run the configured-runtime smoke available through the existing host seam. Record exact runtime versions and pre-existing companion incompatibilities separately; do not alter unrelated packages to make a suite pass.
+
+## Presentation verification
+
+At integration revision `726e350`, the added [mixed presentation checks](../../../packages/pi-codex-tools/test/workflow-presentation.test.ts) pass through the existing real native host and controlled provider. Both package load orders combine project inspection, file creation, hook-redacted validation, a local image, explicit yielding, a late script failure, later collection, and reload. Dark/light settings, disabled image display with preserved model image content, native disclosure controls, generic extension labels, bounded terminal width, unrelated notices and final responses, original source history, and invisible activity records remain intact. A gated command additionally emits live output, finishes with exit status 9 while an independent final response is streaming, stays before that later request in its originating card, and remains available to a later wait without an extra provider request. No runtime correction was needed in this ticket.
+
+The companion-only control and both load orders use the five local companion extensions from the `726e350` snapshot. Pi 1.0.2 reports the pre-existing attachments load error `pi.registerSetting is not a function` with or without the toolset. These tests explicitly retain that diagnostic; they do not establish working attachment integration. Composer, skill references, chat, and goal continue to load. Existing native-host presentation and cell checks passed 45/45, including pipe/PTY live output, input from another execution, hooks, cancellation, termination, shutdown, branch selection, resume/fork, legacy history, clipping, and cleanup. The four new mixed checks passed 4/4 after the final assertions were tightened. Type checking, package lint, formatting, and whitespace validation pass.
+
+The installed `/Users/fran/Library/pnpm/bin/pi` reports **1.1.0**. An external real-PTY probe reused the existing controlled provider and isolated settings with the five snapshot companions plus the configured web extension 1.6.0 and prompt/lifecycle extension 4.13.0. Full startup fails on the same attachments setting API error. A companion-only control without the toolset reproduces that exact startup failure before any provider request. Excluding only attachments permits the remaining six companions and toolset to complete a command, native expansion, readable output/exit status, and reload with no additional provider request (2 requests total). This is a snapshot-code smoke on the installed runtime, not a claim about the concurrently changing primary checkout or a physical terminal inspection. No user settings or credentials were changed.
+
+The temporary executable probes remain outside the repository. Their SHA-256 values are `e07ac7f88e2a1057998c36b9a1b7589caf843a9a00782453398e4e058b8fb609` (full inventory startup), `23ed773e4fcee5dd98fa6a43b929e4ff1afe823a3eff216a18a8db04ed2ea781` (companion-only failure control), and `bbe994a4037493bad310d2604bbea9f3d770db3974426b626d2ed86918c553fb` (attachments-excluded command smoke). The two installed companion manifests hash to `5308ee8f7d84b9a663c93ae0ae99f2b61d23a91044cdffb626e932093575c945` and `11118287abcc7fb463036864b6da6ebaae9c6716d1260a5a3c311f5a43ccfe75`, respectively.
+
+Pi source and companion packages remain unchanged. The chat package's independent work-folding and custom-entry insertion defects remain outside this ticket; the checks do not assert their repair. Final full-package validation, the extended installed-runtime live/continuation smoke, performance comparison, and independent reviews belong to ticket 07.
 
 ## Completed baseline
 
