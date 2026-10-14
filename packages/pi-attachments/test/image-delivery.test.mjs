@@ -1,9 +1,12 @@
 import assert from "node:assert/strict"
+import { execFile } from "node:child_process"
 import fs, { mkdir, readFile, realpath, writeFile } from "node:fs/promises"
 import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { test } from "node:test"
+import { setImmediate } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
+import { promisify } from "node:util"
 import { getAgentDir } from "@earendil-works/pi-coding-agent"
 import { getImageDimensions } from "@earendil-works/pi-tui"
 import { nativePi, retainedRequest, waitFor } from "../fixtures/native-pi.mjs"
@@ -61,7 +64,59 @@ async function retainedImage(host, name, contents) {
   return { path, draft }
 }
 
-test("preparation before Send is reused by concurrent preparation and native input without losing earlier images", async (t) => {
+test("completed image preparation releases cached content after earlier input consumes Send", async (t) => {
+  const gc = globalThis.gc
+  if (!gc) {
+    const environment = { ...process.env }
+    delete environment.NODE_TEST_CONTEXT
+    await promisify(execFile)(
+      process.execPath,
+      [
+        "--expose-gc",
+        "--test",
+        "--test-name-pattern=completed image preparation releases cached content",
+        fileURLToPath(import.meta.url),
+      ],
+      { env: environment },
+    )
+    return
+  }
+  const host = await imageSession(t, [inputExtension])
+  const { path, draft } = await retainedImage(
+    host,
+    "consumed.bmp",
+    Buffer.from(BMP, "base64"),
+  )
+  const file = await realpath(path)
+  const read = fs.readFile
+  let reads = 0
+  const mocked = t.mock.method(fs, "readFile", (...args) => {
+    if (args[0] === file) reads++
+    return read(...args)
+  })
+  syncBuiltinESMExports()
+  t.after(() => {
+    mocked.mock.restore()
+    syncBuiltinESMExports()
+  })
+  await host.runtime.session.prompt("/prepare-images")
+  assert.equal(reads, 1)
+  host.submit(`Handled here\n${draft}`)
+  await waitFor(() =>
+    assert.match(host.render(), /Earlier input handler handled the request/),
+  )
+  for (let attempt = 0; attempt < 5; attempt++) {
+    // eslint-disable-next-line no-await-in-loop -- Release WeakRef's current-job keepalive before collecting.
+    await setImmediate()
+    gc()
+  }
+  host.ui.setEditorText(draft)
+  await host.runtime.session.prompt("/prepare-images")
+  assert.equal(reads, 2)
+  assert.equal(host.requests.length, 0)
+})
+
+test("concurrent preparation shares in-flight content and native input preserves earlier images", async (t) => {
   const host = await imageSession(t, [inputExtension], {
     settings: { images: { autoResize: false } },
   })
@@ -73,7 +128,7 @@ test("preparation before Send is reused by concurrent preparation and native inp
   const file = await realpath(path)
   const read = fs.readFile
   let reads = 0
-  let held = Promise.withResolvers()
+  const held = Promise.withResolvers()
   const mocked = t.mock.method(fs, "readFile", async (...args) => {
     const contents = await read(...args)
     if (args[0] === file) {
@@ -97,16 +152,8 @@ test("preparation before Send is reused by concurrent preparation and native inp
   await initial
   assert.equal(reads, 1)
   assert.match(host.render(), /Images prepared/)
-  held = Promise.withResolvers()
-  const repeated = Promise.all([
-    host.runtime.session.prompt("/prepare-images"),
-    host.runtime.session.prompt("/prepare-images"),
-  ])
   host.submit()
   await waitFor(() => assert.equal(host.requests.length, 1))
-  await repeated
-  assert.equal(reads, 1)
-  held.resolve()
 
   const user = host.requests[0].messages.find(
     (message) => message.role === "user",

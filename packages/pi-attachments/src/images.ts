@@ -60,8 +60,24 @@ export function registerImages(
   thumbnailSize: () => ThumbnailSize,
 ) {
   registerRecovery(pi, storage, signal)
-  const prepared = new Map<string, ReturnType<typeof prepareImage>>()
-  signal.addEventListener("abort", () => prepared.clear(), { once: true })
+  type PreparedImage = NonNullable<Awaited<ReturnType<typeof prepareImage>>>
+  const prepared = new Map<string, WeakRef<PreparedImage>>()
+  const preparing = new Map<string, ReturnType<typeof prepareImage>>()
+  const collected = new FinalizationRegistry<{
+    key: string
+    reference: WeakRef<PreparedImage>
+  }>(({ key, reference }) => {
+    if (prepared.get(key) === reference) prepared.delete(key)
+  })
+  signal.addEventListener(
+    "abort",
+    () => {
+      for (const reference of prepared.values()) collected.unregister(reference)
+      prepared.clear()
+      preparing.clear()
+    },
+    { once: true },
+  )
 
   async function retain(request: Parameters<typeof saveRequest>[1]) {
     try {
@@ -146,17 +162,25 @@ export function registerImages(
       const captured = await Promise.all(
         paths.map((path) => {
           const key = JSON.stringify([path, autoResize, resizeOptions])
-          let image = prepared.get(key)
-          if (!image) {
-            image = prepareImage(path, autoResize, resizeOptions).catch(
-              (error) => {
-                prepared.delete(key)
-                throw error
-              },
-            )
-            prepared.set(key, image)
+          const retained = prepared.get(key)?.deref()
+          if (retained) return retained
+          let pending = preparing.get(key)
+          if (!pending) {
+            pending = prepareImage(path, autoResize, resizeOptions)
+              .then((image) => {
+                if (image && !signal.aborted) {
+                  const previous = prepared.get(key)
+                  if (previous) collected.unregister(previous)
+                  const reference = new WeakRef(image)
+                  prepared.set(key, reference)
+                  collected.register(image, { key, reference }, reference)
+                }
+                return image
+              })
+              .finally(() => preparing.delete(key))
+            preparing.set(key, pending)
           }
-          return image
+          return pending
         }),
       )
       signal.throwIfAborted()

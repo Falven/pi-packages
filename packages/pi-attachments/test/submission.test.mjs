@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import { readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { test } from "node:test"
+import { setImmediate } from "node:timers/promises"
 import { fileURLToPath } from "node:url"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { holdFileRead, retainedRequest } from "../fixtures/native-pi.mjs"
@@ -57,6 +58,13 @@ for (const composer of [false, true]) {
                 if (event.text.startsWith("First")) {
                   firstAtHandler = true
                   await inputGate.promise
+                  if (globalThis.gc) {
+                    for (let attempt = 0; attempt < 5; attempt++) {
+                      // eslint-disable-next-line no-await-in-loop -- Exercise cache collection between editor preparation and public input.
+                      await setImmediate()
+                      globalThis.gc()
+                    }
+                  }
                 }
                 inputs.push(event.text)
                 return {
