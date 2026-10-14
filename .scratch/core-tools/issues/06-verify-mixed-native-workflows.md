@@ -6,7 +6,7 @@
 
 **Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi's image pipeline.
 
-**Status:** blocked by 03 — public nested-call lifetime; partial composition checked
+**Status:** blocked by 02 and 03 — revised storage and continuation implementation; prior partial composition checked
 
 - [ ] Demonstrate a mixed workflow that inspects a project, changes a file, validates the change, and inspects a local image through the selected toolset.
 - [ ] Verify normal package loading and reloading, activation in an existing conversation, and explicit tool inclusions/exclusions. Distinguish hidden declarations from callable-tool access and preserve historical calls.
@@ -15,6 +15,8 @@
 - [ ] Preserve provider composition and the user's guidance, skills, model settings, and effective host preferences. Introduce no second conversation store or package-specific chat protocol.
 - [ ] Verify ordinary prompt continuation with live process/cell state, then new/resumed/forked sessions, reload, quit, and shutdown using actual native lifecycle events. Clear owned live state while retaining completed file changes and history.
 - [ ] Verify cancellation and result interception across a mixed sequence, including a blocked nested call and a redacted result that stays redacted in the next model request.
+- [ ] Verify package-owned cell activity presentation with the configured companions, including work between waits and interrupted records after resume. Native hook IDs/context remain accepted limits; change chat code only after a demonstrated presentation failure.
+- [ ] Verify that cancelling a later wait preserves its cell and unread output, while termination and session replacement clean up owned work. Check notification delivery without an unsolicited turn or duplicated model content.
 - [ ] Keep user-entered shell commands on their native path and avoid changes to terminal, keybinding, editor, or clipboard ownership.
 - [ ] Reuse the same host fixture for integration checks; run the affected existing companion checks only where this slice changes shared behavior.
 

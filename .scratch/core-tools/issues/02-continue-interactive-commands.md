@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** resolved — process continuation slice; full contract remains blocked
+**Status:** claimed — preserve process behavior while sharing asynchronous output storage with cells
 
 - [x] Expose and execute the captured `write_stdin` contract through the existing orchestration and public dispatch path.
 - [x] Support both pipes and an explicitly requested PTY, with accurate input delivery, output, completion status, and process session identifier behavior.
@@ -18,6 +18,13 @@
 - [x] Keep process handles available across ordinary prompts in the same active extension session. Treat invalid, completed, and stale identifiers according to the verified contract.
 - [x] Exercise cancellation and normal session shutdown/reload, including owned child cleanup and retained partial output. Do not restore live handles from history or create a survival daemon.
 - [x] Verify the full request/tool/next-request interaction with real controlled processes through the existing host fixture, including nonzero completion and a failed input/poll call.
+- [ ] Replace synchronous spill I/O with shared asynchronous storage, retaining small output in memory and using private bounded spill files for larger output.
+- [ ] Apply producer backpressure and finite queued/unread limits, preserve incremental UTF-8/truncation behavior, and collect only required new ranges with a stable cutoff.
+- [ ] Verify large continued output, failure, cancellation, cleanup, private file modes, and concurrent collection through the existing real-host seam. Keep existing command arguments, timings, results, and process ownership.
+
+## Approved continuation revision
+
+The prior process slice remains implemented. It is reopened only for the shared storage needed by ticket 03. The proposed internal limits are 64 KiB retained in memory, 256 KiB asynchronous batches/high-water, 1 MiB queued bytes, and 64 MiB unread bytes per owner. Spill is lazy and private; retained disk use must remain bounded across repeated collections. Overflow or I/O failure stops the producer and produces an explicit collected error with cleanup. The implementation must preserve already accepted output and never silently lose a live handle. Final verified limits and measurements belong here.
 
 ## Implementation evidence
 
