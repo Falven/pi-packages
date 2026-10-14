@@ -406,12 +406,14 @@ export class ExecutionCells {
           signal: cell.controller.signal,
           onUpdate: (partial) => {
             const context = partial.details as
-              | { command?: string; cwd?: string }
+              | { command?: string; cwd?: string; path?: string }
               | undefined
             if (typeof context?.command === "string")
               operation.command = boundedPreview(context.command)
             if (typeof context?.cwd === "string")
               operation.cwd = boundedPreview(context.cwd)
+            if (typeof context?.path === "string")
+              operation.path = boundedPreview(context.path)
             this.update(cell)
           },
         },
@@ -426,17 +428,23 @@ export class ExecutionCells {
             .map((part) => part.text)
             .join("\n")
       const context = outcome.result.details as
-        | { command?: string; cwd?: string }
+        | { command?: string; cwd?: string; path?: string }
         | undefined
       if (typeof context?.command === "string")
         operation.command = boundedPreview(context.command)
       if (typeof context?.cwd === "string")
         operation.cwd = boundedPreview(context.cwd)
+      if (typeof context?.path === "string")
+        operation.path = boundedPreview(context.path)
       const structured = outcome.result.structuredContent as
-        | { output?: unknown; exit_code?: unknown }
+        | { output?: unknown; exit_code?: unknown; image_url?: unknown }
         | undefined
       operation.output = boundedPreview(
-        typeof structured?.output === "string" ? structured.output : text,
+        !blocked && typeof structured?.image_url === "string"
+          ? ""
+          : typeof structured?.output === "string"
+            ? structured.output
+            : text,
       )
       if (typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code

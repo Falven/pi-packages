@@ -12,6 +12,7 @@ export type OperationPresentation = {
   status: "running" | "completed" | "failed"
   command?: string
   cwd?: string
+  path?: string
   output?: string
   exitCode?: number
 }
@@ -26,8 +27,30 @@ export type ExecutionDetails = {
   }
 }
 
-export const contentHash = (content: AgentToolResult<unknown>["content"]) =>
-  createHash("sha256").update(JSON.stringify(content)).digest("hex")
+export const contentHash = (
+  content: AgentToolResult<unknown>["content"],
+  nativeHints = false,
+) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify(
+        content.flatMap((part, index) => {
+          if (part.type === "image") return [{ type: "image" }]
+          // Native image normalization appends hints immediately after its image.
+          if (
+            nativeHints &&
+            part.type === "text" &&
+            content[index - 1]?.type === "image" &&
+            /^(?:\[Image converted from [\w/+.-]+ to [\w/+.-]+\.\](?:\n|$))(?:\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\])?$|^\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\]$/.test(
+              part.text,
+            )
+          )
+            return []
+          return [part]
+        }),
+      ),
+    )
+    .digest("hex")
 
 const previewLimit = 16384
 export function boundedPreview(text: string): string {
@@ -60,11 +83,23 @@ function readable(
         /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
         "",
       )
+      // Aggregate truncation loses text boundaries, including serialized image envelopes.
+      if (
+        text.startsWith("Warning: truncated output") &&
+        operations.some((operation) => operation.name === "view_image")
+      )
+        return "[Truncated script output omitted from preview]"
       try {
         const parsed = JSON.parse(text) as {
           output?: unknown
           wall_time_seconds?: unknown
+          image_url?: unknown
         }
+        if (
+          typeof parsed.image_url === "string" &&
+          parsed.image_url.startsWith("data:")
+        )
+          return "[Image result]"
         if (
           typeof parsed.output === "string" &&
           typeof parsed.wall_time_seconds === "number"
@@ -90,7 +125,9 @@ export const executionRenderers: ToolRenderers = {
   renderResult(result, options, theme, context) {
     const details = result.details as ExecutionDetails | undefined
     const execution =
-      details?.contentHash === contentHash(result.content)
+      details &&
+      (details.contentHash === contentHash(result.content) ||
+        details.contentHash === contentHash(result.content, true))
         ? details.execution
         : undefined
     const operations = execution?.operations ?? []
@@ -100,11 +137,13 @@ export const executionRenderers: ToolRenderers = {
         ? "failed"
         : (execution?.status ?? "completed")
     const label =
-      operations.length === 1 && operations[0]?.name === "exec_command"
-        ? "Command"
-        : operations.length
-          ? `${operations.length} operations`
-          : "Execution"
+      operations.length === 1 && operations[0]?.name === "view_image"
+        ? "Image"
+        : operations.length === 1 && operations[0]?.name === "exec_command"
+          ? "Command"
+          : operations.length
+            ? `${operations.length} operations`
+            : "Execution"
     const lines = [
       theme.fg(
         status === "failed"
@@ -118,12 +157,13 @@ export const executionRenderers: ToolRenderers = {
     if (options.expanded) {
       for (const operation of operations) {
         lines.push(
-          `${operation.name === "exec_command" ? "Command" : operation.name} · ${operation.status}`,
+          `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name} · ${operation.status}`,
         )
         if (operation.command !== undefined)
           lines.push(`$ ${operation.command}`)
         if (operation.cwd !== undefined)
           lines.push(`Directory: ${operation.cwd}`)
+        if (operation.path !== undefined) lines.push(`Path: ${operation.path}`)
         if (operation.output) lines.push(operation.output)
         if (operation.exitCode !== undefined)
           lines.push(`Exit status: ${operation.exitCode}`)

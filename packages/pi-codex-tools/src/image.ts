@@ -31,7 +31,7 @@ function fileError(action: string, path: string, error: unknown): Error {
 export function createImage(
   pi: ExtensionAPI,
   available: () => boolean,
-): ToolDefinition<typeof parameters, undefined> {
+): ToolDefinition<typeof parameters, { path: string }> {
   const checkBlocking = () => {
     if (pi.getSettings().images?.blockImages)
       throw new Error("Image reading is disabled.")
@@ -43,14 +43,15 @@ export function createImage(
       "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.",
     parameters,
     exposure: "codemode",
-    async execute(_id, args, signal, _onUpdate, ctx) {
+    async execute(_id, args, signal, onUpdate, ctx) {
       signal?.throwIfAborted()
       if (!available())
         throw new Error(
           "Image reading is not available in the active tool scope",
         )
-      checkBlocking()
       const path = resolve(ctx.cwd, args.path)
+      onUpdate?.({ content: [], details: { path } })
+      checkBlocking()
       const file = await stat(path).catch((error: unknown) => {
         throw fileError("locate", path, error)
       })
@@ -85,7 +86,7 @@ export function createImage(
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
-        details: undefined,
+        details: { path },
       }
     },
   }
