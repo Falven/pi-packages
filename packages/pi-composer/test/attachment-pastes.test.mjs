@@ -373,7 +373,7 @@ test("a capture finishing across a native session switch preserves both drafts a
   assert.equal(await readFile(path, "utf8"), text)
 })
 
-test("submission during snapshot preparation sends the old membership and preserves the next draft", async (t) => {
+test("submission waits for the pending snapshot and preserves the next draft", async (t) => {
   const host = await nativePi(t, [composerPath])
   const capture = holdSnapshotWrite(t, host)
   await host.attachText("Submitted context")
@@ -386,15 +386,18 @@ test("submission during snapshot preparation sends the old membership and preser
   host.ui.pasteToEditor(text)
   const path = await capture.started()
   host.submit()
+  assert.equal(host.requests.length, 0)
+  assert.equal(host.ui.getEditorText(), before)
+  host.ui.setEditorText("Next draft")
+  capture.release()
   await waitFor(() => {
     assert.equal(host.requests.length, 1)
     assert.equal(host.runtime.session.isStreaming, false)
   })
-  assert.deepEqual(host.users[0].content, [{ type: "text", text: before }])
-  assert.equal(host.ui.getEditorText(), "")
-  host.ui.setEditorText("Next draft")
-  capture.release()
-  await waitFor(() => assert.match(host.render(), /Snapshot retained/))
+  const reference = `[Attachment: paste.txt](<${path}>)`
+  assert.deepEqual(host.users[0].content, [
+    { type: "text", text: `Keep\n${originalReference}\n\n${reference}` },
+  ])
   assert.equal(host.ui.getEditorText(), "Next draft")
   const recovery = await retainedRequest(host, before)
   assert.ok(recovery.text.includes(path))
@@ -402,7 +405,7 @@ test("submission during snapshot preparation sends the old membership and preser
   assert.equal(await readFile(originalPath, "utf8"), "Submitted context")
   assert.equal(host.requests.length, 1)
   host.input("\x1b[122;9u")
-  assert.equal(host.ui.getEditorText(), "")
+  assert.equal(host.ui.getEditorText(), before)
   host.input("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), "Next draft")
 })

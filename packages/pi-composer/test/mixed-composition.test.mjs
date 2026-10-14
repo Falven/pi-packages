@@ -715,7 +715,8 @@ for (const delivery of ["normal", "steer", "followUp"]) {
       observed[0].streamingBehavior,
       delivery === "normal" ? undefined : delivery,
     )
-    assert.equal(observed[0].images.length, 1)
+    assert.equal(observed[0].images.length, 2)
+    assert.equal(observed[0].images[0].data, PNG)
     const text = host.users.at(-1).content[0].text
     assert.equal(text, `${observed[0].text}\nAfter mixed transformations.`)
     assert.equal(text.match(/<skill name="review"/g)?.length, 1)
