@@ -158,6 +158,8 @@ export default function piGoal(pi: ExtensionAPI): void {
           tool.parameters === parameters[name as keyof typeof parameters],
       )
   const checkTools = () => {
+    if (lifetime.signal.aborted)
+      throw new Error("The goal extension is no longer active.")
     const collision = pi
       .getAllTools()
       .find((tool) => Object.hasOwn(parameters, tool.name) && !owns(tool.name))
@@ -500,6 +502,7 @@ export default function piGoal(pi: ExtensionAPI): void {
   })
 
   pi.on("session_start", (_event, ctx) => {
+    if (lifetime.signal.aborted) return
     if (ctx.sessionManager.getSessionFile()) {
       try {
         present(ctx, read(ctx))
@@ -528,11 +531,13 @@ export default function piGoal(pi: ExtensionAPI): void {
   })
 
   pi.on("before_agent_start", (_event, ctx) => {
+    if (lifetime.signal.aborted) return
     if (ctx.sessionManager.getSessionFile() && eligible(read(ctx)))
       stop.install(ctx)
   })
 
   pi.on("agent_start", (_event, ctx) => {
+    if (lifetime.signal.aborted) return
     cancelContinuation()
     running = true
     runSignal = ctx.signal
@@ -541,6 +546,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     cancelContinuation()
   })
   pi.on("agent_settled", (event, ctx) => {
+    if (lifetime.signal.aborted) return
     running = false
     if (runSignal?.aborted || ("aborted" in event && event.aborted === true))
       cancelContinuation()

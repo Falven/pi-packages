@@ -140,6 +140,7 @@ test("native provider history preserves decimal-string budgets after reopening",
         assert.match(output.output, /"remainingTokens":"9223372036854775807"/)
         const sessionFile = host.session.sessionManager.getSessionFile()
         assert(sessionFile)
+        await host.session.prompt("/goal pause")
         await host.close()
         const reopened = await openNativeHost(caseT, {
           providerProtocol: "responses",

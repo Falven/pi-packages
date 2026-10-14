@@ -586,3 +586,73 @@ test("raw backend abort leaves the goal active without an immediate continuation
   assert.equal(JSON.parse(result.content[0].text).goal.status, "active")
   assert.equal(host.requests.length, 4)
 })
+
+test("retry cancellation follows the host's public settled cancellation boundary", async (t) => {
+  const boundaries: string[] = []
+  let aborted: boolean | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    settings: {
+      retry: {
+        enabled: true,
+        maxRetries: 1,
+        baseDelayMs: 30_000,
+        maxAgentDelayMs: 30_000,
+        provider: { maxRetries: 0 },
+      },
+    },
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_start", () => {
+          boundaries.push("start")
+        })
+        pi.on("agent_settled", (event) => {
+          boundaries.push("settled")
+          aborted = "aborted" in event ? event.aborted === true : undefined
+        })
+      },
+    ],
+  })
+  host.queueResponse({ status: 503 })
+  await host.session.prompt("/goal create Preserve a raw retry cancellation")
+  const run = host.session.prompt("Start the controlled work.")
+  await t.waitFor(() => assert.equal(host.session.isRetrying, true))
+  await host.session.abort()
+  await run
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  if (aborted === undefined) {
+    await t.waitFor(() => assert.equal(host.requests.length, 2))
+    assert.deepEqual(boundaries, ["start", "settled", "start"])
+    assert.equal(
+      host.session.messages.filter((message) => message.role === "custom")
+        .length,
+      1,
+    )
+    assert.match(await host.frame(), /Goal: active/)
+    t.diagnostic(
+      "Host limitation: retry cancellation is not exposed to extensions without settled cancellation metadata; a continuation starts. Acceptance remains pending for this runtime.",
+    )
+    await host.session.prompt("/goal pause")
+    await host.session.abort()
+    return
+  }
+  assert.equal(aborted, true)
+  assert.deepEqual(boundaries, ["start", "settled"])
+  assert.equal(host.requests.length, 1)
+  assert.deepEqual(
+    host.session.messages.filter((message) => message.role === "custom"),
+    [],
+  )
+  host.queueResponse(...call("get_goal", {}, "read-retry-aborted"))
+  host.queueResponse(...answer("Inspection complete."))
+  await host.session.prompt("Inspect the goal after retry cancellation.")
+  await host.session.prompt("/goal pause")
+  const result = host.session.messages.findLast(
+    (message) => message.role === "toolResult",
+  )
+  assert(result?.role === "toolResult" && result.content[0]?.type === "text")
+  assert.equal(JSON.parse(result.content[0].text).goal.status, "active")
+})

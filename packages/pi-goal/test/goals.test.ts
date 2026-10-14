@@ -72,7 +72,7 @@ test("a persisted session without a goal returns explicit empty state", async (t
   assert.doesNotMatch(await host.frame(), /Goal: active/)
 })
 
-test("explicit creation persists its trimmed objective and native status across reopening", async (t) => {
+test("explicit creation and pause persist the trimmed objective across reopening", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -115,7 +115,8 @@ test("explicit creation persists its trimmed objective and native status across 
   })
   assert(stored.goal.createdAt >= before)
   assert(stored.goal.createdAt <= Math.floor(Date.now() / 1000))
-  assert.match(await host.frame(), /Goal: active/)
+  await host.session.prompt("/goal pause")
+  assert.match(await host.frame(), /Goal: paused/)
   const sessionFile = host.session.sessionManager.getSessionFile()
   assert(sessionFile)
   await host.close()
@@ -126,7 +127,7 @@ test("explicit creation persists its trimmed objective and native status across 
     extensionPaths: [extension],
     noTools: "builtin",
   })
-  assert.match(await reopened.frame(), /Goal: active/)
+  assert.match(await reopened.frame(), /Goal: paused/)
   reopened.queueResponse(
     response("get_goal", "{}", "reopened-goal"),
     finish,
@@ -140,7 +141,16 @@ test("explicit creation persists its trimmed objective and native status across 
   assert(saved?.role === "toolResult")
   const savedText = saved.content[0]
   assert(savedText?.type === "text")
-  assert.equal(savedText.text, text.text)
+  const restored = JSON.parse(savedText.text)
+  assert.deepEqual(restored, {
+    ...stored,
+    goal: {
+      ...stored.goal,
+      status: "paused",
+      updatedAt: restored.goal.updatedAt,
+    },
+  })
+  assert(restored.goal.updatedAt >= stored.goal.updatedAt)
 })
 
 test("the full integer budget survives direct and native programmatic calls without rounding", async (t) => {
@@ -214,12 +224,13 @@ test("native goal presentation strips terminal controls without changing the obj
   )
   await host.session.prompt("Create the explicitly requested goal")
   assert.equal(JSON.parse(lastResult(host).text).goal.objective, objective)
+  await host.session.prompt("/goal pause")
   await host.frame()
   assert.equal(host.terminal.output.includes("\u001b]52"), false)
   await host.session.prompt("/goal inspect")
   await host.frame()
   assert.equal(host.terminal.output.includes("\u001b]52"), false)
-  assert.match(host.terminal.output, /active: Review the work/)
+  assert.match(host.terminal.output, /paused: Review the work/)
 })
 
 test("objectives reject unpaired surrogates before persistence can change their value", async (t) => {

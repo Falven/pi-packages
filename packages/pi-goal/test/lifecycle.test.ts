@@ -124,6 +124,7 @@ test("terminal completion returns its snapshot and retains the display after cle
   assert.equal(replacement.goal.status, "active")
   assert.equal(replacement.goal.tokensUsed, 0)
   assert.equal("tokenBudget" in replacement.goal, false)
+  await host.session.prompt("/goal pause")
   assert.doesNotMatch(await host.frame(), /Goal: complete/)
 })
 
@@ -159,6 +160,7 @@ test("headless completion stays readable and a later replacement starts fresh", 
   assert.equal(replacement.goal.tokensUsed, 0)
   assert.equal(replacement.goal.timeUsedSeconds, 0)
   assert.equal(replacement.remainingTokens, 100)
+  await reopened.session.prompt("/goal pause")
 })
 
 test("a presentation cleanup failure preserves the successful completion snapshot", async (t) => {
@@ -208,7 +210,7 @@ test("opening a headless completion in the terminal retains its display and clea
   assert.equal((await call(terminal, "get_goal")).goal, null)
 })
 
-test("explicit controls create, edit, pause, resume, inspect, and clear without new model work", async (t) => {
+test("explicit controls mutate the goal before automatic admission", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -232,6 +234,7 @@ test("explicit controls create, edit, pause, resume, inspect, and clear without 
   assert.equal(edited.goal.tokensUsed, 0)
   assert.equal(edited.goal.timeUsedSeconds, 0)
   await host.session.prompt("/goal inspect")
+  await host.session.prompt("/goal pause")
   assert.match(await host.frame(), /active: Finish the revised scope/)
   const beforeClear = host.session.messages.length
   await host.session.prompt("/goal clear")
@@ -421,11 +424,31 @@ test("the native goal picker creates an objective and offers the current status 
     assert.match(await host.frame(), /Goal objective/),
   )
   await host.type("Finish the selected work")
+  host.queueResponse(...response("get_goal", {}))
+  host.queueResponse(
+    { pause: true },
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              content: "The controlled turn finished.",
+            },
+            finish_reason: "stop",
+          },
+        ],
+      },
+    },
+    { event: "[DONE]" },
+    { end: true },
+  )
   await host.key("\r")
   await creating
-  assert.equal(host.requests.length, 0)
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
   assert.equal(
-    (await call(host, "get_goal")).goal.objective,
+    JSON.parse(lastResult(host).text).goal.objective,
     "Finish the selected work",
   )
   const pausing = host.session.prompt("/goal")
@@ -435,6 +458,8 @@ test("the native goal picker creates an objective and offers the current status 
   await host.key("\x1b[B")
   await host.key("\n")
   await pausing
+  host.resumeResponse()
+  await host.session.waitForIdle()
   assert.equal((await call(host, "get_goal")).goal.status, "paused")
   const cancelling = host.session.prompt("/goal")
   await t.waitFor(async () => assert.match(await host.frame(), /Resume/))
@@ -495,6 +520,7 @@ test("a running objective edit follows tool output as hidden user context and pe
   await host.session.prompt("/goal edit Revised <scope> & evidence")
   await host.session.prompt("/goal edit The next idle scope")
   const goal = await call(host, "get_goal")
+  await host.session.prompt("/goal pause")
   assert.equal(goal.goal.objective, "The next idle scope")
   assert.equal(goal.goal.tokenBudget, 5000)
   assert.equal(
@@ -515,6 +541,7 @@ test("an older objective editor cannot overwrite a cleared and replaced goal", a
     persistSession: true,
   })
   await host.session.prompt("/goal create Original goal")
+  await host.session.prompt("/goal pause")
   const editing = host.session.prompt("/goal edit")
   await t.waitFor(async () =>
     assert.match(await host.frame(), /Goal objective/),
@@ -523,6 +550,7 @@ test("an older objective editor cannot overwrite a cleared and replaced goal", a
   await host.type("Stale objective")
   await host.session.prompt("/goal clear")
   await host.session.prompt("/goal create Replacement goal")
+  await host.session.prompt("/goal pause")
   await host.key("\r")
   await editing
   assert.match(
@@ -531,7 +559,7 @@ test("an older objective editor cannot overwrite a cleared and replaced goal", a
   )
   const current = await call(host, "get_goal")
   assert.equal(current.goal.objective, "Replacement goal")
-  assert.equal(current.goal.status, "active")
+  assert.equal(current.goal.status, "paused")
 })
 
 test("a session switch cancels a pending goal picker without changing the new session", async (t) => {
@@ -541,12 +569,14 @@ test("a session switch cancels a pending goal picker without changing the new se
     persistSession: true,
   })
   await host.session.prompt("/goal create Original session goal")
+  await host.session.prompt("/goal pause")
   const selecting = host.session.prompt("/goal")
   await t.waitFor(async () => assert.match(await host.frame(), /Goal controls/))
   await host.runtime.newSession()
   await selecting
   await host.session.prompt("/goal create New session goal")
   const current = await call(host, "get_goal")
+  await host.session.prompt("/goal pause")
   assert.equal(current.goal.objective, "New session goal")
   assert.equal(current.goal.status, "active")
 })
