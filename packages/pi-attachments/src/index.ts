@@ -381,6 +381,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
             selectList: getSelectListTheme(),
           },
           keybindings,
+          { paddingX: pi.getSettings().editorPaddingX ?? 0 },
         )
         editor.setText(prefill)
         return {

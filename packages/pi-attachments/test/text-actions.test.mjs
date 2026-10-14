@@ -3,6 +3,7 @@ import { chmod, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
+import { stripVTControlCharacters } from "node:util"
 import { Text } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import {
@@ -22,6 +23,38 @@ const attachmentsPath = fileURLToPath(
 const skillsPath = fileURLToPath(
   new URL("../../pi-skill-references/src/index.ts", import.meta.url),
 )
+
+test("Create from text follows effective editor padding and preserves entered bytes", async (t) => {
+  const host = await nativePi(t, [composerPath], {
+    settings: { editorPaddingX: 1 },
+  })
+  host.runtime.session.settingsManager.applyOverrides({ editorPaddingX: 3 })
+  host.ui.setEditorText("Keep this draft")
+  const pending = host.runtime.session.sendUserMessage("/attach-text", {
+    expandPromptTemplates: true,
+  })
+  await waitFor(() => assert.match(host.render(), /Attach text/))
+  host.input("Entered text")
+  host.render()
+  const rows = [
+    ...host.output.matchAll(
+      // eslint-disable-next-line no-control-regex -- Inspect native terminal row boundaries.
+      /\x1b\[\d+;1H\x1b\[2K(.*?)(?=\x1b\[\d+;\d+H|$)/gs,
+    ),
+  ].map((match) => stripVTControlCharacters(match[1]))
+  const heading = rows.find((row) => row.includes("Attach text"))
+  const content = rows.find((row) => row.includes("Entered text"))
+  assert.ok(heading && content)
+  assert.equal(
+    content.indexOf("Entered text") - heading.indexOf("Attach text"),
+    3,
+  )
+  host.input("\r")
+  await pending
+  const draft = host.ui.getEditorText()
+  assert.match(draft, /Keep this draft/)
+  assert.equal(await readFile(snapshotPath(draft), "utf8"), "Entered text")
+})
 
 async function startAction(host, action, index = 0) {
   const pending = host.runtime.session.sendUserMessage("/attachments", {
