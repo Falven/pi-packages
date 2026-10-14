@@ -13,6 +13,7 @@ export type ProcessPresentation = {
 
 type Process = {
   id: number
+  replacePresentation: (text: string) => void
   observe: Set<(snapshot: ProcessPresentation) => void>
   presentation: ProcessPresentation
   pid?: number
@@ -61,6 +62,14 @@ export class ProcessSessions {
     const { promise: done, resolve } = Promise.withResolvers<void>()
     const child: Process = {
       id: this.nextId++,
+      replacePresentation(text) {
+        head = ""
+        headBytes = 0
+        headFull = false
+        tail = ""
+        omitted = false
+        remember(text)
+      },
       observe: new Set(),
       presentation: { id: this.nextId - 1, output: "", status: "running" },
       output,
@@ -135,7 +144,7 @@ export class ProcessSessions {
     }
     void done.then(() => {
       if (child.error) remember(`\n${child.error.message}`)
-      publish()
+      else publish()
       child.observe.clear()
     })
     let pause: (() => void) | undefined
@@ -222,6 +231,11 @@ export class ProcessSessions {
       child.observe.add(observer)
       observer(child.presentation)
     }
+  }
+
+  replacePresentation(id: number, text: string): void {
+    const child = this.processes.get(id)
+    if (child?.exitCode === undefined) child?.replacePresentation(text)
   }
 
   async write(

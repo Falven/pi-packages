@@ -398,12 +398,11 @@ export class ExecutionCells {
     }
     cell.presentation.operations.push(operation)
     this.update(cell)
+    let processId: number | undefined
     let observing = false
     const observe = (process: ProcessPresentation) => {
-      if (!liveRedacted) {
-        operation.live = true
-        operation.output = process.output
-      }
+      operation.live = true
+      operation.output = process.output
       operation.status = process.status
       if (process.exitCode !== undefined) operation.exitCode = process.exitCode
       this.update(cell)
@@ -455,6 +454,7 @@ export class ExecutionCells {
               operation.cwd = boundedPreview(context.cwd)
             if (context?.process && !observing) {
               observing = true
+              processId = context.process.id
               this.processes.observe(context.process.id, observe)
             }
             if (typeof context?.path === "string")
@@ -527,6 +527,8 @@ export class ExecutionCells {
           : typeof structured?.session_id === "number"
             ? "running"
             : "completed"
+      if (liveRedacted && processId !== undefined)
+        this.processes.replacePresentation(processId, operation.output ?? "")
       this.update(cell)
       this.record(cell, {
         presentation: { ...operation },

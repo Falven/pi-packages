@@ -514,3 +514,80 @@ test("structured command result edits replace the live presentation snapshot", a
   assert.match(output(host), /FILTERED-OUTPUT/)
   assert.doesNotMatch(output(host), /ORIGINAL-OUTPUT/)
 })
+
+test("a redacted command return does not hide later live output or restore its earlier bytes", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 100,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) =>
+        event.toolName === "exec_command"
+          ? { content: [{ type: "text", text: "RETURN-REDACTED\n" }] }
+          : undefined,
+      )
+    },
+  })
+  await host.key("\x0f")
+  const release = join(host.directory, "release")
+  const command = `printf 'BEFORE-RETURN\\n'; until test -f '${release}'; do sleep 0.02; done; printf 'AFTER-RETURN\\n'`
+  host.queueResponse(
+    ...call(
+      `text(await tools.exec_command(${JSON.stringify({ cmd: command, login: false, yield_time_ms: 250 })}));`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start a continued command with redaction")
+  assert.match(output(host), /RETURN-REDACTED/)
+  assert.doesNotMatch(output(host), /BEFORE-RETURN/)
+  await writeFile(release, "")
+  await setTimeout(150)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.match(frame, /\n\s*AFTER-RETURN\s*\n/)
+  assert.doesNotMatch(frame, /\n\s*BEFORE-RETURN\s*\n/)
+  assert.match(frame, /Command · completed/)
+})
+
+test("input result redaction preserves prior origin observations and controls the model return", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 160,
+    columns: 100,
+    extension(pi) {
+      pi.on("tool_result", (event) =>
+        event.toolName === "write_stdin"
+          ? { content: [{ type: "text", text: "INPUT-RESULT-REDACTED" }] }
+          : undefined,
+      )
+    },
+  })
+  await host.key("\x0f")
+  host.queueResponse(
+    ...call(
+      'const process = await tools.exec_command({cmd:"printf \'INPUT-READY\\n\'; read answer; printf \'PRIOR-LIVE-OBSERVATION:%s\\n\' \\"$answer\\"",tty:true,login:false,yield_time_ms:250}); store("process",process.session_id); text(process);',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Start terminal")
+  host.queueResponse(
+    ...call(
+      'text(await tools.write_stdin({session_id:load("process"),chars:"hello\\n"}));',
+      "input",
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Send input with a result hook")
+  assert.match(output(host, "input"), /INPUT-RESULT-REDACTED/)
+  assert.doesNotMatch(output(host, "input"), /PRIOR-LIVE-OBSERVATION/)
+  await setTimeout(60)
+  const frame = stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal(
+    frame
+      .split("\n")
+      .filter((line) => line.trim() === "PRIOR-LIVE-OBSERVATION:hello").length,
+    1,
+  )
+  assert.match(frame, /write_stdin · completed/)
+})
