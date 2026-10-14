@@ -229,7 +229,7 @@ test("native submission keeps original attachment dimensions when effective auto
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })
 
-test("native image-only steering converts the captured image at delivery for the intended request", async (t) => {
+test("native image-only steering converts the captured image before queueing the intended request", async (t) => {
   const response = Promise.withResolvers()
   t.after(() => response.resolve())
   const host = await nativePi(t)
@@ -388,7 +388,7 @@ test("native image delivery preserves earlier images, handler order, and unique 
     data: PNG,
     mimeType: "image/png",
   })
-  assert.equal(host.inputs[0].images.length, 1)
+  assert.equal(host.inputs[0].images.length, 2)
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
 })
 

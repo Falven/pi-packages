@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md), including its applicable architecture decisions.
 
@@ -18,5 +18,7 @@
 - [ ] Adapt the existing focused image and text-entry checks to unmodified public host interfaces. Exercise effective overrides, conversion with resizing disabled, retained bytes, supplied images, all three submission routes, and recoverable failures. Confirm native-editor and composer results separately during ticket 07.
 
 **Integration:** Tickets 01–05 remove coupled host contracts in one integration checkout. Focused checks accompany each slice; complete unmodified-Pi startup and regression acceptance belong to ticket 07. Do not invent host shims to make intermediate checks pass.
+
+**Current implementation (2026-10-14):** Image preparation now runs in the public input event after retaining the requesting draft and supplied images. Preparation failures notify and return `handled` before queue acceptance. Current image blocking does not skip preparation, and resize settings apply before queueing. Recovery still accepts historical submission metadata without requiring a native submission field. The migrated runtime check currently stops at the remaining unsupported settings registration during package startup on unmodified Pi 1.0.2; image behavior acceptance awaits integration of the other contract removals. Focused lint, formatting, and whitespace checks pass.
 
 **Historical verification (2026-10-14):** The previous implementation passed 68 image and text-action tests against the modified host, plus focused type, lint, formatting, and whitespace checks. Those results covered settings overrides, original bytes, conversion, supplied images, recovery, and submission routes. They do not verify this public-input migration. Physical Ghostty interaction was not observed.
