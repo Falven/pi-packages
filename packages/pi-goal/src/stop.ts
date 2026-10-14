@@ -11,6 +11,11 @@ type StopEditor = ReturnType<EditorFactory> & {
   isShowingAutocomplete(): boolean
 }
 
+function ownsCallback(editor: StopEditor, callback: () => void): boolean {
+  // Companion proxies bind callback reads; the stored public value is stable.
+  return Object.getOwnPropertyDescriptor(editor, "onEscape")?.value === callback
+}
+
 export function createGoalStop(
   pause: (ctx: ExtensionContext) => void | Promise<void>,
 ): { install(ctx: ExtensionContext): void; dispose(): void } {
@@ -25,7 +30,7 @@ export function createGoalStop(
   let binding:
     | {
         editor: StopEditor
-        original: () => void
+        original: PropertyDescriptor
         stop: () => void
         cancel: Set<() => void>
       }
@@ -36,8 +41,8 @@ export function createGoalStop(
     binding = undefined
     if (!old) return false
     for (const cancel of old.cancel) cancel()
-    if (old.editor.onEscape !== old.stop) return false
-    old.editor.onEscape = old.original
+    if (!ownsCallback(old.editor, old.stop)) return false
+    Object.defineProperty(old.editor, "onEscape", old.original)
     return true
   }
 
@@ -76,12 +81,18 @@ export function createGoalStop(
       owner.ctx = ctx
       const installed = owner
       const editor = installed.editor
-      if (binding?.editor === editor && editor?.onEscape === binding?.stop)
+      if (
+        binding &&
+        binding.editor === editor &&
+        ownsCallback(editor, binding.stop)
+      )
         return
       detach()
       // The host wires native delegation after the editor factory returns.
       const original = editor?.onEscape
-      if (!editor || !original) {
+      const descriptor =
+        editor && Object.getOwnPropertyDescriptor(editor, "onEscape")
+      if (!editor || !original || !descriptor) {
         owner = undefined
         ctx.ui.setEditorComponent(installed.previous)
         throw new Error("Goal Stop requires a native interruption handler.")
@@ -91,7 +102,7 @@ export function createGoalStop(
         const owns = () =>
           owner === installed &&
           binding?.stop === stop &&
-          editor.onEscape === stop &&
+          ownsCallback(editor, stop) &&
           installed.ctx.ui.getEditorComponent() === installed.factory
         if (!owns() || installed.ctx.isIdle()) {
           original()
@@ -133,7 +144,7 @@ export function createGoalStop(
             }
           })
       }
-      binding = { editor, original, stop, cancel }
+      binding = { editor, original: descriptor, stop, cancel }
       editor.onEscape = stop
     },
     dispose() {
