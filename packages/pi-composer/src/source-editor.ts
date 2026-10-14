@@ -25,6 +25,7 @@ import { continueList } from "./structures.ts"
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
 type Draft = { text: string; anchor: number; head: number }
+type PendingEdit = { from: number; to: number; expected: string }
 export type DraftHistory = { draft: Draft; past: Draft[]; future: Draft[] }
 type EditKind = "typing" | "backspace" | "delete"
 type YankSource = Draft & { formatted: boolean }
@@ -33,6 +34,8 @@ export class SourceEditor extends CustomEditor {
   onDraftChange: ((text: string) => void) | undefined
   onDraftClear: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
+  private observedSource = ""
+  private readonly pendingSourceEdits = new Set<PendingEdit>()
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
   private readonly clipboard: Clipboard
@@ -162,6 +165,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   restoreDraft(text: string, history?: DraftHistory): void {
+    this.pendingSourceEdits.clear()
     this.draft = history?.draft ?? {
       text,
       anchor: text.length,
@@ -177,6 +181,51 @@ export class SourceEditor extends CustomEditor {
 
   override getExpandedText(): string {
     return this.getText()
+  }
+
+  override captureEditorEdit(
+    from: number,
+    to: number,
+  ): { replace(text: string): boolean } {
+    const current = this.getExpandedText()
+    if (
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from < 0 ||
+      to <= from ||
+      to > current.length
+    )
+      throw new RangeError("Invalid editor edit range")
+    const edit = { from, to, expected: current.slice(from, to) }
+    this.pendingSourceEdits.add(edit)
+    return {
+      replace: (text) => {
+        if (
+          !this.pendingSourceEdits.delete(edit) ||
+          this.getText().slice(edit.from, edit.to) !== edit.expected
+        )
+          return false
+        text = text.replace(/\r\n?/g, "\n")
+        const map = (position: number) =>
+          position <= edit.from
+            ? position
+            : position >= edit.to
+              ? position + text.length - (edit.to - edit.from)
+              : edit.from + text.length
+        const draft = this.draft
+        this.commit(
+          {
+            text:
+              draft.text.slice(0, edit.from) + text + draft.text.slice(edit.to),
+            anchor: map(draft.anchor),
+            head: map(draft.head),
+          },
+          undefined,
+          "replacement",
+        )
+        return true
+      },
+    }
   }
 
   override getLines(): string[] {
@@ -198,6 +247,7 @@ export class SourceEditor extends CustomEditor {
   private browsePrompt(direction: -1 | 1): void {
     const index = this.promptIndex - direction
     if (index < -1 || index >= this.prompts.length) return
+    this.pendingSourceEdits.clear()
     if (this.promptIndex < 0) {
       this.promptDraft = this.draft
       this.past.push(this.draft)
@@ -217,6 +267,7 @@ export class SourceEditor extends CustomEditor {
   }
 
   override setText(text: string): void {
+    this.pendingSourceEdits.clear()
     text = text.replace(/\r\n?/g, "\n")
     const current = this.getText()
     if (text === current) return
@@ -396,7 +447,11 @@ export class SourceEditor extends CustomEditor {
     this.yankSource = source
   }
 
-  private commit(next: Draft, kind?: EditKind): void {
+  private commit(
+    next: Draft,
+    kind?: EditKind,
+    origin: "edit" | "replacement" = "edit",
+  ): void {
     const outer = this.transaction === undefined
     const transaction = (this.transaction ??= {
       draft: this.draft,
@@ -420,7 +475,7 @@ export class SourceEditor extends CustomEditor {
     this.editGroup = kind ? { kind, time } : undefined
     this.draft = next
     try {
-      this.changed(kind !== undefined)
+      this.changed(kind !== undefined, origin)
     } finally {
       if (outer) this.transaction = undefined
     }
@@ -434,10 +489,54 @@ export class SourceEditor extends CustomEditor {
     this.promptIndex = -1
     this.promptDraft = undefined
     this.editGroup = undefined
-    this.changed()
+    this.changed(false, from === this.past ? "undo" : "redo")
   }
 
-  private changed(autocomplete = false): void {
+  private changed(
+    autocomplete = false,
+    origin: "edit" | "replacement" | "undo" | "redo" = "edit",
+  ): void {
+    const current = this.getText()
+    const previous = this.observedSource
+    this.observedSource = current
+    if (origin === "undo" || origin === "redo") this.pendingSourceEdits.clear()
+    else if (current !== previous) {
+      let from = 0
+      while (
+        from < previous.length &&
+        from < current.length &&
+        previous[from] === current[from]
+      )
+        from++
+      let oldEnd = previous.length
+      let newEnd = current.length
+      while (
+        oldEnd > from &&
+        newEnd > from &&
+        previous[oldEnd - 1] === current[newEnd - 1]
+      ) {
+        oldEnd--
+        newEnd--
+      }
+      let suffix = 0
+      while (
+        suffix < previous.length &&
+        suffix < current.length &&
+        previous[previous.length - suffix - 1] ===
+          current[current.length - suffix - 1]
+      )
+        suffix++
+      const leftFrom = Math.min(previous.length, current.length) - suffix
+      for (const edit of this.pendingSourceEdits) {
+        if (leftFrom < from && leftFrom < edit.to && oldEnd >= edit.from)
+          this.pendingSourceEdits.delete(edit)
+        else if (oldEnd <= edit.from) {
+          const shift = newEnd - oldEnd
+          edit.from += shift
+          edit.to += shift
+        } else if (from < edit.to) this.pendingSourceEdits.delete(edit)
+      }
+    }
     this.deletionSource = undefined
     this.yankSource = undefined
     this.revision++
@@ -446,7 +545,7 @@ export class SourceEditor extends CustomEditor {
     this.revealCaret = true
     this.preferredCell = undefined
     this.completions.update(autocomplete)
-    this.onChange?.(this.getText())
+    this.onChange?.(current, origin)
     this.onDraftChange?.(this.getText())
     this.tui.requestRender()
   }
