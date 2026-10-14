@@ -2,9 +2,9 @@
 
 **What to build:** A pending attachment operation updates only its requesting draft while preserving the selected editor, later edits, caret, selection where supported, and native history. Establish that the package can provide this behavior without host changes before porting the complete Markdown flow.
 
-**Blocked by:** None (can start immediately).
+**Blocked by:** A decision on submission while attachment capture is pending, following the failed compatibility experiment below. No ticket prerequisite.
 
-**Status:** ready-for-agent
+**Status:** blocked — the normal-submission compatibility experiment fails on unmodified Pi for both editors. Tickets 05 and 07 remain blocked pending a product decision.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md) and [Pi Composer](../../../docs/specs/pi-composer.md), including their applicable architecture decisions.
 
@@ -21,3 +21,24 @@
 **Integration:** Ticket 05 uses the proven editor integration for the complete capture flow. Ticket 07 verifies the integrated extension and actual restored installation. Record compatibility evidence and identified private API gaps here rather than in a separate report.
 
 **Historical verification (2026-10-14):** The previous implementation passed 76 focused identity, recovery, composition, and cleanup checks and 28 chat relationship tests against the modified host, plus type, lint, and format checks. It depended on host-provided opaque identity and targeted transactions, so it does not prove this adapter feasible. Native selection and redo were unavailable in that verification; composer checks covered them. Physical terminal interaction was not observed.
+
+**Compatibility experiment (2026-10-14):** Fresh dependencies from the frozen lockfile supplied unmodified Pi 1.0.2. Run `node --test packages/pi-attachments/fixtures/editor-submission-experiment.mjs` to reproduce the [focused experiment](../../../packages/pi-attachments/fixtures/editor-submission-experiment.mjs). It deliberately retains the failing assertions: six cases run, four controls pass, and the native-editor and composer normal-submission cases fail. The experiment loads the selected editor and a small observing extension through the existing editor/session/provider fixture; it does not load the unfinished attachment extension or replace the selected editor. It exercises actual native dispatch against the controlled provider.
+
+The probe observes two distinct terminal submissions with identical Markdown, identified as `draft-1` and `draft-2`. An earlier asynchronous input handler consumes `draft-1` by returning `handled`. Attachment-side input observation sees only `draft-2`, whose text is indistinguishable from `draft-1`. Both editor callbacks retain their distinct package-owned asynchronous scopes, but the later normal input event has no originating scope or editor identity. Its expected `draft-2` identity is `undefined`. Each host sends exactly one accepted request, as native dispatch requires.
+
+Normal submission clears the native editor before invoking `onSubmit`, then crosses the interactive host's pending-input promise boundary before reaching the public input hooks. An asynchronous scope around the editor callback does not cross that boundary. A FIFO of editor submissions would select the consumed first draft for the accepted second input; matching their equal text cannot repair the association. An earlier input handler may also transform the text or stop propagation, so the package cannot require itself to run first. This disproves asynchronous scope plus FIFO or text matching as a safe submission adapter; it does not prove that every possible editor adapter is impossible.
+
+Steering and follow-up are controls for both editors. Their host paths invoke the session directly from the editor's input handling, and the accepted input retains `draft-2` through the earlier asynchronous handler. The four passing controls establish only that scoped identity survives those routes. They do not satisfy normal submission, asynchronous capture ordering, or the complete attachment contract.
+
+The public/private boundary is now clearer:
+
+- The existing editor can be found through the public TUI component tree supplied to `setWidget()`. Replacement through `setEditorComponent()` is unnecessary for the probe and would not preserve the native editor's state automatically.
+- Public text access, insertion, callbacks, and history insertion do not supply draft identity or a targeted asynchronous range transaction. Native cursor state, paste contents, undo snapshots, and prompt-history restoration would need a scoped adapter before targeted edits could be accepted. None of those private mutation dependencies has been adopted or verified here.
+- The composer's existing identity and targeted edits remain package-owned. Removing their locally added host `override` and callback dependencies is still pending; a composer-only implementation would not resolve the normal-submission boundary.
+- Public input events have neither an originating editor identity nor notification that an earlier handler consumed another input. Access to native pending-message state is outside the approved adapter scope and has not been added.
+
+**Decision needed:** A gate before native submission is the smallest promising change to discuss. It would finish already-started captures and replace their destinations before passing the request to Pi. Input handlers would then receive retained references without needing to recover the cleared draft's identity; capture would still start when the reference enters the draft. This changes the point at which other input handlers can observe or consume a submitted request.
+
+Automatic forwarding after capture is not established as safe. Replaying Send after waiting can submit later edits, clear a newer draft, or change steering/follow-up behavior if the active run finishes meanwhile. Preserving the original request and Send order would require additional editor-level pending-submission behavior and verification. A smaller alternative is to keep the draft editable, report that capture is pending, and require Send again when capture finishes. That avoids automatic submission scheduling but changes the accepted interaction. Neither alternative is approved or implemented.
+
+Pending capture with typing, caret/selection preservation, undo/redo, prompt-history identity, collapsed pastes, out-of-order completion, session switches, reload cleanup, and final integrated startup remain unverified on unmodified Pi. No production adapter, host modification, private queue access, submission marker, capture-on-Send fallback, or source rollback was introduced. The failed submission gate must be settled before completing this ticket or unblocking dependent work.
