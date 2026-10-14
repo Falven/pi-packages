@@ -6,7 +6,7 @@
 
 **Blocked by:** None — presentation prerequisites 02, 03, 04, and 05 are resolved.
 
-**Status:** resolved — presentation workflow checks complete with the companion compatibility limit below; completed baseline retained below
+**Status:** resolved — presentation workflow and main integration checks complete; historical evidence retained below
 
 ## Presentation delta
 
@@ -18,6 +18,8 @@
 - [x] Run the configured-runtime smoke available through the existing host seam. Record exact runtime versions and pre-existing companion incompatibilities separately; do not alter unrelated packages to make a suite pass.
 
 ## Presentation verification
+
+After rebasing onto main at `9c633a3`, all four mixed checks pass with the five local companions loading successfully. Main already includes the attachments API repair, so the tests now require normal loading instead of the earlier expected failure. Both installed-CLI pipe/PTY checks also pass with all seven configured companions. Ticket 07 records this integration verification; the earlier snapshot evidence below retains its original scope.
 
 At integration revision `726e350`, the added [mixed presentation checks](../../../packages/pi-codex-tools/test/workflow-presentation.test.ts) pass through the existing real native host and controlled provider. Both package load orders combine project inspection, file creation, hook-redacted validation, a local image, explicit yielding, a late script failure, later collection, and reload. Dark/light settings, disabled image display with preserved model image content, native disclosure controls, generic extension labels, bounded terminal width, unrelated notices and final responses, original source history, and invisible activity records remain intact. A gated command additionally emits live output, finishes with exit status 9 while an independent final response is streaming, stays before that later request in its originating card, and remains available to a later wait without an extra provider request. No runtime correction was needed in this ticket.
 

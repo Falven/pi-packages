@@ -22,10 +22,6 @@ const companions = [
   "pi-chat",
   "pi-goal",
 ].map((name) => new URL(`../../${name}/src/index.ts`, import.meta.url).pathname)
-const attachmentError = {
-  path: companions[1]!,
-  error: "Failed to load extension: pi.registerSetting is not a function",
-}
 const tiny =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
 
@@ -54,10 +50,9 @@ async function expand(host: Awaited<ReturnType<typeof openNativeHost>>) {
   return stripVTControlCharacters(host.screenLines().join("\n"))
 }
 
-test("the snapshot companion-only control identifies its existing setting API incompatibility", async (t) => {
+test("the companion-only control loads without extension errors", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: companions,
-    expectedExtensionErrors: [attachmentError],
     rows: 80,
   })
   await host.session.prompt("Companion control")
@@ -74,7 +69,6 @@ for (const order of ["first", "last"] as const) {
           order === "first"
             ? [extension, ...companions]
             : [...companions, extension],
-        expectedExtensionErrors: [attachmentError],
         providerApi,
         providerProtocol: "responses",
         rows: 180,
@@ -176,7 +170,6 @@ test(
   async (t) => {
     const host = await openNativeHost(t, {
       extensionPaths: [...companions, extension],
-      expectedExtensionErrors: [attachmentError],
       providerApi,
       providerProtocol: "responses",
       rows: 180,

@@ -48,7 +48,13 @@ Two external pipe/PTY checks pass at `79c8205` on installed `/Users/fran/Library
 
 The unchanged probe passed both cases again at final reviewed runtime `d4ffbfd`, with the same installed 1.1.0 CLI, six usable companion extensions, isolated settings, and four provider requests per case. Its result SHA-256 is `05884a55fcad3764cadf68c0078ba37c4024f522f154a9e2f306e6e424b4ba55`.
 
-This verifies the installed CLI and real PTY transport, not a physical display or human interaction. The full configured inventory still cannot start because attachments requires an unavailable setting API, independently reproduced without this package in ticket 06. No companion source, user settings, or credentials were changed. The snapshot result does not cover concurrent changes in the primary checkout.
+This verifies the installed CLI and real PTY transport, not a physical display or human interaction. The full configured inventory in those snapshots could not start because attachments required an unavailable setting API, independently reproduced without this package in ticket 06. No companion source, user settings, or credentials were changed. The snapshot result does not cover the later main integration below.
+
+### Main integration
+
+The presentation branch was rebased onto main `bf5b9e0`, preserving its original merge resolutions, then fast-forwarded to `9c633a3a5d0ff4ad01f2e8a87ec6decad0584783`. Package runtime files are byte-identical to the reviewed branch. Main already contains the companion repairs, including attachments loading without the earlier setting API error. The four mixed native-host checks initially failed because they still required that old error; removing the obsolete expected-error fixture makes all four pass with every local companion loaded. No package runtime or companion correction was needed. Package type checking, targeted lint/formatting, and whitespace checks pass.
+
+The unchanged installed-CLI probe passes both pipe and PTY cases on Pi 1.1.0 with all seven configured companions, including attachments. Each case uses isolated settings and four controlled-provider requests and verifies early output, native expansion, late failure without a new turn, independent collection, and reload. Its result SHA-256 is `e467f675701da95337ee34992145a88ff1b971e11453187b08d902016830a328`. This closes the earlier companion-startup gap for the integrated snapshot. Physical-display interaction, the broad package suite, and performance measurements were not repeated during integration; their earlier evidence remains attached to its recorded revision.
 
 ### Presentation performance
 

@@ -4,7 +4,7 @@
 
 **Triage:** resolved
 
-**Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. Final presentation verification at `d4ffbfd` is recorded separately in ticket 07: 207 package checks pass, as do static checks, two installed-CLI live pipe/PTY checks with the six usable companions, and both independent review rechecks. The approved native image-placement exception, existing attachments startup incompatibility, physical-display gap, and measured cost of rendering expanded output into the native exit transcript remain explicit. Earlier measurements retain their original revision identities.
+**Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. Final presentation verification at `d4ffbfd` is recorded separately in ticket 07: 207 package checks pass, as do static checks, two installed-CLI live pipe/PTY checks with the six usable companions, and both independent review rechecks. Main integration at `9c633a3` also passes four mixed checks and both installed-CLI cases with all seven companions, closing the earlier attachments startup gap. The approved native image-placement exception, physical-display gap, and measured cost of rendering expanded output into the native exit transcript remain explicit. Earlier measurements retain their original revision identities.
 
 ## Problem Statement
 
