@@ -4,7 +4,6 @@ import { pathToFileURL } from "node:url"
 import {
   type ExtensionAPI,
   type ExtensionContext,
-  type InputDeliveryEvent,
   type InputEvent,
   convertToPng,
   detectSupportedImageMimeTypeFromFile,
@@ -22,8 +21,8 @@ import {
 } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 import { attachmentPaths } from "./references.ts"
+import type { ThumbnailSize } from "./settings.ts"
 
-const THUMBNAIL_SETTING = "pi-attachments.thumbnailSize"
 const THUMBNAIL_BOUNDS = {
   small: { columns: 12, rows: 2 },
   medium: { columns: 24, rows: 4 },
@@ -58,24 +57,11 @@ export function registerImages(
   storage: string,
   signal: AbortSignal,
   draftPaths: (ctx: ExtensionContext) => string[],
+  thumbnailSize: () => ThumbnailSize,
 ): void {
-  pi.registerSetting({
-    id: THUMBNAIL_SETTING,
-    label: "Attachment thumbnail size",
-    description: "Maximum width and height of attachment previews",
-    defaultValue: "medium",
-    values: [
-      { value: "small", label: "Small" },
-      { value: "medium", label: "Medium" },
-      { value: "large", label: "Large" },
-    ],
-  })
   registerRecovery(pi, storage, signal)
 
-  async function retain(
-    event: InputEvent | InputDeliveryEvent,
-    ctx: ExtensionContext,
-  ) {
+  async function retain(event: InputEvent, ctx: ExtensionContext) {
     const request = {
       ...event,
       ...(event.images
@@ -104,30 +90,21 @@ export function registerImages(
   }
 
   pi.on("input", async (event, ctx) => {
-    if (attachmentPaths(event.text, storage, ctx.cwd).length === 0)
-      return undefined
-    try {
-      // Save the requesting draft before authentication, queueing, or editor clearing.
-      await retain(event, ctx)
-      return signal.aborted ? { action: "handled" } : undefined
-    } catch (error) {
-      if (!signal.aborted)
-        ctx.ui.notify(`Image request not sent: ${String(error)}`, "error")
-      return { action: "handled" }
-    }
-  })
-
-  pi.on("input_delivery", async (event, ctx) => {
-    const settings = pi.getSettings().images
-    if (settings?.blockImages) return undefined
     const paths = attachmentPaths(event.text, storage, ctx.cwd)
     if (paths.length === 0) return undefined
-    const resizeOptions = ctx.model?.inputLimits?.images?.resize
-    const autoResize = settings?.autoResize ?? true
+    let recovery: string | undefined
     try {
+      // Save the requesting draft before authentication, queueing, or editor clearing.
+      recovery = await retain(event, ctx)
+      if (signal.aborted) return { action: "handled" }
+      // shortcut: Resize before queueing until Pi supports isolated delivery-time rejection.
+      const resizeOptions = ctx.model?.inputLimits?.images?.resize
+      const autoResize = pi.getSettings().images?.autoResize ?? true
+      // Queued images can become allowed later; Pi applies final image blocking.
       const captured = await Promise.all(
         paths.map((path) => readImage(path, storage)),
       )
+      if (signal.aborted) return { action: "handled" }
       const images = captured.filter((image) => image !== undefined)
       if (images.length === 0) return undefined
       const attachments = await Promise.all(
@@ -150,8 +127,7 @@ export function registerImages(
           }
         }),
       )
-      if (signal.aborted)
-        throw new Error("The attachment session ended during image preparation")
+      if (signal.aborted) return { action: "handled" }
       const notes = attachments.flatMap(({ note }) => (note ? [note] : []))
       return {
         action: "transform",
@@ -162,13 +138,12 @@ export function registerImages(
         ],
       }
     } catch (error) {
-      let reason = `Image request not sent: ${String(error)}`
-      try {
-        reason += `\nRequest saved: ${await retain(event, ctx)}`
-      } catch (recoveryError) {
-        reason += `\n${String(recoveryError)}`
-      }
-      return { action: "reject", reason }
+      if (!signal.aborted)
+        ctx.ui.notify(
+          `Image request not sent: ${String(error)}${recovery ? `\nRequest saved: ${recovery}` : ""}`,
+          "error",
+        )
+      return { action: "handled" }
     }
   })
 
@@ -228,9 +203,7 @@ export function registerImages(
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
           const settings = pi.getSettings()
-          const size = pi.getSetting(
-            THUMBNAIL_SETTING,
-          ) as keyof typeof THUMBNAIL_BOUNDS
+          const size = thumbnailSize()
           const bounds = THUMBNAIL_BOUNDS[size]
           const showImages = settings.terminal?.showImages ?? true
           const configuredWidth = settings.terminal?.imageWidthCells
