@@ -12,6 +12,8 @@ import { createPatch } from "./patch.ts"
 import { ProcessSessions } from "./process.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
+type OwnedCall = { id: string; name: string }
+const callJournalType = "core-tools.calls"
 const contract = JSON.parse(
   readFileSync(new URL("./contract.json", import.meta.url), "utf8"),
 ) as {
@@ -207,45 +209,85 @@ export default function coreTools(pi: ExtensionAPI): void {
       return cells.wait(args, signal)
     },
   })
+  const ownsTool = (name: string) =>
+    pi
+      .getAllTools()
+      .some(
+        (tool) =>
+          tool.name === name &&
+          tool.sourceInfo.path === fileURLToPath(import.meta.url),
+      )
+  pi.on("message_end", (event) => {
+    if (event.message.role !== "assistant") return
+    const calls = event.message.content.flatMap((part) =>
+      part.type === "toolCall" &&
+      [execution.name, waiting.name].includes(part.name) &&
+      ownsTool(part.name)
+        ? [{ id: part.id, name: part.name }]
+        : [],
+    )
+    // Receipt precedes dispatch, including calls blocked by native policy.
+    if (calls.length) pi.appendEntry<OwnedCall[]>(callJournalType, calls)
+  })
   pi.on("before_provider_request", (event, ctx) => {
     const payload = event.payload as {
       tools?: Declaration[]
       input?: Record<string, unknown>[]
     }
     const selected =
-      payload.tools?.filter((tool) =>
-        [execution.name, waiting.name].includes(tool.name),
+      payload.tools?.filter(
+        (tool) =>
+          [execution.name, waiting.name].includes(tool.name) &&
+          ownsTool(tool.name),
       ) ?? []
     let inserted = false
     const rawCalls = new Set<string>()
     const ownedCalls = new Set<string>()
+    const branch = ctx.sessionManager.getBranch()
+    const ownership = new Map(
+      branch.flatMap((entry) => {
+        if (entry.type !== "custom") return []
+        if (entry.customType === callJournalType)
+          return (entry.data as OwnedCall[]).map(
+            (call) => [call.id.split("|")[0]!, call.name] as const,
+          )
+        if (entry.customType === "core-tools.activity")
+          return [
+            [
+              (entry.data as { parent_call_id: string }).parent_call_id.split(
+                "|",
+              )[0]!,
+              execution.name,
+            ] as const,
+          ]
+        return []
+      }),
+    )
     const retained = new Map(
-      ctx.sessionManager
-        .getBranch()
-        .flatMap((entry) =>
-          entry.type === "message" &&
-          entry.message.role === "toolResult" &&
-          [execution.name, waiting.name].includes(entry.message.toolName)
-            ? [
-                [
-                  entry.message.toolCallId.split("|")[0]!,
-                  entry.message.content,
-                ] as const,
-              ]
-            : [],
-        ),
+      branch.flatMap((entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        [execution.name, waiting.name].includes(entry.message.toolName)
+          ? [
+              [
+                entry.message.toolCallId.split("|")[0]!,
+                entry.message.content,
+              ] as const,
+            ]
+          : [],
+      ),
     )
     const input = payload.input?.map((item) => {
       if (
         item["type"] === "function_call" &&
         [execution.name, waiting.name].includes(String(item["name"])) &&
-        item["namespace"] === contract.namespace.name
+        ownership.get(String(item["call_id"])) === item["name"]
       )
         ownedCalls.add(String(item["call_id"]))
       if (
         item["type"] === "function_call" &&
         item["name"] === execution.name &&
-        item["namespace"] === contract.namespace.name
+        ownership.get(String(item["call_id"])) === execution.name
       ) {
         const { arguments: encoded, ...rest } = item
         const args = JSON.parse(String(encoded)) as { input: string }
@@ -316,8 +358,7 @@ export default function coreTools(pi: ExtensionAPI): void {
       ...(payload.tools
         ? {
             tools: payload.tools.flatMap((tool) => {
-              if (![execution.name, waiting.name].includes(tool.name))
-                return [tool]
+              if (!selected.includes(tool)) return [tool]
               if (inserted) return []
               inserted = true
               return [

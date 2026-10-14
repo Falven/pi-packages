@@ -615,15 +615,15 @@ test("wait results preserve duplicate image positions and later context redactio
       host.queueResponse(
         ...call(
           `await yield_control(); text("BEFORE"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)}); text("AFTER"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)});`,
+          "one",
+          null,
         ),
       )
       host.queueResponse(completed)
       await host.session.prompt("Emit mixed output after yielding")
       const id = output(host).match(/Script running with cell ID (\S+)/)?.[1]
       assert(id)
-      host.queueResponse(
-        ...functionCall("wait", { cell_id: id }, "collected", "functions"),
-      )
+      host.queueResponse(...functionCall("wait", { cell_id: id }, "collected"))
       host.queueResponse(completed)
       await host.session.prompt("Collect only the allowed mixed output")
       const request = host.requests.at(-1) as unknown as {

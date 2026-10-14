@@ -126,40 +126,46 @@ test("the outgoing request declares the frozen raw execution contract", async (t
 })
 
 test("raw execution runs a real command and retains its raw call in the next request", async (t) => {
-  const host = await openNativeHost(t, {
-    extensionPaths: [extension],
-    providerApi,
-  })
-  const source =
-    '// @exec: {"yield_time_ms": 10000, "max_output_tokens": 1000}\ntext(await tools.exec_command({cmd: "printf short-command", login: false}));'
-  host.queueResponse(...call(source))
-  host.queueResponse(completed)
-  await host.session.prompt("Run the short command")
-  assert.equal(host.requests.length, 2)
-  const request = host.requests[1] as unknown as {
-    input: Record<string, unknown>[]
+  for (const namespace of ["functions", null]) {
+    await t.test(namespace ?? "omitted namespace", async (caseContext) => {
+      const host = await openNativeHost(caseContext, {
+        extensionPaths: [extension],
+        providerApi,
+      })
+      const source =
+        '// @exec: {"yield_time_ms": 10000, "max_output_tokens": 1000}\ntext(await tools.exec_command({cmd: "printf short-command", login: false}));'
+      host.queueResponse(...call(source, "one", namespace))
+      host.queueResponse(completed)
+      await host.session.prompt("Run the short command")
+      assert.equal(host.requests.length, 2)
+      const request = host.requests[1] as unknown as {
+        input: Record<string, unknown>[]
+      }
+      const replay = request.input.find(
+        (item) => item["call_id"] === "call_one",
+      )
+      assert.equal(replay?.["type"], "custom_tool_call")
+      assert.equal(replay["namespace"], namespace ?? undefined)
+      assert.equal(replay["input"], source)
+      assert.equal("arguments" in replay, false)
+      const result = request.input.find(
+        (item) => item["type"] === "custom_tool_call_output",
+      )
+      assert(result)
+      assert(Array.isArray(result["output"]))
+      assert.equal(result["output"].length, 2)
+      assert.deepEqual(result["output"][0], {
+        type: "input_text",
+        text: result["output"][0].text,
+      })
+      assert.match(
+        result["output"][0].text,
+        /^Script completed\nWall time \d+\.\d seconds\nOutput:\n$/,
+      )
+      assert.match(JSON.stringify(result["output"]), /short-command/)
+      assert.match(JSON.stringify(result["output"]), /exit_code/)
+    })
   }
-  const replay = request.input.find((item) => item["call_id"] === "call_one")
-  assert.equal(replay?.["type"], "custom_tool_call")
-  assert.equal(replay["namespace"], "functions")
-  assert.equal(replay["input"], source)
-  assert.equal("arguments" in replay, false)
-  const result = request.input.find(
-    (item) => item["type"] === "custom_tool_call_output",
-  )
-  assert(result)
-  assert(Array.isArray(result["output"]))
-  assert.equal(result["output"].length, 2)
-  assert.deepEqual(result["output"][0], {
-    type: "input_text",
-    text: result["output"][0].text,
-  })
-  assert.match(
-    result["output"][0].text,
-    /^Script completed\nWall time \d+\.\d seconds\nOutput:\n$/,
-  )
-  assert.match(JSON.stringify(result["output"]), /short-command/)
-  assert.match(JSON.stringify(result["output"]), /exit_code/)
 })
 
 test("a nonzero command bounds Unicode output and retains completion metadata", async (t) => {
@@ -285,7 +291,7 @@ test("raw result encoding preserves later context edits and removals", async (t)
           }))
         },
       })
-      host.queueResponse(...call('text("discarded-secret");'))
+      host.queueResponse(...call('text("discarded-secret");', "one", null))
       host.queueResponse(completed)
       await host.session.prompt("Keep only the processed result")
       assert.doesNotMatch(
@@ -351,6 +357,8 @@ test("deselecting execution preserves raw history and unrelated calls", async (t
   host.queueResponse(
     ...call(
       'text((await tools.exec_command({cmd: "printf retained-raw-input", login: false})).output);',
+      "one",
+      null,
     ),
   )
   host.queueResponse(completed)
@@ -365,6 +373,7 @@ test("deselecting execution preserves raw history and unrelated calls", async (t
   assert(calls.some((item) => item["type"] === "custom_tool_call"))
   assert(calls.some((item) => item["type"] === "custom_tool_call_output"))
   const retained = structuredClone(host.session.messages)
+  await host.reload()
   for (const tools of [["read"], []]) {
     host.session.setActiveToolsByName(tools)
     host.queueResponse(completed)
@@ -382,6 +391,149 @@ test("deselecting execution preserves raw history and unrelated calls", async (t
     )
     assert.deepEqual(host.session.messages.slice(0, retained.length), retained)
   }
+})
+
+test("a blocked raw call keeps its custom result without a namespace", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_call", (event) =>
+        event.toolName === "exec"
+          ? { block: true, reason: "Outer call denied by the test policy" }
+          : undefined,
+      )
+    },
+  })
+  host.queueResponse(...call('text("unreachable");', "blocked", null))
+  host.queueResponse(completed)
+  await host.session.prompt("Reject the raw call before execution")
+  const request = host.requests.at(-1) as unknown as {
+    input: Record<string, unknown>[]
+  }
+  const calls = request.input.filter(
+    (item) => item["call_id"] === "call_blocked",
+  )
+  assert.deepEqual(
+    calls.map((item) => item["type"]),
+    ["custom_tool_call", "custom_tool_call_output"],
+  )
+  assert.equal(calls[0]!["namespace"], undefined)
+  assert.deepEqual(calls[1]!["output"], [
+    { type: "input_text", text: "Outer call denied by the test policy" },
+  ])
+  assert.doesNotMatch(output(host, "blocked"), /unreachable/)
+})
+
+test("same-name foreign tools retain their declarations and history across ownership changes", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "core-tools-ownership-"))
+  t.after(() => rm(directory, { recursive: true, force: true }))
+  const foreignIds = new Set(["call_foreign", "call_foreign-wait"])
+  let sessionFile: string | undefined
+  let foreignHistory: Record<string, unknown>[] = []
+  await t.test("foreign ownership", async (caseContext) => {
+    const host = await openNativeHost(caseContext, {
+      directory,
+      persistSession: true,
+      providerApi,
+      extension(pi) {
+        for (const name of ["exec", "wait"])
+          pi.registerTool({
+            name,
+            label: name,
+            description: `Foreign ${name}`,
+            namespace: { name: "functions" },
+            parameters: Type.Object({}),
+            async execute() {
+              return {
+                content: [
+                  { type: "text", text: "FOREIGN_FIRST" },
+                  { type: "text", text: "FOREIGN_SECOND" },
+                ],
+                details: undefined,
+              }
+            },
+          })
+      },
+    })
+    host.queueResponse(...functionCall("exec", {}, "foreign", "functions"))
+    host.queueResponse(...functionCall("wait", {}, "foreign-wait"))
+    host.queueResponse(completed)
+    await host.session.prompt("Call the foreign tools")
+    const initial = host.requests.at(-1) as unknown as {
+      input: Record<string, unknown>[]
+      tools: { type: string; name: string; description: string }[]
+    }
+    assert.deepEqual(
+      initial.tools
+        .filter((tool) => ["exec", "wait"].includes(tool.name))
+        .map((tool) => [tool.name, tool.type, tool.description]),
+      [
+        ["exec", "function", "Foreign exec"],
+        ["wait", "function", "Foreign wait"],
+      ],
+    )
+    foreignHistory = initial.input.filter((item) =>
+      foreignIds.has(String(item["call_id"])),
+    )
+    assert.deepEqual(
+      foreignHistory.map((item) => item["type"]),
+      [
+        "function_call",
+        "function_call_output",
+        "function_call",
+        "function_call_output",
+      ],
+    )
+    assert.equal(foreignHistory[1]!["output"], "FOREIGN_FIRST\nFOREIGN_SECOND")
+    assert.equal(foreignHistory[3]!["output"], "FOREIGN_FIRST\nFOREIGN_SECOND")
+    sessionFile = host.session.sessionManager.getSessionFile()
+  })
+  await t.test("owned call after resume", async (caseContext) => {
+    assert(sessionFile)
+    const host = await openNativeHost(caseContext, {
+      directory,
+      sessionFile,
+      extensionPaths: [extension],
+      providerApi,
+    })
+    host.queueResponse(
+      ...call('text("OWNED_FIRST"); text("OWNED_SECOND");', "owned", null),
+    )
+    host.queueResponse(completed)
+    await host.session.prompt("Call the selected raw tool after reload")
+    const current = host.requests.at(-1) as unknown as {
+      input: Record<string, unknown>[]
+    }
+    assert.deepEqual(
+      current.input.filter((item) => foreignIds.has(String(item["call_id"]))),
+      foreignHistory,
+    )
+    const ownedHistory = current.input.filter(
+      (item) => item["call_id"] === "call_owned",
+    )
+    assert.deepEqual(
+      ownedHistory.map((item) => item["type"]),
+      ["custom_tool_call", "custom_tool_call_output"],
+    )
+    await host.reload()
+    host.session.setActiveToolsByName([])
+    host.queueResponse(completed)
+    await host.session.prompt(
+      "Keep the earlier call shapes after reload and deselection",
+    )
+    const restored = host.requests.at(-1) as unknown as {
+      input: Record<string, unknown>[]
+    }
+    assert.deepEqual(
+      restored.input.filter((item) => item["call_id"] === "call_owned"),
+      ownedHistory,
+    )
+    assert.deepEqual(
+      restored.input.filter((item) => foreignIds.has(String(item["call_id"]))),
+      foreignHistory,
+    )
+  })
 })
 
 test("excluded or extension-owned command tools cannot be bypassed through execution", async (t) => {

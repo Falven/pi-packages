@@ -29,13 +29,17 @@ export const completed = {
   },
 }
 
-export function call(input: string, id = "one") {
+export function call(
+  input: string,
+  id = "one",
+  namespace: string | null = "functions",
+) {
   const item = {
     type: "custom_tool_call",
     id: `ctc_${id}`,
     call_id: `call_${id}`,
     name: "exec",
-    namespace: "functions",
+    ...(namespace ? { namespace } : {}),
     input,
     status: "completed",
   }
