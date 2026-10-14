@@ -73,6 +73,7 @@ export type NativeHostOptions = {
   skillPaths?: string[]
   noTools?: "all" | "builtin"
   tools?: string[]
+  excludeTools?: string[]
   settings?: Parameters<typeof SettingsManager.inMemory>[0]
   holdResponses?: boolean
   responseStatus?: number
@@ -328,6 +329,9 @@ export async function openNativeHost(
           model,
           ...(options.noTools ? { noTools: options.noTools } : {}),
           ...(options.tools ? { tools: options.tools } : {}),
+          ...(options.excludeTools
+            ? { excludeTools: options.excludeTools }
+            : {}),
         })),
         services,
         diagnostics: [],
