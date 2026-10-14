@@ -1,77 +1,19 @@
 import { spawn } from "node:child_process"
 import { randomBytes, randomInt } from "node:crypto"
-import {
-  closeSync,
-  ftruncateSync,
-  mkdtempSync,
-  openSync,
-  readSync,
-  rmSync,
-  writeSync,
-} from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
 import * as pty from "node-pty"
-import { OutputBuffer } from "./output.ts"
-
-class ProcessOutput {
-  private readonly directory = mkdtempSync(join(tmpdir(), "core-tools-output-"))
-  private readonly fd = openSync(join(this.directory, "output"), "w+", 0o600)
-  private bytes = 0
-  private closed = false
-
-  append(value: string): void {
-    const chunk = Buffer.from(value)
-    let written = 0
-    while (written < chunk.length) {
-      written += writeSync(
-        this.fd,
-        chunk,
-        written,
-        chunk.length - written,
-        this.bytes + written,
-      )
-    }
-    this.bytes += written
-  }
-
-  take(maxTokens: number) {
-    const output = new OutputBuffer(maxTokens)
-    const chunk = Buffer.alloc(Math.min(this.bytes, 65536))
-    let position = 0
-    while (position < this.bytes) {
-      const count = readSync(
-        this.fd,
-        chunk,
-        0,
-        Math.min(chunk.length, this.bytes - position),
-        position,
-      )
-      output.append(chunk.subarray(0, count))
-      position += count
-    }
-    ftruncateSync(this.fd, 0)
-    this.bytes = 0
-    return output.result()
-  }
-
-  close(): void {
-    if (this.closed) return
-    this.closed = true
-    closeSync(this.fd)
-    rmSync(this.directory, { recursive: true, force: true })
-  }
-}
+import { OutputStore, type OutputCursor } from "./output.ts"
 
 type Process = {
   id: number
   pid?: number
-  output: ProcessOutput
+  output: OutputStore
+  cursor: OutputCursor
   done: Promise<void>
   collected: Promise<unknown>
   exitCode?: number
   error?: Error
   write?: (chars: string) => void
+  resume?: () => void
 }
 
 type CommandOptions = {
@@ -94,22 +36,41 @@ export class ProcessSessions {
     signal: AbortSignal,
   ) {
     signal.throwIfAborted()
+    if (this.processes.size >= 32)
+      throw new Error("Process session limit reached (32 retained handles)")
     if (this.nextId > 2147483647)
       throw new Error("Process identifier range exhausted")
-    const output = new ProcessOutput()
+    const fail = (error: unknown) => {
+      child.error ??= error instanceof Error ? error : new Error(String(error))
+      this.stop(child)
+    }
+    const output = new OutputStore(fail)
     const { promise: done, resolve } = Promise.withResolvers<void>()
     const child: Process = {
       id: this.nextId++,
       output,
+      cursor: output.snapshot(),
       done,
       collected: Promise.resolve(),
     }
+    let pause: (() => void) | undefined
+    let waiting: Promise<void> | undefined
     const append = (data: string) => {
+      if (child.error) return
       try {
-        output.append(data)
+        const pressure = output.append(data)
+        if (pressure && pressure !== waiting) {
+          waiting = pressure
+          pause!()
+          void pressure.then(() => {
+            if (waiting === pressure) {
+              waiting = undefined
+              child.resume!()
+            }
+          }, fail)
+        }
       } catch (error) {
-        child.error = error instanceof Error ? error : new Error(String(error))
-        this.stop(child)
+        fail(error)
       }
     }
     const args = [options.login ? "-lc" : "-c", options.command]
@@ -123,6 +84,8 @@ export class ProcessSessions {
         })
         child.pid = terminal.pid
         child.write = (chars) => terminal.write(chars)
+        pause = () => terminal.pause()
+        child.resume = () => terminal.resume()
         terminal.onData(append)
         terminal.onExit(({ exitCode, signal: exitSignal }) => {
           child.exitCode = exitSignal ? 1 : exitCode
@@ -136,10 +99,18 @@ export class ProcessSessions {
           stdio: ["ignore", "pipe", "pipe"],
         })
         if (command.pid) child.pid = command.pid
+        pause = () => {
+          command.stdout.pause()
+          command.stderr.pause()
+        }
+        child.resume = () => {
+          command.stdout.resume()
+          command.stderr.resume()
+        }
         command.stdout.setEncoding("utf8").on("data", append)
         command.stderr.setEncoding("utf8").on("data", append)
         command.once("error", (error) => {
-          child.error = error
+          child.error ??= error
         })
         command.once("close", (code) => {
           child.exitCode = code ?? 1
@@ -147,7 +118,7 @@ export class ProcessSessions {
         })
       }
     } catch (error) {
-      output.close()
+      await output.close()
       throw error
     }
     this.processes.set(child.id, child)
@@ -172,11 +143,12 @@ export class ProcessSessions {
     for (const child of children) this.stop(child)
     await Promise.all(children.map((child) => child.done))
     await Promise.allSettled(children.map((child) => child.collected))
-    for (const child of children) child.output.close()
+    await Promise.all(children.map((child) => child.output.close()))
     this.processes.clear()
   }
 
   private stop(child: Process): void {
+    child.resume?.()
     if (!child.pid) return
     try {
       process.kill(-child.pid, "SIGKILL")
@@ -201,6 +173,7 @@ export class ProcessSessions {
         )
       const started = performance.now()
       let timer: NodeJS.Timeout | undefined
+      let retire = false
       const stop = () => this.stop(child)
       signal.addEventListener("abort", stop, { once: true })
       try {
@@ -212,22 +185,43 @@ export class ProcessSessions {
             timer = setTimeout(resolve, yieldTime)
           }),
         ])
-        if (signal.aborted) await child.done
-        if (child.error) throw child.error
+        if (signal.aborted || child.error) await child.done
+        let exitCode = child.exitCode
+        let cutoff = child.output.snapshot()
+        let collected = await child.output.read(child.cursor, cutoff, maxTokens)
+        if (signal.aborted || child.error) {
+          await child.done
+          exitCode = child.exitCode
+          cutoff = child.output.snapshot()
+          collected = await child.output.read(child.cursor, cutoff, maxTokens)
+        }
+        retire = exitCode !== undefined
+        if (child.error)
+          throw new Error(
+            child.error.message +
+              (collected.output ? `\n${collected.output}` : ""),
+          )
+        child.cursor = cutoff
+        child.output.discardThrough(cutoff)
         return {
           chunk_id: randomBytes(3).toString("hex"),
           wall_time_seconds: (performance.now() - started) / 1000,
-          ...(child.exitCode === undefined
+          ...(exitCode === undefined
             ? { session_id: child.id }
-            : { exit_code: child.exitCode }),
-          ...child.output.take(maxTokens),
+            : { exit_code: exitCode }),
+          ...collected,
         }
+      } catch (error) {
+        this.stop(child)
+        await child.done
+        retire = true
+        throw error
       } finally {
         clearTimeout(timer)
         signal.removeEventListener("abort", stop)
-        if (child.exitCode !== undefined) {
+        if (retire) {
           this.processes.delete(child.id)
-          child.output.close()
+          await child.output.close()
         }
       }
     })

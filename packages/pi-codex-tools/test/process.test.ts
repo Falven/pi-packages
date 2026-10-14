@@ -74,6 +74,21 @@ async function readPids(t: TestContext, file: string, count = 1) {
   )
 }
 
+async function outputDirectory(
+  t: TestContext,
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+) {
+  const previous = process.env["TMPDIR"]
+  const directory = join(host.directory, "temporary")
+  await mkdir(directory)
+  process.env["TMPDIR"] = directory
+  t.after(() => {
+    if (previous === undefined) delete process.env["TMPDIR"]
+    else process.env["TMPDIR"] = previous
+  })
+  return directory
+}
+
 test("a PTY continues through fresh tool calls and ordinary prompts", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -285,19 +300,12 @@ test("pipe mode closes stdin and keeps unread completion output after failed inp
   assert.equal("session_id" in drained, false)
 })
 
-test("unread output stays private and a later budget preserves split UTF-8 and trailing bytes", async (t) => {
+test("small output stays in memory and private spill preserves later budgets and split UTF-8", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
   })
-  const previousTmp = process.env["TMPDIR"]
-  const spills = join(host.directory, "temporary")
-  await mkdir(spills)
-  process.env["TMPDIR"] = spills
-  t.after(() => {
-    if (previousTmp === undefined) delete process.env["TMPDIR"]
-    else process.env["TMPDIR"] = previousTmp
-  })
+  const spills = await outputDirectory(t, host)
   const program = join(host.directory, "output.mjs")
   const start = join(host.directory, "start")
   const gate = join(host.directory, "finish")
@@ -307,8 +315,9 @@ test("unread output stays private and a later budget preserves split UTF-8 and t
     `
 import { existsSync, writeFileSync } from "node:fs";
 import { setTimeout } from "node:timers/promises";
+process.stdout.write("MEMORY\\n");
 while (!existsSync(${JSON.stringify(start)})) await setTimeout(10);
-await new Promise((resolve) => process.stdout.write("FIRST\\n", resolve));
+await new Promise((resolve) => process.stdout.write("FIRST\\n" + "🙂".repeat(16384) + "TAIL\\n", resolve));
 writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
 while (!existsSync(${JSON.stringify(gate)})) await setTimeout(10);
 process.stdout.write(Buffer.from([0xf0, 0x9f]));
@@ -324,27 +333,42 @@ process.exitCode = 7;
     "start",
   )
   const initial = result(host, "start")
-  assert.equal(initial.output, "")
-  assert.equal(initial.original_token_count, 0)
-  const directories = await readdir(spills)
-  assert.equal(directories.length, 1)
-  const directory = join(spills, directories[0]!)
-  assert.equal((await stat(directory)).mode & 0o777, 0o700)
-  const files = await readdir(directory)
-  assert.equal(files.length, 1)
-  assert.equal((await stat(join(directory, files[0]!))).mode & 0o777, 0o600)
+  let memory = initial
+  if (!initial.output) {
+    await request(
+      host,
+      `text(await tools.write_stdin({session_id:${initial.session_id}, max_output_tokens:1}));`,
+      "memory",
+    )
+    memory = result(host, "memory")
+  }
+  assert.equal(memory.original_token_count, 2)
+  assert.equal(
+    memory.output,
+    "Warning: truncated output (original token count: 2)\nTotal output lines: 1\n\nME…1 tokens truncated…Y\n",
+  )
+  assert.deepEqual(await readdir(spills), [])
   await writeFile(start, "start")
   const [pid] = await readPids(t, pidFile)
+  await t.waitFor(async () => {
+    const directories = await readdir(spills)
+    assert.equal(directories.length, 1)
+    const directory = join(spills, directories[0]!)
+    assert.equal((await stat(directory)).mode & 0o777, 0o700)
+    const files = await readdir(directory)
+    assert.equal(files.length, 1)
+    assert.equal((await stat(join(directory, files[0]!))).mode & 0o777, 0o600)
+  })
   await request(
     host,
     `text(await tools.write_stdin({session_id:${initial.session_id}, max_output_tokens:1}));`,
     "first",
   )
   const first = result(host, "first")
-  assert.equal(first.original_token_count, 2)
+  assert.equal(first.original_token_count, 16387)
   assert.equal(
     first.output,
-    "Warning: truncated output (original token count: 2)\nTotal output lines: 1\n\nFI…1 tokens truncated…T\n",
+    "Warning: truncated output (original token count: 16387)\nTotal output lines: 2\n\nFI…16386 tokens truncated…L\n",
   )
   await writeFile(gate, "finish")
   await t.waitFor(() =>
@@ -360,6 +384,229 @@ process.exitCode = 7;
   assert.equal(drained.original_token_count, 41)
   assert.equal(drained.exit_code, 7)
   assert.deepEqual(await readdir(spills), [])
+})
+
+test("large incremental output wraps bounded storage without replaying delivered bytes", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  const spills = await outputDirectory(t, host)
+  const program = join(host.directory, "phases.mjs")
+  const pidFile = join(host.directory, "owned.pid")
+  const gate = join(host.directory, "phase")
+  await writeFile(
+    program,
+    `
+import { existsSync, writeFileSync } from "node:fs";
+import { setTimeout } from "node:timers/promises";
+const write = (text) => new Promise(resolve => process.stdout.write(text, resolve));
+const chunk = "🙂".repeat(16384);
+writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+for (let phase = 0; phase < 4; phase++) {
+  while (!existsSync(${JSON.stringify(gate)} + phase)) await setTimeout(10);
+  await write("BEGIN" + phase + "\\n");
+  for (let chunkIndex = 0; chunkIndex < 320; chunkIndex++) await write(chunk);
+  await write("END" + phase + "\\n");
+  writeFileSync(${JSON.stringify(gate)} + phase + ".ready", "ready");
+}
+while (!existsSync(${JSON.stringify(gate)} + "finish")) await setTimeout(10);
+process.exitCode = 7;
+`,
+  )
+  await request(
+    host,
+    `text(await tools.exec_command(${JSON.stringify({ cmd: `exec node '${program}'`, shell: "/bin/sh", login: false, yield_time_ms: 250 })}));`,
+    "start",
+  )
+  const initial = result(host, "start")
+  assert.equal(initial.output, "")
+  const [pid] = await readPids(t, pidFile)
+  for (let phase = 0; phase < 4; phase++) {
+    await writeFile(gate + phase, "continue")
+    await t.waitFor(
+      async () =>
+        assert.equal(await readFile(gate + phase + ".ready", "utf8"), "ready"),
+      { timeout: 10000 },
+    )
+    await request(
+      host,
+      `text(await tools.write_stdin({session_id:${initial.session_id}, max_output_tokens:2}));`,
+      `phase${phase}`,
+    )
+    const part = result(host, `phase${phase}`)
+    assert.equal(part.session_id, initial.session_id)
+    assert.equal(part.original_token_count, 5242883)
+    assert.equal(
+      part.output,
+      `Warning: truncated output (original token count: 5242883)\nTotal output lines: 2\n\nBEGI…5242881 tokens truncated…ND${phase}\n`,
+    )
+    const directories = await readdir(spills)
+    assert.equal(directories.length, 1)
+    const directory = join(spills, directories[0]!)
+    const files = await readdir(directory)
+    assert.equal(files.length, 1)
+    assert((await stat(join(directory, files[0]!))).size <= 64 * 1024 * 1024)
+  }
+  await writeFile(gate + "finish", "finish")
+  await t.waitFor(() =>
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" }),
+  )
+  await request(
+    host,
+    `text(await tools.write_stdin({session_id:${initial.session_id}}));`,
+    "finish",
+  )
+  assert.equal(result(host, "finish").exit_code, 7)
+  assert.equal(result(host, "finish").output, "")
+  assert.deepEqual(await readdir(spills), [])
+})
+
+test("unread overflow stops its producer and retains an explicit error until collection", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  const spills = await outputDirectory(t, host)
+  const program = join(host.directory, "overflow.mjs")
+  const gate = join(host.directory, "start")
+  const pidFile = join(host.directory, "owned.pid")
+  await writeFile(
+    program,
+    `
+import { existsSync, writeFileSync } from "node:fs";
+import { setTimeout } from "node:timers/promises";
+writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+while (!existsSync(${JSON.stringify(gate)})) await setTimeout(10);
+await new Promise(resolve => process.stdout.write("ACCEPTED\\n", resolve));
+const chunk = Buffer.alloc(65536, "x");
+for (let index = 0; index < 2048; index++)
+  await new Promise(resolve => process.stdout.write(chunk, resolve));
+await setTimeout(30000);
+`,
+  )
+  await request(
+    host,
+    `text(await tools.exec_command(${JSON.stringify({ cmd: `exec node '${program}'`, shell: "/bin/sh", login: false, yield_time_ms: 250 })}));`,
+    "start",
+  )
+  const initial = result(host, "start")
+  const [pid] = await readPids(t, pidFile)
+  await writeFile(gate, "start")
+  await t.waitFor(
+    () => assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" }),
+    { timeout: 10000 },
+  )
+  const failed = await request(
+    host,
+    `try { await tools.write_stdin({session_id:${initial.session_id}, max_output_tokens:4}); } catch (error) { text(error); }`,
+    "overflow",
+  )
+  assert.match(failed, /Unread output exceeds 67108864 bytes/)
+  assert.match(failed, /Warning: truncated output/)
+  assert.match(failed, /Total output lines: 2/)
+  assert.match(failed, /ACCEPTED…\d+ tokens truncated…xxxxxxxx$/)
+  assert.deepEqual(await readdir(spills), [])
+  assert.match(
+    await request(
+      host,
+      `try { await tools.write_stdin({session_id:${initial.session_id}}); } catch (error) { text(error); }`,
+      "stale",
+    ),
+    /Unknown process id/,
+  )
+  await request(
+    host,
+    'text(await tools.exec_command({cmd:"printf FRESH",shell:"/bin/sh",login:false}));',
+    "fresh",
+  )
+  assert.equal(result(host, "fresh").output, "FRESH")
+})
+
+test("asynchronous spill failure retains accepted output and retires the failed handle after collection", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  const spills = await outputDirectory(t, host)
+  process.env["TMPDIR"] = join(spills, "missing")
+  const program = join(host.directory, "failure.mjs")
+  const pidFile = join(host.directory, "owned.pid")
+  await writeFile(
+    program,
+    `
+import { writeFileSync } from "node:fs";
+import { setTimeout } from "node:timers/promises";
+writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
+process.stdout.write("ACCEPTED" + "x".repeat(131072));
+await setTimeout(30000);
+`,
+  )
+  const failed = await request(
+    host,
+    `try { await tools.exec_command(${JSON.stringify({ cmd: `exec node '${program}'`, shell: "/bin/sh", login: false, max_output_tokens: 4 })}); } catch (error) { text(error); }`,
+    "failure",
+  )
+  const [pid] = await readPids(t, pidFile)
+  assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" })
+  assert.match(failed, /ENOENT/)
+  assert.match(failed, /Warning: truncated output/)
+  assert.match(failed, /ACCEPTED…\d+ tokens truncated…xxxxxxxx$/)
+  assert.deepEqual(await readdir(spills), [])
+})
+
+test("completed unread handles count toward the process limit and a collected handle frees capacity", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  const gate = join(host.directory, "finish")
+  const prefix = join(host.directory, "owned-")
+  const commands = Array.from({ length: 32 }, (_, index) => ({
+    cmd: `printf '%s' $$ > '${prefix}${index}'; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'RETAINED\\n'; exit 7`,
+    shell: "/bin/sh",
+    login: false,
+    yield_time_ms: 250,
+  }))
+  const launched = await request(
+    host,
+    `text(await Promise.all(${JSON.stringify(commands)}.map(args => tools.exec_command(args))));`,
+    "start",
+  )
+  const handles = JSON.parse(launched.slice(launched.indexOf("["))) as {
+    session_id: number
+    output: string
+  }[]
+  assert.equal(handles.length, 32)
+  for (const handle of handles) assert.equal(typeof handle.session_id, "number")
+  const pids = (
+    await Promise.all(commands.map((_, index) => readPids(t, prefix + index)))
+  ).flat()
+  await writeFile(gate, "finish")
+  await t.waitFor(() => {
+    for (const pid of pids)
+      assert.throws(() => process.kill(pid, 0), { code: "ESRCH" })
+  })
+  const blocked = await request(
+    host,
+    'try { await tools.exec_command({cmd:"printf EXCESS",shell:"/bin/sh",login:false}); } catch (error) { text(error); }',
+    "blocked",
+  )
+  assert.match(blocked, /Process session limit reached \(32 retained handles\)/)
+  await request(
+    host,
+    `text(await tools.write_stdin({session_id:${handles[0]!.session_id}}));`,
+    "collect",
+  )
+  assert.equal(result(host, "collect").output, "RETAINED\n")
+  assert.equal(result(host, "collect").exit_code, 7)
+  await request(
+    host,
+    'text(await tools.exec_command({cmd:"printf FRESH",shell:"/bin/sh",login:false}));',
+    "fresh",
+  )
+  assert.equal(result(host, "fresh").output, "FRESH")
+  assert.equal(result(host, "fresh").exit_code, 0)
 })
 
 test("reload awaits the PTY and its waiting child and makes the old handle stale", async (t) => {
@@ -599,16 +846,22 @@ test("input selection and exclusion remain authoritative", async (t) => {
   }
 })
 
-test("cancelling a later poll awaits owned children and retains that call's partial output", async (t) => {
+test("cancelling a later poll awaits owned children and retains large partial PTY output", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
   })
+  const spills = await outputDirectory(t, host)
   const pidFile = join(host.directory, "owned.pids")
+  const program = join(host.directory, "large-output.mjs")
+  await writeFile(
+    program,
+    'const chunk = "x".repeat(65536); for (let index = 0; index < 128; index++) await new Promise(resolve => process.stdout.write(chunk, resolve)); process.stdout.write("\\nLARGE-END\\n");',
+  )
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: `printf 'READY\\n'; IFS= read -r line; sleep 30 & child=$!; printf 'PARTIAL:%s\\n' "$line"; printf '%s %s' $$ "$child" > '${pidFile}'; wait`,
+      cmd: `printf 'READY\\n'; IFS= read -r line; sleep 30 & child=$!; printf 'PARTIAL:%s\\n' "$line"; node '${program}'; printf '%s %s' $$ "$child" > '${pidFile}'; wait`,
       shell: "/bin/sh",
       login: false,
       tty: true,
@@ -619,7 +872,7 @@ test("cancelling a later poll awaits owned children and retains that call's part
   const initial = result(host, "start")
   host.queueResponse(
     ...call(
-      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"go\\n", yield_time_ms:10000}));`,
+      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"go\\n", yield_time_ms:10000, max_output_tokens:32}));`,
       "poll",
     ),
   )
@@ -639,6 +892,9 @@ test("cancelling a later poll awaits owned children and retains that call's part
   assert.equal(retained.nestedCalls.calls.length, 1)
   assert.notEqual(retained.nestedCalls.calls[0]!.status, "unfinished")
   assert.match(JSON.stringify(retained.content), /PARTIAL:go/)
+  assert.match(JSON.stringify(retained.content), /LARGE-END/)
+  assert.match(JSON.stringify(retained.content), /tokens truncated/)
+  assert.deepEqual(await readdir(spills), [])
   const stale = await request(
     host,
     `try { await tools.write_stdin({session_id:${initial.session_id}}); } catch (error) { text(error); }`,

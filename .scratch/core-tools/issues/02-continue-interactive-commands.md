@@ -6,7 +6,7 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop.
 
-**Status:** claimed — preserve process behavior while sharing asynchronous output storage with cells
+**Status:** implemented — process continuation uses shared asynchronous output storage
 
 - [x] Expose and execute the captured `write_stdin` contract through the existing orchestration and public dispatch path.
 - [x] Support both pipes and an explicitly requested PTY, with accurate input delivery, output, completion status, and process session identifier behavior.
@@ -18,13 +18,17 @@
 - [x] Keep process handles available across ordinary prompts in the same active extension session. Treat invalid, completed, and stale identifiers according to the verified contract.
 - [x] Exercise cancellation and normal session shutdown/reload, including owned child cleanup and retained partial output. Do not restore live handles from history or create a survival daemon.
 - [x] Verify the full request/tool/next-request interaction with real controlled processes through the existing host fixture, including nonzero completion and a failed input/poll call.
-- [ ] Replace synchronous spill I/O with shared asynchronous storage, retaining small output in memory and using private bounded spill files for larger output.
-- [ ] Apply producer backpressure and finite queued/unread limits, preserve incremental UTF-8/truncation behavior, and collect only required new ranges with a stable cutoff.
-- [ ] Verify large continued output, failure, cancellation, cleanup, private file modes, and concurrent collection through the existing real-host seam. Keep existing command arguments, timings, results, and process ownership.
+- [x] Replace synchronous spill I/O with shared asynchronous storage, retaining small output in memory and using private bounded spill files for larger output.
+- [x] Apply producer backpressure and finite queued/unread limits, preserve incremental UTF-8/truncation behavior, and collect only required new ranges with a stable cutoff.
+- [x] Verify large continued output, failure, cancellation, cleanup, private file modes, and concurrent collection through the existing real-host seam. Keep existing command arguments, timings, results, and process ownership.
 
 ## Approved continuation revision
 
-The prior process slice remains implemented. It is reopened only for the shared storage needed by ticket 03. The proposed internal limits are 64 KiB retained in memory, 256 KiB asynchronous batches/high-water, 1 MiB queued bytes, and 64 MiB unread bytes per owner. Spill is lazy and private; retained disk use must remain bounded across repeated collections. Overflow or I/O failure stops the producer and produces an explicit collected error with cleanup. The implementation must preserve already accepted output and never silently lose a live handle. Final verified limits and measurements belong here.
+The prior process slice remains implemented. It was reopened only for the shared storage needed by ticket 03. The verified internal limits are 64 KiB retained in memory, 256 KiB asynchronous batches/high-water, 1 MiB queued storage, and 64 MiB unread bytes per process. Spill is lazy and private; a circular file bounds retained disk use to 64 MiB across repeated collections. Overflow or I/O failure stops the producer and produces an explicit collected error with cleanup. Accepted queued bytes remain available when a spill write fails. A failure to read persisted bytes is reported directly; storage corruption cannot be reconstructed.
+
+The process manager retains at most 32 handles, including completed processes with unread output and failures awaiting collection. Exhaustion rejects a new command explicitly without evicting an existing handle. Collecting a terminal result or failure retires its handle and releases storage. Session cleanup awaits owned producers and closes their stores.
+
+`OutputStore` accepts and counts bytes and line endings on arrival, gives each collection an absolute cutoff, and reads only the required head/tail ranges for a truncated result. Later arrivals remain unread for the next collection, including completion during an asynchronous read. Small output requires no file. Larger output is written in asynchronous batches from bounded 64 KiB slabs. Pipes pause both output streams, and PTYs pause their output; both resume when the queue drains. A producer resumed during flush completion cannot strand a new queue. There is no polling loop or synchronous output I/O. Cells consume the same store through ticket 03, with ordered part metadata owned by the cell manager.
 
 ## Implementation evidence
 
@@ -50,13 +54,19 @@ A later full repository run at `0d80487` exposed three test setup races: startup
 
 The same delayed-startup probe passed all three cases after the test fixes. After removing that temporary delay, all 117 package tests passed, as did package type checking, targeted lint, formatting, and whitespace checks. The full repository rerun remains separate from this focused verification.
 
+The asynchronous revision began with a failing real-host tracer: small output incorrectly created a spill file. That tracer now passes while preserving exact budgets, private modes, later output, and split UTF-8. Additional real-host regressions pass for 80 MiB across four collections with bounded disk and no replay, 64 MiB unread overflow with retained accepted output and an explicit collected error, a real asynchronous filesystem failure, completed-unread handle exhaustion and capacity recovery, and cancellation after 8 MiB of PTY output. Existing native hooks, redaction, cancellation, child cleanup, concurrent polls, and wait semantics remain covered.
+
+Supplementary in-process store probes completed 300 append/read/discard cycles totaling 75 MiB across ring wrap, and 200 pressure-release appends totaling 50 MiB without intervening collection. They check progress and byte accounting; their wall times are not comparative host performance measurements. The shared before/after performance evaluation belongs to ticket 03.
+
+After incorporating integration commit `e8142e4`, all 121 package tests pass. Package type checking, targeted lint, formatting, and whitespace checks pass. This slice does not repeat the full repository suite or claim measured performance improvement from the diagnostic probes.
+
 Evidence is retained in the [command index](../../../packages/pi-codex-tools/test/fixtures/observed/commands/index.json). Relevant indexed cases are `command-long-waits.json`, `command-pty-boundaries.json`, `empty-poll-upper-bound.json`, `command-input-validation.json`, `post-exit-handles.json`, `concurrent-process-polls.json`, `concurrent-process-input.json`, and `pty-interrupt.json`. The [dependency probe](../../../packages/pi-codex-tools/test/fixtures/observed/commands/pty-dependency-gate.json) is a separate unindexed observation. These supplemental observations do not establish the runtime build identity of the frozen capture.
 
 ## Dependency and remaining limits
 
 `node-pty` is pinned to 1.2.0-beta.15. The published 1.1.0 terminal helper lacks its executable bit on the tested platform. The pinned release ships it as 0755 and loads and spawns on Node 26.8.1, macOS arm64, without install scripts, runtime permission changes, or build-approval settings. Real input, EOF, terminal dimensions, and exit 7 pass the dependency gate. Source-build fallback and other platforms or runtime versions remain unverified.
 
-Process continuation is independent of the blocked execution-cell work in ticket 03. The outer script deadline still reports unavailable retained execution and cancels pending calls. Long polls require a sufficient outer script budget. No old execution context, daemon, or history-based handle restoration is added.
+Process continuation remains independently owned: a command that has yielded keeps its handle across ordinary prompts in the active extension session. Ticket 03 owns retained execution cells and the outer script's continuation. This revision changes shared output storage and process collection; it adds no daemon or history-based handle restoration.
 
 Explicit cancellation retains processed partial output and complete native nested-call records. Normal quit also preserves the active call's partial output and awaits owned processes, but the installed host's direct runtime disposal omits that call's nested summary after invalidation. This native behavior is not repaired with synthetic history. Output produced while no call is collecting it is cleared during session cleanup; already returned results remain in history.
 
