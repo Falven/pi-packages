@@ -811,6 +811,63 @@ test("a stale Markdown capture stays readable without replacing a newer draft", 
   assert.doesNotMatch(host.render(), /Manage attachments/)
 })
 
+for (const composer of [false, true]) {
+  test(`${composer ? "composer" : "native"} dialog restoration reuses the original capture after the source changes`, async (t) => {
+    const host = await nativePi(t, composer ? [composerPath] : [])
+    const source = join(host.directory, "source.txt")
+    await writeFile(source, "The original captured contents")
+    const read = holdFileRead(t, source)
+    const original = "Inspect [note](source.txt)"
+    host.ui.setEditorText(original)
+    await read.started()
+    let close
+    const dialog = host.ui.custom((_tui, _theme, _keys, done) => {
+      close = done
+      return {
+        render: () => ["Temporary attachment dialog"],
+        invalidate() {},
+        handleInput() {},
+      }
+    })
+    t.after(() => close?.())
+    await waitFor(() =>
+      assert.match(host.render(), /Temporary attachment dialog/),
+    )
+    host.ui.setEditorText("Unrelated replacement")
+    read.release()
+    const request = await waitFor(() => retainedRequest(host, original))
+    const path = snapshotPath(request.text)
+    await waitFor(async () =>
+      assert.equal(
+        await readFile(path, "utf8"),
+        "The original captured contents",
+      ),
+    )
+    assert.equal(host.ui.getEditorText(), "Unrelated replacement")
+    await writeFile(source, "Contents changed while the dialog was open")
+    close()
+    close = undefined
+    await dialog
+    const captured = `Inspect [note](<${path}>)`
+    await waitFor(() => assert.equal(host.ui.getEditorText(), captured))
+    assert.equal(
+      (await fs.readdir(join(host.agentDir, "pi-attachments"))).filter((name) =>
+        name.startsWith("snapshot-"),
+      ).length,
+      1,
+    )
+    host.input(composer ? "\x1b[122;9u" : "\x1b[45;5u")
+    assert.equal(host.ui.getEditorText(), original)
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    const user = host.requests[0].messages.findLast(
+      (message) => message.role === "user",
+    )
+    assert.equal(user.content[0].text, captured)
+    assert.equal(await readFile(path, "utf8"), "The original captured contents")
+  })
+}
+
 test("a Markdown capture finishing after session replacement retains its original request", async (t) => {
   const host = await nativePi(t, [], { noSession: true })
   const source = join(host.directory, "previous.txt")
@@ -838,37 +895,56 @@ test("a Markdown capture finishing after session replacement retains its origina
 })
 
 for (const composer of [false, true]) {
-  test(`pending ${composer ? "composer" : "native"} history does not enter a replacement session`, async (t) => {
-    const host = await nativePi(t, composer ? [composerPath] : [])
-    const source = join(host.directory, "previous.txt")
-    await writeFile(source, "Previous submitted contents")
-    const sessionId = host.runtime.session.sessionManager.getSessionId()
-    const read = holdFileRead(t, source)
-    host.ui.setEditorText("Previous [file](previous.txt)")
-    await read.started()
-    host.submit()
-    assert.equal(host.ui.getEditorText(), "Previous [file](previous.txt)")
-    await host.runtime.newSession()
-    host.ui.setEditorText("Current session draft")
-    read.release()
-    const request = await waitFor(() =>
-      retainedRequest(host, `Session: ${sessionId}`),
-    )
-    const path = snapshotPath(request.text)
-    await waitFor(async () =>
-      assert.equal(await readFile(path, "utf8"), "Previous submitted contents"),
-    )
-    assert.equal(host.ui.getEditorText(), "Current session draft")
-    host.ui.setEditorText("")
-    host.input("\x1b[A")
-    assert.equal(host.ui.getEditorText(), "")
-    host.submit("Current session request")
-    await waitFor(() => assert.equal(host.requests.length, 1))
-    const user = host.requests[0].messages.findLast(
-      (message) => message.role === "user",
-    )
-    assert.equal(user.content[0].text, "Current session request")
-  })
+  for (const transition of ["session replacement", "reload"]) {
+    test(`pending ${composer ? "composer" : "native"} capture stays recoverable through ${transition} without entering later history`, async (t) => {
+      let starts = 0
+      const host = await nativePi(t, composer ? [composerPath] : [], {
+        extensionFactories: [
+          (pi) =>
+            pi.on("session_start", () => {
+              starts++
+            }),
+        ],
+      })
+      const source = join(host.directory, "previous.txt")
+      await writeFile(source, "Previous submitted contents")
+      const sessionId = host.runtime.session.sessionManager.getSessionId()
+      const read = holdFileRead(t, source)
+      host.ui.setEditorText("Previous [file](previous.txt)")
+      await read.started()
+      host.submit()
+      assert.equal(host.ui.getEditorText(), "Previous [file](previous.txt)")
+      if (transition === "session replacement") await host.runtime.newSession()
+      else {
+        host.submit("/reload")
+        await waitFor(() => assert.equal(starts, 2))
+      }
+      host.ui.setEditorText("Current session draft")
+      read.release()
+      const request = await waitFor(() =>
+        retainedRequest(host, `Session: ${sessionId}`),
+      )
+      const path = snapshotPath(request.text)
+      await waitFor(async () =>
+        assert.equal(
+          await readFile(path, "utf8"),
+          "Previous submitted contents",
+        ),
+      )
+      assert.equal(host.ui.getEditorText(), "Current session draft")
+      host.ui.setEditorText("")
+      host.input("\x1b[A")
+      if (transition === "session replacement")
+        assert.equal(host.ui.getEditorText(), "")
+      else assert.doesNotMatch(host.ui.getEditorText(), /previous\.txt/)
+      host.submit("Current session request")
+      await waitFor(() => assert.equal(host.requests.length, 1))
+      const user = host.requests[0].messages.findLast(
+        (message) => message.role === "user",
+      )
+      assert.equal(user.content[0].text, "Current session request")
+    })
+  }
 }
 
 test("a delayed Markdown destination change preserves unrelated typing and the selected range", async (t) => {
@@ -894,48 +970,60 @@ test("a delayed Markdown destination change preserves unrelated typing and the s
   assert.equal(host.ui.getEditorText(), "😀 [file](selected.txt) taichosen")
 })
 
-test("a failed pending capture rejects Send visibly and retains its requesting draft", async (t) => {
-  const host = await nativePi(t, [], { noSession: true })
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const source = join(host.directory, "failed.txt")
-  await writeFile(source, "Captured before the failed write")
-  const write = fs.writeFile
-  const failure = t.mock.method(fs, "writeFile", async (...args) => {
-    if (
-      String(args[0]).includes("/snapshot-") &&
-      String(args[0]).endsWith("/failed.txt")
-    )
-      throw Object.assign(new Error("Attachment storage denied"), {
-        code: "EACCES",
-      })
-    return write(...args)
-  })
-  syncBuiltinESMExports()
-  t.after(() => {
-    failure.mock.restore()
+for (const switchSession of [false, true]) {
+  test(`a failed pending capture retains its requesting draft after ${switchSession ? "session replacement" : "later edits"}`, async (t) => {
+    const host = await nativePi(t, [], { noSession: true })
+    const sessionId = host.runtime.session.sessionManager.getSessionId()
+    const source = join(host.directory, "failed.txt")
+    await writeFile(source, "Captured before the failed write")
+    const write = fs.writeFile
+    const failure = t.mock.method(fs, "writeFile", async (...args) => {
+      if (
+        String(args[0]).includes("/snapshot-") &&
+        String(args[0]).endsWith("/failed.txt")
+      )
+        throw Object.assign(new Error("Attachment storage denied"), {
+          code: "EACCES",
+        })
+      return write(...args)
+    })
     syncBuiltinESMExports()
+    t.after(() => {
+      failure.mock.restore()
+      syncBuiltinESMExports()
+    })
+    const read = holdFileRead(t, source)
+    const original = "Save [failed](failed.txt)"
+    host.ui.setEditorText(original)
+    await read.started()
+    host.submit()
+    assert.equal(host.ui.getEditorText(), original)
+    if (switchSession) {
+      await host.runtime.newSession()
+      assert.notEqual(
+        host.runtime.session.sessionManager.getSessionId(),
+        sessionId,
+      )
+    }
+    host.ui.setEditorText("Unrelated later draft")
+    read.release()
+    if (!switchSession)
+      await waitFor(() =>
+        assert.match(host.render(), /Attachment request not sent/),
+      )
+    const request = await waitFor(() =>
+      retainedRequest(host, "Delivery: normal"),
+    )
+    await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+    assert.equal(host.requests.length, 0)
+    assert.equal(host.ui.getEditorText(), "Unrelated later draft")
+    assert.equal(host.inputs.length, 0)
+    assert.ok(request.text.includes(original))
+    assert.ok(request.text.includes(`Session: ${sessionId}`))
+    assert.ok(request.text.includes(`Working directory: ${host.directory}`))
+    assert.equal(host.runtime.session.sessionFile, undefined)
+    host.submit("A later valid request")
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    assert.ok(!JSON.stringify(host.requests).includes("failed.txt"))
   })
-  const read = holdFileRead(t, source)
-  const original = "Save [failed](failed.txt)"
-  host.ui.setEditorText(original)
-  await read.started()
-  host.submit()
-  assert.equal(host.ui.getEditorText(), original)
-  host.ui.setEditorText("Unrelated later draft")
-  read.release()
-  await waitFor(() =>
-    assert.match(host.render(), /Attachment request not sent/),
-  )
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  assert.equal(host.requests.length, 0)
-  assert.equal(host.ui.getEditorText(), "Unrelated later draft")
-  assert.equal(host.inputs.length, 0)
-  const request = await retainedRequest(host, "Delivery: normal")
-  assert.ok(request.text.includes(original))
-  assert.ok(request.text.includes(`Session: ${sessionId}`))
-  assert.ok(request.text.includes(`Working directory: ${host.directory}`))
-  assert.equal(host.runtime.session.sessionFile, undefined)
-  host.submit("A later valid request")
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  assert.ok(!JSON.stringify(host.requests).includes("failed.txt"))
-})
+}

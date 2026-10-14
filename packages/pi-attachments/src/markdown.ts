@@ -286,6 +286,31 @@ export function registerMarkdown(storage: string, signal: AbortSignal) {
               })
             }
             drafts.set(identity, draft)
+          } else if (origin === "restore") {
+            const destinations = new Set<number>()
+            for (const { reference, capture } of draft.references) {
+              if (!capture || destinations.has(reference.destination.from))
+                continue
+              destinations.add(reference.destination.from)
+              const edit = access.captureEdit(
+                reference.destination.from,
+                reference.destination.to,
+              )
+              void capture.promise.then((outcome) => {
+                if (
+                  !outcome ||
+                  "unchanged" in outcome ||
+                  "error" in outcome ||
+                  signal.aborted
+                )
+                  return
+                const path =
+                  "saved" in outcome
+                    ? outcome.saved.paths[0]!
+                    : outcome.retainedPath
+                edit.replace(replacement(reference, path))
+              })
+            }
           }
           previous = draft
         },
