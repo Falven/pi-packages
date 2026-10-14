@@ -110,11 +110,7 @@ export default function coreTools(pi: ExtensionAPI): void {
       tools?: Declaration[]
       input?: Record<string, unknown>[]
     }
-    if (!payload.tools) return
-    const selected = payload.tools.filter(
-      (tool) => tool.name === execution.name,
-    )
-    if (!selected.length) return
+    const selected = payload.tools?.some((tool) => tool.name === execution.name)
     let inserted = false
     const rawCalls = new Set<string>()
     const retained = new Map(
@@ -163,20 +159,25 @@ export default function coreTools(pi: ExtensionAPI): void {
       }
       return item
     })
+    if (!selected && rawCalls.size === 0) return
     return {
       ...payload,
       ...(input ? { input } : {}),
-      tools: payload.tools.flatMap((tool) => {
-        if (tool.name !== execution.name) return [tool]
-        if (inserted) return []
-        inserted = true
-        return [
-          {
-            ...contract.namespace,
-            tools: [{ ...execution, description: tool["description"] }],
-          },
-        ]
-      }),
+      ...(payload.tools
+        ? {
+            tools: payload.tools.flatMap((tool) => {
+              if (tool.name !== execution.name) return [tool]
+              if (inserted) return []
+              inserted = true
+              return [
+                {
+                  ...contract.namespace,
+                  tools: [{ ...execution, description: tool["description"] }],
+                },
+              ]
+            }),
+          }
+        : {}),
     }
   })
 }

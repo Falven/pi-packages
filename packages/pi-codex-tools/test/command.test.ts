@@ -306,6 +306,51 @@ test("explicit selections remain authoritative for direct and nested tools", asy
   }
 })
 
+test("deselecting execution preserves raw history and unrelated calls", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  await writeFile(join(host.directory, "foreign.txt"), "native-content")
+  host.queueResponse(
+    ...functionCall("read", { path: "foreign.txt" }, "foreign"),
+  )
+  host.queueResponse(
+    ...call(
+      'text((await tools.exec_command({cmd: "printf retained-raw-input", login: false})).output);',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Retain a raw call and an unrelated native call")
+  const request = host.requests.at(-1) as unknown as {
+    input: Record<string, unknown>[]
+  }
+  const calls = request.input.filter((item) =>
+    ["call_one", "call_foreign"].includes(String(item["call_id"])),
+  )
+  assert.equal(calls.length, 4)
+  assert(calls.some((item) => item["type"] === "custom_tool_call"))
+  assert(calls.some((item) => item["type"] === "custom_tool_call_output"))
+  const retained = structuredClone(host.session.messages)
+  for (const tools of [["read"], []]) {
+    host.session.setActiveToolsByName(tools)
+    host.queueResponse(completed)
+    await host.session.prompt("Use only the remaining selection")
+    const next = host.requests.at(-1) as unknown as {
+      input: Record<string, unknown>[]
+      tools?: { name: string }[]
+    }
+    assert.deepEqual(next.tools?.map((tool) => tool.name) ?? [], tools)
+    assert.deepEqual(
+      next.input.filter((item) =>
+        ["call_one", "call_foreign"].includes(String(item["call_id"])),
+      ),
+      calls,
+    )
+    assert.deepEqual(host.session.messages.slice(0, retained.length), retained)
+  }
+})
+
 test("excluded or extension-owned command tools cannot be bypassed through execution", async (t) => {
   for (const mode of ["excluded", "overridden"] as const) {
     await t.test(mode, async (caseContext) => {
