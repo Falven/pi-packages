@@ -1,6 +1,6 @@
 # pi-goal specification
 
-**Status:** ready-for-agent
+**Status:** implementation-blocked
 
 ## Problem Statement
 
@@ -289,10 +289,12 @@ The final matrix covers create, inspect, continue, edit, pause, resume, clear, c
 
 ## Further Notes
 
-The specification, real-session test boundary, Phoenix comparison, and seven-ticket delivery sequence are approved. The specification and all implementation tickets use `ready-for-agent`; acceptance checkboxes remain pending until supported by implementation evidence. The approved order is create and inspect, lifecycle controls, safe continuation and Stop, accounting and budgets, session preservation, runtime stop safeguards, and final acceptance. Session preservation and runtime stop safeguards both depend on accounting and may proceed independently; final acceptance depends on both.
+The specification, real-session test boundary, Phoenix comparison, and seven-ticket delivery sequence are approved. Creation and inspection are implemented, but [ticket 01](../../.scratch/pi-goal/issues/01-create-inspect-goals.md) remains blocked on native programmatic error compatibility. Its unsupported acceptance item remains pending, and dependent implementation tickets cannot start. The approved order is create and inspect, lifecycle controls, safe continuation and Stop, accounting and budgets, session preservation, runtime stop safeguards, and final acceptance. Session preservation and runtime stop safeguards both depend on accounting and may proceed independently; final acceptance depends on both.
 
 The behavior baseline was inspected on 2026-10-13: desktop version 26.1007.30912 (build 20156), engine 0.162.0-alpha.17.2, source revision `740e5af33c71225640e0c1c1555c514c2c93ab74`. The Pi source baseline is 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`; the workspace dependency is 1.0.2. These identify evidence, not a promise that future releases retain the same behavior.
 
-The test boundary was approved, with Phoenix agent-interface comparison added explicitly. Read-only inspection confirmed the [local capture collection](http://127.0.0.1:6006/projects/UHJvamVjdDoz) and an existing actual-desktop observation containing parsed request data and response events. That observation comes from an ongoing conversation and includes goal tool definitions; it is not a matched fresh goal trial or evidence of goal behavior. No `pi-goal` implementation, new goal scenarios, runtime feasibility experiment, or end-to-end parity comparison has been completed for this specification.
+The test boundary was approved, with Phoenix agent-interface comparison added explicitly. Read-only inspection confirmed the [local capture collection](http://127.0.0.1:6006/projects/UHJvamVjdDoz) and an existing actual-desktop observation containing parsed request data and response events. That observation comes from an ongoing conversation and includes goal tool definitions; it is not a matched fresh goal trial or evidence of goal behavior. The create/read implementation now has real-session checks and retrieved Phoenix captures recorded in ticket 01. Public admission and Stop feasibility probes are recorded in [ticket 03](../../.scratch/pi-goal/issues/03-continue-safely-honor-stop.md). Full lifecycle implementation, actual-terminal acceptance, and the complete agent-interface comparison remain pending.
+
+Two reproduced public-boundary gaps prevent an exact-compatibility claim. Ticket 01 shows that native programmatic failures reject as an `Error` object, while the observed target rejects as a primitive string; the type, string conversion, and next-request serialization differ. Ticket 03 shows that removing the extension during asynchronous settlement can deliver a deferred `/goal` admission command as human input and start another provider request. The tested queued-command, timer, and idle-wait approaches do not provide cancellation or revalidation at that boundary; this is not proof that every public alternative is impossible. The Stop composition probe succeeds within its recording-terminal and controlled-pause scope.
 
 The unresolved items above are engineering gates. They do not authorize silently changing the contract, weakening input fidelity, adding private hooks, or claiming that a source inspection proves runtime compatibility.
