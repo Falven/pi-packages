@@ -1,6 +1,6 @@
 # Pi interaction
 
-The language used to describe composing prompts and reading conversation history in Pi. These user-facing concepts are shared across the packages.
+The language used to describe composing prompts, pursuing goals, and reading conversation history in Pi. These user-facing concepts are shared across the packages.
 
 ## Language
 
@@ -121,3 +121,23 @@ A thought shown at its conversation position in ordinary chat flow, without its 
 
 **Activity heading**:
 A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.
+
+**Goal**:
+An explicitly authorized outcome whose pursuit can continue within a session across successive work attempts.
+_Avoid_: Task list, when referring to the desired outcome
+
+**Objective**:
+The statement of what a goal must achieve, including its scope and constraints.
+_Avoid_: Plan, when referring to the desired outcome rather than the steps to reach it
+
+**Goal continuation**:
+A further work attempt toward an active goal after the previous attempt ends, without a new user request.
+_Avoid_: Queued follow-up, which originates from a user request
+
+**Goal budget**:
+An optional token allowance allocated to pursuing a goal.
+_Avoid_: Context limit, time limit, spending limit
+
+**Agent interface**:
+The instructions, messages, tool contracts, calls, and results available to the model during a conversation.
+_Avoid_: User interface, when referring to information exchanged with the model
