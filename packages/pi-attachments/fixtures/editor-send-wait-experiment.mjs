@@ -1127,3 +1127,61 @@ for (const composer of [false, true])
     host.reply()
     await host.settled()
   })
+
+for (const composer of [false, true])
+  test(`${composer ? "composer" : "native"}: follow-up /reload stays message text after its run ends and earlier preparation fails`, async (t) => {
+    let starts = 0
+    const inputs = []
+    const host = await openNativeHost(t, {
+      noTools: "all",
+      holdResponses: true,
+      extension: preclearProbe(),
+      extensionFactories: [
+        (pi) => {
+          pi.on("session_start", () => {
+            starts++
+          })
+          pi.on("input", (event) => {
+            inputs.push(event.text)
+          })
+        },
+      ],
+      extensionPaths: composer
+        ? [new URL("../../pi-composer/src/index.ts", import.meta.url).pathname]
+        : [],
+    })
+    host.ui.setEditorText("Original run")
+    await host.key("\r")
+    await t.waitFor(() => assert.equal(host.requests.length, 1))
+    await writeFile(
+      join(host.directory, "broken.png"),
+      Buffer.from(PNG, "base64").subarray(0, 33),
+    )
+    host.ui.setEditorText("Failed [image](broken.png)")
+    await t.waitFor(() => assert.match(host.ui.getEditorText(), /snapshot-/))
+    const failed = host.ui.getEditorText()
+    const [reference] = fileReferences(failed, host.directory)
+    const held = holdFileRead(t, reference.path)
+    await host.key("\x1b\r")
+    await held.started()
+    host.ui.setEditorText("/reload")
+    await host.key("\x1b\r")
+    host.ui.setEditorText("Later untouched draft")
+    host.reply()
+    await host.settled()
+    assert.deepEqual(inputs, ["Original run"])
+    held.release()
+    await t.waitFor(() => assert.ok(starts > 1 || host.requests.length === 2))
+    assert.equal(
+      starts,
+      1,
+      "The original follow-up is message text, not a native reload command",
+    )
+    assert.equal(userText(host.requests[1]), "/reload")
+    assert.deepEqual(inputs, ["Original run", "/reload"])
+    assert.equal(host.ui.getEditorText(), "Later untouched draft")
+    const recovery = await retainedRequest({ agentDir: host.directory }, failed)
+    assert.ok(recovery.text.includes(failed))
+    host.reply()
+    await host.settled()
+  })
