@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite"
 import { randomUUID } from "node:crypto"
+import type { AccountingMode, GoalIdentity } from "./accounting.ts"
 
 export type Goal = {
   threadId: string
@@ -152,6 +153,56 @@ export class GoalStore {
         "the goal changed while this action was pending; inspect the current goal and try again",
       )
     return decode(row)
+  }
+
+  account(
+    goal: GoalIdentity,
+    tokens: bigint,
+    seconds: bigint,
+    mode: AccountingMode,
+  ): StoredGoal | null {
+    const maximum = 9223372036854775807n
+    if (tokens < 0n || seconds < 0n || tokens > maximum || seconds > maximum)
+      throw new Error("Goal accounting exceeds the nonnegative integer range")
+    const statuses =
+      mode === "complete"
+        ? "'active', 'budgetLimited', 'complete'"
+        : mode === "stopped"
+          ? "'active', 'budgetLimited', 'paused', 'blocked', 'usageLimited'"
+          : "'active', 'budgetLimited'"
+    const statement = this.database.prepare(`
+      UPDATE goals SET
+        tokensUsed = tokensUsed + ?, timeUsedSeconds = timeUsedSeconds + ?,
+        status = CASE
+          WHEN ${mode === "stopped" ? "status != 'complete'" : "status = 'active'"}
+            AND tokenBudget IS NOT NULL AND tokensUsed + ? >= tokenBudget
+          THEN 'budgetLimited' ELSE status END,
+        updatedAt = ?
+      WHERE threadId = ? AND generation = ? AND status IN (${statuses})
+        AND tokensUsed <= ? AND timeUsedSeconds <= ?
+      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
+                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
+    `)
+    statement.setReadBigInts(true)
+    const row = statement.get(
+      tokens,
+      seconds,
+      tokens,
+      BigInt(Math.floor(Date.now() / 1000)),
+      goal.threadId,
+      goal.generation,
+      maximum - tokens,
+      maximum - seconds,
+    ) as GoalRow | undefined
+    if (row) return decode(row)
+    const current = this.read(goal.threadId)
+    if (
+      current?.generation === goal.generation &&
+      (current.tokensUsed > maximum - tokens ||
+        current.timeUsedSeconds > maximum - seconds)
+    )
+      throw new Error("Goal accounting exceeds the nonnegative integer range")
+    return null
   }
 
   clear(goal: StoredGoal): void {
