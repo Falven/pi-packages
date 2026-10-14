@@ -513,10 +513,23 @@ test("a single tool call stays grouped and collapsed after completion", async (t
 })
 
 test("commentary between model iterations separates tool groups in source order", async (t) => {
+  let noticeBetweenCalls = false
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
     settings: { hideThinkingBlock: true },
+    extensionFactories: [
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.group-boundary",
+          () => new Text("Notice between calls", 0, 0),
+        )
+        pi.on("tool_execution_end", (event) => {
+          if (noticeBetweenCalls && event.toolCallId === "notice-first")
+            pi.appendEntry("test.group-boundary", {})
+        })
+      },
+    ],
   })
   await writeFile(join(host.directory, "one.txt"), "first")
   await writeFile(join(host.directory, "two.txt"), "second")
@@ -549,6 +562,49 @@ test("commentary between model iterations separates tool groups in source order"
   assert.doesNotMatch(screen(), /Reading |read one\.txt|read two\.txt/)
   host.resumeResponse()
   await host.settled()
+
+  noticeBetweenCalls = true
+  host.queueResponse(
+    readDelta("notice-first", "one.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  host.queueResponse(
+    readDelta("notice-second", "two.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read with a native notice")
+  await host.key("\r")
+  await host.settled()
+  const closed = await host.frame()
+  assert.match(
+    closed,
+    /Worked for \d+m \d+s ▶[\s\S]*Notice between calls[\s\S]*Received\./,
+  )
+  assert.equal((closed.match(/Notice between calls/g) ?? []).length, 1)
+  assert.doesNotMatch(closed, /▶ Read files/)
+  const noticeWorkRow = host
+    .screenLines()
+    .findLastIndex((line) =>
+      /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
+    )
+  assert(noticeWorkRow >= 0)
+  await host.key(`\x1b[<0;2;${noticeWorkRow + 1}M`)
+  await host.key(`\x1b[<0;2;${noticeWorkRow + 1}m`)
+  const expanded = await host.frame()
+  assert.match(
+    expanded,
+    /▶ Read files[\s\S]*Notice between calls[\s\S]*▶ Read files[\s\S]*Received\./,
+  )
+  assert.equal((expanded.match(/▶ Read files/g) ?? []).length, 2)
+  assert.equal((expanded.match(/Notice between calls/g) ?? []).length, 1)
+  await host.reload()
+  const replayed = await host.frame()
+  assert.equal((replayed.match(/Notice between calls/g) ?? []).length, 1)
+  assert.doesNotMatch(replayed, /▶ Read files/)
 })
 
 test("a later assistant's trailing prose follows consecutive calls", async (t) => {
@@ -928,6 +984,9 @@ test("folding a group clears selected tool output before native copy", async (t)
 })
 
 test("custom renderers and failed calls keep a manually opened group", async (t) => {
+  let result: Text | undefined
+  let resultPresenters = 0
+  let invalidateResult: (() => void) | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
@@ -938,7 +997,15 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
           name: "mystery",
           label: "Mystery",
           renderCall: () => new Text("CUSTOM CALL", 0, 0),
-          renderResult: () => new Text("CUSTOM RESULT", 0, 0),
+          renderResult: (_value, _options, _theme, context) => {
+            if (!context.lastComponent) {
+              resultPresenters++
+              result = new Text("CUSTOM RESULT", 0, 0)
+            }
+            assert(result)
+            invalidateResult = context.invalidate
+            return result
+          },
         }),
     ],
   })
@@ -997,6 +1064,60 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   assert.match(screen(), /CUSTOM CALL/)
   assert.match(screen(), /CUSTOM RESULT/)
   assert.match(screen(), /Called a tool, read files/)
+  assert(result)
+  assert(invalidateResult)
+  assert.equal(resultPresenters, 1)
+  result.setText("CUSTOM LATE RESULT")
+  invalidateResult()
+  await host.frame()
+  assert.match(screen(), /CUSTOM LATE RESULT/)
+  assert.match(screen(), /▼ Called a tool, read files/)
+  const workRow = host
+    .screenLines()
+    .findIndex((line) =>
+      /Worked for \d+m \d+s ▼/.test(stripTerminalSequences(line)),
+    )
+  assert(workRow >= 0)
+  await host.key(`\x1b[<0;2;${workRow + 1}M`)
+  await host.key(`\x1b[<0;2;${workRow + 1}m`)
+  assert.doesNotMatch(await host.frame(), /CUSTOM LATE RESULT|CUSTOM CALL/)
+  assert.match(screen(), /Received\./)
+  await host.key("\x1b")
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Later answer" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    { pause: true },
+    done,
+    end,
+  )
+  await host.type("A later request")
+  await host.key("\r")
+  await t.waitFor(async () => assert.match(await host.frame(), /Later answer/))
+  result.setText("CUSTOM UPDATE DURING LATER REQUEST")
+  invalidateResult()
+  assert.doesNotMatch(await host.frame(), /CUSTOM UPDATE DURING LATER REQUEST/)
+  assert.equal(resultPresenters, 1)
+  host.resumeResponse()
+  await host.settled()
+  await openWork(host)
+  const later = await host.frame()
+  assert.match(later, /CUSTOM UPDATE DURING LATER REQUEST/)
+  assert.match(later, /▼ Called a tool, read files/)
+  assert.equal((later.match(/CUSTOM CALL/g) ?? []).length, 1)
+  assert.equal(
+    (later.match(/CUSTOM UPDATE DURING LATER REQUEST/g) ?? []).length,
+    1,
+  )
+  assert.equal(resultPresenters, 1)
 })
 
 test("native custom renderers keep equal occurrences distinct", async (t) => {

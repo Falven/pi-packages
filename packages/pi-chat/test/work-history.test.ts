@@ -904,12 +904,20 @@ test("same-journal tree navigation restores only surviving relationships", async
     extensionPaths: [chat],
     rows: 36,
     extensionFactories: [
-      (pi) =>
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.lifecycle-notice",
+          () => new Text("Tree notice", 0, 0),
+        )
+        pi.on("tool_execution_end", () =>
+          pi.appendEntry("test.lifecycle-notice", {}),
+        )
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
             await ctx.navigateTree(target)
           },
-        }),
+        })
+      },
     ],
   })
   await writeFile(join(host.directory, "one.txt"), "native result")
@@ -947,6 +955,11 @@ test("same-journal tree navigation restores only surviving relationships", async
   const restored = await host.frame()
   assert.match(restored, /Worked for \d+m \d+s ▶/)
   assert.match(restored, /Tree answer/)
+  assert.match(
+    restored,
+    /Worked for \d+m \d+s ▶[\s\S]*Tree notice[\s\S]*Tree answer/,
+  )
+  assert.equal((restored.match(/Tree notice/g) ?? []).length, 1)
   assert.doesNotMatch(restored, /Tree progress/)
 
   target = progress.id
@@ -954,7 +967,7 @@ test("same-journal tree navigation restores only surviving relationships", async
   await host.key("\r")
   const partial = await host.frame()
   assert.match(partial, /Tree progress/)
-  assert.doesNotMatch(partial, /Tree answer|Worked for \d+m \d+s ▶/)
+  assert.doesNotMatch(partial, /Tree answer|Tree notice|Worked for \d+m \d+s ▶/)
 
   target = answer.id
   await host.type("/test-tree")
@@ -967,6 +980,17 @@ test("native fork carries certified relationships whose sources survive", async 
     extensionPaths: [chat],
     persistSession: true,
     rows: 36,
+    extensionFactories: [
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.lifecycle-notice",
+          () => new Text("Fork notice", 0, 0),
+        )
+        pi.on("tool_execution_end", () =>
+          pi.appendEntry("test.lifecycle-notice", {}),
+        )
+      },
+    ],
   })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -998,6 +1022,11 @@ test("native fork carries certified relationships whose sources survive", async 
   const frame = await host.frame()
   assert.match(frame, /Worked for \d+m \d+s ▶/)
   assert.match(frame, /Fork answer/)
+  assert.match(
+    frame,
+    /Worked for \d+m \d+s ▶[\s\S]*Fork notice[\s\S]*Fork answer/,
+  )
+  assert.equal((frame.match(/Fork notice/g) ?? []).length, 1)
   assert.doesNotMatch(frame, /Fork progress/)
   assert.doesNotMatch(frame, /Sibling request|Sibling answer/)
   assert.doesNotMatch(
@@ -1165,12 +1194,20 @@ test("compaction keeps certified source relationships for later tree navigation"
     persistSession: true,
     rows: 36,
     extensionFactories: [
-      (pi) =>
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.lifecycle-notice",
+          () => new Text("Archived notice", 0, 0),
+        )
+        pi.on("tool_execution_end", () =>
+          pi.appendEntry("test.lifecycle-notice", {}),
+        )
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
             await ctx.navigateTree(target)
           },
-        }),
+        })
+      },
     ],
   })
   await writeFile(join(host.directory, "one.txt"), "native result")
@@ -1204,6 +1241,11 @@ test("compaction keeps certified source relationships for later tree navigation"
   const restored = await host.frame()
   assert.match(restored, /Worked for \d+m \d+s ▶/)
   assert.match(restored, /Archived answer/)
+  assert.match(
+    restored,
+    /Worked for \d+m \d+s ▶[\s\S]*Archived notice[\s\S]*Archived answer/,
+  )
+  assert.equal((restored.match(/Archived notice/g) ?? []).length, 1)
   assert.doesNotMatch(restored, /Archived progress/)
 })
 
@@ -1284,5 +1326,40 @@ test("a standalone native message after the final keeps its source position", as
   assert.match(
     replayed,
     /Final before notice[\s\S]*Native post-answer notice[\s\S]*Only answer[\s\S]*Notice without earlier work[\s\S]*Answer without earlier work/,
+  )
+
+  host.queueResponse(delta(""), { pause: true }, finish(), done)
+  host.queueResponse(
+    delta("Retained-only answer"),
+    { pause: true },
+    finish(),
+    done,
+  )
+  await host.type("Request without visible work")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(host.requests.length, 4))
+  await host.session.steer("Retained-only steering")
+  host.resumeResponse()
+  await t.waitFor(async () =>
+    assert.match(await host.frame(), /Retained-only answer/),
+  )
+  appendNotice.current()
+  host.resumeResponse()
+  await host.settled()
+  const retainedOnly = await host.frame()
+  assert.equal((retainedOnly.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  assert.match(
+    retainedOnly,
+    /Request without visible work[\s\S]*Retained-only steering[\s\S]*Notice without earlier work[\s\S]*Retained-only answer/,
+  )
+  await host.reload()
+  const retainedReplay = await host.frame()
+  assert.equal(
+    (retainedReplay.match(/Worked for \d+m \d+s ▶/g) ?? []).length,
+    1,
+  )
+  assert.match(
+    retainedReplay,
+    /Retained-only steering[\s\S]*Notice without earlier work[\s\S]*Retained-only answer/,
   )
 })
