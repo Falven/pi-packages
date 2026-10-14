@@ -87,7 +87,7 @@ export const executionRenderers: ToolRenderers = {
   renderCall(_args, theme) {
     return new Text(theme.fg("toolTitle", theme.bold("Execution")), 0, 0)
   },
-  renderResult(result, options, theme) {
+  renderResult(result, options, theme, context) {
     const details = result.details as ExecutionDetails | undefined
     const execution =
       details?.contentHash === contentHash(result.content)
@@ -95,7 +95,7 @@ export const executionRenderers: ToolRenderers = {
         : undefined
     const operations = execution?.operations ?? []
     const status =
-      result.isError ||
+      context.isError ||
       operations.some((operation) => operation.status === "failed")
         ? "failed"
         : (execution?.status ?? "completed")
@@ -141,9 +141,12 @@ export const waitRenderers: ToolRenderers = {
   renderCall(_args, theme) {
     return new Text(theme.fg("toolTitle", theme.bold("Wait")), 0, 0)
   },
-  renderResult(result, _options, theme) {
-    const status = result.isError
-      ? "Execution failed"
+  renderResult(result, _options, theme, context) {
+    const error = result.content.findLast((part) => part.type === "text")
+    const status = context.isError
+      ? error?.type === "text"
+        ? error.text.replace(/^Script error:\n/, "")
+        : "Execution failed"
       : (result.content[0]?.type === "text"
             ? result.content[0].text
             : ""
@@ -151,7 +154,7 @@ export const waitRenderers: ToolRenderers = {
         ? "Execution running"
         : "Output collected"
     return new Text(
-      theme.fg(result.isError ? "error" : "muted", boundedPreview(status)),
+      theme.fg(context.isError ? "error" : "muted", boundedPreview(status)),
       0,
       0,
     )

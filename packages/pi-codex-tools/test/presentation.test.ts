@@ -2,11 +2,13 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { setTimeout } from "node:timers/promises"
 import { stripVTControlCharacters } from "node:util"
+import { visibleWidth } from "@earendil-works/pi-tui"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
   completed,
   extension,
+  functionCall,
   output,
   providerApi,
 } from "./fixtures/model-loop.ts"
@@ -207,4 +209,26 @@ test("large command previews show omissions and wrap within narrow terminal cell
   assert.match(expanded, /output omitted/)
   assert.match(expanded, /Exit status: 0/)
   assert.doesNotMatch(expanded, /�|Wall time|chunk_id/)
+  assert(host.screenLines().every((line) => visibleWidth(line) <= 24))
+})
+
+test("a failed wait shows its collection error without transport details", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    rows: 60,
+    columns: 100,
+  })
+  host.queueResponse(
+    ...functionCall("wait", { cell_id: "missing" }, "missing", "functions"),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Collect output")
+  await host.key("\x0f")
+  await setTimeout(60)
+  assert.match(
+    stripVTControlCharacters(host.screenLines().join("\n")),
+    /exec cell missing not found/,
+  )
+  assert.match(output(host, "missing"), /exec cell missing not found/)
 })
