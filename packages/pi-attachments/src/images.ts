@@ -58,19 +58,12 @@ export function registerImages(
   signal: AbortSignal,
   draftPaths: (ctx: ExtensionContext) => string[],
   thumbnailSize: () => ThumbnailSize,
-): void {
+) {
   registerRecovery(pi, storage, signal)
+  const prepared = new Map<string, ReturnType<typeof prepareImage>>()
+  signal.addEventListener("abort", () => prepared.clear(), { once: true })
 
-  async function retain(event: InputEvent, ctx: ExtensionContext) {
-    const request = {
-      ...event,
-      ...(event.images
-        ? { images: event.images.map((image) => ({ ...image })) }
-        : {}),
-      sessionId: ctx.sessionManager.getSessionId(),
-      sessionFile: ctx.sessionManager.getSessionFile(),
-      cwd: ctx.cwd,
-    }
+  async function retain(request: Parameters<typeof saveRequest>[1]) {
     try {
       return await saveRequest(storage, request)
     } catch (error) {
@@ -89,60 +82,101 @@ export function registerImages(
     }
   }
 
-  pi.on("input", async (event, ctx) => {
-    const paths = attachmentPaths(event.text, storage, ctx.cwd)
+  async function prepareImage(
+    path: string,
+    autoResize: boolean,
+    resizeOptions: Parameters<typeof resizeImage>[2],
+  ) {
+    const image = await readImage(path, storage)
+    signal.throwIfAborted()
+    if (!image) return undefined
+    if (!autoResize) return { image, note: undefined }
+    const resized = await resizeImage(
+      Buffer.from(image.data, "base64"),
+      image.mimeType,
+      resizeOptions,
+    )
+    signal.throwIfAborted()
+    if (!resized)
+      throw new Error("Could not prepare the captured image for delivery")
+    return {
+      image: {
+        type: "image" as const,
+        data: resized.data,
+        mimeType: resized.mimeType,
+      },
+      note: formatDimensionNote(resized),
+    }
+  }
+
+  async function prepare(
+    event: Pick<InputEvent, "text" | "images" | "streamingBehavior">,
+    ctx: ExtensionContext,
+  ) {
+    const request = {
+      ...event,
+      ...(event.images
+        ? { images: event.images.map((image) => ({ ...image })) }
+        : {}),
+      sessionId: ctx.sessionManager.getSessionId(),
+      sessionFile: ctx.sessionManager.getSessionFile(),
+      cwd: ctx.cwd,
+    }
+    const paths = attachmentPaths(request.text, storage, request.cwd)
     if (paths.length === 0) return undefined
+    signal.throwIfAborted()
     let recovery: string | undefined
     try {
       // Save the requesting draft before authentication, queueing, or editor clearing.
-      recovery = await retain(event, ctx)
-      if (signal.aborted) return { action: "handled" }
+      recovery = await retain(request)
+      signal.throwIfAborted()
       // shortcut: Resize before queueing until Pi supports isolated delivery-time rejection.
-      const resizeOptions = ctx.model?.inputLimits?.images?.resize
+      const resizeOptions = { ...ctx.model?.inputLimits?.images?.resize }
       const autoResize = pi.getSettings().images?.autoResize ?? true
       // Queued images can become allowed later; Pi applies final image blocking.
       const captured = await Promise.all(
-        paths.map((path) => readImage(path, storage)),
-      )
-      if (signal.aborted) return { action: "handled" }
-      const images = captured.filter((image) => image !== undefined)
-      if (images.length === 0) return undefined
-      const attachments = await Promise.all(
-        images.map(async (image) => {
-          if (!autoResize) return { image, note: undefined }
-          const resized = await resizeImage(
-            Buffer.from(image.data, "base64"),
-            image.mimeType,
-            resizeOptions,
-          )
-          if (!resized)
-            throw new Error("Could not prepare the captured image for delivery")
-          return {
-            image: {
-              type: "image" as const,
-              data: resized.data,
-              mimeType: resized.mimeType,
-            },
-            note: formatDimensionNote(resized),
+        paths.map((path) => {
+          const key = JSON.stringify([path, autoResize, resizeOptions])
+          let image = prepared.get(key)
+          if (!image) {
+            image = prepareImage(path, autoResize, resizeOptions).catch(
+              (error) => {
+                prepared.delete(key)
+                throw error
+              },
+            )
+            prepared.set(key, image)
           }
+          return image
         }),
       )
-      if (signal.aborted) return { action: "handled" }
+      signal.throwIfAborted()
+      const attachments = captured.filter((image) => image !== undefined)
+      if (attachments.length === 0) return undefined
       const notes = attachments.flatMap(({ note }) => (note ? [note] : []))
       return {
-        action: "transform",
-        text: [event.text, ...notes].join("\n\n"),
+        text: [request.text, ...notes].join("\n\n"),
         images: [
-          ...(event.images ?? []),
-          ...attachments.map(({ image }) => image),
+          ...(request.images ?? []),
+          ...attachments.map(({ image }) => Object.assign({}, image)),
         ],
       }
     } catch (error) {
+      if (recovery)
+        throw new Error(`${String(error)}\nRequest saved: ${recovery}`, {
+          cause: error,
+        })
+      throw error
+    }
+  }
+
+  pi.on("input", async (event, ctx) => {
+    try {
+      const result = await prepare(event, ctx)
+      return result ? { action: "transform", ...result } : undefined
+    } catch (error) {
       if (!signal.aborted)
-        ctx.ui.notify(
-          `Image request not sent: ${String(error)}${recovery ? `\nRequest saved: ${recovery}` : ""}`,
-          "error",
-        )
+        ctx.ui.notify(`Image request not sent: ${String(error)}`, "error")
       return { action: "handled" }
     }
   })
@@ -286,4 +320,5 @@ export function registerImages(
       }
     })
   })
+  return { prepare }
 }

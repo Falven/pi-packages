@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
-import { mkdir, readFile, writeFile } from "node:fs/promises"
+import fs, { mkdir, readFile, realpath, writeFile } from "node:fs/promises"
+import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
@@ -24,13 +25,27 @@ function imageSession(t, extensionPaths = [], state = {}) {
       (pi) => {
         const lifetime = new AbortController()
         pi.on("session_shutdown", () => lifetime.abort())
-        registerImages(
+        const images = registerImages(
           pi,
           join(getAgentDir(), "pi-attachments"),
           lifetime.signal,
           () => [],
           () => "medium",
         )
+        pi.registerCommand("prepare-images", {
+          description: "Prepare the current draft's attachment images",
+          handler: async (args, ctx) => {
+            await images.prepare(
+              {
+                text: ctx.ui.getEditorText(),
+                images: state.prewarmImages,
+                streamingBehavior: args || undefined,
+              },
+              ctx,
+            )
+            ctx.ui.notify("Images prepared", "info")
+          },
+        })
       },
     ],
   })
@@ -45,6 +60,145 @@ async function retainedImage(host, name, contents) {
   host.ui.setEditorText(draft)
   return { path, draft }
 }
+
+test("preparation before Send is reused by concurrent preparation and native input without losing earlier images", async (t) => {
+  const host = await imageSession(t, [inputExtension], {
+    settings: { images: { autoResize: false } },
+  })
+  const { path, draft } = await retainedImage(
+    host,
+    "prepared.bmp",
+    Buffer.from(BMP, "base64"),
+  )
+  const file = await realpath(path)
+  const read = fs.readFile
+  let reads = 0
+  let held = Promise.withResolvers()
+  const mocked = t.mock.method(fs, "readFile", async (...args) => {
+    const contents = await read(...args)
+    if (args[0] === file) {
+      reads++
+      await held.promise
+    }
+    return contents
+  })
+  syncBuiltinESMExports()
+  t.after(() => {
+    held.resolve()
+    mocked.mock.restore()
+    syncBuiltinESMExports()
+  })
+  const initial = Promise.all([
+    host.runtime.session.prompt("/prepare-images"),
+    host.runtime.session.prompt("/prepare-images"),
+  ])
+  await waitFor(() => assert.equal(reads, 1))
+  held.resolve()
+  await initial
+  assert.equal(reads, 1)
+  assert.match(host.render(), /Images prepared/)
+  held = Promise.withResolvers()
+  const repeated = Promise.all([
+    host.runtime.session.prompt("/prepare-images"),
+    host.runtime.session.prompt("/prepare-images"),
+  ])
+  host.submit()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  await repeated
+  assert.equal(reads, 1)
+  held.resolve()
+
+  const user = host.requests[0].messages.find(
+    (message) => message.role === "user",
+  )
+  assert.equal(user.content[0].text, `Before attachments\n${draft}`)
+  assert.equal(user.content.length, 3)
+  assert.equal(user.content[1].image_url.url, `data:image/png;base64,${PNG}`)
+  const [, mimeType, data] = /^data:([^;]+);base64,(.+)$/.exec(
+    user.content[2].image_url.url,
+  )
+  assert.deepEqual(getImageDimensions(data, mimeType), {
+    widthPx: 1,
+    heightPx: 1,
+  })
+  assert.equal((await readFile(path)).toString("base64"), BMP)
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+})
+
+for (const change of ["resize preference", "model image limits"]) {
+  test(`input uses the effective ${change} changed after preparation`, async (t) => {
+    const host = await imageSession(t)
+    await host.runtime.session.setModel({
+      ...host.runtime.session.model,
+      inputLimits: { images: { resize: { maxWidth: 1, maxHeight: 1 } } },
+    })
+    const { path, draft } = await retainedImage(
+      host,
+      "policy.png",
+      Buffer.from(PNG, "base64"),
+    )
+    await host.runtime.session.prompt("/prepare-images")
+    assert.match(host.render(), /Images prepared/)
+    if (change === "resize preference") {
+      host.runtime.session.settingsManager.applyOverrides({
+        images: { autoResize: false },
+      })
+    } else {
+      await host.runtime.session.setModel({
+        ...host.runtime.session.model,
+        inputLimits: { images: { resize: { maxWidth: 2, maxHeight: 1 } } },
+      })
+    }
+    host.submit()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    const user = host.requests[0].messages.find(
+      (message) => message.role === "user",
+    )
+    assert.equal(user.content[0].text, draft)
+    assert.equal(user.content[1].image_url.url, `data:image/png;base64,${PNG}`)
+    assert.equal((await readFile(path)).toString("base64"), PNG)
+    await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  })
+}
+
+test("failed preparation reaches its caller, preserves requesting contents, and permits retry", async (t) => {
+  const host = await imageSession(t, [inputExtension], {
+    settings: { images: { blockImages: true } },
+    prewarmImages: [{ type: "image", mimeType: "image/png", data: PNG }],
+  })
+  const broken = Buffer.from(PNG, "base64").subarray(0, 33)
+  const { path, draft } = await retainedImage(host, "retry.png", broken)
+  await host.runtime.session.prompt("/prepare-images followUp")
+  assert.match(host.render(), /Request saved:/)
+  assert.doesNotMatch(host.render(), /Images prepared/)
+  assert.equal(host.requests.length, 0)
+  assert.equal(host.ui.getEditorText(), draft)
+  assert.deepEqual(await readFile(path), broken)
+  const recovery = await retainedRequest(host, "Delivery: followUp")
+  assert.ok(recovery.text.includes(draft))
+  const supplied = /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/.exec(
+    recovery.text,
+  )
+  assert.ok(supplied)
+  assert.equal((await readFile(supplied[1])).toString("base64"), PNG)
+
+  await writeFile(path, Buffer.from(PNG, "base64"))
+  await host.runtime.session.prompt("/prepare-images followUp")
+  assert.match(host.render(), /Images prepared/)
+  host.runtime.session.settingsManager.applyOverrides({
+    images: { blockImages: false },
+  })
+  host.submit()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const user = host.requests[0].messages.find(
+    (message) => message.role === "user",
+  )
+  assert.equal(user.content[0].text, `Before attachments\n${draft}`)
+  assert.equal(user.content.length, 3)
+  for (const part of user.content.slice(1))
+    assert.equal(part.image_url.url, `data:image/png;base64,${PNG}`)
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+})
 
 test("normal input keeps supplied images, converts BMP, and honors the effective resize override without changing retained bytes", async (t) => {
   const host = await imageSession(t, [inputExtension], {
