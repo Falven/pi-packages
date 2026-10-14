@@ -63,7 +63,7 @@ test("both provider protocols advertise native goal inputs and lossless budget g
       )
       assert.deepEqual(
         declarations.map((tool: { name: string }) => tool.name).toSorted(),
-        ["create_goal", "get_goal"],
+        ["create_goal", "get_goal", "update_goal"],
       )
       for (const tool of declarations) {
         assert.equal(tool.parameters.type, "object")
@@ -73,6 +73,18 @@ test("both provider protocols advertise native goal inputs and lossless budget g
         if (tool.name === "get_goal") {
           assert.deepEqual(tool.parameters.properties, {})
           assert.deepEqual(tool.parameters.required, [])
+        } else if (tool.name === "update_goal") {
+          assert.deepEqual(tool.parameters.required, ["status"])
+          assert.deepEqual(tool.parameters.properties.status.enum, [
+            "complete",
+            "blocked",
+            "paused",
+          ])
+          assert.equal(tool.parameters.properties.status.type, "string")
+          assert.match(tool.description, /explicit user request/)
+          assert.match(tool.description, /three consecutive goal turns/)
+          assert.match(tool.description, /fresh three-turn audit/)
+          assert.match(tool.description, /returned fields/)
         } else {
           assert.deepEqual(tool.parameters.required, ["objective"])
           assert.equal(tool.parameters.properties.objective.type, "string")

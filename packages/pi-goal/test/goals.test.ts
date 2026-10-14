@@ -216,7 +216,7 @@ test("native goal presentation strips terminal controls without changing the obj
   assert.equal(JSON.parse(lastResult(host).text).goal.objective, objective)
   await host.frame()
   assert.equal(host.terminal.output.includes("\u001b]52"), false)
-  await host.session.prompt("/goal")
+  await host.session.prompt("/goal inspect")
   await host.frame()
   assert.equal(host.terminal.output.includes("\u001b]52"), false)
   assert.match(host.terminal.output, /active: Review the work/)
