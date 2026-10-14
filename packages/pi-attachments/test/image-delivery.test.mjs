@@ -1,33 +1,101 @@
 import assert from "node:assert/strict"
-import { readFile, rm, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { test } from "node:test"
 import { fileURLToPath } from "node:url"
+import { getAgentDir } from "@earendil-works/pi-coding-agent"
 import { getImageDimensions } from "@earendil-works/pi-tui"
-import {
-  nativePi,
-  retainedRequest,
-  snapshotPath,
-  waitFor,
-} from "../fixtures/native-pi.mjs"
+import { nativePi, retainedRequest, waitFor } from "../fixtures/native-pi.mjs"
+import { registerImages } from "../src/images.ts"
 
 const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
+const BMP =
+  "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA=="
 const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
 
+function imageSession(t, extensionPaths = [], state = {}) {
+  return nativePi(t, extensionPaths, {
+    ...state,
+    attachments: false,
+    extensionFactories: [
+      (pi) => {
+        const lifetime = new AbortController()
+        pi.on("session_shutdown", () => lifetime.abort())
+        registerImages(
+          pi,
+          join(getAgentDir(), "pi-attachments"),
+          lifetime.signal,
+          () => [],
+          () => "medium",
+        )
+      },
+    ],
+  })
+}
+
+async function retainedImage(host, name, contents) {
+  const storage = join(host.agentDir, "pi-attachments", "test-snapshot")
+  await mkdir(storage, { recursive: true })
+  const path = join(storage, name)
+  await writeFile(path, contents)
+  const draft = `[Attachment: ${name}](<${path}>)`
+  host.ui.setEditorText(draft)
+  return { path, draft }
+}
+
+test("normal input keeps supplied images, converts BMP, and honors the effective resize override without changing retained bytes", async (t) => {
+  const host = await imageSession(t, [inputExtension], {
+    settings: { images: { autoResize: true } },
+  })
+  await host.runtime.session.setModel({
+    ...host.runtime.session.model,
+    inputLimits: { images: { resize: { maxWidth: 1, maxHeight: 1 } } },
+  })
+  const png = await retainedImage(
+    host,
+    "original.png",
+    Buffer.from(PNG, "base64"),
+  )
+  const bmp = await retainedImage(
+    host,
+    "converted.bmp",
+    Buffer.from(BMP, "base64"),
+  )
+  const draft = `${png.draft}\n${png.draft}\n${bmp.draft}`
+  host.runtime.session.settingsManager.applyOverrides({
+    images: { autoResize: false },
+  })
+  host.submit(draft)
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const user = host.requests[0].messages.find(
+    (message) => message.role === "user",
+  )
+  assert.equal(user.content[0].text, `Before attachments\n${draft}`)
+  assert.equal(user.content.length, 4)
+  for (const part of user.content.slice(1, 3))
+    assert.equal(part.image_url.url, `data:image/png;base64,${PNG}`)
+  const [, mimeType, data] = /^data:([^;]+);base64,(.+)$/.exec(
+    user.content[3].image_url.url,
+  )
+  assert.equal(mimeType, "image/png")
+  assert.deepEqual(getImageDimensions(data, mimeType), {
+    widthPx: 1,
+    heightPx: 1,
+  })
+  assert.equal((await readFile(png.path)).toString("base64"), PNG)
+  assert.equal((await readFile(bmp.path)).toString("base64"), BMP)
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+})
+
 test("blocked images still undergo preparation and a failure keeps the requesting contents recoverable", async (t) => {
-  const host = await nativePi(t, [inputExtension], {
+  const host = await imageSession(t, [inputExtension], {
     settings: { images: { blockImages: true } },
   })
-  const source = join(host.directory, "blocked.png")
   const broken = Buffer.from(PNG, "base64").subarray(0, 33)
-  await writeFile(source, broken)
-  host.ui.pasteToEditor(source)
-  const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
-  const draft = host.ui.getEditorText().trim()
-  await rm(source)
+  const { path, draft } = await retainedImage(host, "blocked.png", broken)
 
   host.submit()
   await waitFor(() => assert.match(host.render(), /Image request not sent/))
@@ -49,7 +117,7 @@ for (const behavior of ["steer", "followUp"]) {
     test(`${behavior} delivery follows image blocking changed from ${blockedAtQueue} while queued`, async (t) => {
       const response = Promise.withResolvers()
       t.after(() => response.resolve())
-      const host = await nativePi(t, [], {
+      const host = await imageSession(t, [], {
         settings: {
           images: { blockImages: blockedAtQueue, autoResize: false },
         },
@@ -57,23 +125,15 @@ for (const behavior of ["steer", "followUp"]) {
       host.replies.push(response.promise)
       host.submit("Finish the active request")
       await waitFor(() => assert.equal(host.requests.length, 1))
-      const source = join(host.directory, "queued.png")
       const bytes = Buffer.from(PNG, "base64")
-      await writeFile(source, bytes)
-      await host.attachFile(source)
-      const draft = host.ui.getEditorText().trim()
-      const path = snapshotPath(draft)
+      const { path, draft } = await retainedImage(host, "queued.png", bytes)
       host.input(behavior === "steer" ? "\r" : "\x1b\r")
       await waitFor(() =>
         assert.equal(host.runtime.session.pendingMessageCount, 1),
       )
-      assert.deepEqual(host.inputs.at(-1).images, [
-        { type: "image", mimeType: "image/png", data: PNG },
-      ])
       host.runtime.session.settingsManager.applyOverrides({
         images: { blockImages: !blockedAtQueue },
       })
-      await rm(source)
       host.ui.setEditorText("Unrelated later work")
       response.resolve()
 
@@ -103,7 +163,7 @@ for (const behavior of ["steer", "followUp"]) {
   test(`${behavior} keeps the resize policy used before queueing when settings change later`, async (t) => {
     const response = Promise.withResolvers()
     t.after(() => response.resolve())
-    const host = await nativePi(t, [], {
+    const host = await imageSession(t, [], {
       settings: { images: { autoResize: false } },
     })
     await host.runtime.session.setModel({
@@ -113,10 +173,11 @@ for (const behavior of ["steer", "followUp"]) {
     host.replies.push(response.promise)
     host.submit("Finish the active request")
     await waitFor(() => assert.equal(host.requests.length, 1))
-    const source = join(host.directory, "resize.png")
-    await writeFile(source, Buffer.from(PNG, "base64"))
-    await host.attachFile(source)
-    const path = snapshotPath(host.ui.getEditorText())
+    const { path } = await retainedImage(
+      host,
+      "resize.png",
+      Buffer.from(PNG, "base64"),
+    )
     host.input(behavior === "steer" ? "\r" : "\x1b\r")
     await waitFor(() =>
       assert.equal(host.runtime.session.pendingMessageCount, 1),
@@ -146,16 +207,16 @@ for (const behavior of ["steer", "followUp"]) {
   test(`${behavior} preparation failure stops before queue acceptance and preserves active work, history, and recovery`, async (t) => {
     const response = Promise.withResolvers()
     t.after(() => response.resolve())
-    const host = await nativePi(t)
+    const host = await imageSession(t)
     host.replies.push(response.promise)
     host.submit("Finish the active request")
     await waitFor(() => assert.equal(host.requests.length, 1))
-    const source = join(host.directory, "broken-queued.png")
     const bytes = Buffer.from(PNG, "base64").subarray(0, 33)
-    await writeFile(source, bytes)
-    await host.attachFile(source)
-    const draft = host.ui.getEditorText().trim()
-    const path = snapshotPath(draft)
+    const { path, draft } = await retainedImage(
+      host,
+      "broken-queued.png",
+      bytes,
+    )
     host.input(behavior === "steer" ? "\r" : "\x1b\r")
     await waitFor(() => assert.match(host.render(), /Image request not sent/))
     assert.equal(host.runtime.session.pendingMessageCount, 0)
@@ -193,13 +254,9 @@ for (const behavior of ["steer", "followUp"]) {
 }
 
 test("image failure retains its snapshot and request when session-file persistence is disabled", async (t) => {
-  const host = await nativePi(t, [], { noSession: true })
-  const source = join(host.directory, "unpersisted.png")
+  const host = await imageSession(t, [], { noSession: true })
   const bytes = Buffer.from(PNG, "base64").subarray(0, 33)
-  await writeFile(source, bytes)
-  await host.attachFile(source)
-  const draft = host.ui.getEditorText().trim()
-  const path = snapshotPath(draft)
+  const { path, draft } = await retainedImage(host, "unpersisted.png", bytes)
   host.submit()
   await waitFor(() => assert.match(host.render(), /Image request not sent/))
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
