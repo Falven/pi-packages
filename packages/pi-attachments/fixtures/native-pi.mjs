@@ -161,7 +161,9 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
         additionalExtensionPaths: [
           ...new Set([
             ...extensionPaths,
-            fileURLToPath(new URL("../src/index.ts", import.meta.url)),
+            ...(state.attachments === false
+              ? []
+              : [fileURLToPath(new URL("../src/index.ts", import.meta.url))]),
           ]),
         ],
         extensionFactories: [observer, ...(state.extensionFactories ?? [])],
