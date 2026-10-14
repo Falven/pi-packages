@@ -1,0 +1,1043 @@
+{
+  "evidenceFormat": 1,
+  "kind": "derived performance summaries; individual measurements remain in external raw captures",
+  "comparison": "Completed-call baseline versus revised runtime and revised continuation workloads; no model latency.",
+  "hostDependencyVersion": "1.0.2",
+  "probeSha256": {
+    "probe.test.mjs": "b0edaee516ea44b88b8aebec933e435862d473ad43ae19c294d06fb233d3c7d2",
+    "extended-probe.test.mjs": "5358d3badf6d30b026751f4427eaa3af7fc9ca05a351884609913c49644808dd"
+  },
+  "interpretation": [
+    "Use the fresh adjacent baseline/control pair for short-call comparison. The earlier measurements are retained and not hidden.",
+    "Fresh short-command median/p95 is 26.15/29.02 ms baseline versus 24.36/27.53 ms revised; no repeated regression appears.",
+    "Each short workload has 30 measurements after five warmups; extended workload p95 from three samples is only the observed maximum.",
+    "Whole-process RSS includes host, workers, history and recorded requests; excludes child-process RSS and filesystem cache. Sampling may miss brief peaks.",
+    "Zero-deadline waits create no workers. The performance probe itself samples memory and readiness; runtime waiting is event-driven.",
+    "These small local samples establish no capacity ceiling, provider performance or deterministic task-quality advantage."
+  ],
+  "runs": [
+    {
+      "externalCaptureId": "baseline-6bac1a2.json",
+      "rawSha256": "ec1ba585babd4a5b1236f2c02c30fea938d29a929bb8c976307cd2027f859b52",
+      "sourceRevision": "6bac1a27fcc4260352b41edddec51ec7ce754d3d",
+      "capturedAt": "2026-10-14T13:48:22.141Z",
+      "environment": {
+        "node": "v26.8.1",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logical_cpus": 12
+      },
+      "method": {
+        "seam": "real native host with controlled Responses transport",
+        "model_latency": "excluded; completion spans only native tool execution events",
+        "worker_start": "public process worker event to the worker online event",
+        "dispatch_to_guest": "native tool start to first guest Date.now; guest resolution is one millisecond",
+        "memory": "whole process including worker threads, host, recorded requests, and history; RSS sampled every 5ms; OS high-water is cumulative",
+        "main_thread_delay": "one-millisecond monitor over each measured host batch, including local transport and presentation",
+        "warmup_count": 5,
+        "sample_count_per_workload": 30,
+        "p95": "nearest-rank percentile",
+        "ordering": "one session; text-only then short-command; no concurrent calls"
+      },
+      "measurements": [
+        {
+          "name": "text-only",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 11.99241649999999,
+              "p95": 12.791417000000138,
+              "min": 11.452584000000115,
+              "max": 13.403874999999971
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 13.927734375,
+              "p95": 14.802490234375,
+              "min": 13.202880859375,
+              "max": 16.0126953125
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 14.953041499999927,
+              "p95": 16.305500000000166,
+              "min": 14.200791999999865,
+              "max": 16.69508399999995
+            },
+            "rss_start_bytes": 281018368,
+            "rss_end_bytes": 301875200,
+            "sampled_peak_rss_bytes": 303939584,
+            "process_high_water_rss_kib": 297120,
+            "main_thread_delay_ms": {
+              "median": 1.146879,
+              "p95": 2.201599,
+              "max": 3.123199
+            },
+            "event_loop_utilization": {
+              "idle": 409.290419,
+              "active": 192.34912214913948,
+              "utilization": 0.31970824554142524
+            },
+            "cpu_user_ms": 698.231,
+            "cpu_system_ms": 52.961
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        },
+        {
+          "name": "short-command",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.021958499999982,
+              "p95": 12.509958000000097,
+              "min": 11.437124999999924,
+              "max": 12.63216599999987
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 13.7969970703125,
+              "p95": 15.077392578125,
+              "min": 12.944580078125,
+              "max": 15.23583984375
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 22.141957999999704,
+              "p95": 23.478250000000116,
+              "min": 21.012374999999793,
+              "max": 23.9184580000001
+            },
+            "rss_start_bytes": 306167808,
+            "rss_end_bytes": 323944448,
+            "sampled_peak_rss_bytes": 325189632,
+            "process_high_water_rss_kib": 317792,
+            "main_thread_delay_ms": {
+              "median": 1.145855,
+              "p95": 2.619391,
+              "max": 4.198399
+            },
+            "event_loop_utilization": {
+              "idle": 570.1301290000001,
+              "active": 280.4744540249785,
+              "utilization": 0.3297354136366582
+            },
+            "cpu_user_ms": 756.34,
+            "cpu_system_ms": 77.062
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        }
+      ]
+    },
+    {
+      "externalCaptureId": "revised-31e3ff4.json",
+      "rawSha256": "51858fa531ae9bc94a94f49ffdea12649101dd0f8ece7dfca5ef29b10365914e",
+      "sourceRevision": "31e3ff4c089531259313d5c0a4c0463378ff81f6",
+      "capturedAt": "2026-10-14T15:00:45.570Z",
+      "environment": {
+        "node": "v26.8.1",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logical_cpus": 12
+      },
+      "method": {
+        "seam": "real native host with controlled Responses transport",
+        "model_latency": "excluded; completion spans only native tool execution events",
+        "worker_start": "public process worker event to the worker online event",
+        "dispatch_to_guest": "native tool start to first guest Date.now; guest resolution is one millisecond",
+        "memory": "whole process including worker threads, host, recorded requests, and history; RSS sampled every 5ms; OS high-water is cumulative",
+        "main_thread_delay": "one-millisecond monitor over each measured host batch, including local transport and presentation",
+        "warmup_count": 5,
+        "sample_count_per_workload": 30,
+        "p95": "nearest-rank percentile",
+        "ordering": "one session; text-only then short-command; no concurrent calls"
+      },
+      "measurements": [
+        {
+          "name": "text-only",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 11.35439550000001,
+              "p95": 12.067209000000048,
+              "min": 10.723666999999978,
+              "max": 12.143666000000053
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 13.1923828125,
+              "p95": 14.326416015625,
+              "min": 12.448974609375,
+              "max": 14.389892578125
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 13.991770999999972,
+              "p95": 15.209459000000038,
+              "min": 13.380707999999913,
+              "max": 15.679583000000093
+            },
+            "rss_start_bytes": 268959744,
+            "rss_end_bytes": 286031872,
+            "sampled_peak_rss_bytes": 286703616,
+            "process_high_water_rss_kib": 281712,
+            "main_thread_delay_ms": {
+              "median": 1.147903,
+              "p95": 2.758655,
+              "max": 3.618815
+            },
+            "event_loop_utilization": {
+              "idle": 380.10501,
+              "active": 196.72657278465272,
+              "utilization": 0.3410468127195043
+            },
+            "cpu_user_ms": 686.344,
+            "cpu_system_ms": 45.548
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        },
+        {
+          "name": "short-command",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.470417000000225,
+              "p95": 15.112125000000106,
+              "min": 10.958832999999913,
+              "max": 15.577375000000075
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 14.6934814453125,
+              "p95": 17.77880859375,
+              "min": 12.547119140625,
+              "max": 19.23046875
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 25.111187499999915,
+              "p95": 31.885874999999942,
+              "min": 20.41404199999988,
+              "max": 44.97095800000011
+            },
+            "rss_start_bytes": 287473664,
+            "rss_end_bytes": 310247424,
+            "sampled_peak_rss_bytes": 312442880,
+            "process_high_water_rss_kib": 305344,
+            "main_thread_delay_ms": {
+              "median": 1.149951,
+              "p95": 2.877439,
+              "max": 9.756671
+            },
+            "event_loop_utilization": {
+              "idle": 667.868238,
+              "active": 338.3621370514984,
+              "utilization": 0.3362670671059609
+            },
+            "cpu_user_ms": 848.636,
+            "cpu_system_ms": 76.831
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        }
+      ]
+    },
+    {
+      "externalCaptureId": "baseline-control-6bac1a2.json",
+      "rawSha256": "40d945d2ff6d781cafd6bdd16305dfec1cf832f256e4ef2437ac9560d957eceb",
+      "sourceRevision": "6bac1a27fcc4260352b41edddec51ec7ce754d3d",
+      "capturedAt": "2026-10-14T15:08:27.529Z",
+      "environment": {
+        "node": "v26.8.1",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logical_cpus": 12
+      },
+      "method": {
+        "seam": "real native host with controlled Responses transport",
+        "model_latency": "excluded; completion spans only native tool execution events",
+        "worker_start": "public process worker event to the worker online event",
+        "dispatch_to_guest": "native tool start to first guest Date.now; guest resolution is one millisecond",
+        "memory": "whole process including worker threads, host, recorded requests, and history; RSS sampled every 5ms; OS high-water is cumulative",
+        "main_thread_delay": "one-millisecond monitor over each measured host batch, including local transport and presentation",
+        "warmup_count": 5,
+        "sample_count_per_workload": 30,
+        "p95": "nearest-rank percentile",
+        "ordering": "one session; text-only then short-command; no concurrent calls"
+      },
+      "measurements": [
+        {
+          "name": "text-only",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.13216650000004,
+              "p95": 12.890416999999843,
+              "min": 11.217125000000124,
+              "max": 12.915250000000015
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 13.903076171875,
+              "p95": 14.687255859375,
+              "min": 12.691162109375,
+              "max": 14.83203125
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 15.243145500000082,
+              "p95": 15.921166000000085,
+              "min": 13.987374999999929,
+              "max": 16.532416999999896
+            },
+            "rss_start_bytes": 234209280,
+            "rss_end_bytes": 266403840,
+            "sampled_peak_rss_bytes": 268484608,
+            "process_high_water_rss_kib": 262448,
+            "main_thread_delay_ms": {
+              "median": 1.148927,
+              "p95": 2.338815,
+              "max": 3.487743
+            },
+            "event_loop_utilization": {
+              "idle": 405.76690499999995,
+              "active": 204.44971997520452,
+              "utilization": 0.33504449339365694
+            },
+            "cpu_user_ms": 705.681,
+            "cpu_system_ms": 56.136
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        },
+        {
+          "name": "short-command",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.397333000000117,
+              "p95": 12.884625000000142,
+              "min": 11.356041999999889,
+              "max": 12.98287500000015
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 14.1025390625,
+              "p95": 14.96923828125,
+              "min": 12.928466796875,
+              "max": 15.494140625
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 26.148520499999904,
+              "p95": 29.016749999999774,
+              "min": 24.510249999999814,
+              "max": 32.08966700000019
+            },
+            "rss_start_bytes": 270352384,
+            "rss_end_bytes": 292225024,
+            "sampled_peak_rss_bytes": 294191104,
+            "process_high_water_rss_kib": 287520,
+            "main_thread_delay_ms": {
+              "median": 1.147903,
+              "p95": 2.951167,
+              "max": 4.427775
+            },
+            "event_loop_utilization": {
+              "idle": 677.454372,
+              "active": 334.39137785504147,
+              "utilization": 0.33047663431204494
+            },
+            "cpu_user_ms": 804.137,
+            "cpu_system_ms": 89.936
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        }
+      ]
+    },
+    {
+      "externalCaptureId": "revised-control-f415bae.json",
+      "rawSha256": "60e1c414fc8de0961a80dedc6d47d62f87eac0049c7b3f6fbe042bebfad8994d",
+      "sourceRevision": "f415bae160418a06d50c53397c3beeeee935655e",
+      "capturedAt": "2026-10-14T15:08:41.048Z",
+      "environment": {
+        "node": "v26.8.1",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logical_cpus": 12
+      },
+      "method": {
+        "seam": "real native host with controlled Responses transport",
+        "model_latency": "excluded; completion spans only native tool execution events",
+        "worker_start": "public process worker event to the worker online event",
+        "dispatch_to_guest": "native tool start to first guest Date.now; guest resolution is one millisecond",
+        "memory": "whole process including worker threads, host, recorded requests, and history; RSS sampled every 5ms; OS high-water is cumulative",
+        "main_thread_delay": "one-millisecond monitor over each measured host batch, including local transport and presentation",
+        "warmup_count": 5,
+        "sample_count_per_workload": 30,
+        "p95": "nearest-rank percentile",
+        "ordering": "one session; text-only then short-command; no concurrent calls"
+      },
+      "measurements": [
+        {
+          "name": "text-only",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.132146499999976,
+              "p95": 12.48416700000007,
+              "min": 11.187791999999945,
+              "max": 12.491416999999956
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 13.986328125,
+              "p95": 14.7431640625,
+              "min": 12.75244140625,
+              "max": 14.9326171875
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 14.892792000000043,
+              "p95": 15.432166999999936,
+              "min": 13.666459000000032,
+              "max": 15.720874999999978
+            },
+            "rss_start_bytes": 269221888,
+            "rss_end_bytes": 291323904,
+            "sampled_peak_rss_bytes": 293126144,
+            "process_high_water_rss_kib": 286880,
+            "main_thread_delay_ms": {
+              "median": 1.153023,
+              "p95": 2.652159,
+              "max": 3.592191
+            },
+            "event_loop_utilization": {
+              "idle": 392.527917,
+              "active": 210.68237510090637,
+              "utilization": 0.34926853513577477
+            },
+            "cpu_user_ms": 725.312,
+            "cpu_system_ms": 54.253
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        },
+        {
+          "name": "short-command",
+          "summary": {
+            "worker_start_ms": {
+              "samples": 30,
+              "median": 12.212625500000058,
+              "p95": 12.746041999999761,
+              "min": 11.44125000000031,
+              "max": 13.008542000000034
+            },
+            "dispatch_to_guest_ms": {
+              "samples": 30,
+              "median": 14.04541015625,
+              "p95": 14.723388671875,
+              "min": 13.09521484375,
+              "max": 15.047607421875
+            },
+            "short_complete_ms": {
+              "samples": 30,
+              "median": 24.356604500000003,
+              "p95": 27.528084000000035,
+              "min": 21.751291000000037,
+              "max": 27.889374999999973
+            },
+            "rss_start_bytes": 295616512,
+            "rss_end_bytes": 316669952,
+            "sampled_peak_rss_bytes": 318881792,
+            "process_high_water_rss_kib": 311632,
+            "main_thread_delay_ms": {
+              "median": 1.147903,
+              "p95": 2.807807,
+              "max": 4.902911
+            },
+            "event_loop_utilization": {
+              "idle": 645.51979,
+              "active": 301.3597101506806,
+              "utilization": 0.31826616808445435
+            },
+            "cpu_user_ms": 797.611,
+            "cpu_system_ms": 71.178
+          },
+          "sampleOutcomes": {
+            "measured": 30
+          }
+        }
+      ]
+    },
+    {
+      "externalCaptureId": "extended-f415bae-01.json",
+      "rawSha256": "c4ab54fa15da8eb9f131e249423c83ff4df2b090295e9109397e9d3d4057dfa5",
+      "sourceRevision": "f415bae160418a06d50c53397c3beeeee935655e",
+      "capturedAt": "2026-10-14T15:08:58.734Z",
+      "environment": {
+        "node": "v26.8.1",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "logical_cpus": 12
+      },
+      "method": {
+        "seam": "real native host with the existing controlled provider; no live model calls",
+        "timing": "outer tool durations use public tool_execution_start/end; full sample durations also include local transport, presentation, readiness checks, and stated holds",
+        "workers": "public process worker event followed by Worker online/exit; all workers created by this isolated probe are tracked",
+        "memory": "whole-process RSS includes workers, host, retained history, and recorded provider requests; sampled every 5 ms inside each sample; OS high-water is cumulative",
+        "cpu": "process.cpuUsage includes the host and its worker threads; child-process CPU is excluded",
+        "event_loop_delay": "public one-millisecond delay histogram per sample; no-delay samples are null rather than zero; histogram aggregates are not raw timer samples",
+        "raw_data": "individual outer calls, public nested spans, worker events, RSS samples, and per-sample metrics are retained",
+        "polling": "zero-deadline wait calls are the measured workload; readiness and memory sampling belong to the probe, not the runtime",
+        "collection": "same-cell calls are sequential; no concurrent collector benchmark",
+        "parsing": "exec is a raw custom call; wait is a structured function_call in namespace functions; cell IDs stay strings; process IDs stay numeric; exact first-line framing is required",
+        "warmup_count": "5 for zero waits; 1 for every other group",
+        "repeat_count": "20 zero waits; 3 for every other group",
+        "p95": "nearest-rank percentile; three-sample p95 equals the maximum and is diagnostic only",
+        "budgets": "finite commands use 8 output tokens; their outer script uses 512; concurrent producers use 64 per collection",
+        "bounds": "individual host roundtrips 15 s; finite-cell drain 15 s; sample-readiness 5 s; test 180 s; controlled child commands have a 60 s fallback lifetime",
+        "ordering": "one native session; zero waits, finite 8 MiB, finite 48 MiB, three producers, CPU termination, pending-command termination; history grows throughout",
+        "limits": [
+          "No fixed RSS ceiling or throughput SLO is asserted.",
+          "RSS sampling can miss short peaks; resourceUsage high-water is cumulative.",
+          "OS child-process RSS and filesystem-cache memory are excluded from process RSS.",
+          "These small local samples are diagnostic comparisons, not capacity estimates or provider parity.",
+          "Explicit termination is tested against the selected contract: abort pending operations and preserve already returned process handles."
+        ]
+      },
+      "measurements": [
+        {
+          "name": "zero-deadline-waits",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 20,
+              "median": 4.093291499999964,
+              "p95": 6.709792000000107,
+              "min": 3.32808399999999,
+              "max": 8.288040999999794
+            },
+            "native_outer_ms": {
+              "samples": 20,
+              "median": 0.08620849999999791,
+              "p95": 0.15766599999983555,
+              "min": 0.06674999999995634,
+              "max": 0.17391599999996288
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 20,
+              "median": 259112960,
+              "p95": 265322496,
+              "min": 241549312,
+              "max": 265388032
+            },
+            "rss_delta_bytes": {
+              "samples": 20,
+              "median": 344064,
+              "p95": 4046848,
+              "min": 32768,
+              "max": 8519680
+            },
+            "cpu_user_ms": {
+              "samples": 20,
+              "median": 5.445,
+              "p95": 9.788,
+              "min": 3.76,
+              "max": 12.854
+            },
+            "cpu_system_ms": {
+              "samples": 20,
+              "median": 0.363,
+              "p95": 0.999,
+              "min": 0.235,
+              "max": 1.869
+            },
+            "termination_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "wait_ms": {
+              "samples": 20,
+              "median": 0.08620849999999791,
+              "p95": 0.15766599999983555,
+              "min": 0.06674999999995634,
+              "max": 0.17391599999996288
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 20,
+              "median": 1.9271669999999999,
+              "p95": 3.149823,
+              "min": 1.402879,
+              "max": 3.713023
+            },
+            "worker_start_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "worker_lifetime_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 20
+          },
+          "workersCreatedDuringMeasuredWaits": 0
+        },
+        {
+          "name": "finite-output-8-mib",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 3,
+              "median": 76.24029099999984,
+              "p95": 81.40316700000017,
+              "min": 72.12987499999986,
+              "max": 81.40316700000017
+            },
+            "native_outer_ms": {
+              "samples": 3,
+              "median": 69.47679099999982,
+              "p95": 74.72262499999988,
+              "min": 65.709834,
+              "max": 74.72262499999988
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 3,
+              "median": 313540608,
+              "p95": 313999360,
+              "min": 294027264,
+              "max": 313999360
+            },
+            "rss_delta_bytes": {
+              "samples": 3,
+              "median": 4980736,
+              "p95": 19169280,
+              "min": 442368,
+              "max": 19169280
+            },
+            "cpu_user_ms": {
+              "samples": 3,
+              "median": 37.468,
+              "p95": 37.644,
+              "min": 32.941,
+              "max": 37.644
+            },
+            "cpu_system_ms": {
+              "samples": 3,
+              "median": 9.025,
+              "p95": 10.25,
+              "min": 7.681,
+              "max": 10.25
+            },
+            "termination_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "wait_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 3,
+              "median": 1.561599,
+              "p95": 1.707007,
+              "min": 1.276927,
+              "max": 1.707007
+            },
+            "worker_start_ms": {
+              "samples": 3,
+              "median": 12.33616700000016,
+              "p95": 12.740291999999954,
+              "min": 11.550834000000123,
+              "max": 12.740291999999954
+            },
+            "worker_lifetime_ms": {
+              "samples": 3,
+              "median": 70.81791700000008,
+              "p95": 75.96141699999998,
+              "min": 67.05250000000001,
+              "max": 75.96141699999998
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 3
+          }
+        },
+        {
+          "name": "finite-output-48-mib",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 3,
+              "median": 126.25587500000006,
+              "p95": 152.514459,
+              "min": 125.74775,
+              "max": 152.514459
+            },
+            "native_outer_ms": {
+              "samples": 3,
+              "median": 118.21250000000009,
+              "p95": 144.34699999999998,
+              "min": 117.71199999999999,
+              "max": 144.34699999999998
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 3,
+              "median": 382779392,
+              "p95": 386564096,
+              "min": 360775680,
+              "max": 386564096
+            },
+            "rss_delta_bytes": {
+              "samples": 3,
+              "median": 20643840,
+              "p95": 22003712,
+              "min": -491520,
+              "max": 22003712
+            },
+            "cpu_user_ms": {
+              "samples": 3,
+              "median": 102.93,
+              "p95": 110.333,
+              "min": 96.394,
+              "max": 110.333
+            },
+            "cpu_system_ms": {
+              "samples": 3,
+              "median": 33.902,
+              "p95": 42.285,
+              "min": 30.042,
+              "max": 42.285
+            },
+            "termination_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "wait_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 3,
+              "median": 1.642495,
+              "p95": 1.802239,
+              "min": 1.496063,
+              "max": 1.802239
+            },
+            "worker_start_ms": {
+              "samples": 3,
+              "median": 13.584290999999894,
+              "p95": 13.721083000000135,
+              "min": 12.221665999999914,
+              "max": 13.721083000000135
+            },
+            "worker_lifetime_ms": {
+              "samples": 3,
+              "median": 120.45545799999991,
+              "p95": 146.46037499999989,
+              "min": 119.79179199999999,
+              "max": 146.46037499999989
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 3
+          }
+        },
+        {
+          "name": "three-live-output-cells",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 3,
+              "median": 1099.0433329999996,
+              "p95": 1118.5767909999995,
+              "min": 1076.7927500000005,
+              "max": 1118.5767909999995
+            },
+            "native_outer_ms": {
+              "samples": 3,
+              "median": 10.202913999999055,
+              "p95": 10.758124999998472,
+              "min": 8.490249999999833,
+              "max": 10.758124999998472
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 3,
+              "median": 408207360,
+              "p95": 413810688,
+              "min": 405766144,
+              "max": 413810688
+            },
+            "rss_delta_bytes": {
+              "samples": 3,
+              "median": 2375680,
+              "p95": 11452416,
+              "min": -622592,
+              "max": 11452416
+            },
+            "cpu_user_ms": {
+              "samples": 3,
+              "median": 245.483,
+              "p95": 274.404,
+              "min": 228.861,
+              "max": 274.404
+            },
+            "cpu_system_ms": {
+              "samples": 3,
+              "median": 45.57,
+              "p95": 50.714,
+              "min": 39.214,
+              "max": 50.714
+            },
+            "termination_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "wait_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 3,
+              "median": 1.585151,
+              "p95": 1.707007,
+              "min": 1.582079,
+              "max": 1.707007
+            },
+            "worker_start_ms": {
+              "samples": 9,
+              "median": 11.834125000000313,
+              "p95": 17.322666000000027,
+              "min": 10.358374999999796,
+              "max": 17.322666000000027
+            },
+            "worker_lifetime_ms": {
+              "samples": 9,
+              "median": 1068.6203750000004,
+              "p95": 1086.2965409999997,
+              "min": 1048.4671250000001,
+              "max": 1086.2965409999997
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 3
+          }
+        },
+        {
+          "name": "cpu-loop-termination",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 3,
+              "median": 32.238000000000284,
+              "p95": 32.366250000000036,
+              "min": 30.795624999999745,
+              "max": 32.366250000000036
+            },
+            "native_outer_ms": {
+              "samples": 3,
+              "median": 16.121124999999665,
+              "p95": 16.534583000000566,
+              "min": 15.421499999999469,
+              "max": 16.534583000000566
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 3,
+              "median": 413679616,
+              "p95": 414990336,
+              "min": 412549120,
+              "max": 414990336
+            },
+            "rss_delta_bytes": {
+              "samples": 3,
+              "median": 262144,
+              "p95": 1310720,
+              "min": 180224,
+              "max": 1310720
+            },
+            "cpu_user_ms": {
+              "samples": 3,
+              "median": 44.898,
+              "p95": 54.489,
+              "min": 41.534,
+              "max": 54.489
+            },
+            "cpu_system_ms": {
+              "samples": 3,
+              "median": 2.292,
+              "p95": 2.366,
+              "min": 2.123,
+              "max": 2.366
+            },
+            "termination_ms": {
+              "samples": 3,
+              "median": 0.7541659999997137,
+              "p95": 0.8289580000000569,
+              "min": 0.697041999999783,
+              "max": 0.8289580000000569
+            },
+            "wait_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 3,
+              "median": 3.301375,
+              "p95": 3.497983,
+              "min": 3.026943,
+              "max": 3.497983
+            },
+            "worker_start_ms": {
+              "samples": 3,
+              "median": 12.365749999999935,
+              "p95": 12.525666000000456,
+              "min": 12.097750000000815,
+              "max": 12.525666000000456
+            },
+            "worker_lifetime_ms": {
+              "samples": 3,
+              "median": 24.616166000000703,
+              "p95": 24.770833000000493,
+              "min": 23.973791000000347,
+              "max": 24.770833000000493
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 3
+          }
+        },
+        {
+          "name": "pending-command-termination",
+          "summary": {
+            "full_sample_ms": {
+              "samples": 3,
+              "median": 120.1979169999995,
+              "p95": 121.79899999999998,
+              "min": 119.9287919999997,
+              "max": 121.79899999999998
+            },
+            "native_outer_ms": {
+              "samples": 3,
+              "median": 2.4151240000001053,
+              "p95": 2.5033330000005662,
+              "min": 2.40099999999984,
+              "max": 2.5033330000005662
+            },
+            "sampled_peak_rss_bytes": {
+              "samples": 3,
+              "median": 417071104,
+              "p95": 418480128,
+              "min": 416989184,
+              "max": 418480128
+            },
+            "rss_delta_bytes": {
+              "samples": 3,
+              "median": 1212416,
+              "p95": 1638400,
+              "min": -98304,
+              "max": 1638400
+            },
+            "cpu_user_ms": {
+              "samples": 3,
+              "median": 42.11,
+              "p95": 44.725,
+              "min": 38.546,
+              "max": 44.725
+            },
+            "cpu_system_ms": {
+              "samples": 3,
+              "median": 3.578,
+              "p95": 3.631,
+              "min": 3.514,
+              "max": 3.631
+            },
+            "termination_ms": {
+              "samples": 3,
+              "median": 2.105790999999954,
+              "p95": 2.153957999999875,
+              "min": 2.000583000000006,
+              "max": 2.153957999999875
+            },
+            "wait_ms": {
+              "samples": 0,
+              "median": null,
+              "p95": null,
+              "min": null,
+              "max": null
+            },
+            "main_thread_delay_p95_ms": {
+              "samples": 3,
+              "median": 2.026495,
+              "p95": 2.097151,
+              "min": 1.265663,
+              "max": 2.097151
+            },
+            "worker_start_ms": {
+              "samples": 3,
+              "median": 9.571541999999681,
+              "p95": 10.657500000000255,
+              "min": 9.354083000000173,
+              "max": 10.657500000000255
+            },
+            "worker_lifetime_ms": {
+              "samples": 3,
+              "median": 108.36633400000028,
+              "p95": 109.05162499999915,
+              "min": 108.24633300000005,
+              "max": 109.05162499999915
+            }
+          },
+          "sampleOutcomes": {
+            "passed": 3
+          }
+        }
+      ],
+      "cleanup": {
+        "outcome": "passed",
+        "workersRemaining": 0,
+        "emergencyWorkerTerminations": 0,
+        "ownedProcessesObserved": 16,
+        "ownedProcessesAlive": 0,
+        "emergencyProcessKills": 0,
+        "errors": []
+      }
+    }
+  ]
+}

@@ -33,4 +33,4 @@
 
 The measured cases establish the implemented patch behavior. Every malformed grammar, Unicode edge case, and operating-system error diagnostic was not exhaustively observed, so universal behavioral equivalence is not claimed. Coordination covers this process and existing resolved symlink aliases; it does not prevent external filesystem races or provide rollback, atomic multi-file transactions, or undo.
 
-This slice supports completed awaited calls. Retained execution remains blocked as recorded in ticket 03.
+This slice initially verified completed awaited calls. [Ticket 03](03-yield-and-resume-execution-cells.md) now implements retained execution, and [ticket 06](06-verify-mixed-native-workflows.md) verifies patch work after a yield with configured companions.

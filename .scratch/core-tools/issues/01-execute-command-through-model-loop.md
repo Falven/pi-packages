@@ -6,7 +6,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** resolved — completed command slice; full contract remains blocked
+**Status:** resolved — completed command slice; final contract verification is recorded in ticket 07
 
 - [x] Create the normal self-contained package with the approved identifier and public extension entry point. Preserve the approved naming restriction and avoid extra documentation or runtime application dependencies.
 - [x] Freeze the selected declarations and instructions from the identified source capture, preserving the approved omissions and recording the scoped fixture separately from the complete capture. Do not silently substitute current live declarations if the frozen source is unavailable.
@@ -31,10 +31,10 @@
 
 ## Remaining contract limits
 
-This ticket verifies completed scripts whose nested calls are awaited. The live description states that limit and withholds unavailable helpers; it is not a complete description or full-contract parity claim. The frozen fixture retains the full selected baseline.
+This ticket initially verified completed scripts whose nested calls were awaited. Its original restricted description is superseded by the session-owned continuation implementation in [ticket 03](03-yield-and-resume-execution-cells.md). The frozen fixture retains the full selected baseline; final conformance is recorded in [ticket 07](07-verify-contract-and-matched-trials.md).
 
 The initial ticket 01 command slice waited for completion and rejected PTY requests. That historical scope is superseded by [ticket 02](02-continue-interactive-commands.md), which owns process sessions, PTYs, command yield deadlines, input polling, and their current implementation status. Unavailable elevated authority remains rejected instead of creating an approval mechanism.
 
-Ticket 03 records the demonstrated public lifetime blocker. The outer script deadline currently returns an explicit unsupported-continuation error and cancels pending calls. No `wait`, retained cells, notifications, timers, stored values, or explicit yielding are advertised. A script that returns while dispatched host calls remain unawaited has the same native attribution limitation as a yielded cell; it is not claimed as verified history parity. Ordinary completion does not silently wait for or cancel that unawaited work.
+[Ticket 03](03-yield-and-resume-execution-cells.md) implements retained cells, waiting, notifications, timers, stored values, and explicit yielding under the approved package contract. [Ticket 06](06-verify-mixed-native-workflows.md) verifies continued work with configured companions and native session lifecycle events. Public native attribution still ends with the original parent; package-owned activity records do not claim to repair that host limitation. Ordinary completion does not silently wait for or cancel dispatched unawaited host work.
 
-Patches and images are documented in [ticket 04](04-apply-file-patches.md) and [ticket 05](05-return-local-images.md). Combined companion workflows, full lifecycle coverage, and matched live-model trials remain with their respective later tickets. The shared raw-call fixture setup is in [model-loop.ts](../../../packages/pi-codex-tools/test/fixtures/model-loop.ts); the existing native host remains the sole agent harness.
+Patches and images are documented in [ticket 04](04-apply-file-patches.md) and [ticket 05](05-return-local-images.md). [Ticket 06](06-verify-mixed-native-workflows.md) verifies combined companion workflows and native lifecycle coverage; matched live-model trials are recorded in [ticket 07](07-verify-contract-and-matched-trials.md). The shared raw-call fixture setup is in [model-loop.ts](../../../packages/pi-codex-tools/test/fixtures/model-loop.ts); the existing native host remains the controlled-test agent harness.
