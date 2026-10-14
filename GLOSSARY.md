@@ -13,7 +13,7 @@ A prompt being prepared for submission, including its text, references, and atta
 _Avoid_: Message, when the prompt has not been submitted
 
 **Reference**:
-Editable text within a draft that identifies a resource, such as a file or skill. A file reference identifies the source file whose current contents can be read.
+Editable text within a draft that identifies a resource, such as a file or skill. A plain source path identifies the file whose current contents can be read.
 _Avoid_: Attachment, when referring only to a mention of a resource
 
 **Skill reference**:
@@ -21,19 +21,42 @@ A reference identifying a skill the user explicitly wants applied to the request
 _Avoid_: Slash command, unless referring to a command invocation
 
 **Attachment**:
-Supplementary content associated with a draft, such as an image or a text file, preserved as it was when added.
+Supplementary file contents included in a draft through a Markdown link or image pointing to a local file.
 _Avoid_: Reference, when referring to captured content
+
+**Attachment source**:
+An existing file or entered text from which an attachment is captured, independent of the kind of content it contains.
+_Avoid_: Attachment type, when referring to how content is supplied
+
+**Attachment snapshot**:
+A retained copy of contents captured from an attachment source. Later changes to the source do not change that copy.
+
+**Attachment capture**:
+Preservation of an attachment source's contents as a snapshot.
 
 **Text attachment**:
 Text associated with a draft as a file that the agent can read on demand.
 
+**Attachment thumbnail**:
+A compact image preview in the composer that identifies an attached image without opening its retained file in another application.
+_Avoid_: Attachment contents, when referring only to the preview
+
 **Attachment reference**:
-A reference identifying preserved attachment contents in a draft or submitted prompt.
+A Markdown link or image pointing to an existing local file whose contents are included as an attachment in a draft or submitted prompt.
 _Avoid_: File reference, when referring to captured attachment contents
 
 **Attachment membership**:
-The set of attachments included in a particular draft.
+The attachments included in a draft through local-file links and images in its Markdown. A plain path does not include a file as an attachment.
 _Avoid_: Attachment contents, when referring to which items the draft includes
+
+**Preview text**:
+Read-only inspection of an attachment's retained text without changing the draft or its attachment membership.
+
+**Restore Inline**:
+Conversion of attached text into ordinary editable draft text by inserting its contents at the caret or selection and removing the corresponding attachment reference. The retained contents remain available.
+
+**Remove from draft**:
+Removal of an attachment reference and therefore its membership in the current draft, while preserving its retained contents.
 
 **Source view**:
 A view of the draft's Markdown syntax that can be edited directly.
