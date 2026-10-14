@@ -40,11 +40,13 @@ function thumbnailSize(value: unknown, path: string): ThumbnailSize {
 }
 
 export function thumbnailSettings(storage: string, signal: AbortSignal) {
-  const path = join(storage, "settings.json")
+  // Mutable preferences must stay outside the immutable snapshot directory.
+  const directory = dirname(storage)
+  const path = join(directory, "pi-attachments.json")
   let size: ThumbnailSize = "medium"
   function save(value: ThumbnailSize) {
-    mkdirSync(storage, { recursive: true, mode: 0o700 })
-    const temporary = join(storage, `.settings-${randomUUID()}.tmp`)
+    mkdirSync(directory, { recursive: true, mode: 0o700 })
+    const temporary = join(directory, `.pi-attachments-${randomUUID()}.tmp`)
     try {
       writeFileSync(
         temporary,
@@ -67,7 +69,7 @@ export function thumbnailSettings(storage: string, signal: AbortSignal) {
       size = thumbnailSize(saved["thumbnailSize"], path)
   } else {
     // Migrate only the prior user preference; Pi's settings stay untouched.
-    const legacyPath = join(dirname(storage), "settings.json")
+    const legacyPath = join(directory, "settings.json")
     const legacy = readSettings(legacyPath)?.["extensionSettings"]
     if (legacy && typeof legacy === "object" && !Array.isArray(legacy)) {
       const value = (legacy as Record<string, unknown>)[
