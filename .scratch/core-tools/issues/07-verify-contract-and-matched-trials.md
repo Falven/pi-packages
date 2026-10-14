@@ -4,9 +4,9 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 06 — Preserve complete workflows in mixed Pi sessions (presentation delta).
+**Blocked by:** None — presentation prerequisite 06 is resolved.
 
-**Status:** awaiting-review — presentation verification complete; independent reviews pending
+**Status:** resolved — presentation verification and both independent reviews complete within the recorded limits
 
 ## Presentation delta
 
@@ -14,7 +14,7 @@
 - [x] Verify compact and expanded cards, early pipe/PTY output, origin ownership across cells, invisible retained journals, terminal-status precedence, late failures, no automatic alerts, and bounded large/mixed output through the approved seam.
 - [x] Compare presentation-enabled completed calls and live output with the completed core baseline without model latency. Record bounded buffer/history behavior, no display polling or extra tool calls, native refresh batching, cleanup, and any material regression.
 - [x] Run a configured Pi terminal smoke for live output, expansion, continuation, and reload where the terminal is available. State any physical-terminal or configured-runtime validation gap explicitly rather than treating source inspection or a controlled host as equivalent.
-- [ ] Complete independent standards and spec reviews of the integration-branch delta and fix all actionable findings. Preserve the original seven tickets’ historical evidence and mark each new delta resolved only after its own acceptance is met or an explicit permitted verification limit is recorded.
+- [x] Complete independent standards and spec reviews of the integration-branch delta and fix all actionable findings. Preserve the original seven tickets’ historical evidence and mark each new delta resolved only after its own acceptance is met or an explicit permitted verification limit is recorded.
 - [x] Retain existing matched live-model results under their original revisions. Repeat affected deterministic contract checks; only rerun broader live-model trials if the agent interface or execution behavior changes. Do not add extra reports, source-product names, or runtime dependencies.
 
 ## Presentation verification
@@ -27,7 +27,7 @@ The real-host checks cover compact/expanded cards, early pipe and PTY bytes befo
 
 ### Review corrections
 
-The corrections following `b12c59e3abe708c93d719bb850e7b006687d2d72` passed **207/207** package checks with no failures, cancellations, skips, or todos in 88.711 seconds. Package type checking, package lint, formatting of the changed artifacts, and whitespace validation pass. The declaration snapshot, frozen contract, model collection path, and existing observation fixtures are unchanged. Final independent review closure remains pending.
+The reviewed corrections at `d4ffbfd5bdb9b48d6983c0a9b6bd5bf2aab2111b` passed **207/207** package checks with no failures, cancellations, skips, or todos in 88.711 seconds. Package type checking, package lint, formatting of the changed artifacts, and whitespace validation pass. The declaration snapshot, frozen contract, model collection path, and existing observation fixtures are unchanged.
 
 Focused native-host regressions reproduced and repaired four defects:
 
@@ -40,9 +40,13 @@ The approved image-placement exception is now explicit in the specification, lif
 
 The legacy-history check now creates actually missing result metadata through public session append APIs. Its earlier `details: null` hook fixture did not remove metadata on the tested host. The corrected check verifies the unavailable-details disclosure and recorded terminal failure after reload. Earlier verification and performance counts below remain attached to their original revisions; their eight-operation limit describes that measured implementation, not the corrected retention policy.
 
+Both independent rechecks completed at `d4ffbfd` with no new actionable findings. The standards reviewer confirmed all three findings resolved and independently passed eight focused native-host checks. The specification reviewer confirmed the ANSI and active-operation corrections, accepted the explicitly approved native image-placement exception, and passed seven focused native-host checks. Both reviews were read-only and found no scope creep; neither repeated the broad suite or physical-display interaction. The four implementation defects and the approved image exception close all five unique review findings.
+
 ### Installed terminal
 
-Two external pipe/PTY checks pass on installed `/Users/fran/Library/pnpm/bin/pi` **1.1.0**, running the actual CLI in a PTY with isolated settings and the existing controlled provider. They load the six usable companions identified in ticket 06 from the tested snapshot, excluding only the pre-existing incompatible attachments extension. Each check observes early output before `exec_command` reaches its public result hook, then a late command exit 7 and script failure without calling `wait` or starting another model turn. A later prompt collects exactly the remaining output, its wait card reports failure without repeating the operation, and reload restores the known failed command. Native expansion is used for each new companion group. Each case makes exactly four provider requests. An initial screen assertion waited on a newly collapsed group; repeating the native expansion control corrected the probe without a package change.
+Two external pipe/PTY checks pass at `79c8205` on installed `/Users/fran/Library/pnpm/bin/pi` **1.1.0**, running the actual CLI in a PTY with isolated settings and the existing controlled provider. They load the six usable companions identified in ticket 06 from the tested snapshot, excluding only the pre-existing incompatible attachments extension. Each check observes early output before `exec_command` reaches its public result hook, then a late command exit 7 and script failure without calling `wait` or starting another model turn. A later prompt collects exactly the remaining output, its wait card reports failure without repeating the operation, and reload restores the known failed command. Native expansion is used for each new companion group. Each case makes exactly four provider requests. An initial screen assertion waited on a newly collapsed group; repeating the native expansion control corrected the probe without a package change.
+
+The unchanged probe passed both cases again at final reviewed runtime `d4ffbfd`, with the same installed 1.1.0 CLI, six usable companion extensions, isolated settings, and four provider requests per case. Its result SHA-256 is `05884a55fcad3764cadf68c0078ba37c4024f522f154a9e2f306e6e424b4ba55`.
 
 This verifies the installed CLI and real PTY transport, not a physical display or human interaction. The full configured inventory still cannot start because attachments requires an unavailable setting API, independently reproduced without this package in ticket 06. No companion source, user settings, or credentials were changed. The snapshot result does not cover concurrent changes in the primary checkout.
 
@@ -63,7 +67,26 @@ Each workload creates exactly 25 workers and 50 provider requests, with zero wor
 
 Sampled whole-process peak RSS for text/command/live/burst was 270.19/284.61/247.92/308.22 MiB baseline and 297.95/315.23/275.58/347.56 MiB revised. These sequential-workload figures include accumulated host/provider captures and native UI history, omit child RSS, and can miss peaks between 5 ms samples; they are not isolated per-cell memory or capacity claims. Revised main-thread delay p95/max ranges were 2.03–3.11/3.13–8.45 ms versus 1.59–2.24/3.05–8.69 ms baseline. Runtime presentation uses process/worker events and native invalidation batching, with no display timer, polling, extra tool call, or worker creation on wait. Existing wait/cancellation/large-output tests verify those lifecycle and collection properties separately.
 
-Temporary probes and raw measurements remain outside the repository. SHA-256 identities: performance probe `ce17006eebd91f11eaba2d3f3243adb4baa56b3c8a66083b9ba7d98ee6cc020b`; final baseline/revised measurements `9740b6f9b01d96153e20165698f989aa21f7cd259dd6accecda358303b8da85a` / `a593ba1dc7fc53c1d9bb8bdfbe7f36d8197c55ab758e60e62dc206711ba3fdc5`; resume-hint control `ef8248c79232731b69e0822676caea498a0634c9178059a05d737937720b6814`; installed live-terminal probe/result `8ced5823cc11d48385a8ff43fcc533d7031cb4c8b0dec063fbf498ab8eebe91a` / `5bf53b5302fc1a5ca26310e9b5641daa3edf83fffd324f5e63358a5895cf53d9`. The independent standards and specification reviews remain pending; this verification does not mark their acceptance complete.
+Temporary probes and raw measurements remain outside the repository. SHA-256 identities for this earlier pair: performance probe `ce17006eebd91f11eaba2d3f3243adb4baa56b3c8a66083b9ba7d98ee6cc020b`; baseline/revised measurements `9740b6f9b01d96153e20165698f989aa21f7cd259dd6accecda358303b8da85a` / `a593ba1dc7fc53c1d9bb8bdfbe7f36d8197c55ab758e60e62dc206711ba3fdc5`; resume-hint control `ef8248c79232731b69e0822676caea498a0634c9178059a05d737937720b6814`; installed live-terminal probe/result `8ced5823cc11d48385a8ff43fcc533d7031cb4c8b0dec063fbf498ab8eebe91a` / `5bf53b5302fc1a5ca26310e9b5641daa3edf83fffd324f5e63358a5895cf53d9`. The final reviewed revision has its own measurements below.
+
+### Final adjacent comparison
+
+The unchanged probe ran a fresh serial adjacent pair for pre-presentation `5ea9e15785728d479e18c19228ab08df09d7b7ac` and final reviewed runtime `d4ffbfd5bdb9b48d6983c0a9b6bd5bf2aab2111b`. Both use Pi 1.0.2, Node v26.8.1 on arm64 macOS, expanded cards, native transcript-on-exit, five warmups, and twenty measured calls per workload. Model transport is excluded from execution time. Values below are milliseconds, baseline → revised.
+
+| Workload      | Median / p95 execution            | Host shutdown | Runtime cleanup within shutdown |
+| ------------- | --------------------------------- | ------------- | ------------------------------- |
+| Text          | 14.29 / 17.06 → 13.24 / 14.02     | 1.72 → 1.53   | 0.24 → 0.22                     |
+| Short command | 19.36 / 20.27 → 19.78 / 20.87     | 2.33 → 1.77   | 0.36 → 0.22                     |
+| Live output   | 190.77 / 199.13 → 191.88 / 194.69 | 21.97 → 67.34 | 3.15 → 1.60                     |
+| Burst output  | 53.38 / 55.83 → 55.29 / 57.00     | 8.42 → 51.72  | 0.21 → 0.23                     |
+
+This pair adds 0.42 ms median for a short command and 1.91 ms for burst output. Revised live/burst shutdown spends 65.74/51.50 ms in native UI stop, consistent with the earlier measured cost of rendering expanded output into the exit transcript. Runtime cleanup remains 1.60/0.23 ms. The earlier `resume-hint` control remains evidence for `79c8205`; it was not repeated or relabeled. These small samples do not establish a general performance guarantee.
+
+All workloads again create 25 workers and 50 provider requests and leave zero workers after cleanup. Revised text/command/live/burst journal counts and serialized sizes match the earlier presentation pair: 50/50/75/75 records and 7,685/20,435/441,715/437,040 bytes, with a largest record of 17,395 bytes. The corrected active-plus-recent-settled retention rule is covered by the bounded-operation regression; these one-operation performance workloads do not measure its maximum capacity.
+
+Sampled whole-process peak RSS for text/command/live/burst is 274.19/279.70/248.67/305.50 MiB baseline and 297.14/314.42/274.20/346.23 MiB revised. Baseline main-thread delay p95/max ranges are 1.74–2.74/4.01–9.85 ms; revised ranges are 1.98–3.28/3.58–8.62 ms. Sampling every 5 ms includes host/provider history, excludes child RSS, and can miss peaks; these are not isolated per-cell memory bounds. Runtime observation remains event-driven with no display polling, extra tool calls, or workers created by waiting.
+
+Fresh baseline/revised result SHA-256 values are `c32684f632b94983e823dd4a84491f993024164b42ac0508dd70a1c5fd178cf3` / `17981489e75a7996215bcf8e387f1bca2bdc60cf7f7d434f418f23e76b761bb1`. The performance and installed-terminal probes retain the hashes above; raw results remain outside the repository.
 
 ## Completed baseline
 

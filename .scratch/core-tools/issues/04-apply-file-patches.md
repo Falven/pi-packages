@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
+**Blocked by:** None — presentation prerequisite 01 is resolved.
 
 **Status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
 

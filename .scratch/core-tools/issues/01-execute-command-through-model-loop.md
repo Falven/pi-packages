@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None (can start immediately).
+**Blocked by:** None.
 
 **Status:** resolved — completed command presentation delta; completed baseline retained below
 

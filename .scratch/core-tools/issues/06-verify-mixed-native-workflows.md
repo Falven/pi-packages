@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi’s image pipeline (presentation deltas).
+**Blocked by:** None — presentation prerequisites 02, 03, 04, and 05 are resolved.
 
 **Status:** resolved — presentation workflow checks complete with the companion compatibility limit below; completed baseline retained below
 

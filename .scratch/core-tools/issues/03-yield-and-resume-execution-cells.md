@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop; 02 — Continue interactive commands across prompts (presentation deltas).
+**Blocked by:** None — presentation prerequisites 01 and 02 are resolved.
 
 **Status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
 

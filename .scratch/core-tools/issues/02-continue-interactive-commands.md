@@ -4,7 +4,7 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
+**Blocked by:** None — presentation prerequisite 01 is resolved.
 
 **Status:** resolved — live command presentation belongs to its originating execution
 
