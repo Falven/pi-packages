@@ -7,6 +7,7 @@ import type {
 import { Type, type TSchema } from "typebox"
 import { createCommand, createStdin } from "./command.ts"
 import { execute } from "./execution.ts"
+import { createImage } from "./image.ts"
 import { ProcessSessions } from "./process.ts"
 
 type Declaration = { type: string; name: string; [key: string]: unknown }
@@ -31,12 +32,18 @@ function description(names: ReadonlySet<string>): string {
       .split("\n")
       .filter(
         (line) =>
-          !/^- `(?:image\(|store\(|load\(|notify\(|setTimeout\(|clearTimeout\(|yield_control\(|yield_time_ms`)/.test(
+          !/^- `(?:store\(|load\(|notify\(|setTimeout\(|clearTimeout\(|yield_control\(|yield_time_ms`)/.test(
             line,
-          ),
+          ) &&
+          (!line.startsWith("- `image(") || names.has("view_image")),
       )
       .join("\n"),
     "Only completed scripts are supported. Await every tool call before the script ends. Command calls may yield a process session for later input or polling. Retained execution is unavailable. Reaching the script yield deadline returns an error and cancels pending calls.",
+    ...(names.has("view_image")
+      ? [
+          "Image emission uses Pi's native processing. Requested image detail is not preserved by this host's provider conversion.",
+        ]
+      : []),
     ...sections.filter((section) =>
       names.has(section.match(/^### `([^`]+)`/)![1]!),
     ),
@@ -98,6 +105,30 @@ export default function coreTools(pi: ExtensionAPI): void {
       processes,
     ),
   )
+  const imageAvailable = () => {
+    const active = new Set(pi.getActiveTools())
+    return (
+      active.has("view_image") ||
+      (active.has("read") &&
+        pi
+          .getAllTools()
+          .some(
+            (tool) =>
+              tool.name === "read" && tool.sourceInfo.source === "builtin",
+          ))
+    )
+  }
+  const image = createImage(pi, imageAvailable)
+  pi.registerTool(image)
+  const syncImage = () => {
+    const current = pi.getAllTools().find((tool) => tool.name === image.name)
+    if (!current || current.sourceInfo.path !== fileURLToPath(import.meta.url))
+      return
+    const exposure = imageAvailable() ? "codemode" : "hidden"
+    if (current.exposure !== exposure) pi.registerTool({ ...image, exposure })
+  }
+  pi.on("session_start", syncImage)
+  pi.on("before_agent_start", syncImage)
   pi.registerTool({
     name: execution.name,
     label: "Execute",
@@ -123,7 +154,12 @@ export default function coreTools(pi: ExtensionAPI): void {
                 names.has(tool.name)) ||
               (names.has("exec_command") &&
                 stock.has(tool.name) &&
-                ["bash", "grep", "find", "ls"].includes(tool.name)),
+                ["bash", "grep", "find", "ls"].includes(tool.name)) ||
+              (names.has("view_image") &&
+                (tool.name === "view_image" ||
+                  (names.has("exec_command") &&
+                    stock.has(tool.name) &&
+                    tool.name === "read"))),
           )
           .map((tool) => tool.name),
       }
@@ -133,6 +169,7 @@ export default function coreTools(pi: ExtensionAPI): void {
         args.input,
         ctx,
         signal ? AbortSignal.any([signal, lifetime.signal]) : lifetime.signal,
+        pi,
       )
     },
   })
@@ -141,11 +178,7 @@ export default function coreTools(pi: ExtensionAPI): void {
       tools?: Declaration[]
       input?: Record<string, unknown>[]
     }
-    if (!payload.tools) return
-    const selected = payload.tools.filter(
-      (tool) => tool.name === execution.name,
-    )
-    if (!selected.length) return
+    const selected = payload.tools?.some((tool) => tool.name === execution.name)
     let inserted = false
     const rawCalls = new Set<string>()
     const retained = new Map(
@@ -194,20 +227,25 @@ export default function coreTools(pi: ExtensionAPI): void {
       }
       return item
     })
+    if (!selected && rawCalls.size === 0) return
     return {
       ...payload,
       ...(input ? { input } : {}),
-      tools: payload.tools.flatMap((tool) => {
-        if (tool.name !== execution.name) return [tool]
-        if (inserted) return []
-        inserted = true
-        return [
-          {
-            ...contract.namespace,
-            tools: [{ ...execution, description: tool["description"] }],
-          },
-        ]
-      }),
+      ...(payload.tools
+        ? {
+            tools: payload.tools.flatMap((tool) => {
+              if (tool.name !== execution.name) return [tool]
+              if (inserted) return []
+              inserted = true
+              return [
+                {
+                  ...contract.namespace,
+                  tools: [{ ...execution, description: tool["description"] }],
+                },
+              ]
+            }),
+          }
+        : {}),
     }
   })
 }

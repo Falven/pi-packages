@@ -80,7 +80,18 @@ test("the outgoing request declares the frozen raw execution contract", async (t
   )
   assert.doesNotMatch(
     declared.description,
-    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|view_image)`/,
+    /`(?:wait|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch)`/,
+  )
+  assert(
+    declared.description.includes(
+      frozen.split("### `view_image`\n")[1].split("\n### `")[0],
+    ),
+  )
+  assert.match(declared.description, /`image\(/)
+  assert(
+    declared.description.includes(
+      frozen.split("### `write_stdin`\n")[1].split("\n### `")[0],
+    ),
   )
   assert.match(declared.description, /completed scripts/i)
   assert.equal(
@@ -89,7 +100,10 @@ test("the outgoing request declares the frozen raw execution contract", async (t
     ),
     false,
   )
-  assert(request.tools.some((tool) => tool.name === "read"))
+  assert.equal(
+    request.tools.some((tool) => tool.name === "read"),
+    false,
+  )
 })
 
 test("raw execution runs a real command and retains its raw call in the next request", async (t) => {
@@ -306,6 +320,51 @@ test("explicit selections remain authoritative for direct and nested tools", asy
   }
 })
 
+test("deselecting execution preserves raw history and unrelated calls", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  await writeFile(join(host.directory, "foreign.txt"), "native-content")
+  host.queueResponse(
+    ...functionCall("read", { path: "foreign.txt" }, "foreign"),
+  )
+  host.queueResponse(
+    ...call(
+      'text((await tools.exec_command({cmd: "printf retained-raw-input", login: false})).output);',
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Retain a raw call and an unrelated native call")
+  const request = host.requests.at(-1) as unknown as {
+    input: Record<string, unknown>[]
+  }
+  const calls = request.input.filter((item) =>
+    ["call_one", "call_foreign"].includes(String(item["call_id"])),
+  )
+  assert.equal(calls.length, 4)
+  assert(calls.some((item) => item["type"] === "custom_tool_call"))
+  assert(calls.some((item) => item["type"] === "custom_tool_call_output"))
+  const retained = structuredClone(host.session.messages)
+  for (const tools of [["read"], []]) {
+    host.session.setActiveToolsByName(tools)
+    host.queueResponse(completed)
+    await host.session.prompt("Use only the remaining selection")
+    const next = host.requests.at(-1) as unknown as {
+      input: Record<string, unknown>[]
+      tools?: { name: string }[]
+    }
+    assert.deepEqual(next.tools?.map((tool) => tool.name) ?? [], tools)
+    assert.deepEqual(
+      next.input.filter((item) =>
+        ["call_one", "call_foreign"].includes(String(item["call_id"])),
+      ),
+      calls,
+    )
+    assert.deepEqual(host.session.messages.slice(0, retained.length), retained)
+  }
+})
+
 test("excluded or extension-owned command tools cannot be bypassed through execution", async (t) => {
   for (const mode of ["excluded", "overridden"] as const) {
     await t.test(mode, async (caseContext) => {
@@ -334,7 +393,9 @@ test("excluded or extension-owned command tools cannot be bypassed through execu
         },
       })
       host.queueResponse(
-        ...call("text(ALL_TOOLS); text(typeof tools.exec_command);"),
+        ...call(
+          'text(ALL_TOOLS.filter(({name}) => name === "exec_command")); text(typeof tools.exec_command);',
+        ),
       )
       host.queueResponse(completed)
       await host.session.prompt("Keep the selected tools")
