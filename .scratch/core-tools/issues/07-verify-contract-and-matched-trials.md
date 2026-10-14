@@ -1,12 +1,27 @@
 # 07: Verify the complete contract and matched model trials
 
-**What to build:** Establish the selected core toolset's conformance through complete request/result evidence, then compare task behavior in matched live-model trials with explicit controls and limitations.
+**What to build:** Verify the completed presentation delta, its bounded live behavior and preserved model contract, and record the exact checks and remaining limits without relabeling earlier evidence.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependency:** [06 — Preserve complete workflows in mixed Pi sessions](06-verify-mixed-native-workflows.md), resolved.
+**Blocked by:** 06 — Preserve complete workflows in mixed Pi sessions (presentation delta).
 
-**Status:** resolved — bounded core comparison complete at `c2adc1b`; native image and public-host limits remain explicit
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Run all affected core-package checks, type checking, lint, formatting, and relevant existing integration checks. Verify the outgoing declarations, input/result encoding, hook redaction, and collection contract are unchanged by presentation.
+- [ ] Verify compact and expanded cards, early pipe/PTY output, origin ownership across cells, invisible retained journals, terminal-status precedence, late failures, no automatic alerts, and bounded large/mixed output through the approved seam.
+- [ ] Compare presentation-enabled completed calls and live output with the completed core baseline without model latency. Record bounded buffer/history behavior, no display polling or extra tool calls, native refresh batching, cleanup, and any material regression.
+- [ ] Run a configured Pi terminal smoke for live output, expansion, continuation, and reload where the terminal is available. State any physical-terminal or configured-runtime validation gap explicitly rather than treating source inspection or a controlled host as equivalent.
+- [ ] Complete independent standards and spec reviews of the integration-branch delta and fix all actionable findings. Preserve the original seven tickets’ historical evidence and mark each new delta resolved only after its own acceptance is met or an explicit permitted verification limit is recorded.
+- [ ] Retain existing matched live-model results under their original revisions. Repeat affected deterministic contract checks; only rerun broader live-model trials if the agent interface or execution behavior changes. Do not add extra reports, source-product names, or runtime dependencies.
+
+## Completed baseline
+
+**Historical status:** resolved — bounded core comparison complete at `c2adc1b`; native image and public-host limits remain explicit
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Run the accumulated slice checks and close any missing selected-contract cases. Preserve the source capture identity and the separate scoped fixture identity.
 - [x] Compare actual outgoing names, namespaces, descriptions, grammar, schemas, defaults, optional fields, argument encoding, results, errors, truncation, and image content. Assert the absence of excluded tools and helper overloads.

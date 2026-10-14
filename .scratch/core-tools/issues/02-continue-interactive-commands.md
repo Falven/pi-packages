@@ -1,12 +1,27 @@
 # 02: Continue interactive commands across prompts
 
-**What to build:** Start a command that remains running, receive its process session identifier, and continue it through input or polling on later calls and ordinary prompts in the same extension session.
+**What to build:** Stream a command’s output into its originating execution card before command or input calls return, and keep that command’s status and accumulated output there across later input and collection calls.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
+**Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
 
-**Status:** resolved — process continuation uses shared asynchronous output storage
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Observe existing pipe and PTY output and lifecycle events to update command presentation while a tool call is pending and after it returns a process handle. A handle means running; later completion, cancellation, launch failure, and nonzero exit update the originating command without another tool call.
+- [ ] Preserve the command’s stable originating operation and effective directory across prompts and cells. Input and collection from another execution may describe their own action but must not duplicate or move the command output.
+- [ ] Keep live display independent of process and cell collection cursors, token budgets, cutoff boundaries, return timing, and errors. Later model calls must still receive the expected new output exactly once under the existing contract.
+- [ ] Reuse native refresh batching with no display-driven polling, hidden collection, extra tool dispatch, or model-context messages. Live output may precede result hooks; normal returned results remain hook-processed and must not restore removed content.
+- [ ] Bound retained display output and incremental history writes, preserve output order and trailing output, show omissions, and release session-owned presentation observers on cleanup without prematurely stopping independent process sessions.
+- [ ] Demonstrate early output with synchronized real pipe and PTY producers at the approved host seam, then completion without polling, later input from another execution, redaction timing, and unchanged model collection. Cover large output and cancellation without introducing a second harness.
+
+## Completed baseline
+
+**Historical status:** resolved — process continuation uses shared asynchronous output storage
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Expose and execute the captured `write_stdin` contract through the existing orchestration and public dispatch path.
 - [x] Support both pipes and an explicitly requested PTY, with accurate input delivery, output, completion status, and process session identifier behavior.

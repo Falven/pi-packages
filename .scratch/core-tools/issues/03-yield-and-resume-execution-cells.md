@@ -1,12 +1,27 @@
 # 03: Yield and resume execution cells
 
-**What to build:** Let JavaScript execution yield output while it continues, then use `functions.wait` to collect new output, completion, or termination. Keep explicit stored values available across executions in the same extension session.
+**What to build:** Keep execution progress, accumulated readable output, and late failures in the originating card across yields and waits, and recover the latest recorded outcome after reload or branch changes.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies (resolved):** 01 — Execute a command through the complete model loop; 02 — Shared asynchronous output storage for commands and cells.
+**Blocked by:** 01 — Execute a command through the complete model loop; 02 — Continue interactive commands across prompts (presentation deltas).
 
-**Status:** resolved — focused and configured lifecycle checks verified; diagnostic performance comparison recorded for ticket 07
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Use public renderer invalidation to update an originating execution card after its initial result returns. Waiting reports its own collection, termination, cancellation, or error status without duplicating operation output; model-facing waiting behavior is unchanged.
+- [ ] Distinguish cell settlement, process lifecycle, child tool completion, and final collection. Cell removal must not turn an already recorded terminal result into interrupted or unknown.
+- [ ] Reconcile ordered retained records on the active branch by originating session, call, and operation. Later terminal records override earlier running records; ordinary journal entries remain invisible. Restore available details after reload, resume, and branch changes without recreating live resources or attributing older work to a newer request.
+- [ ] Show late script and command failures in their original card and retain them even without a later wait. Display must not consume results available for later continuation or create automatic failure notifications or unsolicited turns; keep explicitly invoked notifications unchanged.
+- [ ] Handle older or incomplete records honestly using available data and interrupted or unknown status only when no terminal outcome or live state establishes the result. Do not fabricate missing output or rerun historical operations.
+- [ ] Verify yield → later operation → wait, cancelled waits, explicit termination, interleaved cells, later prompts, live independent processes, late failure without waiting, successful collection, and retained restoration through the approved host seam. Keep bounded state and unchanged provider results.
+
+## Completed baseline
+
+**Historical status:** resolved — focused and configured lifecycle checks verified; diagnostic performance comparison recorded for ticket 07
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Probe public dispatch after the parent returns and during a later prompt with configured companions. Verify hook blocking, argument changes, result redaction, explicit cancellation, dynamic callable selection, custom-entry rendering/model exclusion, and notification timing. Record native identity/history limitations as accepted differences.
 - [x] Expose the captured `functions.wait` declaration, schema, defaults, and string cell identifier in the actual provider request. Preserve the distinction from numeric command-process identifiers.

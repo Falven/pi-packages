@@ -1,12 +1,25 @@
 # 05: Return local images through Pi's image pipeline
 
-**What to build:** Let the model read a local image through the selected image tool, emit it from JavaScript, and receive the image in the next request while Pi's blocking and normalization settings remain effective.
+**What to build:** Show readable image operations and native image output in the originating execution card while preserving blocking, normalization, result hooks, terminal visibility, and the existing model image contract.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
+**Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
 
-**Status:** resolved — image slice; native detail limitation remains
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Present image operation path, status, and readable errors within the parent card, with native image display when permitted. Never use base64 data or a raw result envelope as ordinary card text.
+- [ ] Respect effective image blocking, normal image processing, hook removal, terminal image visibility, and native expansion controls. Keep model image settings independent from terminal visibility and do not recover discarded image bytes through presentation metadata.
+- [ ] Keep mixed script text and image output readable, bounded, and in its originating execution. Retain available presentation metadata without duplicating full image payloads into each journal entry or altering model content boundaries.
+- [ ] Verify valid, blocked, missing, and hook-redacted image outcomes at the approved host seam, including terminal image preferences and the next provider request. Preserve the recorded native detail and normalization limitations.
+
+## Completed baseline
+
+**Historical status:** resolved — image slice; native detail limitation remains
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Expose the captured `view_image` parameters and result shape: local filesystem path, default high detail or requested original detail, returned detail, and base64 data URL. Resolve relative paths in the owning context.
 - [x] Support the selected `image` helper's data-URL and ordinary result-object forms and explicit-detail override. Add no network URL support, protocol image metadata, audio, or generated-image surface.

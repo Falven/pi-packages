@@ -1,12 +1,25 @@
 # 04: Apply file patches through native dispatch
 
-**What to build:** Let the model submit a patch through JavaScript orchestration, apply the requested local file changes, and receive the verified patch result in the next request while preserving Pi's file coordination and interception.
+**What to build:** Show readable patch actions, affected files, and actual success or failure inside the originating execution card while preserving real file effects and the existing returned patch contract.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies (resolved):** 01 — Execute a command through the complete model loop.
+**Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
 
-**Status:** resolved — patch slice; runtime evidence limits recorded below
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Show compact patch action/status and expanded readable file-change outcomes within the parent card, using effective input after argument hooks and actual execution outcomes. Do not display JavaScript orchestration or raw result framing.
+- [ ] Represent creation, update, move, deletion, blocking, validation failure, and partial runtime failure accurately; never infer a successful file change merely from requested patch text.
+- [ ] Retain bounded presentation details through the existing public history mechanism while preserving raw input, result hooks, file coordination, cancellation, and exact model-visible patch results. Do not add a new diff viewer or parse arbitrary shell commands.
+- [ ] Use red-before-green real-host cases with temporary files to verify visible outcomes alongside actual file contents and the subsequent model request, including an argument replacement and a redacted result. Keep changes limited to this package.
+
+## Completed baseline
+
+**Historical status:** resolved — patch slice; runtime evidence limits recorded below
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Expose the captured raw-string `apply_patch` interface through the selected nested tools and preserve the model-facing declaration.
 - [x] Establish patch grammar, matching, returned change information, errors, validation order, and partial-failure behavior using the frozen declaration and supplemental runtime observations, with their different provenance recorded below.

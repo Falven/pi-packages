@@ -1,12 +1,27 @@
 # 06: Preserve complete workflows in mixed Pi sessions
 
-**What to build:** Use commands, continued execution, patches, and images together in normal Pi sessions while preserving existing extensions, user choices, native history, and lifecycle behavior.
+**What to build:** Verify command, continuation, patch, and image presentation together with normal Pi lifecycle and configured companions, keeping unrelated content and the agent interface intact.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies (resolved):** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi's image pipeline.
+**Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi’s image pipeline (presentation deltas).
 
-**Status:** resolved — configured controlled native-host workflow verified at `f415bae`; matched live-model verification is recorded in ticket 07
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Exercise mixed operations and consecutive calls using the existing real-host fixture with the configured companion setup. Parent cards own nested output; invisible routine entries add no standalone rows while unrelated notices and final responses remain intact.
+- [ ] Verify rendering during streaming, work after yielding and during a later prompt, input from another execution, late failures, and waits with unchanged model result collection and hook handling.
+- [ ] Verify reload, resume, fork or branch selection, shutdown, cancellation, and retained history. Later terminal records must win; old work must not acquire the active request’s identity or restore workers and processes.
+- [ ] Check native themes, image preferences, manual/global expansion, and terminal-width behavior. Generic extension labels and native tool shells remain unchanged.
+- [ ] Keep all implementation and test changes within the tool package or the minimal existing host-fixture seam it owns. Pi source and every chat-package correction are explicitly out of scope, including its work-folding and insertion-identity defects.
+- [ ] Run the configured-runtime smoke available through the existing host seam. Record exact runtime versions and pre-existing companion incompatibilities separately; do not alter unrelated packages to make a suite pass.
+
+## Completed baseline
+
+**Historical status:** resolved — configured controlled native-host workflow verified at `f415bae`; matched live-model verification is recorded in ticket 07
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Demonstrate a mixed workflow that inspects a project, changes a file, validates the change, and inspects a local image through the selected toolset.
 - [x] Verify normal package loading and reloading, activation in an existing conversation, and explicit tool inclusions/exclusions. Distinguish hidden declarations from callable-tool access and preserve historical calls.

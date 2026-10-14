@@ -1,12 +1,27 @@
 # 01: Execute a command through the complete model loop
 
-**What to build:** Load the core toolset normally, let the model submit a short command through raw JavaScript execution, run the command in the owning Pi context, and deliver the processed result in the next model request. Establish the public integration and fixed contract foundation used by the remaining slices.
+**What to build:** Add a compact native execution card for a completed command, with readable command, effective directory, output, and exit status while preserving the original model interaction and retained source.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Dependencies:** None.
+**Blocked by:** None (can start immediately).
 
-**Status:** resolved — completed command slice; final contract verification is recorded in ticket 07
+**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+
+## Presentation delta
+
+- [ ] Register parent call/result renderers for execution and waiting using native components, themes, expansion controls, and terminal-width utilities. Show a compact summary and status by default; expanded execution shows operations and readable results, never orchestration source or transport envelopes.
+- [ ] Carry stable operation identity, effective command context after settings and argument hooks, and processed results through tool-owned presentation details and complete pending updates. Keep nested operations in their parent execution card; do not rely on native nested-call IDs or independent child transcript rows.
+- [ ] Preserve original source and transport results in retained history and leave model declarations, result content, encoding, hook processing, and output collection unchanged. Returned presentation must respect hook edits instead of recovering removed results.
+- [ ] Retain compact incremental presentation records through public entries and make routine activity entries invisible in the chat view. Completed command presentation remains recoverable from available history; no separate history store or chat-package changes.
+- [ ] Keep command errors, script errors before any child, and script-emitted text readable. Distinguish command exit status from script success. Bound presentation data and show omissions using display-cell-aware clipping and wrapping.
+- [ ] Use the approved real-host seam for red-before-green checks of compact/expanded command cards, hook changes and redaction, retained original content, invisible routine records, and unchanged next model request. Existing callers and selected core behavior remain valid.
+
+## Completed baseline
+
+**Historical status:** resolved — completed command slice; final contract verification is recorded in ticket 07
+
+The following criteria and evidence describe the previously completed core contract. This revision supersedes its visible routine-journal presentation; it does not authorize changes to Pi or the chat package.
 
 - [x] Create the normal self-contained package with the approved identifier and public extension entry point. Preserve the approved naming restriction and avoid extra documentation or runtime application dependencies.
 - [x] Freeze the selected declarations and instructions from the identified source capture, preserving the approved omissions and recording the scoped fixture separately from the complete capture. Do not silently substitute current live declarations if the frozen source is unavailable.
