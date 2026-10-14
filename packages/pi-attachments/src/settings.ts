@@ -19,7 +19,9 @@ export type ThumbnailSize = (typeof sizes)[keyof typeof sizes]
 
 function readSettings(path: string): Record<string, unknown> | undefined {
   try {
-    const value: unknown = JSON.parse(readFileSync(path, "utf8"))
+    const value: unknown = JSON.parse(
+      readFileSync(path, "utf8").replace(/^\uFEFF/, ""),
+    )
     if (!value || typeof value !== "object" || Array.isArray(value))
       throw new Error("Expected a settings object")
     return value as Record<string, unknown>

@@ -652,7 +652,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
   }
 
   pi.registerCommand("attachments", {
-    description: "Preview, restore inline, or remove draft attachments",
+    description:
+      "Preview, restore inline, remove attachments, or change settings",
     handler: (_args, ctx) => attachments(ctx),
   })
   pi.registerCommand("attach", {
