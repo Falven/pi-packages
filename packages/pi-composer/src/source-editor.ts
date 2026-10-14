@@ -292,7 +292,8 @@ export class SourceEditor extends CustomEditor {
     text = text.replace(/\r\n?/g, "\n")
     const current = this.getText()
     if (text === current) {
-      this.commit({ ...this.draft }, undefined, "replacement")
+      this.draft = withIdentity({ ...this.draft }, {})
+      this.onChange?.(current, "replacement")
       return
     }
     if (!text) this.onDraftClear?.(current)

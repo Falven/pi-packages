@@ -29,7 +29,7 @@ test("public editor identity follows composer undo and redo across identical cap
   assert.notStrictEqual(host.ui.getEditorTextIdentity(), second)
 })
 
-test("public same-text draft replacement gets a distinct undoable identity", async (t) => {
+test("public same-text draft replacement changes identity without adding an undo step", async (t) => {
   const host = await openHost(t)
   host.ui.setEditorText("draft")
   await host.key("\x1b[D")
@@ -40,12 +40,12 @@ test("public same-text draft replacement gets a distinct undoable identity", asy
   assert.notStrictEqual(after, before)
   assert.equal(host.ui.getEditorText(), "draft")
 
-  await host.key("\x1b[122;9u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), before)
-  assert.equal(host.ui.getEditorText(), "draft")
-  await host.key("\x1b[122;10u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), after)
-
   await host.key("!")
   assert.equal(host.ui.getEditorText(), "draf!t")
+
+  await host.key("\x1b[122;9u")
+  assert.strictEqual(host.ui.getEditorTextIdentity(), after)
+  assert.equal(host.ui.getEditorText(), "draft")
+  await host.key("\x1b[122;9u")
+  assert.equal(host.ui.getEditorText(), "")
 })

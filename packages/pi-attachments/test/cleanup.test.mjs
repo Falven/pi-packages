@@ -120,7 +120,7 @@ test("native cleanup reclaims abandoned image preparation bytes only after recov
   const { host, bytes, draft, snapshot, original, abandoned, repair } =
     await failedPreparation(t)
   repair()
-  assert.match(host.render(), /Temporary image capture write failure/)
+  assert.match(host.render(), /Temporary\s+image\s+capture\s+write\s+failure/)
   const sizes = await Promise.all(
     abandoned.map(async (path) => (await stat(path)).size),
   )
@@ -417,7 +417,7 @@ test("an image recovery record remains readable after a late write failure, retr
   await host.attachFile(source)
   const draft = host.ui.getEditorText()
   await host.runtime.session.prompt(draft)
-  assert.match(host.render(), /Recovery metadata flush failed/)
+  assert.match(host.render(), /Recovery\s+metadata\s+flush\s+failed/)
   assert.ok(earlier)
   const incoming = earlier.text.match(
     /\[Attachment: input-image-1\.png\]\(<([^>]+)>\)/,
