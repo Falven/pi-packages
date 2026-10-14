@@ -225,9 +225,9 @@ importers:
         version: 1.0.2
 
   packages/pi-goal:
-    dependencies:
+    devDependencies:
       '@earendil-works/pi-coding-agent':
-        specifier: ^1.0.2
+        specifier: 1.0.2
         version: 1.0.2(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)
 
   packages/pi-skill-references:
