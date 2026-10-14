@@ -77,8 +77,12 @@ type NativeState = {
 type NativeEditor = PromptEditor & {
   state: NativeState
   pastes: Map<number, string>
-  undoStack: { pop(): { state: NativeState } | undefined }
+  undoStack: {
+    stack: { state: NativeState }[]
+    pop(): { state: NativeState } | undefined
+  }
   historyIndex: number
+  historyDraft: NativeState | null
   lastAction: unknown
   undo(): void
   navigateHistory(direction: number): void
@@ -325,7 +329,7 @@ export function registerEditor(
 ): void {
   let dispose: (() => void) | undefined
   const originals = new WeakMap<object, unknown>()
-  const identities = new Map<string, object>()
+  const nativeIdentities = new WeakMap<NativeEditor, Map<string, object>>()
   const unwrap = <T>(value: T): T =>
     typeof value === "function"
       ? ((originals.get(value) as T | undefined) ?? value)
@@ -375,6 +379,10 @@ export function registerEditor(
             ? (editor as ComposerEditor)
             : undefined
         const native = composer ? undefined : (editor as NativeEditor)
+        const identities = native
+          ? (nativeIdentities.get(native) ?? new Map<string, object>())
+          : undefined
+        if (native) nativeIdentities.set(native, identities!)
         const originalChange = unwrap(editor.onChange)
         const originalDraftChange = composer
           ? unwrap(composer.onDraftChange)
@@ -420,14 +428,29 @@ export function registerEditor(
             return aliases.get(token) ?? token
           }
           const token = (native!.state.piAttachmentsDraftId ??= randomUUID())
-          let value = identities.get(token)
-          if (!value) identities.set(token, (value = {}))
+          let value = identities!.get(token)
+          if (!value) identities!.set(token, (value = {}))
           return value
+        }
+
+        function pruneIdentities() {
+          if (!native) return
+          // Public callbacks do not reveal which drafts native undo/history still own.
+          const retained = new Set(
+            native.undoStack.stack.map(
+              ({ state }) => state.piAttachmentsDraftId,
+            ),
+          )
+          retained.add(native.state.piAttachmentsDraftId)
+          retained.add(native.historyDraft?.piAttachmentsDraftId)
+          for (const token of identities!.keys())
+            if (!retained.has(token)) identities!.delete(token)
         }
 
         if (native) {
           // Cloneable metadata follows the editor's existing undo and prompt-history snapshots.
           identity()
+          pruneIdentities()
           const pop = unwrap(native.undoStack.pop)
           wrap(
             native.undoStack,
@@ -560,7 +583,7 @@ export function registerEditor(
           if (native && !restoring) {
             native.state.piAttachmentsDraftId = randomUUID()
             if (restoredIdentity)
-              identities.set(
+              identities!.set(
                 native.state.piAttachmentsDraftId,
                 restoredIdentity,
               )
@@ -587,6 +610,7 @@ export function registerEditor(
             restoredIdentity ? "restore" : restoring ? "undo" : origin,
             replaced,
           )
+          pruneIdentities()
         }
         if (composer) {
           wrap(
@@ -781,6 +805,8 @@ export function registerEditor(
           },
           dispose() {
             stopped = true
+            if (signal.aborted) identities?.clear()
+            else pruneIdentities()
             for (const edit of pendingEdits) edit.operation?.cancel()
             pendingEdits.clear()
             for (const finish of idleWaits) finish()
