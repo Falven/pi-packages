@@ -24,7 +24,24 @@ import { continueList } from "./structures.ts"
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
 
-type Draft = { text: string; anchor: number; head: number }
+const textIdentity = Symbol("textIdentity")
+type Draft = {
+  text: string
+  anchor: number
+  head: number
+  [textIdentity]?: object
+}
+function identityOf(draft: Draft): object {
+  if (!draft[textIdentity])
+    Object.defineProperty(draft, textIdentity, { value: {} })
+  return draft[textIdentity]!
+}
+
+function withIdentity(draft: Draft, identity: object): Draft {
+  Object.defineProperty(draft, textIdentity, { value: identity })
+  return draft
+}
+
 type PendingEdit = { from: number; to: number; expected: string }
 export type DraftHistory = { draft: Draft; past: Draft[]; future: Draft[] }
 type EditKind = "typing" | "backspace" | "delete"
@@ -153,6 +170,10 @@ export class SourceEditor extends CustomEditor {
 
   override getText(): string {
     return this.draft.text
+  }
+
+  override getEditorTextIdentity(): object {
+    return identityOf(this.draft)
   }
 
   override invalidate(): void {
@@ -460,7 +481,10 @@ export class SourceEditor extends CustomEditor {
     this.promptIndex = -1
     this.promptDraft = undefined
     const time = Date.now()
-    if (next.text !== this.getText() && !transaction.recorded) {
+    if (
+      (next.text !== this.getText() || origin === "replacement") &&
+      !transaction.recorded
+    ) {
       if (
         !kind ||
         this.editGroup?.kind !== kind ||
@@ -473,7 +497,12 @@ export class SourceEditor extends CustomEditor {
       transaction.recorded = true
     }
     this.editGroup = kind ? { kind, time } : undefined
-    this.draft = next
+    this.draft = withIdentity(
+      next,
+      next.text === this.draft.text && origin !== "replacement"
+        ? identityOf(this.draft)
+        : {},
+    )
     try {
       this.changed(kind !== undefined, origin)
     } finally {
@@ -557,11 +586,14 @@ export class SourceEditor extends CustomEditor {
     this.revealCaret = true
     this.preferredCell = undefined
     this.editGroup = undefined
-    this.draft = {
-      ...this.draft,
-      head: position,
-      anchor: select ? this.draft.anchor : position,
-    }
+    this.draft = withIdentity(
+      {
+        ...this.draft,
+        head: position,
+        anchor: select ? this.draft.anchor : position,
+      },
+      identityOf(this.draft),
+    )
     this.completions.update()
     this.tui.requestRender()
   }
@@ -720,7 +752,10 @@ export class SourceEditor extends CustomEditor {
       this.revealCaret = true
       this.editGroup = undefined
       this.preferredCell = undefined
-      this.draft = { ...this.draft, anchor: 0, head: this.getText().length }
+      this.draft = withIdentity(
+        { ...this.draft, anchor: 0, head: this.getText().length },
+        identityOf(this.draft),
+      )
       this.completions.update()
       this.tui.requestRender()
       return
