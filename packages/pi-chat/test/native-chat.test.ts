@@ -1001,8 +1001,11 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
 
 test("native custom renderers keep equal occurrences distinct", async (t) => {
   const sendRef: { current?: () => void } = {}
+  const appendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
+    persistSession: true,
+    rows: 44,
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
@@ -1013,6 +1016,7 @@ test("native custom renderers keep equal occurrences distinct", async (t) => {
           "test.message",
           () => new Text("Repeated custom message", 0, 0),
         )
+        appendRef.current = () => pi.appendEntry("test.entry", { value: 1 })
         sendRef.current = () => {
           pi.appendEntry("test.entry", { value: 1 })
           pi.sendMessage(
@@ -1038,6 +1042,71 @@ test("native custom renderers keep equal occurrences distinct", async (t) => {
   assert.equal(entries.length, 2)
   assert.notEqual(entries[0]?.id, entries[1]?.id)
   assert.equal(host.requests.length, 0)
+
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Streaming answer" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    { pause: true },
+    {
+      event: { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+    },
+    done,
+    end,
+  )
+  await host.type("Stream beside the entry")
+  await host.key("\r")
+  await t.waitFor(async () =>
+    assert.match(await host.frame(), /Streaming answer/),
+  )
+  assert(appendRef.current)
+  appendRef.current()
+  await host.frame()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  const streamingFrame = screen()
+  assert.equal(streamingFrame.match(/Rendered entry/g)?.length, 2)
+  assert(
+    streamingFrame.lastIndexOf("Rendered entry") <
+      streamingFrame.indexOf("Streaming answer"),
+  )
+  host.resumeResponse()
+  await host.settled()
+  const sourceEntries = host.session.sessionManager
+    .getBranch()
+    .filter(
+      (entry) => entry.type === "custom" && entry.customType === "test.entry",
+    )
+  assert.equal(sourceEntries.length, 2)
+  assert.notEqual(sourceEntries[0]?.id, sourceEntries[1]?.id)
+  const source = JSON.stringify(sourceEntries)
+  await host.reload()
+  await host.frame()
+  assert.equal(screen().match(/Rendered entry/g)?.length, 2)
+  assert.equal(screen().match(/Repeated custom message/g)?.length, 2)
+  assert(
+    screen().lastIndexOf("Rendered entry") <
+      screen().indexOf("Streaming answer"),
+  )
+  assert.equal(
+    JSON.stringify(
+      host.session.sessionManager
+        .getBranch()
+        .filter(
+          (entry) =>
+            entry.type === "custom" && entry.customType === "test.entry",
+        ),
+    ),
+    source,
+  )
+  assert.equal(host.requests.length, 1)
 })
 
 test("native shell output remains a persisted standalone conversation row", async (t) => {
@@ -1161,48 +1230,59 @@ test("a prior fullscreen owner prevents activation without losing its root", asy
 
 for (const hook of ["getSelectionSourceLine", "getSelectionColumns"])
   test(`missing renderer.${hook} reports its name and restores native chat`, async (t) => {
-    const errors: string[] = []
-    let nativeRoot: unknown
-    let currentRoot: (() => unknown) | undefined
-    let restore: (() => void) | undefined
-    const host = await openNativeHost(t, {
-      extensionPaths: [chat],
-      onMount: (interactive) => {
-        const mode = interactive as unknown as {
-          fullscreenLayoutRoot: unknown
-          renderer: Record<string, Function | undefined>
-          showError(message: string): void
-        }
-        nativeRoot = mode.fullscreenLayoutRoot
-        currentRoot = () => mode.fullscreenLayoutRoot
-        const original = mode.renderer[hook]
-        Object.defineProperty(mode.renderer, hook, {
-          configurable: true,
-          writable: true,
-          value: undefined,
-        })
-        restore = () => {
-          mode.renderer[hook] = original
-        }
-        const showError = mode.showError
-        t.mock.method(mode, "showError", (message: string) => {
-          errors.push(message)
-          showError.call(mode, message)
-        })
-      },
-    })
-    restore?.()
-    assert(
-      errors.some((message) =>
-        message.includes(`Pi is missing renderer.${hook}()`),
-      ),
-    )
-    assert.equal(currentRoot?.(), nativeRoot)
-    await host.type("Native chat still works")
-    await host.key("\r")
-    await host.settled()
-    assert.match(await host.frame(), /Received\./)
-    assert.equal(currentRoot?.(), nativeRoot)
+    /* oxlint-disable eslint/no-await-in-loop -- Native capability probes share process-wide host hooks. */
+    for (const missing of hook === "getSelectionSourceLine"
+      ? [`renderer.${hook}`, "addCustomEntryToChat"]
+      : [`renderer.${hook}`]) {
+      const errors: string[] = []
+      let nativeRoot: unknown
+      let currentRoot: (() => unknown) | undefined
+      let restore: (() => void) | undefined
+      const host = await openNativeHost(t, {
+        extensionPaths: [chat],
+        onMount: (interactive) => {
+          const mode = interactive as unknown as {
+            fullscreenLayoutRoot: unknown
+            renderer: Record<string, Function | undefined>
+            showError(message: string): void
+          }
+          nativeRoot = mode.fullscreenLayoutRoot
+          currentRoot = () => mode.fullscreenLayoutRoot
+          const target = missing.startsWith("renderer.")
+            ? mode.renderer
+            : (mode as unknown as Record<string, Function | undefined>)
+          const name = missing.split(".").at(-1)!
+          const original = target[name]
+          Object.defineProperty(target, name, {
+            configurable: true,
+            writable: true,
+            value: undefined,
+          })
+          restore = () => {
+            target[name] = original
+          }
+          const showError = mode.showError
+          t.mock.method(mode, "showError", (message: string) => {
+            errors.push(message)
+            showError.call(mode, message)
+          })
+        },
+      })
+      restore?.()
+      assert(
+        errors.some((message) =>
+          message.includes(`Pi is missing ${missing}()`),
+        ),
+      )
+      assert.equal(currentRoot?.(), nativeRoot)
+      await host.type("Native chat still works")
+      await host.key("\r")
+      await host.settled()
+      assert.match(await host.frame(), /Received\./)
+      assert.equal(currentRoot?.(), nativeRoot)
+      await host.close()
+    }
+    /* oxlint-enable eslint/no-await-in-loop */
   })
 
 test("cleanup leaves a later fullscreen owner's replacement intact", async (t) => {
@@ -1211,11 +1291,14 @@ test("cleanup leaves a later fullscreen owner's replacement intact", async (t) =
   observed.notifications.length = 0
   observed.errors.length = 0
   let interactive: Parameters<typeof installReplacement>[0] | undefined
+  let customEntryMethod: unknown
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     settings: { fullscreenScrollbar: "always" },
     onMount: (mode) => {
       interactive = mode
+      customEntryMethod = (mode as unknown as { addCustomEntryToChat: unknown })
+        .addCustomEntryToChat
     },
   })
   await host.frame()
@@ -1228,6 +1311,11 @@ test("cleanup leaves a later fullscreen owner's replacement intact", async (t) =
   await host.close()
   assert.equal(ownedRoot(), observed.replacement)
   assert.equal(borrowed.scrollbar, "always")
+  assert.equal(
+    (interactive as unknown as { addCustomEntryToChat: unknown })
+      .addCustomEntryToChat,
+    customEntryMethod,
+  )
 })
 
 test("page navigation scrolls native chat while the composer stays usable", async (t) => {

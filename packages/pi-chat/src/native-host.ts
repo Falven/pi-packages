@@ -120,6 +120,7 @@ type NativeMode = ThoughtEnvironment & {
   renderSessionEntries(entries: Entry[], options?: unknown): void
   renderSessionItems(items: Iterable<unknown>, options?: unknown): void
   renderInitialMessages(): void
+  addCustomEntryToChat(entry: Entry): void
   addMessageToChat(message: Message, options?: unknown): void
   handleEvent(event: {
     type: string
@@ -2683,6 +2684,30 @@ export class NativeChatHost {
       return result
     })
     requireMethod(host.renderSessionItems, "renderSessionItems")
+    wrap("addCustomEntryToChat", (original) => (entry: Entry) => {
+      const owner =
+        this.source?.entry === entry ? this.source : this.forEntry(entry)
+      return this.withSource(owner, () => {
+        const children = host.chatContainer.children
+        const streamingIndex = host.streamingComponent
+          ? children.indexOf(host.streamingComponent)
+          : -1
+        const length = children.length
+        const result = original.call(host, entry as never)
+        // Pi inserts directly before the streaming assistant, bypassing addChild.
+        if (streamingIndex >= 0 && children.length > length) {
+          const component = children[streamingIndex]
+          if (
+            !component ||
+            !("entry" in component) ||
+            component.entry !== entry
+          )
+            throw new Error("pi-chat cannot associate Pi's custom entry")
+          this.recordNative(component)
+        }
+        return result
+      })
+    })
     wrap(
       "renderSessionEntries",
       (original) => (entries: Entry[], options?: unknown) => {

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Make the native-host fixture independent of companion extensions.
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Create the loadable pi-chat package with required-capability checks rather than a version allowlist; missing hooks or conflicting chat ownership prevent activation explicitly. Target Pi 1.1.0 and later, verify 1.1.0, and retain secondary coverage for 1.0.2.
 - [x] Acquire the host and install the scoped adapter before native history construction, including normal startup, reload, and session replacement.
@@ -22,10 +22,12 @@
 
 Correction delta:
 
-- [ ] Associate original native custom-entry components with their actual source entries on both ordinary append and direct insertion before a streaming assistant, during live use and native replay.
-- [ ] Preserve source identity separately from work membership, retain native renderer state and insertion order, and reuse the existing adapter's lifecycle and cleanup without an extra history rebuild or message changes.
-- [ ] Update existing native-host coverage to verify the observable live/replay behavior and source preservation; do not add test cases, files, or a separate test seam.
+- [x] Associate original native custom-entry components with their actual source entries on both ordinary append and direct insertion before a streaming assistant, during live use and native replay.
+- [x] Preserve source identity separately from work membership, retain native renderer state and insertion order, and reuse the existing adapter's lifecycle and cleanup without an extra history rebuild or message changes.
+- [x] Update existing native-host coverage to verify the observable live/replay behavior and source preservation; do not add test cases, files, or a separate test seam.
 
 The completed checklist and earlier results below describe the baseline. This ticket is reopened only for custom-entry association; it introduces no execution-journal parser or tool-package change. Work folding around unrelated notices is the dependent correction in ticket 07.
+
+The correction observes native custom-entry construction through the existing scoped adapter, retains the replay projection's source owner, and associates the original component inserted before a streaming assistant after checking its exact entry identity. Ordinary appends still use native `addChild`. Existing cases now cover equal rendered occurrences, actual `appendEntry` insertion during paused assistant streaming, native reload, retained entry preservation, a missing construction hook, and restoration after a later fullscreen owner takes over. The native chat file passes 33/33 on Pi 1.0.2; repository TypeScript and scoped lint, formatting, and diff checks pass. No test cases or files were added. These observable live/replay assertions also passed before the association fix: ticket 07 supplies the dependent fold regression that makes source association externally observable. Primary-runtime and combined acceptance remain integration checks.
 
 After the scrollbar and padding corrections, the chat suite passed 116/116 against each of Pi 1.1.0 and 1.0.2. Modified existing cases cover all scrollbar modes and live changes, native styles and pointer behavior, automatic hiding, gutter selection/copy, zero padding, live header updates, retained user/thought/tool padding, and cleanup after a later owner takes over. Existing rendering, source preservation, interaction, and lifecycle checks also pass. TypeScript, scoped lint, and formatting checks pass. Physical-terminal appearance remains pending under ticket 12.
