@@ -1,6 +1,6 @@
 # Attachments specification
 
-**Status:** ready-for-agent
+**Status:** implemented
 
 ## Problem Statement
 
@@ -233,13 +233,30 @@ Support for the configured external editor inside Create from text… is a later
 
 ## Further Notes
 
-The settings integration, unified Attach… flow, and automatic source-link capture described here include agreed changes awaiting implementation. Automatic destination replacement still requires an editing usability check. In Pi 1.0.2, the generic public editor contract has no targeted edit transaction or change-origin information. A delayed whole-draft replacement moves the caret to the end and creates a separate undo step in both editors; it also clears the composer's selection. Undo restores the source link without telling the change observer that this was history restoration. Safe automatic replacement therefore needs additional public editor support that preserves the existing draft and history contracts; no API shape is specified here.
+Work is integrated on the consumer branch `pi-attachments/integration` and the upstream branch `pi-attachments/host-integration`. The upstream work starts from `3daa20280f6a7c7cbe0935680c9a38fdc3863005`. Its package version is 1.2.0, but that version number does not identify a published build containing these changes. The new public interfaces remain unreleased. A clean installation using the consumer's pinned Pi 1.0.2 dependencies cannot run the complete integration; update the dependency floor only after an upstream release containing the required interfaces exists.
 
-The inspected implementation always resizes prepared attachment images, can render thumbnails when `terminal.showImages` is false, and omits `editorPaddingX` from its separate text-entry dialog. Pi already enforces `images.blockImages` at final delivery, but earlier attachment preparation can fail before that enforcement. The local fixes and later delivery integration address those separate gaps while preserving retained originals and normal image-policy enforcement.
+Pi owns named extension actions, effective bindings, and enum settings in its standard menu. Its public targeted-edit and text-identity contracts preserve the requesting editor state through asynchronous capture, undo, prompt history, and collapsed native pastes. A submission-preparation boundary receives the actual editor identity and awaits existing captures before ordinary input transformations. It does not infer a draft from matching text or create a snapshot on Send. Editor submissions preserve receipt order through preparation without waiting for provider responses; queued message identity remains intact for other extensions. A separate delivery boundary prepares images using current policy and can reject one submission while unrelated work continues. Local image-visibility, resize, width, and padding fixes remain independently usable.
 
-The thumbnail presets are settled. Their public upstream settings interface still needs engineering design; an extension-settings registration API is not available in the pinned Pi version or specified here. The same public-service constraint applies to configurable actions, safe automatic destination replacement, and isolated delivery failure. These integration requirements preserve the agreed user behavior.
+Markdown destinations decode named and numeric character references while preserving escaped ampersands, local file autolinks, and literal `%20` in ordinary paths. Generated destinations escape Markdown syntax. Historical `Attachment:` references, including renamed labels and image syntax, reuse an existing literal retained filename before normalizing the destination. That compatibility lookup occurs when the reference enters the draft; previews wait for it and redraws reuse its result.
 
-The [package README](../../packages/pi-attachments/README.md) documents paste and attachment actions, native clipboard use, previews, recovery, and cleanup. Work and acceptance evidence are tracked in the [composition tickets](../../.scratch/prompt-composition/issues/), [package merge ticket](../../.scratch/attachment-paste/issues/01-merge-paste-and-attachment-capture.md), [native clipboard ticket](../../.scratch/composer-keyboard/issues/06-preserve-configured-clipboard-routes.md), [clipboard-manager workflow ticket](../../.scratch/clipboard-paste/issues/01-document-and-verify-native-clipboard-paste.md), [preview-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md), [image-opening tickets](../../.scratch/image-opening/issues/), and [attachment audit fixes](../../.scratch/composition-audit/issues/01-preserve-attachment-ranges-and-preview.md).
+Build and install one coherent set of public packages from the upstream integration branch for local verification. The existing packaging tools keep direct and transitive Pi dependencies together. After hydrating the checkouts' locked dependencies, use:
+
+```sh
+cd /path/to/pi
+node scripts/pack-packages.mjs --out .artifacts/attachments --offline-model-data
+node scripts/use-local-packages.mjs --manifest .artifacts/attachments/manifest.json --consumer /path/to/pi-packages --package @earendil-works/pi-coding-agent --package-manager pnpm
+cd /path/to/pi-packages
+pnpm install --ignore-scripts --no-frozen-lockfile
+npm test -- --test-concurrency=4 --test-timeout=90000
+```
+
+The local package paths and lockfile overrides are verification inputs, not release metadata. Keep them out of commits. Do not substitute individually linked packages or claim that an unmodified published Pi version provides these interfaces.
+
+**Automated verification (2026-10-14):** Consumer commit `060fbc6` passed all 914 repository tests against the coherent public-package build from upstream commit `5bfbd59c9`, with no failures, cancellations, or skips. Consumer typecheck, lint, and formatting checks passed. The required upstream root check and focused editor, action, settings, preparation, and delivery suites passed; eight credential-dependent compaction tests were skipped. Standards and specification review findings are resolved. All six settings integration tickets are complete.
+
+Physical Ghostty graphics, clipboard gestures, and link activation remain pending. The available application-control boundary denied access to the terminal application, so automated public-host coverage does not establish those physical results.
+
+Current work and acceptance evidence are tracked in the [settings integration tickets](../../.scratch/pi-attachments-settings/issues/). Earlier evidence remains in the [composition tickets](../../.scratch/prompt-composition/issues/), [package merge ticket](../../.scratch/attachment-paste/issues/01-merge-paste-and-attachment-capture.md), [native clipboard ticket](../../.scratch/composer-keyboard/issues/06-preserve-configured-clipboard-routes.md), [clipboard-manager workflow ticket](../../.scratch/clipboard-paste/issues/01-document-and-verify-native-clipboard-paste.md), [preview-selection ticket](../../.scratch/composer-keyboard/issues/07-preserve-selection-through-native-ui.md), [image-opening tickets](../../.scratch/image-opening/issues/), and [attachment audit fixes](../../.scratch/composition-audit/issues/01-preserve-attachment-ranges-and-preview.md).
 
 See the [glossary](../../GLOSSARY.md) and [composer specification](pi-composer.md).
 
