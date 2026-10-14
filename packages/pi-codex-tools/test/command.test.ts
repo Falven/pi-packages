@@ -80,8 +80,14 @@ test("the outgoing request declares the frozen raw execution contract", async (t
   )
   assert.doesNotMatch(
     declared.description,
-    /`(?:wait|image|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|view_image|write_stdin)`/,
+    /`(?:wait|store|load|notify|setTimeout|clearTimeout|yield_control|apply_patch|write_stdin)`/,
   )
+  assert(
+    declared.description.includes(
+      frozen.split("### `view_image`\n")[1].split("\n### `")[0],
+    ),
+  )
+  assert.match(declared.description, /`image\(/)
   assert.match(declared.description, /completed scripts/i)
   assert.equal(
     request.tools.some((tool) =>
@@ -89,7 +95,10 @@ test("the outgoing request declares the frozen raw execution contract", async (t
     ),
     false,
   )
-  assert(request.tools.some((tool) => tool.name === "read"))
+  assert.equal(
+    request.tools.some((tool) => tool.name === "read"),
+    false,
+  )
 })
 
 test("raw execution runs a real command and retains its raw call in the next request", async (t) => {
@@ -379,7 +388,9 @@ test("excluded or extension-owned command tools cannot be bypassed through execu
         },
       })
       host.queueResponse(
-        ...call("text(ALL_TOOLS); text(typeof tools.exec_command);"),
+        ...call(
+          'text(ALL_TOOLS.filter(({name}) => name === "exec_command")); text(typeof tools.exec_command);',
+        ),
       )
       host.queueResponse(completed)
       await host.session.prompt("Keep the selected tools")

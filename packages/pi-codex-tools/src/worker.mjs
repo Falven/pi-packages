@@ -35,6 +35,20 @@ const createBridge = runInContext(
       post({ type: "exit" });
       throw finish;
     };
+    globalThis.image = (value, detail) => {
+      const url = typeof value === "string" ? value : value?.image_url;
+      if (typeof url !== "string" || url.length === 0)
+        throw "image expects a non-empty image URL string or an object with image_url and optional detail";
+      if (!url.startsWith("data:"))
+        throw "Tool call failed: invalid image output. Pass a base64 data URI instead";
+      const selected = detail ?? value?.detail;
+      if (selected !== undefined && selected !== null) {
+        if (typeof selected !== "string") throw "image detail must be a string when provided";
+        if (!["auto", "low", "high", "original"].includes(selected))
+          throw "image detail must be one of: auto, low, high, original";
+      }
+      post({ type: "image", url, detail: selected });
+    };
     globalThis.ALL_TOOLS = JSON.parse(definitions);
     globalThis.tools = Object.fromEntries(ALL_TOOLS.map(({ name }) => [name,
       (args) => new Promise((resolve, reject) => {

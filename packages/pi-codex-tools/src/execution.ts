@@ -2,6 +2,7 @@ import { Worker } from "node:worker_threads"
 import { OutputBuffer } from "./output.ts"
 import type {
   AgentToolResult,
+  ExtensionAPI,
   ExtensionToolContext,
 } from "@earendil-works/pi-coding-agent"
 
@@ -9,6 +10,7 @@ export async function execute(
   source: string,
   ctx: ExtensionToolContext,
   signal: AbortSignal | undefined,
+  pi: ExtensionAPI,
 ): Promise<AgentToolResult<undefined>> {
   const started = performance.now()
   const pragma = source.match(/^[ \t]*\/\/ @exec:([^\r\n]*)/)
@@ -31,7 +33,9 @@ export async function execute(
   const calls = new Set<Promise<unknown>>()
   let timer: NodeJS.Timeout | undefined
   const bounded = new OutputBuffer(maxTokens)
-  const tools = ctx.tools.filter((tool) => tool.name === "exec_command")
+  const tools = ctx.tools.filter((tool) =>
+    ["exec_command", "view_image"].includes(tool.name),
+  )
   const worker = new Worker(new URL("./worker.mjs", import.meta.url), {
     workerData: {
       source,
@@ -43,15 +47,16 @@ export async function execute(
     ],
   })
   const output: AgentToolResult<undefined>["content"] = []
+  let firstText: number | undefined
   let emitted = false
   let finished = false
   let failure: unknown
   const append = (text: string) => {
+    firstText ??= output.length
     if (emitted) bounded.append("\n")
     emitted = true
     bounded.append(text)
-    if (bounded.truncated) output.length = 0
-    else output.push({ type: "text", text })
+    if (!bounded.truncated) output.push({ type: "text", text })
   }
   try {
     await new Promise<void>((resolve, reject) => {
@@ -85,9 +90,21 @@ export async function execute(
           id: number
           name: string
           args: unknown
+          url: string
         }
         if (message.type === "text") {
           append(message.text)
+        } else if (message.type === "image") {
+          if (pi.getSettings().images?.blockImages)
+            append("Image reading is disabled.")
+          else {
+            const comma = message.url.indexOf(",")
+            output.push({
+              type: "image",
+              mimeType: message.url.slice(5, comma).split(";")[0]!,
+              data: message.url.slice(comma + 1),
+            })
+          }
         } else if (message.type === "done" || message.type === "exit") {
           finish()
         } else if (message.type === "error") {
@@ -99,17 +116,22 @@ export async function execute(
           calls.add(call)
           try {
             const outcome = await call
-            const text = outcome.result.content
-              .filter((part) => part.type === "text")
-              .map((part) => part.text)
-              .join("\n")
+            const blocked =
+              message.name === "view_image" &&
+              pi.getSettings().images?.blockImages
+            const text = blocked
+              ? "Image reading is disabled."
+              : outcome.result.content
+                  .filter((part) => part.type === "text")
+                  .map((part) => part.text)
+                  .join("\n")
             if (finished) {
               if (callSignal.aborted && text) append(text)
               return
             }
             const response = JSON.stringify({
               id: message.id,
-              ...(outcome.isError
+              ...(outcome.isError || blocked
                 ? { error: text }
                 : { result: outcome.result.structuredContent ?? text }),
             })
@@ -131,9 +153,14 @@ export async function execute(
     await worker.terminate()
     if (callSignal.aborted) await Promise.allSettled(calls)
   }
-  const content = bounded.truncated
-    ? [{ type: "text" as const, text: bounded.result().output }]
+  const content: AgentToolResult<undefined>["content"] = bounded.truncated
+    ? output.filter((part) => part.type === "image")
     : output
+  if (bounded.truncated)
+    content.splice(firstText!, 0, {
+      type: "text",
+      text: bounded.result().output,
+    })
   return failure
     ? {
         content: [
