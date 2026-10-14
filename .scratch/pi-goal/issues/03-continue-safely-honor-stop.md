@@ -20,3 +20,11 @@
 - [ ] Verify run boundaries, request counts, pending inputs, tool results, and persisted state through the real-session fixture. Do not equate a non-streaming snapshot with completion of all deferred actions. Perform the relevant actual-terminal Stop checks and leave any unperformed checks pending.
 - [ ] Capture continuation, objective editing, queue races, pause, and Stop exchanges in Phoenix. Separate actual-client observations from scripted runs and replays, verify retrieved records, and record supported behavior and unresolved differences here.
 - [ ] Leave Pi source and installed files untouched, preserve neutral terminology, run the relevant checks, and keep this ticket incomplete if required admission or Stop behavior remains unproven.
+
+## Admission feasibility evidence
+
+The six real-session probes in `packages/pi-goal/test/admission-boundaries.test.ts` passed against Pi 1.0.2 and 1.1.0. Retaining reload and ordinary disposal reject a stale nonce command without a second provider request. Removing the extension leaves the queued command without its handler: `/goal admission-1` becomes user input and starts a second request.
+
+An extension-owned `setImmediate` action can be cancelled before synchronous removal. An asynchronous settlement observer lets that action enter the host's deferred queue before shutdown, reproducing the same second request. `waitForIdle()` also resolves before asynchronous settlement ends and does not prevent this outcome.
+
+The missing public guarantee is cancellation or revalidation of a deferred prompt at admission after extension removal. These probes establish the failure of the queued-command approach and the tested timer and idle alternatives; they do not establish that every public design is impossible. No private integration is approved. Pause, clear, replacement, actual Stop, companion composition, and Phoenix captures remain unverified here. All acceptance criteria and ticket status remain pending.
