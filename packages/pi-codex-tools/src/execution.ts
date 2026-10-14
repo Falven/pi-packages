@@ -8,6 +8,7 @@ import {
   contentHash,
   type ExecutionDetails,
   type OperationPresentation,
+  type PatchDetails,
 } from "./presentation.ts"
 import { OutputStore, type OutputCursor } from "./output.ts"
 import type {
@@ -375,6 +376,7 @@ export class ExecutionCells {
     },
   ): Promise<void> {
     const child = `${cell.id}/${message.id}`
+    let patchDetails: PatchDetails | undefined
     const operation: OperationPresentation = {
       id: child,
       name: message.name,
@@ -405,6 +407,8 @@ export class ExecutionCells {
         {
           signal: cell.controller.signal,
           onUpdate: (partial) => {
+            if (message.name === "apply_patch")
+              patchDetails = partial.details as PatchDetails | undefined
             const context = partial.details as
               | { command?: string; cwd?: string }
               | undefined
@@ -440,6 +444,15 @@ export class ExecutionCells {
       )
       if (typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code
+      if (message.name === "apply_patch") {
+        const returned = outcome.result.details as PatchDetails | undefined
+        const details = returned?.contentHash ? returned : patchDetails
+        if (details?.contentHash === contentHash(outcome.result.content)) {
+          operation.patchChanges = details.patchChanges
+          if (details.patchOmitted) operation.patchOmitted = true
+          if (text === "{}") operation.output = ""
+        }
+      }
       operation.status =
         outcome.isError ||
         blocked ||
@@ -466,6 +479,10 @@ export class ExecutionCells {
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error)
       operation.status = "failed"
+      if (patchDetails?.contentHash === contentHash([{ type: "text", text }])) {
+        operation.patchChanges = patchDetails.patchChanges
+        if (patchDetails.patchOmitted) operation.patchOmitted = true
+      }
       operation.output = boundedPreview(text)
       this.update(cell)
       this.record(cell, {
