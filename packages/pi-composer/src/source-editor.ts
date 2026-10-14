@@ -291,7 +291,10 @@ export class SourceEditor extends CustomEditor {
     this.pendingSourceEdits.clear()
     text = text.replace(/\r\n?/g, "\n")
     const current = this.getText()
-    if (text === current) return
+    if (text === current) {
+      this.commit({ ...this.draft }, undefined, "replacement")
+      return
+    }
     if (!text) this.onDraftClear?.(current)
     let anchor = text.length
     let head = text.length
