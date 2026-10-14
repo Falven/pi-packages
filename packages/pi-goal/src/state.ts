@@ -205,6 +205,28 @@ export class GoalStore {
     return null
   }
 
+  stop(
+    goal: GoalIdentity,
+    status: "blocked" | "usageLimited",
+  ): StoredGoal | null {
+    const statuses =
+      status === "usageLimited" ? "'active', 'budgetLimited'" : "'active'"
+    const statement = this.database.prepare(`
+      UPDATE goals SET status = ?, updatedAt = ?
+      WHERE threadId = ? AND generation = ? AND status IN (${statuses})
+      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
+                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
+    `)
+    statement.setReadBigInts(true)
+    const row = statement.get(
+      status,
+      BigInt(Math.floor(Date.now() / 1000)),
+      goal.threadId,
+      goal.generation,
+    ) as GoalRow | undefined
+    return row ? decode(row) : null
+  }
+
   clear(goal: StoredGoal): void {
     this.database
       .prepare("DELETE FROM goals WHERE threadId = ? AND generation = ?")

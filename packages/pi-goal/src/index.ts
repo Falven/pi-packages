@@ -9,6 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import { GoalStore, goalResult, type Goal, type StoredGoal } from "./state.ts"
 import { createGoalStop } from "./stop.ts"
+import { GoalGuards } from "./guards.ts"
 import {
   GoalAccounting,
   reportedTokens,
@@ -142,15 +143,23 @@ export default function piGoal(pi: ExtensionAPI): void {
   let revision = 0
   let running = false
   let runSignal: AbortSignal | undefined
+  let manualCompaction: { signal: AbortSignal; complete: boolean } | undefined
   const accounting = new GoalAccounting()
+  const guards = new GoalGuards()
   const seenMessages = new Set<string>()
   let pendingAssistant = false
   let accountingFailed = false
   const usageFailures = new Set<string>()
   let budgetNotice: string | undefined
-  const calls = new Map<string, { executed: boolean }>()
+  const calls = new Map<string, { executed: boolean; current: boolean }>()
   let pending:
-    | { nonce: string; threadId: string; generation: string; revision: number }
+    | {
+        nonce: string
+        threadId: string
+        generation: string
+        revision: number
+        compactionSignal: AbortSignal | undefined
+      }
     | undefined
   let scheduled: NodeJS.Immediate | undefined
   const parameters = {
@@ -255,13 +264,17 @@ export default function piGoal(pi: ExtensionAPI): void {
     scheduled = undefined
     pending = undefined
   }
-  const requestContinuation = (ctx: ExtensionContext) => {
+  const requestContinuation = (
+    ctx: ExtensionContext,
+    compactionSignal?: AbortSignal,
+  ) => {
     if (
       lifetime.signal.aborted ||
       accountingFailed ||
       pending ||
       running ||
-      !ctx.isIdle() ||
+      (!ctx.isIdle() && !compactionSignal) ||
+      compactionSignal?.aborted ||
       ctx.hasPendingMessages() ||
       !ctx.sessionManager.getSessionFile()
     )
@@ -275,6 +288,7 @@ export default function piGoal(pi: ExtensionAPI): void {
         threadId: goal.threadId,
         generation: goal.generation,
         revision,
+        compactionSignal,
       }
       pending = candidate
       scheduled = setImmediate(() => {
@@ -298,7 +312,10 @@ export default function piGoal(pi: ExtensionAPI): void {
     present(ctx, goal)
     if (eligible(goal)) {
       stop.install(ctx)
-      requestContinuation(ctx)
+      requestContinuation(
+        ctx,
+        manualCompaction?.complete ? manualCompaction.signal : undefined,
+      )
     }
   }
   const checkpoint = (
@@ -309,12 +326,14 @@ export default function piGoal(pi: ExtensionAPI): void {
     if (lifetime.signal.aborted || !ctx.sessionManager.getSessionFile())
       return null
     try {
+      const previous = accounting.activeGoal
       const goal = accounting.checkpoint(
         storage(),
         ctx.sessionManager.getSessionId(),
         mode,
         keepBudgetLimited,
       )
+      if (previous && !accounting.activeGoal) guards.reset()
       if (goal) {
         accountingFailed = false
         present(ctx, goal)
@@ -330,6 +349,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     if (lifetime.signal.aborted) return
     const goal = read(ctx)
     if (goal?.status === "active") {
+      guards.reset()
       checkpoint(ctx)
       const updated = storage().update(goal, "paused")
       accounting.applyExternal(updated)
@@ -391,6 +411,7 @@ export default function piGoal(pi: ExtensionAPI): void {
         if (message.startsWith("cannot create a new goal")) throw error
         throw new Error(`failed to create goal: ${message}`, { cause: error })
       }
+      guards.reset()
       accounting.activate(goal)
       changed(ctx, goal)
       return goalResult(goal)
@@ -411,6 +432,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       checkpoint(ctx, args.status === "complete" ? "complete" : "stopped")
       const updated = storage().update(goal, args.status)
       accounting.clear()
+      guards.reset()
       changed(ctx, updated)
       return goalResult(updated, args.status === "complete")
     },
@@ -424,6 +446,13 @@ export default function piGoal(pi: ExtensionAPI): void {
       if (args.startsWith("--continue ")) {
         const candidate = pending
         if (!candidate || args !== `--continue ${candidate.nonce}`) return
+        if (candidate.compactionSignal) await ctx.waitForIdle()
+        if (
+          lifetime.signal.aborted ||
+          pending !== candidate ||
+          candidate.compactionSignal?.aborted
+        )
+          return
         pending = undefined
         if (
           candidate.revision !== revision ||
@@ -451,6 +480,7 @@ export default function piGoal(pi: ExtensionAPI): void {
                 tool.exposure === "codemode" ||
                 tool.exposure === "deferred"),
           )
+        guards.expectContinuation(candidate.nonce)
         pi.sendMessage(
           {
             customType: "goal.internal_context",
@@ -518,10 +548,20 @@ export default function piGoal(pi: ExtensionAPI): void {
         objective === undefined
       ) {
         if (!ctx.hasUI) throw new Error(`Use /goal ${action} <objective>`)
-        objective = await ctx.ui.editor(
-          "Goal objective",
-          action === "edit" ? goal?.objective : undefined,
-        )
+        const closed = Promise.withResolvers<undefined>()
+        const closeEditor = () => closed.resolve(undefined)
+        lifetime.signal.addEventListener("abort", closeEditor, { once: true })
+        try {
+          objective = await Promise.race([
+            ctx.ui.editor(
+              "Goal objective",
+              action === "edit" ? goal?.objective : undefined,
+            ),
+            closed.promise,
+          ])
+        } finally {
+          lifetime.signal.removeEventListener("abort", closeEditor)
+        }
         if (objective === undefined || !current()) return
       }
       if (action === "inspect") {
@@ -532,6 +572,7 @@ export default function piGoal(pi: ExtensionAPI): void {
           "info",
         )
       } else if (action === "create") {
+        guards.reset()
         checkpoint(ctx)
         const created = storage().create(
           threadId,
@@ -540,6 +581,7 @@ export default function piGoal(pi: ExtensionAPI): void {
         accounting.applyExternal(created)
         changed(ctx, created)
       } else if (action === "clear") {
+        guards.reset()
         checkpoint(ctx)
         if (goal) storage().clear(goal)
         accounting.clear()
@@ -559,6 +601,7 @@ export default function piGoal(pi: ExtensionAPI): void {
           throw new Error(
             "resume is available only for a paused, blocked, or usage-limited goal",
           )
+        guards.reset()
         checkpoint(ctx)
         const updated = storage().update(
           goal,
@@ -592,6 +635,13 @@ export default function piGoal(pi: ExtensionAPI): void {
     },
   })
 
+  pi.on("session_before_compact", (event) => {
+    if (event.reason === "manual") {
+      cancelContinuation()
+      manualCompaction = { signal: event.signal, complete: false }
+    }
+  })
+
   pi.on("session_start", (_event, ctx) => {
     if (lifetime.signal.aborted) return
     if (ctx.sessionManager.getSessionFile()) {
@@ -620,6 +670,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       cancelContinuation()
       accounting.clear()
       accounting.finish()
+      guards.reset()
       running = false
       runSignal = undefined
       calls.clear()
@@ -642,13 +693,16 @@ export default function piGoal(pi: ExtensionAPI): void {
   pi.on("agent_start", (_event, ctx) => {
     if (lifetime.signal.aborted) return
     cancelContinuation()
-    if (!running && ctx.sessionManager.getSessionFile())
-      accounting.start(read(ctx))
+    if (!running) {
+      guards.start(ctx.sessionManager.getEntries())
+      if (ctx.sessionManager.getSessionFile()) accounting.start(read(ctx))
+    }
     running = true
     runSignal = ctx.signal
   })
   pi.on("input", () => {
     cancelContinuation()
+    guards.cancelContinuation()
   })
   const recordUsage = (usage: Parameters<typeof reportedTokens>[0]) => {
     try {
@@ -677,11 +731,35 @@ export default function piGoal(pi: ExtensionAPI): void {
       seenMessages.add(id)
     }
   }
+  pi.on("session_compact", (event, ctx) => {
+    if (lifetime.signal.aborted) return
+    guards.committed(ctx.sessionManager.getEntries())
+    const entry = event.compactionEntry
+    if (entry.usage && !seenMessages.has(entry.id)) {
+      try {
+        recordUsage(entry.usage)
+      } finally {
+        seenMessages.add(entry.id)
+      }
+    }
+    if (!running) checkpoint(ctx)
+    if (event.reason === "manual" && manualCompaction) {
+      manualCompaction.complete = true
+      requestContinuation(ctx, manualCompaction.signal)
+    }
+  })
   pi.on("message_end", (event) => {
+    if (running) guards.message(event.message)
     if (event.message.role === "assistant") pendingAssistant = true
   })
+  pi.on("message_update", (event) => {
+    if (running) guards.update(event)
+  })
+  pi.on("provider_stream_event", (event) => {
+    if (running) guards.provider(event)
+  })
   pi.on("tool_execution_start", (event, ctx) => {
-    calls.set(callKey(event), { executed: false })
+    calls.set(callKey(event), { executed: false, current: running })
     // The message hook pipeline can replace usage. Its persisted entry is final.
     if (pendingAssistant) {
       pendingAssistant = false
@@ -695,6 +773,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     }
   })
   pi.on("turn_end", (event) => {
+    if (running) guards.turn(event.message)
     recordAssistant(event.messageEntryId, event.message)
     pendingAssistant = false
   })
@@ -707,6 +786,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     if (lifetime.signal.aborted) return
     const key = callKey(event)
     const call = calls.get(key)
+    guards.tool(running && call?.current === true)
     if (!call) return
     calls.delete(key)
     if (event.result.usage) recordUsage(event.result.usage)
@@ -730,15 +810,31 @@ export default function piGoal(pi: ExtensionAPI): void {
   })
   pi.on("agent_settled", (event, ctx) => {
     if (lifetime.signal.aborted) return
+    const aborted =
+      runSignal?.aborted || ("aborted" in event && event.aborted === true)
+    if (aborted) guards.reset()
     try {
+      guards.committed(ctx.sessionManager.getEntries())
+      const owner = accounting.currentGoal
+      const reason = aborted ? undefined : guards.finish()
       checkpoint(ctx)
+      if (reason && owner?.threadId === ctx.sessionManager.getSessionId()) {
+        const stopped = storage().stop(owner, reason)
+        accounting.clear()
+        guards.reset()
+        if (stopped) changed(ctx, stopped)
+      }
     } finally {
       accounting.finish()
       running = false
+      for (const call of calls.values()) call.current = false
     }
-    if (runSignal?.aborted || ("aborted" in event && event.aborted === true))
-      cancelContinuation()
+    if (aborted) cancelContinuation()
     else requestContinuation(ctx)
     runSignal = undefined
+  })
+
+  pi.on("agent_before_settle", (event) => {
+    if (running) guards.beforeSettle(event)
   })
 }
