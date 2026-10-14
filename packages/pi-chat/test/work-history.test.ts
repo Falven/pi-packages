@@ -54,17 +54,40 @@ const finish = (reason = "stop") => ({
 const done = { event: "[DONE]" }
 
 test("settled work hides the earlier identical text and retains the final occurrence", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 36 })
+  const appendNotice = { current: () => {} }
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 44,
+    extensionFactories: [
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.work-notice",
+          () => new Text("Native intervening notice", 0, 0),
+        )
+        appendNotice.current = () => pi.appendEntry("test.work-notice", {})
+      },
+    ],
+  })
   await writeFile(join(host.directory, "one.txt"), "native tool result")
   host.queueResponse(delta("Done", "one.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
+  host.queueResponse(delta("Done"), { pause: true }, finish(), done)
   await host.type("Do the work")
   await host.key("\r")
+  await t.waitFor(async () =>
+    assert.equal(((await host.frame()).match(/\bDone\b/g) ?? []).length, 2),
+  )
+  appendNotice.current()
+  host.resumeResponse()
   await host.settled()
 
   const collapsed = await host.frame()
   assert.match(collapsed, /Worked for \d+m \d+s ▶/)
   assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1)
+  assert.match(
+    collapsed,
+    /Worked for \d+m \d+s ▶[\s\S]*Native intervening notice[\s\S]*Done/,
+  )
+  assert.equal((collapsed.match(/Native intervening notice/g) ?? []).length, 1)
   assert.doesNotMatch(collapsed, /read one\.txt/)
   assert.match(collapsed, /Do the work/)
   assert.equal(host.requests.length, 2)
@@ -114,18 +137,48 @@ test("settled work hides the earlier identical text and retains the final occurr
   const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(expanded, /Worked for \d+m \d+s ▼/)
   assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
+  assert.match(
+    expanded,
+    /Done[\s\S]*Read files[\s\S]*Native intervening notice[\s\S]*Done/,
+  )
+  assert.equal((expanded.match(/Native intervening notice/g) ?? []).length, 1)
   assert.match(expanded, /▶ Read files/)
   assert.doesNotMatch(expanded, /read one\.txt/)
 
   await host.reload()
-  assert.match(await host.frame(), /Worked for 34m 49s ▶/)
+  const replayed = await host.frame()
+  assert.match(replayed, /Worked for 34m 49s ▶/)
+  assert.equal((replayed.match(/\bDone\b/g) ?? []).length, 1)
+  assert.match(
+    replayed,
+    /Worked for 34m 49s ▶[\s\S]*Native intervening notice[\s\S]*Done/,
+  )
 })
 
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
+  const appendFinalNotice = { current: () => {} }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 52,
     settings: { hideThinkingBlock: true },
+    extensionFactories: [
+      (pi) => {
+        pi.registerEntryRenderer(
+          "test.final-notice",
+          () => new Text("Notice after steering", 0, 0),
+        )
+        appendFinalNotice.current = () =>
+          pi.appendEntry("test.final-notice", {})
+        pi.registerEntryRenderer(
+          "test.steering-notice",
+          () => new Text("Notice before steering", 0, 0),
+        )
+        pi.on("tool_execution_end", (event) => {
+          if (event.toolCallId === "read-one.txt")
+            pi.appendEntry("test.steering-notice", {})
+        })
+      },
+    ],
   })
   const assertSteeringGap = (nextText: string) => {
     const lines = host.screenLines()
@@ -154,6 +207,7 @@ test("identical delivered steering and follow-up retain separate request relatio
   )
   host.queueResponse(
     delta("First answer", undefined, "Final reasoning"),
+    { pause: true },
     finish(),
     done,
   )
@@ -169,8 +223,17 @@ test("identical delivered steering and follow-up retain separate request relatio
   await host.session.steer("Same queued text")
   await host.session.followUp("Same queued text")
   host.resumeResponse()
+  await t.waitFor(async () => assert.match(await host.frame(), /First answer/))
+  appendFinalNotice.current()
+  host.resumeResponse()
   await host.settled()
 
+  const assertNoticeGap = () => {
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const answer = lines.findIndex((line) => line.includes("First answer"))
+    assert(answer > 0)
+    assert.match(lines[answer - 1]!, /Notice after steering/)
+  }
   const frame = await host.frame()
   assert.equal(host.requests.length, 5)
   assert.equal(
@@ -187,11 +250,21 @@ test("identical delivered steering and follow-up retain separate request relatio
     frame,
     /Original request[\s\S]*Worked for \d+m \d+s ▶[\s\S]*Same queued text[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Worked for \d+m \d+s ▶[\s\S]*Second answer/,
   )
+  assert.match(
+    frame,
+    /Worked for \d+m \d+s ▶[\s\S]*Notice before steering[\s\S]*Same queued text[\s\S]*First answer/,
+  )
+  assert.equal((frame.match(/Notice before steering/g) ?? []).length, 1)
+  assert.match(
+    frame,
+    /Same queued text[\s\S]*Notice after steering[\s\S]*First answer/,
+  )
+  assert.equal((frame.match(/Notice after steering/g) ?? []).length, 1)
   assert.match(frame, /Original request/)
   assert.match(frame, /First answer/)
   assert.match(frame, /Second answer/)
   assert.doesNotMatch(frame, /Before steering|After steering|Followup progress/)
-  assertSteeringGap("First answer")
+  assertNoticeGap()
 
   const row = host
     .screenLines()
@@ -207,7 +280,7 @@ test("identical delivered steering and follow-up retain separate request relatio
   assert.match(expanded, /After steering/)
   assert.match(
     expanded,
-    /Before steering[\s\S]*Same queued text[\s\S]*After steering[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Second answer/,
+    /Before steering[\s\S]*Notice before steering[\s\S]*Same queued text[\s\S]*After steering[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Second answer/,
   )
   assert.doesNotMatch(expanded, /Followup progress/)
   assertSteeringGap("After steering")
@@ -216,8 +289,13 @@ test("identical delivered steering and follow-up retain separate request relatio
   const replayed = await host.frame()
   assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
   assert.equal((replayed.match(/Same queued text/g) ?? []).length, 2)
+  assert.match(
+    replayed,
+    /Notice before steering[\s\S]*Same queued text[\s\S]*First answer/,
+  )
+  assert.equal((replayed.match(/Notice before steering/g) ?? []).length, 1)
   assert.match(replayed, /First answer|Second answer/)
-  assertSteeringGap("First answer")
+  assertNoticeGap()
 })
 
 test("without provider phase evidence work stays visible until the final stream settles", async (t) => {
@@ -1130,11 +1208,17 @@ test("compaction keeps certified source relationships for later tree navigation"
 })
 
 test("a standalone native message after the final keeps its source position", async (t) => {
+  const appendNotice = { current: () => {} }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 34,
     extensionFactories: [
       (pi) => {
+        pi.registerEntryRenderer(
+          "test.notice-only",
+          () => new Text("Notice without earlier work", 0, 0),
+        )
+        appendNotice.current = () => pi.appendEntry("test.notice-only", {})
         pi.registerMessageRenderer(
           "post-answer",
           () => new Text("Native post-answer notice", 0, 0),
@@ -1173,4 +1257,32 @@ test("a standalone native message after the final keeps its source position", as
   assert.match(frame, /Worked for \d+m \d+s ▶/)
   assert.match(frame, /Final before notice[\s\S]*Native post-answer notice/)
   assert.doesNotMatch(frame, /Earlier native work/)
+
+  host.queueResponse(
+    delta("Answer without earlier work"),
+    { pause: true },
+    finish(),
+    done,
+  )
+  await host.type("Only answer")
+  await host.key("\r")
+  await t.waitFor(async () =>
+    assert.match(await host.frame(), /Answer without earlier work/),
+  )
+  appendNotice.current()
+  host.resumeResponse()
+  await host.settled()
+  const later = await host.frame()
+  assert.equal((later.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  assert.match(
+    later,
+    /Final before notice[\s\S]*Native post-answer notice[\s\S]*Only answer[\s\S]*Notice without earlier work[\s\S]*Answer without earlier work/,
+  )
+  await host.reload()
+  const replayed = await host.frame()
+  assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  assert.match(
+    replayed,
+    /Final before notice[\s\S]*Native post-answer notice[\s\S]*Only answer[\s\S]*Notice without earlier work[\s\S]*Answer without earlier work/,
+  )
 })

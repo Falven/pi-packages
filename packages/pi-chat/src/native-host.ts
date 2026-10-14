@@ -1203,10 +1203,17 @@ export class NativeChatHost {
       }
       const body: Activity[] = []
       const final: Activity[] = []
+      const standaloneNotice = (item: Activity) =>
+        !item.work &&
+        !this.work.find(item.occurrence) &&
+        (item.occurrence?.entry?.type === "custom" ||
+          item.occurrence?.message?.role === "custom")
+      const retained = (item: Activity) =>
+        item.occurrence?.message?.role === "user" || standaloneNotice(item)
       for (; index < activities.length; index++) {
         const next = activities[index]!
         const nextWork = next.work ?? this.work.find(next.occurrence)
-        if (nextWork !== work) break
+        if (nextWork !== work && !standaloneNotice(next)) break
         if (
           final.length &&
           !this.work.isFinalMessage(next.occurrence ?? next.owner, work)
@@ -1216,19 +1223,22 @@ export class NativeChatHost {
         else body.push(next)
       }
       if (
-        body.some((item) => !(item.component instanceof Spacer)) &&
+        body.some(
+          (item) => !retained(item) && !(item.component instanceof Spacer),
+        ) &&
         final.length
       ) {
         work.header ??= new WorkHeader(this, work)
         result.push({ component: work.header, tool: false })
         if (this.work.expanded(work)) result.push(...body)
         else {
-          const users = body.filter(
-            (item) => item.occurrence?.message?.role === "user",
-          )
-          result.push(...users)
+          const visible = body.filter(retained)
+          result.push(...visible)
           // Split final parts omit the native assistant's leading spacer.
-          if (users.length && final[0]!.occurrence?.contentIndex !== undefined)
+          if (
+            visible.at(-1)?.occurrence?.message?.role === "user" &&
+            final[0]!.occurrence?.contentIndex !== undefined
+          )
             result.push({ component: work.header.spacing, tool: false })
         }
       } else result.push(...body)
