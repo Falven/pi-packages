@@ -6,14 +6,21 @@
 
 **Blocked by:** 01 — Execute a command through the complete model loop (presentation delta).
 
-**Status:** ready-for-agent — approved presentation delta; completed baseline retained below
+**Status:** resolved — approved image presentation delta; completed baseline retained below
 
 ## Presentation delta
 
-- [ ] Present image operation path, status, and readable errors within the parent card, with native image display when permitted. Never use base64 data or a raw result envelope as ordinary card text.
-- [ ] Respect effective image blocking, normal image processing, hook removal, terminal image visibility, and native expansion controls. Keep model image settings independent from terminal visibility and do not recover discarded image bytes through presentation metadata.
-- [ ] Keep mixed script text and image output readable, bounded, and in its originating execution. Retain available presentation metadata without duplicating full image payloads into each journal entry or altering model content boundaries.
-- [ ] Verify valid, blocked, missing, and hook-redacted image outcomes at the approved host seam, including terminal image preferences and the next provider request. Preserve the recorded native detail and normalization limitations.
+- [x] Present image operation path, status, and readable errors within the parent card, with native image display when permitted. Never use base64 data or a raw result envelope as ordinary card text.
+- [x] Respect effective image blocking, normal image processing, hook removal, terminal image visibility, and native expansion controls. Keep model image settings independent from terminal visibility and do not recover discarded image bytes through presentation metadata.
+- [x] Keep mixed script text and image output readable, bounded, and in its originating execution. Retain available presentation metadata without duplicating full image payloads into each journal entry or altering model content boundaries.
+- [x] Verify valid, blocked, missing, and hook-redacted image outcomes at the approved host seam, including terminal image preferences and the next provider request. Preserve the recorded native detail and normalization limitations.
+
+### Presentation verification
+
+- Ten native-host checks in `test/image-presentation.test.ts` cover effective argument changes, compact and expanded image status, readable paths/errors, mixed text, missing files, initial blocking, blocking enabled by a result hook, child redaction, parent image removal, parent text replacement, formatted child results, and truncated serialized image output. The initial checks reproduced the missing image summary and encoded-envelope preview; separate checks reproduced a missing policy-error message when script code caught that error and image bytes entering the journal after a result hook formatted the image envelope.
+- Native terminal image rendering consumes only the current processed parent content. A controlled Kitty-capability check verifies images with terminal visibility enabled, and its disabled counterpart keeps the same image in the next provider request without terminal image output. No image bytes are added to presentation details or routine activity records. Native format conversion preserves the image operation's metadata; image removal and mixed-text replacement invalidate stale presentation data.
+- Aggregate token truncation loses original text boundaries. If image operations occurred, the card marks that truncated script preview as omitted rather than displaying possible encoded-image fragments. The model result and retained history remain unchanged; ordinary bounded script text remains readable alongside native images.
+- All 40 checks across the image, image-presentation, and parent-presentation suites pass on the installed 1.0.2 host dependency. Package type checking, lint, formatting, and whitespace checks pass. This verifies the controlled native host, not physical terminal interaction. The native detail and normalization limits below remain unchanged.
 
 ## Completed baseline
 

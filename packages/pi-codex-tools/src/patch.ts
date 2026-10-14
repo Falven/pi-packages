@@ -7,6 +7,12 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent"
 import { Type } from "typebox"
+import {
+  boundedPreview,
+  contentHash,
+  type PatchChange,
+  type PatchDetails,
+} from "./presentation.ts"
 
 const parameters = Type.Object(
   { input: Type.String() },
@@ -273,7 +279,7 @@ async function coordinated<T>(
 export function createPatch(
   available: () => boolean,
   lifetime: AbortSignal,
-): ToolDefinition<typeof parameters, undefined> {
+): ToolDefinition<typeof parameters, PatchDetails> {
   return {
     name: "apply_patch",
     label: "Patch",
@@ -281,86 +287,131 @@ export function createPatch(
       "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
     parameters,
     exposure: "codemode",
-    async execute(_id, args, signal, _onUpdate, ctx) {
-      const abort = signal ? AbortSignal.any([signal, lifetime]) : lifetime
-      abort.throwIfAborted()
-      if (!available())
-        throw new Error(
-          "File patches are not available in the active tool scope",
+    async execute(_id, args, signal, onUpdate, ctx) {
+      const patchChanges: PatchChange[] = []
+      let patchOmitted = false
+      const changed = (change: PatchChange) => {
+        if (patchChanges.length === 16) {
+          patchChanges.shift()
+          patchOmitted = true
+        }
+        patchChanges.push({
+          ...change,
+          path: boundedPreview(change.path),
+          ...(change.destination
+            ? { destination: boundedPreview(change.destination) }
+            : {}),
+        })
+      }
+      const details = (text: string): PatchDetails => ({
+        contentHash: contentHash([{ type: "text", text }]),
+        patchChanges: structuredClone(patchChanges),
+        ...(patchOmitted ? { patchOmitted: true } : {}),
+      })
+      try {
+        const abort = signal ? AbortSignal.any([signal, lifetime]) : lifetime
+        abort.throwIfAborted()
+        if (!available())
+          throw new Error(
+            "File patches are not available in the active tool scope",
+          )
+        const operations = parse(args.input, ctx.cwd)
+        await coordinated(
+          operations.flatMap((operation) =>
+            operation.kind === "update" && operation.destination
+              ? [operation.path, operation.destination]
+              : [operation.path],
+          ),
+          async () => {
+            const plans: { operation: Operation; content?: string }[] = []
+            for (const operation of operations) {
+              abort.throwIfAborted()
+              if (operation.kind === "add")
+                plans.push({ operation, content: operation.content })
+              else {
+                let content: string
+                try {
+                  content = decode(await readFile(operation.path))
+                } catch (error) {
+                  throw new Error(
+                    `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error)}`,
+                    { cause: error },
+                  )
+                }
+                abort.throwIfAborted()
+                plans.push({
+                  operation,
+                  ...(operation.kind === "update"
+                    ? { content: update(content, operation) }
+                    : {}),
+                })
+              }
+            }
+            const started = performance.now()
+            const failure = (message: string) =>
+              new Error(
+                `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}`,
+              )
+            for (const { operation, content } of plans) {
+              abort.throwIfAborted()
+              if (operation.kind !== "delete") {
+                const path =
+                  operation.kind === "update"
+                    ? (operation.destination ?? operation.path)
+                    : operation.path
+                try {
+                  await mkdir(dirname(path), { recursive: true })
+                  abort.throwIfAborted()
+                  await writeFile(path, content!)
+                  changed({
+                    action: operation.kind === "add" ? "Added" : "Updated",
+                    path,
+                  })
+                } catch {
+                  abort.throwIfAborted()
+                  throw failure(`Failed to write file ${path}`)
+                }
+                abort.throwIfAborted()
+              }
+              if (
+                operation.kind === "delete" ||
+                (operation.kind === "update" && operation.destination)
+              ) {
+                try {
+                  await unlink(operation.path)
+                  if (
+                    operation.kind === "update" &&
+                    operation.destination &&
+                    operation.destination !== operation.path
+                  ) {
+                    patchChanges.pop()
+                    changed({
+                      action: "Moved",
+                      path: operation.path,
+                      destination: operation.destination,
+                    })
+                  } else changed({ action: "Deleted", path: operation.path })
+                } catch {
+                  abort.throwIfAborted()
+                  throw failure(`Failed to delete file ${operation.path}`)
+                }
+                abort.throwIfAborted()
+              }
+            }
+          },
         )
-      const operations = parse(args.input, ctx.cwd)
-      await coordinated(
-        operations.flatMap((operation) =>
-          operation.kind === "update" && operation.destination
-            ? [operation.path, operation.destination]
-            : [operation.path],
-        ),
-        async () => {
-          const plans: { operation: Operation; content?: string }[] = []
-          for (const operation of operations) {
-            abort.throwIfAborted()
-            if (operation.kind === "add")
-              plans.push({ operation, content: operation.content })
-            else {
-              let content: string
-              try {
-                content = decode(await readFile(operation.path))
-              } catch (error) {
-                throw new Error(
-                  `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error)}`,
-                  { cause: error },
-                )
-              }
-              abort.throwIfAborted()
-              plans.push({
-                operation,
-                ...(operation.kind === "update"
-                  ? { content: update(content, operation) }
-                  : {}),
-              })
-            }
-          }
-          const started = performance.now()
-          const failure = (message: string) =>
-            new Error(
-              `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}`,
-            )
-          for (const { operation, content } of plans) {
-            abort.throwIfAborted()
-            if (operation.kind !== "delete") {
-              const path =
-                operation.kind === "update"
-                  ? (operation.destination ?? operation.path)
-                  : operation.path
-              try {
-                await mkdir(dirname(path), { recursive: true })
-                abort.throwIfAborted()
-                await writeFile(path, content!)
-              } catch {
-                abort.throwIfAborted()
-                throw failure(`Failed to write file ${path}`)
-              }
-              abort.throwIfAborted()
-            }
-            if (
-              operation.kind === "delete" ||
-              (operation.kind === "update" && operation.destination)
-            ) {
-              try {
-                await unlink(operation.path)
-              } catch {
-                abort.throwIfAborted()
-                throw failure(`Failed to delete file ${operation.path}`)
-              }
-              abort.throwIfAborted()
-            }
-          }
-        },
-      )
-      return {
-        content: [{ type: "text", text: "{}" }],
-        structuredContent: {},
-        details: undefined,
+        return {
+          content: [{ type: "text", text: "{}" }],
+          structuredContent: {},
+          details: details("{}"),
+        }
+      } catch (error) {
+        const text = error instanceof Error ? error.message : String(error)
+        onUpdate?.({
+          content: [{ type: "text", text }],
+          details: details(text),
+        })
+        throw error
       }
     },
   }

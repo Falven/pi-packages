@@ -10,6 +10,7 @@ import {
   contentHash,
   type ExecutionDetails,
   type OperationPresentation,
+  type PatchDetails,
 } from "./presentation.ts"
 import type { ProcessSessions, ProcessPresentation } from "./process.ts"
 import { OutputStore, type OutputCursor } from "./output.ts"
@@ -385,6 +386,7 @@ export class ExecutionCells {
     },
   ): Promise<void> {
     const child = `${cell.id}/${message.id}`
+    let patchDetails: PatchDetails | undefined
     const operation: OperationPresentation = {
       id: child,
       name: message.name,
@@ -437,10 +439,13 @@ export class ExecutionCells {
         {
           signal: cell.controller.signal,
           onUpdate: (partial) => {
+            if (message.name === "apply_patch")
+              patchDetails = partial.details as PatchDetails | undefined
             const context = partial.details as
               | {
                   command?: string
                   cwd?: string
+                  path?: string
                   process?: ProcessPresentation
                 }
               | undefined
@@ -452,6 +457,8 @@ export class ExecutionCells {
               observing = true
               this.processes.observe(context.process.id, observe)
             }
+            if (typeof context?.path === "string")
+              operation.path = boundedPreview(context.path)
             this.update(cell)
           },
         },
@@ -467,14 +474,21 @@ export class ExecutionCells {
             .map((part) => part.text)
             .join("\n")
       const context = outcome.result.details as
-        | { command?: string; cwd?: string; outputHash?: string }
+        | { command?: string; cwd?: string; outputHash?: string; path?: string }
         | undefined
       if (typeof context?.command === "string")
         operation.command = boundedPreview(context.command)
       if (typeof context?.cwd === "string")
         operation.cwd = boundedPreview(context.cwd)
+      if (typeof context?.path === "string")
+        operation.path = boundedPreview(context.path)
       const structured = outcome.result.structuredContent as
-        | { output?: unknown; exit_code?: unknown; session_id?: unknown }
+        | {
+            output?: unknown
+            exit_code?: unknown
+            session_id?: unknown
+            image_url?: unknown
+          }
         | undefined
       operation.input = message.name === "write_stdin" && !outcome.isError
       liveRedacted =
@@ -484,11 +498,27 @@ export class ExecutionCells {
             contentHash([{ type: "text", text: structured.output }]))
       if (!operation.live || liveRedacted)
         operation.output = boundedPreview(
-          typeof structured?.output === "string" ? structured.output : text,
+          !blocked &&
+            (typeof structured?.image_url === "string" ||
+              (message.name === "view_image" &&
+                /"image_url"\s*:\s*"data:/.test(text)))
+            ? ""
+            : typeof structured?.output === "string"
+              ? structured.output
+              : text,
         )
       if (liveRedacted) delete operation.exitCode
       if (typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code
+      if (message.name === "apply_patch") {
+        const patchResult = outcome.result.details as PatchDetails | undefined
+        const details = patchResult?.contentHash ? patchResult : patchDetails
+        if (details?.contentHash === contentHash(outcome.result.content)) {
+          operation.patchChanges = details.patchChanges
+          if (details.patchOmitted) operation.patchOmitted = true
+          if (text === "{}") operation.output = ""
+        }
+      }
       operation.status =
         outcome.isError ||
         blocked ||
@@ -517,6 +547,10 @@ export class ExecutionCells {
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error)
       operation.status = "failed"
+      if (patchDetails?.contentHash === contentHash([{ type: "text", text }])) {
+        operation.patchChanges = patchDetails.patchChanges
+        if (patchDetails.patchOmitted) operation.patchOmitted = true
+      }
       operation.output = boundedPreview(text)
       this.update(cell)
       this.record(cell, {

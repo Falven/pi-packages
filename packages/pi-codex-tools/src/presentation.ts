@@ -6,12 +6,26 @@ import type {
   ToolRenderers,
 } from "@earendil-works/pi-coding-agent"
 
+export type PatchChange = {
+  action: "Added" | "Updated" | "Moved" | "Deleted"
+  path: string
+  destination?: string
+}
+export type PatchDetails = {
+  contentHash: string
+  patchChanges: PatchChange[]
+  patchOmitted?: boolean
+}
+
 export type OperationPresentation = {
   id: string
   name: string
   status: "running" | "completed" | "failed"
   command?: string
   cwd?: string
+  path?: string
+  patchChanges?: PatchChange[]
+  patchOmitted?: boolean
   output?: string
   input?: boolean
   live?: boolean
@@ -28,8 +42,30 @@ export type ExecutionDetails = {
   }
 }
 
-export const contentHash = (content: AgentToolResult<unknown>["content"]) =>
-  createHash("sha256").update(JSON.stringify(content)).digest("hex")
+export const contentHash = (
+  content: AgentToolResult<unknown>["content"],
+  nativeHints = false,
+) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify(
+        content.flatMap((part, index) => {
+          if (part.type === "image") return [{ type: "image" }]
+          // Native image normalization appends hints immediately after its image.
+          if (
+            nativeHints &&
+            part.type === "text" &&
+            content[index - 1]?.type === "image" &&
+            /^(?:\[Image converted from [\w/+.-]+ to [\w/+.-]+\.\](?:\n|$))(?:\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\])?$|^\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\]$/.test(
+              part.text,
+            )
+          )
+            return []
+          return [part]
+        }),
+      ),
+    )
+    .digest("hex")
 
 const previewLimit = 16384
 export function boundedPreview(text: string): string {
@@ -68,15 +104,29 @@ function readable(
   return content
     .filter((part) => part.type === "text")
     .map((part) => {
-      const text = part.text.replace(
-        /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
-        "",
+      const text = part.text
+        .replace(
+          /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
+          "",
+        )
+        .replace(/^Exit code: 1\nWall time: [^\n]+\nOutput:\n/, "")
+      // Aggregate truncation loses text boundaries, including serialized image envelopes.
+      if (
+        text.startsWith("Warning: truncated output") &&
+        operations.some((operation) => operation.name === "view_image")
       )
+        return "[Truncated script output omitted from preview]"
       try {
         const parsed = JSON.parse(text) as {
           output?: unknown
           wall_time_seconds?: unknown
+          image_url?: unknown
         }
+        if (
+          typeof parsed.image_url === "string" &&
+          parsed.image_url.startsWith("data:")
+        )
+          return "[Image result]"
         if (
           typeof parsed.output === "string" &&
           typeof parsed.wall_time_seconds === "number"
@@ -92,6 +142,11 @@ function readable(
       } catch {
         /* Ordinary script text is already readable. */
       }
+      if (
+        text.split("\n").every((line) => line === "{}") &&
+        operations.some((operation) => operation.patchChanges)
+      )
+        return ""
       return operations.some((operation) => operation.output === text)
         ? ""
         : text
@@ -114,7 +169,9 @@ export function createExecutionRenderers(
     renderResult(result, options, theme, context) {
       const details = result.details as ExecutionDetails | undefined
       let execution =
-        details?.contentHash === contentHash(result.content)
+        details &&
+        (details.contentHash === contentHash(result.content) ||
+          details.contentHash === contentHash(result.content, true))
           ? details.execution
           : undefined
       if (execution) {
@@ -135,11 +192,15 @@ export function createExecutionRenderers(
             ? "running"
             : (execution?.status ?? "completed")
       const label =
-        operations.length === 1 && operations[0]?.name === "exec_command"
-          ? "Command"
-          : operations.length
-            ? `${operations.length} operations`
-            : "Execution"
+        operations.length === 1 && operations[0]?.name === "view_image"
+          ? "Image"
+          : operations.length === 1 && operations[0]?.name === "apply_patch"
+            ? "Patch"
+            : operations.length === 1 && operations[0]?.name === "exec_command"
+              ? "Command"
+              : operations.length
+                ? `${operations.length} operations`
+                : "Execution"
       const lines = [
         theme.fg(
           status === "failed"
@@ -153,13 +214,27 @@ export function createExecutionRenderers(
       if (options.expanded) {
         for (const operation of operations) {
           lines.push(
-            `${operation.name === "exec_command" ? "Command" : operation.name} · ${operation.status}`,
+            `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name === "apply_patch" ? "Patch" : operation.name} · ${operation.status}`,
           )
           if (operation.command !== undefined)
             lines.push(`$ ${operation.command}`)
           if (operation.cwd !== undefined)
             lines.push(`Directory: ${operation.cwd}`)
-          if (operation.output && !operation.input) lines.push(operation.output)
+          if (operation.path !== undefined)
+            lines.push(`Path: ${operation.path}`)
+          for (const change of operation.patchChanges ?? [])
+            lines.push(
+              `${change.action}: ${change.path}${change.destination ? ` → ${change.destination}` : ""}`,
+            )
+          if (operation.patchOmitted)
+            lines.push("… [earlier file changes omitted]")
+          if (operation.output && !operation.input)
+            lines.push(
+              operation.output.replace(
+                /^Exit code: 1\nWall time: [^\n]+\nOutput:\n/,
+                "",
+              ),
+            )
           if (operation.exitCode !== undefined)
             lines.push(`Exit status: ${operation.exitCode}`)
         }
