@@ -1,42 +1,42 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { openHost } from "../fixtures/host.ts"
+import { openAttachmentEditor } from "../fixtures/attachment-editor.ts"
 
-test("public editor identity follows composer undo and redo across identical captures", async (t) => {
-  const host = await openHost(t)
+test("composer identity follows undo and redo across identical captures", async (t) => {
+  const host = await openAttachmentEditor(t)
   host.ui.setEditorText("[note](source.txt)")
-  const original = host.ui.getEditorTextIdentity()
+  const original = host.access.snapshot().identity
   await host.key("\x1b[D")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), original)
+  assert.strictEqual(host.access.snapshot().identity, original)
 
-  assert.equal(host.ui.captureEditorEdit(7, 17).replace("retained.txt"), true)
-  const first = host.ui.getEditorTextIdentity()
+  assert.equal(host.access.captureEdit(7, 17).replace("retained.txt"), true)
+  const first = host.access.snapshot().identity
   assert.notStrictEqual(first, original)
-  assert.equal(host.ui.captureEditorEdit(7, 19).replace("retained.txt"), true)
-  const second = host.ui.getEditorTextIdentity()
+  assert.equal(host.access.captureEdit(7, 19).replace("retained.txt"), true)
+  const second = host.access.snapshot().identity
   assert.notStrictEqual(second, first)
 
   await host.key("\x1b[122;9u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), first)
+  assert.strictEqual(host.access.snapshot().identity, first)
   await host.key("\x1b[122;9u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), original)
+  assert.strictEqual(host.access.snapshot().identity, original)
   await host.key("\x1b[122;10u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), first)
+  assert.strictEqual(host.access.snapshot().identity, first)
   await host.key("\x1b[122;10u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), second)
+  assert.strictEqual(host.access.snapshot().identity, second)
 
   host.ui.setEditorText("another draft")
-  assert.notStrictEqual(host.ui.getEditorTextIdentity(), second)
+  assert.notStrictEqual(host.access.snapshot().identity, second)
 })
 
-test("public same-text draft replacement changes identity without adding an undo step", async (t) => {
-  const host = await openHost(t)
+test("same-text composer replacement changes identity without adding an undo step", async (t) => {
+  const host = await openAttachmentEditor(t)
   host.ui.setEditorText("draft")
   await host.key("\x1b[D")
-  const before = host.ui.getEditorTextIdentity()
+  const before = host.access.snapshot().identity
 
   host.ui.setEditorText("draft")
-  const after = host.ui.getEditorTextIdentity()
+  const after = host.access.snapshot().identity
   assert.notStrictEqual(after, before)
   assert.equal(host.ui.getEditorText(), "draft")
 
@@ -44,7 +44,7 @@ test("public same-text draft replacement changes identity without adding an undo
   assert.equal(host.ui.getEditorText(), "draf!t")
 
   await host.key("\x1b[122;9u")
-  assert.strictEqual(host.ui.getEditorTextIdentity(), after)
+  assert.strictEqual(host.access.snapshot().identity, after)
   assert.equal(host.ui.getEditorText(), "draft")
   await host.key("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), "")

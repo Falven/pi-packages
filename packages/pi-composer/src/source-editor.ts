@@ -48,7 +48,12 @@ type EditKind = "typing" | "backspace" | "delete"
 type YankSource = Draft & { formatted: boolean }
 
 export class SourceEditor extends CustomEditor {
-  onDraftChange: ((text: string) => void) | undefined
+  onDraftChange:
+    | ((
+        text: string,
+        origin?: "edit" | "replacement" | "undo" | "redo",
+      ) => void)
+    | undefined
   onDraftClear: ((text: string) => void) | undefined
   private draft: Draft = { text: "", anchor: 0, head: 0 }
   private observedSource = ""
@@ -56,6 +61,8 @@ export class SourceEditor extends CustomEditor {
   private readonly nativeKeys: KeybindingsManager
   private readonly completions: ReturnType<typeof createCompletions>
   private readonly clipboard: Clipboard
+  private pasteHandler: CustomEditor["onPasteImage"]
+  private defaultPasteHandler: CustomEditor["onPasteImage"]
   private revision = 0
   private sourceWidth = 60
   private formatted = true
@@ -103,6 +110,7 @@ export class SourceEditor extends CustomEditor {
       configurable: true,
       get: () => paste,
       set: (handler: CustomEditor["onPasteImage"]) => {
+        this.pasteHandler = handler
         // Other editor decorators can invoke this public callback directly.
         paste = handler
           ? function (this: unknown) {
@@ -120,6 +128,24 @@ export class SourceEditor extends CustomEditor {
       (text, cursor) => this.commit({ text, anchor: cursor, head: cursor }),
       () => this.getAutocompleteMaxVisible(),
     )
+  }
+
+  markDefaultPaste(): CustomEditor["onPasteImage"] {
+    this.defaultPasteHandler = this.pasteHandler
+    return this.defaultPasteHandler
+  }
+
+  replaceDefaultPaste(handler: () => void): (() => void) | undefined {
+    if (
+      !this.defaultPasteHandler ||
+      this.pasteHandler !== this.defaultPasteHandler
+    )
+      return undefined
+    const previous = this.defaultPasteHandler
+    this.onPasteImage = handler
+    return () => {
+      if (this.pasteHandler === handler) this.onPasteImage = previous
+    }
   }
 
   override setAutocompleteProvider(provider: AutocompleteProvider): void {
@@ -172,8 +198,15 @@ export class SourceEditor extends CustomEditor {
     return this.draft.text
   }
 
-  override getEditorTextIdentity(): object {
+  getEditorTextIdentity(): object {
     return identityOf(this.draft)
+  }
+
+  getEditorSelection(): { from: number; to: number } {
+    return {
+      from: Math.min(this.draft.anchor, this.draft.head),
+      to: Math.max(this.draft.anchor, this.draft.head),
+    }
   }
 
   override invalidate(): void {
@@ -204,22 +237,25 @@ export class SourceEditor extends CustomEditor {
     return this.getText()
   }
 
-  override captureEditorEdit(
+  captureEditorEdit(
     from: number,
     to: number,
-  ): { replace(text: string): boolean } {
+  ): { cancel(): void; replace(text: string): boolean } {
     const current = this.getExpandedText()
     if (
       !Number.isInteger(from) ||
       !Number.isInteger(to) ||
       from < 0 ||
-      to <= from ||
+      to < from ||
       to > current.length
     )
       throw new RangeError("Invalid editor edit range")
     const edit = { from, to, expected: current.slice(from, to) }
     this.pendingSourceEdits.add(edit)
     return {
+      cancel: () => {
+        this.pendingSourceEdits.delete(edit)
+      },
       replace: (text) => {
         if (
           !this.pendingSourceEdits.delete(edit) ||
@@ -228,7 +264,8 @@ export class SourceEditor extends CustomEditor {
           return false
         text = text.replace(/\r\n?/g, "\n")
         const map = (position: number) =>
-          position <= edit.from
+          position < edit.from ||
+          (position === edit.from && edit.from !== edit.to)
             ? position
             : position >= edit.to
               ? position + text.length - (edit.to - edit.from)
@@ -293,7 +330,8 @@ export class SourceEditor extends CustomEditor {
     const current = this.getText()
     if (text === current) {
       this.draft = withIdentity({ ...this.draft }, {})
-      this.onChange?.(current, "replacement")
+      this.onChange?.(current)
+      this.onDraftChange?.(current, "replacement")
       return
     }
     if (!text) this.onDraftClear?.(current)
@@ -578,8 +616,8 @@ export class SourceEditor extends CustomEditor {
     this.revealCaret = true
     this.preferredCell = undefined
     this.completions.update(autocomplete)
-    this.onChange?.(current, origin)
-    this.onDraftChange?.(this.getText())
+    this.onChange?.(current)
+    this.onDraftChange?.(this.getText(), origin)
     this.tui.requestRender()
   }
 
@@ -612,9 +650,9 @@ export class SourceEditor extends CustomEditor {
 
   submitDraft(): void {
     const text = this.getText()
-    const identity = this.getEditorTextIdentity()
+    if (!text.trim()) return
     this.setText("")
-    this.onSubmit?.(text, identity)
+    this.onSubmit?.(text)
   }
 
   private moveVertically(direction: -1 | 1, select: boolean): void {
@@ -898,7 +936,7 @@ export class SourceEditor extends CustomEditor {
       }
     }
     if (keys.matches(data, "tui.input.submit") || submitAlias) {
-      if (this.disableSubmit || !this.getText().trim()) return
+      if (this.disableSubmit) return
       this.submitDraft()
       return
     }

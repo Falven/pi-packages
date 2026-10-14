@@ -5,6 +5,7 @@ import { beforeEach, test } from "node:test"
 import { getNativeClipboard } from "@earendil-works/pi-tui"
 import { CustomEditor } from "@earendil-works/pi-coding-agent"
 import { openHost } from "../fixtures/host.ts"
+import { openAttachmentEditor } from "../fixtures/attachment-editor.ts"
 
 beforeEach((t) => {
   assert("mock" in t)
@@ -17,6 +18,37 @@ beforeEach((t) => {
   )
   t.mock.method(clipboard, "getImage", async () => null)
   t.mock.method(clipboard, "getText", async () => "Unrelated clipboard")
+})
+
+test("attachment clipboard integration replaces only the native default and restores it on detach", async (t) => {
+  const host = await openAttachmentEditor(t)
+  const editor = host.editor
+  assert(editor instanceof CustomEditor)
+  assert(
+    "replaceDefaultPaste" in editor &&
+      typeof editor.replaceDefaultPaste === "function",
+  )
+  const detach = editor.replaceDefaultPaste(() =>
+    editor.insertTextAtCursor("Attached"),
+  )
+  assert.equal(typeof detach, "function")
+  await host.key("\x1b[118;9u")
+  assert.equal(host.ui.getEditorText(), "Attached")
+  detach()
+  host.ui.setEditorText("")
+  await host.key("\x1b[118;9u")
+  await t.waitFor(() =>
+    assert.equal(host.ui.getEditorText(), "Unrelated clipboard"),
+  )
+
+  editor.onPasteImage = () => editor.insertTextAtCursor("Supplied")
+  assert.equal(
+    editor.replaceDefaultPaste(() => assert.fail()),
+    undefined,
+  )
+  host.ui.setEditorText("")
+  await host.key("\x1b[118;9u")
+  assert.equal(host.ui.getEditorText(), "Supplied")
 })
 
 test("the configured clipboard action and Command V both use the supplied handler", async (t) => {

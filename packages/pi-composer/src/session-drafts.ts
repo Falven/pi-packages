@@ -215,9 +215,14 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }, 150)
       timer.unref()
     }
+    let defaultPaste: SourceEditor["onPasteImage"]
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
       const previous = editor?.getDraftHistory()
       const next = new SourceEditor(tui, theme, keybindings, currentClipboard)
+      if (defaultPaste) {
+        next.onPasteImage = defaultPaste
+        next.markDefaultPaste()
+      }
       if (previous) next.restoreDraft(previous.draft.text, previous)
       editor = next
       next.onDraftChange = (draft) => {
@@ -231,6 +236,8 @@ export function sessionDrafts(pi: ExtensionAPI): void {
       }
       return next
     })
+    // Pi has now supplied the fallback; later factory decorators keep their own handlers.
+    defaultPaste = editor!.markDefaultPaste()
     editor!.restoreDraft(
       text,
       history?.draft.text === text ? history : undefined,
