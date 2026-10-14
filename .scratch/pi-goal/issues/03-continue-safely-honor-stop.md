@@ -28,3 +28,9 @@ The six real-session probes in `packages/pi-goal/test/admission-boundaries.test.
 An extension-owned `setImmediate` action can be cancelled before synchronous removal. An asynchronous settlement observer lets that action enter the host's deferred queue before shutdown, reproducing the same second request. `waitForIdle()` also resolves before asynchronous settlement ends and does not prevent this outcome.
 
 The missing public guarantee is cancellation or revalidation of a deferred prompt at admission after extension removal. These probes establish the failure of the queued-command approach and the tested timer and idle alternatives; they do not establish that every public design is impossible. No private integration is approved. Pause, clear, replacement, actual Stop, companion composition, and Phoenix captures remain unverified here. All acceptance criteria and ticket status remain pending.
+
+## Stop feasibility evidence
+
+The 17 real-session tests in `packages/pi-goal/test/stop-probe.test.ts` passed against Pi 1.0.2 and 1.1.0. A public editor composition installed at `before_agent_start` preserves native dispatch, autocomplete and overlays, default and remapped interruption, retry and compaction cancellation, and both companion load orders, including packaged loading. Controlled pause rejection, synchronous failure, and a 500 ms timeout still delegate to native interruption; the timer is not a hard wall-clock bound. Raw backend abort does not request pause. Shutdown preserves a later editor owner and suppresses a delayed Stop callback.
+
+These tests use the recording terminal fixture and controlled pause callbacks. They establish the public composition seam, not persisted goal transitions, actual-terminal behavior, Phoenix comparison, arbitrary editor replacement, or the admission guarantee described above. Required acceptance criteria remain pending until the package implementation and those checks pass.
