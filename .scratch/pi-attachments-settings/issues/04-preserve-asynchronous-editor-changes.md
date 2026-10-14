@@ -30,6 +30,8 @@ Normal submission clears the native editor before invoking `onSubmit`, then cros
 
 Steering and follow-up are controls for both editors. Their host paths invoke the session directly from the editor's input handling, and the accepted input retains `draft-2` through the earlier asynchronous handler. The four passing controls establish only that scoped identity survives those routes. They do not satisfy normal submission, asynchronous capture ordering, or the complete attachment contract.
 
+Read-only source comparison found six relevant portions byte-identical between Pi 1.0.2 and restoration target `6fb2e7815` (1.1.0): native editor submission, normal interactive submission routing, the interactive run loop, the pending-input promise, public input event/result types, and the public editor interface. This supports the same submission-boundary limitation at the restoration target; it is not a runtime verification of Pi 1.1.0.
+
 The public/private boundary is now clearer:
 
 - The existing editor can be found through the public TUI component tree supplied to `setWidget()`. Replacement through `setEditorComponent()` is unnecessary for the probe and would not preserve the native editor's state automatically.
