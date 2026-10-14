@@ -112,15 +112,24 @@ export function registerImages(
   async function prepare(
     event: Pick<InputEvent, "text" | "images" | "streamingBehavior">,
     ctx: ExtensionContext,
+    context: {
+      sessionId: string
+      sessionFile?: string | undefined
+      cwd: string
+    } = {
+      sessionId: ctx.sessionManager.getSessionId(),
+      sessionFile: ctx.sessionManager.getSessionFile(),
+      cwd: ctx.cwd,
+    },
   ) {
     const request = {
       ...event,
       ...(event.images
         ? { images: event.images.map((image) => ({ ...image })) }
         : {}),
-      sessionId: ctx.sessionManager.getSessionId(),
-      sessionFile: ctx.sessionManager.getSessionFile(),
-      cwd: ctx.cwd,
+      sessionId: context.sessionId,
+      sessionFile: context.sessionFile,
+      cwd: context.cwd,
     }
     const paths = attachmentPaths(request.text, storage, request.cwd)
     if (paths.length === 0) return undefined

@@ -2,15 +2,13 @@ import { statSync } from "node:fs"
 import { homedir } from "node:os"
 import { basename, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
-import type {
-  ExtensionContext,
-  KeybindingsManager,
-} from "@earendil-works/pi-coding-agent"
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent"
 import {
   getNativeClipboard,
   isFocusable,
   matchesKey,
   type EditorComponent,
+  type KeybindingsManager,
   type TUI,
   type TuiMouseEvent,
 } from "@earendil-works/pi-tui"
@@ -88,7 +86,7 @@ export function registerPaste(
     ctx: ExtensionContext,
     tui: TUI,
     keybindings: KeybindingsManager,
-  ): EditorComponent {
+  ): () => void {
     let pendingPaste: string | undefined
 
     function paste(text: string): void {
@@ -107,130 +105,130 @@ export function registerPaste(
       return attach(
         ctx,
         async () => {
-          try {
-            const clipboard = getNativeClipboard()
-            if (!clipboard) throw new Error("Native clipboard is unavailable")
-            const paths = await clipboard.getFilePaths?.()
-            if (paths?.length) {
-              return paths.map((path) => {
-                if (!path || /\p{Cc}/u.test(path))
-                  throw new Error(
-                    "Clipboard file path contains control characters",
-                  )
-                const source = resolve(cwd, path)
-                return {
-                  name: basename(source).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
-                  path: source,
-                }
-              })
-            }
-            const image = await clipboard.getImage()
-            if (image) {
-              return [{ name: "clipboard-image", contents: image, image: true }]
-            }
-            const text = await clipboard.getText()
-            if (text === undefined)
-              throw new Error("Clipboard text is unavailable")
-            return text ? content(text, cwd) : undefined
-          } catch (error) {
-            if (!signal.aborted)
-              ctx.ui.notify(`Could not paste: ${String(error)}`, "error")
-            return undefined
+          const clipboard = getNativeClipboard()
+          if (!clipboard) throw new Error("Native clipboard is unavailable")
+          const paths = await clipboard.getFilePaths?.()
+          if (paths?.length) {
+            return paths.map((path) => {
+              if (!path || /\p{Cc}/u.test(path))
+                throw new Error(
+                  "Clipboard file path contains control characters",
+                )
+              const source = resolve(cwd, path)
+              return {
+                name: basename(source).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
+                path: source,
+              }
+            })
           }
+          const image = await clipboard.getImage()
+          if (image) {
+            return [{ name: "clipboard-image", contents: image, image: true }]
+          }
+          const text = await clipboard.getText()
+          if (text === undefined)
+            throw new Error("Clipboard text is unavailable")
+          return text ? content(text, cwd) : undefined
         },
         false,
       )
     }
 
-    if (!Reflect.get(editor, "onPasteImage", editor)) {
-      Reflect.set(editor, "onPasteImage", () => void clipboardPaste(), editor)
+    const restorations: (() => void)[] = []
+    function wrap(property: string, value: unknown) {
+      const descriptor = Object.getOwnPropertyDescriptor(editor, property)
+      Object.defineProperty(editor, property, {
+        value,
+        configurable: true,
+        writable: true,
+      })
+      restorations.push(() => {
+        if (Reflect.get(editor, property, editor) !== value) return
+        if (descriptor) Object.defineProperty(editor, property, descriptor)
+        else Reflect.deleteProperty(editor, property)
+      })
+    }
+    const clipboardAction = () => void clipboardPaste()
+    const replaceDefaultPaste = Reflect.get(
+      editor,
+      "replaceDefaultPaste",
+      editor,
+    )
+    if (typeof replaceDefaultPaste === "function") {
+      const restore = replaceDefaultPaste.call(editor, clipboardAction)
+      if (restore) restorations.push(restore)
+    } else if (
+      !ctx.ui.getEditorComponent() ||
+      !Reflect.get(editor, "onPasteImage", editor)
+    ) {
+      wrap("onPasteImage", clipboardAction)
     }
 
-    return new Proxy(editor, {
-      get(target, property) {
-        const value = Reflect.get(target, property, target)
-        if (property === "handleMouse") {
-          return (event: TuiMouseEvent) => {
-            const result = target.handleMouse?.(event)
-            if (result?.handled || result?.capture || result?.focus)
-              return result
-            if (
-              event.button === "right" &&
-              !event.shift &&
-              !event.alt &&
-              !event.ctrl &&
-              isFocusable(target) &&
-              target.focused
-            ) {
-              if (event.type === "click") void clipboardPaste()
-              return { handled: true }
-            }
-            return result
-          }
-        }
-        if (property === "handleInput") {
-          return function handleInput(data: string) {
-            if (pendingPaste !== undefined || data.startsWith("\x1b[200~")) {
-              pendingPaste =
-                (pendingPaste ?? "") +
-                (pendingPaste === undefined ? data.slice(6) : data)
-              const end = pendingPaste.indexOf("\x1b[201~")
-              if (end < 0) return
-              const text = pendingPaste
-                .slice(0, end)
-                // eslint-disable-next-line no-control-regex -- Native CSI-u paste encoding carries literal control bytes.
-                .replace(/\x1b\[(\d+);5u/g, (sequence, code: string) => {
-                  const point = Number(code)
-                  return (point >= 65 && point <= 90) ||
-                    (point >= 97 && point <= 122)
-                    ? String.fromCharCode(point & 31)
-                    : sequence
-                })
-              const rest = pendingPaste.slice(end + 6)
-              pendingPaste = undefined
-              paste(text)
-              if (rest) {
-                changed()
-                handleInput(rest)
-              }
-            } else {
-              const clipboardAction = Reflect.get(
-                target,
-                "onPasteImage",
-                target,
-              )
-              if (
-                matchesKey(data, "super+v") &&
-                !Object.hasOwn(
-                  keybindings.getUserBindings(),
-                  "app.clipboard.pasteImage",
-                ) &&
-                typeof clipboardAction === "function" &&
-                !Object.values(keybindings.getEffectiveConfig())
-                  .flat()
-                  .some((key) => key && matchesKey(data, key))
-              ) {
-                const shortcut = Reflect.get(
-                  target,
-                  "onExtensionShortcut",
-                  target,
-                )
-                if (
-                  typeof shortcut !== "function" ||
-                  !shortcut.call(target, data)
-                )
-                  clipboardAction.call(target)
-              } else {
-                target.handleInput(data)
-              }
-            }
-          }
-        }
-        return typeof value === "function" ? value.bind(target) : value
-      },
-      set(target, property, value) {
-        return Reflect.set(target, property, value, target)
-      },
+    const mouse = editor.handleMouse
+    wrap("handleMouse", (event: TuiMouseEvent) => {
+      if (event.button !== "right" || event.type === "press") changed()
+      const result = mouse?.call(editor, event)
+      if (result?.handled || result?.capture || result?.focus) return result
+      if (
+        event.button === "right" &&
+        !event.shift &&
+        !event.alt &&
+        !event.ctrl &&
+        isFocusable(editor) &&
+        editor.focused
+      ) {
+        if (event.type === "click") void clipboardPaste()
+        return { handled: true }
+      }
+      return result
     })
+
+    const input = editor.handleInput
+    function handleInput(data: string) {
+      changed()
+      if (pendingPaste !== undefined || data.startsWith("\x1b[200~")) {
+        pendingPaste =
+          (pendingPaste ?? "") +
+          (pendingPaste === undefined ? data.slice(6) : data)
+        const end = pendingPaste.indexOf("\x1b[201~")
+        if (end < 0) return
+        const text = pendingPaste
+          .slice(0, end)
+          // eslint-disable-next-line no-control-regex -- Native CSI-u paste encoding carries literal control bytes.
+          .replace(/\x1b\[(\d+);5u/g, (sequence, code: string) => {
+            const point = Number(code)
+            return (point >= 65 && point <= 90) || (point >= 97 && point <= 122)
+              ? String.fromCharCode(point & 31)
+              : sequence
+          })
+        const rest = pendingPaste.slice(end + 6)
+        pendingPaste = undefined
+        paste(text)
+        if (rest) handleInput(rest)
+      } else {
+        const pasteAction = Reflect.get(editor, "onPasteImage", editor)
+        if (
+          matchesKey(data, "super+v") &&
+          !Object.hasOwn(
+            keybindings.getUserBindings(),
+            "app.clipboard.pasteImage",
+          ) &&
+          typeof pasteAction === "function" &&
+          !Object.values(keybindings.getResolvedBindings())
+            .flat()
+            .some((key) => key && matchesKey(data, key))
+        ) {
+          const shortcut = Reflect.get(editor, "onExtensionShortcut", editor)
+          if (typeof shortcut !== "function" || !shortcut.call(editor, data))
+            pasteAction.call(editor)
+        } else {
+          input.call(editor, data)
+        }
+      }
+    }
+    wrap("handleInput", handleInput)
+    return () => {
+      for (const restore of restorations.toReversed()) restore()
+    }
   }
 }

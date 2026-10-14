@@ -161,6 +161,46 @@ test("native Attach File keeps captured bytes after the source changes or is rem
   assert.equal(await readFile(path, "utf8"), "Original file\r\nSnowman: ☃\0\n")
 })
 
+for (const composer of [false, true]) {
+  test(`${composer ? "composer" : "native"} one Send waits for a path paste into an empty draft`, async (t) => {
+    const host = await nativePi(
+      t,
+      composer
+        ? [
+            fileURLToPath(
+              new URL("../../pi-composer/src/index.ts", import.meta.url),
+            ),
+          ]
+        : [],
+    )
+    const source = join(host.directory, "pending.txt")
+    await writeFile(source, "Captured before Send")
+    const held = holdFileRead(t, source)
+    host.input(`\x1b[200~${source}\x1b[201~`)
+    await held.started()
+    host.input("\r")
+    assert.equal(host.requests.length, 0)
+    host.input("Later draft")
+    await writeFile(source, "Changed after Send")
+    held.release()
+    await waitFor(() => assert.equal(host.requests.length, 1))
+    const user = host.requests[0].messages.findLast(
+      ({ role }) => role === "user",
+    )
+    const sent = user.content
+      .filter(({ type }) => type === "text")
+      .map(({ text }) => text)
+      .join("\n")
+    assert.equal(
+      await readFile(snapshotPath(sent), "utf8"),
+      "Captured before Send",
+    )
+    assert.doesNotMatch(sent, /Later draft/)
+    assert.equal(host.ui.getEditorText(), "Later draft")
+    assert.equal(host.inputs.length, 1)
+  })
+}
+
 test("Attach accepts local quoted, escaped, URL, home, and relative file paths", async (t) => {
   const host = await nativePi(t)
   const name = "source note.txt"
