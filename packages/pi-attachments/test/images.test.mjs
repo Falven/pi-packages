@@ -37,6 +37,39 @@ const BMP =
 const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
+const composerPath = fileURLToPath(
+  new URL("../../pi-composer/src/index.ts", import.meta.url),
+)
+
+for (const [name, extensions] of [
+  ["native", []],
+  ["composer", [composerPath]],
+]) {
+  test(`${name} preview follows effective image visibility without changing its snapshot`, async (t) => {
+    const caps = getCapabilities()
+    setCapabilities({ ...caps, images: "kitty" })
+    t.after(() => setCapabilities(caps))
+    const host = await nativePi(t, extensions, {
+      settings: { terminal: { showImages: false } },
+    })
+    const source = join(host.directory, "hidden.png")
+    await writeFile(source, Buffer.from(PNG, "base64"))
+    await host.runtime.session.prompt(`/attach-file ${source}`)
+    const draft = host.ui.getEditorText()
+    const path = snapshotPath(draft)
+    await waitFor(() => assert.match(host.render(), /\[Image: hidden\.png/))
+    assert.doesNotMatch(host.output, /\x1b_Ga=p/)
+    host.runtime.session.settingsManager.applyOverrides({
+      terminal: { showImages: true },
+    })
+    await waitFor(() => {
+      host.render()
+      assert.match(host.output, /\x1b_Ga=p/)
+    })
+    assert.equal(host.ui.getEditorText(), draft)
+    assert.equal((await readFile(path)).toString("base64"), PNG)
+  })
+}
 
 test("image previews link retained files through native click handling beside the editor and other widgets", async (t) => {
   const caps = getCapabilities()
@@ -169,6 +202,31 @@ test("native image-only submission sends the captured image after its source is 
   assert.equal(host.ui.getEditorText(), "")
 })
 
+test("native submission keeps original attachment dimensions when effective auto-resize is off", async (t) => {
+  const host = await nativePi(t, [], {
+    settings: { images: { autoResize: true } },
+  })
+  await host.runtime.session.setModel({
+    ...host.runtime.session.model,
+    inputLimits: { images: { resize: { maxWidth: 1, maxHeight: 1 } } },
+  })
+  const source = join(host.directory, "unresized.png")
+  await writeFile(source, Buffer.from(PNG, "base64"))
+  await host.runtime.session.prompt(`/attach-file ${source}`)
+  const path = snapshotPath(host.ui.getEditorText())
+  host.runtime.session.settingsManager.applyOverrides({
+    images: { autoResize: false },
+  })
+  host.submit()
+  await waitFor(() => assert.equal(host.requests.length, 1))
+  const user = host.requests[0].messages.find(
+    (message) => message.role === "user",
+  )
+  assert.equal(user.content[1].image_url.url, `data:image/png;base64,${PNG}`)
+  assert.doesNotMatch(user.content[0].text, /displayed at/)
+  assert.equal((await readFile(path)).toString("base64"), PNG)
+})
+
 test("native image-only steering converts the captured image before queueing it for the intended request", async (t) => {
   const response = Promise.withResolvers()
   t.after(() => response.resolve())
@@ -291,6 +349,7 @@ test("an image preview decode failure stays visible without removing its capture
 
 test("native image delivery preserves earlier images, handler order, and unique snapshot membership", async (t) => {
   const host = await nativePi(t, [inputExtension], {
+    settings: { images: { autoResize: false } },
     extensionFactories: [
       (pi) =>
         pi.on("input", (event) => ({
@@ -417,6 +476,42 @@ test("the native fullscreen widget emits small PNG graphics for converted image 
   })
   assert.match(host.render(), /Other extension widget/)
   assert.equal((await readFile(path)).toString("base64"), BMP)
+})
+
+test("effective image width caps native preview graphics without recapturing the attachment", async (t) => {
+  const caps = getCapabilities()
+  setCapabilities({ ...caps, images: "kitty" })
+  t.after(() => setCapabilities(caps))
+  const host = await nativePi(t, [], {
+    settings: { terminal: { imageWidthCells: 2 } },
+  })
+  const bytes = await readFile(new URL("../fixtures/wide.png", import.meta.url))
+  const source = join(host.directory, "wide.png")
+  await writeFile(source, bytes)
+  await host.runtime.session.prompt(`/attach-file ${source}`)
+  const draft = host.ui.getEditorText()
+  const path = snapshotPath(draft)
+  const dimensions = () => {
+    host.render()
+    const match = /\x1b_Ga=p,[^;]*c=(\d+),r=(\d+)/.exec(host.output)
+    assert.ok(match, "native preview emitted image graphics")
+    return { columns: Number(match[1]), rows: Number(match[2]) }
+  }
+  const narrow = await waitFor(() => dimensions())
+  assert.ok(narrow.columns <= 2)
+  assert.ok(narrow.rows <= 4)
+  host.runtime.session.settingsManager.applyOverrides({
+    terminal: { imageWidthCells: 8 },
+  })
+  const wider = await waitFor(() => {
+    const next = dimensions()
+    assert.ok(next.columns > narrow.columns)
+    return next
+  })
+  assert.ok(wider.columns <= 8)
+  assert.ok(wider.rows <= 4)
+  assert.equal(host.ui.getEditorText(), draft)
+  assert.deepEqual(await readFile(path), bytes)
 })
 /* eslint-enable no-control-regex */
 

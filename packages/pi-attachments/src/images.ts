@@ -10,7 +10,13 @@ import {
   resizeImage,
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
-import { getCapabilities, hyperlink, Image } from "@earendil-works/pi-tui"
+import {
+  getCapabilities,
+  getImageDimensions,
+  hyperlink,
+  imageFallback,
+  Image,
+} from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
 
 export function attachmentReferences(text: string, storage: string) {
@@ -76,6 +82,7 @@ export function registerImages(
       cwd: ctx.cwd,
     }
     const resizeOptions = ctx.model?.inputLimits?.images?.resize
+    const autoResize = pi.getSettings().images?.autoResize ?? true
     let recovery: Promise<string> | undefined
     const retain = () => (recovery ??= saveRequest(storage, request))
     try {
@@ -88,6 +95,7 @@ export function registerImages(
       await retain()
       const attachments = await Promise.all(
         images.map(async (image) => {
+          if (!autoResize) return { image, note: undefined }
           const resized = await resizeImage(
             Buffer.from(image.data, "base64"),
             image.mimeType,
@@ -139,7 +147,10 @@ export function registerImages(
 
   pi.on("session_start", (_event, ctx) => {
     ctx.ui.setWidget("pi-attachments", (tui, theme) => {
-      const previews = new Map<string, Image | string | null>()
+      const previews = new Map<
+        string,
+        { image: Image; fallback: string } | string | null
+      >()
       async function loadPreview(path: string) {
         try {
           const image = await readImage(path, storage)
@@ -156,9 +167,8 @@ export function registerImages(
               throw new Error("Could not decode the image for preview")
             const png = await convertToPng(thumbnail.data, thumbnail.mimeType)
             if (!png) throw new Error("Could not convert the image for preview")
-            previews.set(
-              path,
-              new Image(
+            previews.set(path, {
+              image: new Image(
                 png.data,
                 png.mimeType,
                 { fallbackColor: (text) => theme.fg("dim", text) },
@@ -168,7 +178,12 @@ export function registerImages(
                   maxHeightCells: 4,
                 },
               ),
-            )
+              fallback: imageFallback(
+                png.mimeType,
+                getImageDimensions(png.data, png.mimeType) ?? undefined,
+                basename(path),
+              ),
+            })
           }
         } catch (error) {
           previews.set(
@@ -185,8 +200,18 @@ export function registerImages(
           const paths = attachmentPaths(ctx.ui.getEditorText(), storage)
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
+          const settings = pi.getSettings()
+          const showImages = settings.terminal?.showImages ?? true
+          const configuredWidth = settings.terminal?.imageWidthCells
+          const imageWidth = Math.min(
+            24,
+            typeof configuredWidth === "number" &&
+              Number.isFinite(configuredWidth)
+              ? Math.max(1, Math.floor(configuredWidth))
+              : 60,
+          )
           const link = (text: string, path: string) =>
-            capabilities.hyperlinks && previews.get(path) instanceof Image
+            capabilities.hyperlinks
               ? hyperlink(
                   text,
                   pathToFileURL(path).href.replace(
@@ -213,13 +238,19 @@ export function registerImages(
               )
             } else if (preview) {
               // Native hyperlinks need text cells beneath the image graphics.
-              const cells = capabilities.images
-                ? " ".repeat(Math.max(1, Math.min(width - 2, 24)))
+              const graphics = showImages && capabilities.images
+              const cells = graphics
+                ? " ".repeat(Math.max(1, Math.min(width - 2, imageWidth)))
                 : ""
               lines.push(
-                ...preview
-                  .render(width)
-                  .map((line) => link(line + cells, path)),
+                ...(graphics
+                  ? preview.image.render(Math.min(width, imageWidth + 2))
+                  : truncateToVisualLines(
+                      theme.fg("dim", preview.fallback),
+                      1,
+                      width,
+                    ).visualLines
+                ).map((line) => link(line + cells, path)),
               )
             }
           }
@@ -227,7 +258,8 @@ export function registerImages(
         },
         invalidate() {
           for (const preview of previews.values()) {
-            if (preview instanceof Image) preview.invalidate()
+            if (preview && typeof preview !== "string")
+              preview.image.invalidate()
           }
         },
       }

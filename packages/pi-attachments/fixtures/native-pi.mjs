@@ -149,6 +149,7 @@ export async function nativePi(t, extensionPaths = [], state = {}) {
         lastChangelogVersion: VERSION,
         compaction: { enabled: false },
         retry: { enabled: false },
+        ...state.settings,
       }),
       resourceLoaderOptions: {
         noExtensions: true,
