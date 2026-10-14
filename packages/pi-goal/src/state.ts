@@ -18,9 +18,25 @@ export type Goal = {
   updatedAt: bigint
 }
 
-type GoalRow = Omit<Goal, "objective" | "tokenBudget"> & {
+export type StoredGoal = Goal & { generation: string }
+
+type GoalRow = Omit<StoredGoal, "objective" | "tokenBudget"> & {
   objective: Uint8Array
   tokenBudget: bigint | null
+}
+
+function decode(row: GoalRow): StoredGoal {
+  return {
+    threadId: row.threadId,
+    generation: row.generation,
+    objective: Buffer.from(row.objective).toString("utf8"),
+    status: row.status,
+    ...(row.tokenBudget === null ? {} : { tokenBudget: row.tokenBudget }),
+    tokensUsed: row.tokensUsed,
+    timeUsedSeconds: row.timeUsedSeconds,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }
 }
 
 export class GoalStore {
@@ -48,30 +64,26 @@ export class GoalStore {
     }
   }
 
-  read(threadId: string): Goal | null {
+  read(threadId: string): StoredGoal | null {
     // Byte reads preserve embedded NULs on runtimes that truncate text reads.
     const statement = this.database.prepare(`
-      SELECT threadId, CAST(objective AS BLOB) AS objective, status, tokenBudget,
+      SELECT threadId, generation, CAST(objective AS BLOB) AS objective, status, tokenBudget,
              tokensUsed, timeUsedSeconds, createdAt, updatedAt
       FROM goals WHERE threadId = ?
     `)
     statement.setReadBigInts(true)
     const row = statement.get(threadId) as GoalRow | undefined
     if (!row) return null
-    return {
-      threadId: row.threadId,
-      objective: Buffer.from(row.objective).toString("utf8"),
-      status: row.status,
-      ...(row.tokenBudget === null ? {} : { tokenBudget: row.tokenBudget }),
-      tokensUsed: row.tokensUsed,
-      timeUsedSeconds: row.timeUsedSeconds,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    }
+    return decode(row)
   }
 
-  create(threadId: string, objective: string, tokenBudget?: bigint): Goal {
+  create(
+    threadId: string,
+    objective: string,
+    tokenBudget?: bigint,
+  ): StoredGoal {
     const now = BigInt(Math.floor(Date.now() / 1000))
+    const generation = randomUUID()
     const statement = this.database.prepare(`
       INSERT INTO goals VALUES (?, ?, ?, 'active', ?, 0, 0, ?, ?)
       ON CONFLICT(threadId) DO UPDATE SET
@@ -87,7 +99,7 @@ export class GoalStore {
     `)
     const changed = statement.run(
       threadId,
-      randomUUID(),
+      generation,
       objective,
       tokenBudget ?? null,
       now,
@@ -100,6 +112,7 @@ export class GoalStore {
     }
     return {
       threadId,
+      generation,
       objective,
       status: "active",
       ...(tokenBudget === undefined ? {} : { tokenBudget }),
@@ -108,6 +121,43 @@ export class GoalStore {
       createdAt: now,
       updatedAt: now,
     }
+  }
+
+  update(
+    goal: StoredGoal,
+    status: "active" | "paused" | "blocked" | "complete",
+    objective?: string,
+  ): StoredGoal {
+    const statement = this.database.prepare(`
+      UPDATE goals SET status = CASE
+        WHEN ? = 'complete' THEN 'complete'
+        WHEN tokenBudget IS NOT NULL AND tokensUsed >= tokenBudget THEN 'budgetLimited'
+        ELSE ? END,
+        objective = COALESCE(?, objective), updatedAt = ?
+      WHERE threadId = ? AND generation = ?
+      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
+                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
+    `)
+    statement.setReadBigInts(true)
+    const row = statement.get(
+      status,
+      status,
+      objective ?? null,
+      BigInt(Math.floor(Date.now() / 1000)),
+      goal.threadId,
+      goal.generation,
+    ) as GoalRow | undefined
+    if (!row)
+      throw new Error(
+        "the goal changed while this action was pending; inspect the current goal and try again",
+      )
+    return decode(row)
+  }
+
+  clear(goal: StoredGoal): void {
+    this.database
+      .prepare("DELETE FROM goals WHERE threadId = ? AND generation = ?")
+      .run(goal.threadId, goal.generation)
   }
 
   close(): void {
@@ -120,7 +170,7 @@ function integer(value: bigint): number | string {
   return Number.isSafeInteger(number) ? number : value.toString()
 }
 
-export function goalResult(goal: Goal | null) {
+export function goalResult(goal: Goal | null, completing = false) {
   const remainder =
     goal?.tokenBudget === undefined ? null : goal.tokenBudget - goal.tokensUsed
   const result = {
@@ -138,7 +188,12 @@ export function goalResult(goal: Goal | null) {
     },
     remainingTokens:
       remainder === null ? null : integer(remainder < 0n ? 0n : remainder),
-    completionBudgetReport: null,
+    completionBudgetReport:
+      completing &&
+      goal?.status === "complete" &&
+      (goal.tokenBudget !== undefined || goal.timeUsedSeconds > 0n)
+        ? "Report completion using the usage in this result. When goal.tokenBudget is present, report goal.tokensUsed against that allowance. When goal.timeUsedSeconds is positive, express the elapsed time briefly in the response language."
+        : null,
   }
   return {
     content: [{ type: "text" as const, text: JSON.stringify(result) }],

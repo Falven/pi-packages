@@ -81,6 +81,7 @@ export type NativeHostOptions = {
   directory?: string
   cwd?: string
   sessionFile?: string
+  headless?: boolean
 }
 
 type ResponseStep =
@@ -342,11 +343,13 @@ export async function openNativeHost(
   const terminal = new RecordingTerminal()
   terminal.columns = options.columns ?? 60
   terminal.rows = options.rows ?? 24
-  const interactive = new InteractiveMode(runtime, {
-    terminal,
-    tuiMode: options.tuiMode ?? "fullscreen",
-  })
-  if (options.onMount) {
+  const interactive = options.headless
+    ? undefined
+    : new InteractiveMode(runtime, {
+        terminal,
+        tuiMode: options.tuiMode ?? "fullscreen",
+      })
+  if (interactive && options.onMount) {
     const mode = interactive as unknown as {
       mountInteractiveTui(...args: unknown[]): unknown
     }
@@ -362,9 +365,15 @@ export async function openNativeHost(
     }
   }
   activeMode = interactive
-  await interactive.init()
-  assert(context, "Pi must emit session_start with its live UI context")
-  void interactive.run()
+  if (interactive) {
+    await interactive.init()
+    void interactive.run()
+  } else {
+    const bind = async () => runtime.session.bindExtensions({ mode: "print" })
+    runtime.setRebindSession(bind)
+    await bind()
+  }
+  assert(context, "The host must emit session_start with its live context")
   await setTimeout(0)
 
   return {
@@ -381,11 +390,13 @@ export async function openNativeHost(
     requestBodies,
     terminal,
     screenLines() {
+      assert(interactive, "A headless session has no terminal screen")
       return (
         interactive as unknown as { renderer: { getScreenLines(): string[] } }
       ).renderer.getScreenLines()
     },
     switchMode(mode: "regular" | "fullscreen") {
+      assert(interactive, "A headless session has no terminal mode")
       return (
         interactive as unknown as {
           switchTuiMode(mode: "regular" | "fullscreen"): boolean
@@ -393,6 +404,7 @@ export async function openNativeHost(
       ).switchTuiMode(mode)
     },
     async reload() {
+      assert(interactive, "Use the session reload method in headless mode")
       await (
         interactive as unknown as { handleReloadCommand(): Promise<void> }
       ).handleReloadCommand()
@@ -428,6 +440,7 @@ export async function openNativeHost(
       return stripVTControlCharacters(terminal.output)
     },
     async frame() {
+      assert(interactive, "A headless session has no terminal frame")
       terminal.output = ""
       ;(
         interactive as unknown as {
