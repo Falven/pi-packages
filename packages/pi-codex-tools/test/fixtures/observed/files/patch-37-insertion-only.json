@@ -1,0 +1,33 @@
+{
+  "case_id": "patch-37-insertion-only",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/patch-final/insertion-only.txt\n@@\n+TAIL\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-final/insertion-only.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "Zmlyc3QKc2Vjb25kCg==",
+      "sha256": "dbea9325179efe46ea2add94f7b6b745ca983fabb208dc6d34aa064623d7ee23",
+      "text": "first\nsecond\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {},
+    "own_keys": []
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-final/insertion-only.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 420,
+      "bytes_base64": "Zmlyc3QKc2Vjb25kClRBSUwK",
+      "sha256": "7c34c3251826a9ea32e49e7b5c33052ae9069bf2c1ca347d857f46cad2ae01c7",
+      "text": "first\nsecond\nTAIL\n"
+    }
+  }
+}

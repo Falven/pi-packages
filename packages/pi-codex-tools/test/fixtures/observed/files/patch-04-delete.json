@@ -1,0 +1,25 @@
+{
+  "case_id": "patch-04-delete",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Delete File: /tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "YWxwaGEKcmVuYW1lZAo=",
+      "sha256": "efde4c6a4153d3b510688b490303c32d19176a19c0acce65fa477ba7c53c3de0",
+      "text": "alpha\nrenamed\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "value": {}
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt": {
+      "exists": false
+    }
+  }
+}

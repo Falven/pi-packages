@@ -1,0 +1,168 @@
+{
+  "case_group": "command-yield-numeric",
+  "runtime_identity": "current public execution interface; build unverified",
+  "cases": [
+    {
+      "case_id": "yield--1",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": -1
+      },
+      "caller_elapsed_ms": 3,
+      "error": "failed to parse function arguments: invalid value: integer `-1`, expected u64 at line 1 column 182"
+    },
+    {
+      "case_id": "yield-0",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 0
+      },
+      "caller_elapsed_ms": 409,
+      "result": {
+        "chunk_id": "995bb1",
+        "wall_time_seconds": 0.251480625,
+        "session_id": 54825,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "cleanup": {
+        "chunk_id": "1a09ed",
+        "wall_time_seconds": 0.890058417,
+        "exit_code": 0,
+        "original_token_count": 3,
+        "output": "START\nEND\n"
+      }
+    },
+    {
+      "case_id": "yield-1",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 1
+      },
+      "caller_elapsed_ms": 411,
+      "result": {
+        "chunk_id": "7ba70a",
+        "wall_time_seconds": 0.251616667,
+        "session_id": 62990,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "cleanup": {
+        "chunk_id": "37dcbe",
+        "wall_time_seconds": 0.887649417,
+        "exit_code": 0,
+        "original_token_count": 3,
+        "output": "START\nEND\n"
+      }
+    },
+    {
+      "case_id": "yield-249",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 249
+      },
+      "caller_elapsed_ms": 424,
+      "result": {
+        "chunk_id": "a994e9",
+        "wall_time_seconds": 0.251751208,
+        "session_id": 92399,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "cleanup": {
+        "chunk_id": "82d8a0",
+        "wall_time_seconds": 0.934907583,
+        "exit_code": 0,
+        "original_token_count": 3,
+        "output": "START\nEND\n"
+      }
+    },
+    {
+      "case_id": "yield-250",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 250
+      },
+      "caller_elapsed_ms": 425,
+      "result": {
+        "chunk_id": "6799e8",
+        "wall_time_seconds": 0.250719209,
+        "session_id": 7239,
+        "original_token_count": 0,
+        "output": ""
+      },
+      "cleanup": {
+        "chunk_id": "c48252",
+        "wall_time_seconds": 0.851173667,
+        "exit_code": 0,
+        "original_token_count": 3,
+        "output": "START\nEND\n"
+      }
+    },
+    {
+      "case_id": "yield-250.5",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 250.5
+      },
+      "caller_elapsed_ms": 0,
+      "error": "failed to parse function arguments: invalid type: floating point `250.5`, expected u64 at line 1 column 185"
+    },
+    {
+      "case_id": "yield-30001",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 30001
+      },
+      "caller_elapsed_ms": 1081,
+      "result": {
+        "chunk_id": "e79232",
+        "wall_time_seconds": 0.901349459,
+        "exit_code": 0,
+        "original_token_count": 3,
+        "output": "START\nEND\n"
+      }
+    },
+    {
+      "case_id": "yield-100000000000000000000",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "python3 -c 'import time; print(\"START\", flush=True); time.sleep(0.8); print(\"END\", flush=True)'",
+        "workdir": "/tmp",
+        "login": false,
+        "max_output_tokens": 500,
+        "yield_time_ms": 100000000000000000000
+      },
+      "caller_elapsed_ms": 1,
+      "error": "failed to parse function arguments: invalid type: floating point `1e+20`, expected u64 at line 1 column 201"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "case_id": "patch-33-move-existing-destination",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/patch-more/move-source.txt\n*** Move to: /tmp/core-tools-file-evidence/fixtures/patch-more/move-destination.txt\n@@\n-source\n+MOVED\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/move-source.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 493,
+      "bytes_base64": "c291cmNlCg==",
+      "sha256": "b8bb034f9b63bd0254fbc7c157cae746c75853f4643d6cea844dc48ddb57f522",
+      "text": "source\n"
+    },
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/move-destination.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 384,
+      "bytes_base64": "ZGVzdGluYXRpb24K",
+      "sha256": "403ccb9b4e352aacdb17425e4905368710f9f08a4c2e9ede3d7fd95eb95a2482",
+      "text": "destination\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {},
+    "own_keys": []
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/move-source.txt": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/patch-more/move-destination.txt": {
+      "exists": true,
+      "kind": "file",
+      "mode": 384,
+      "bytes_base64": "TU9WRUQK",
+      "sha256": "24896b07979084d5cb9fc5c712685d57b56ededdd7f680e84e7726f481630848",
+      "text": "MOVED\n"
+    }
+  }
+}

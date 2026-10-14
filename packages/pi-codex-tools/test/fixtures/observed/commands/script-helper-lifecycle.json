@@ -1,0 +1,58 @@
+{
+  "case_group": "script-helper-lifecycle",
+  "baseline": "local-tools-reference-20261013",
+  "cases": [
+    {
+      "id": "text-coercion",
+      "provenance": "reduced observation of model-visible outer result; not raw transport framing",
+      "input": "text(\"undefined[\");text(undefined);text(\"]null[\");text(null);text(\"]false[\");text(false);text(\"]zero[\");text(0);text(\"]object[\");text({probe:1});text(\"]array[\");text([1,\"x\"]);text(\"]bigint[\");text(1n);text(\"]function[\");text(()=>1);text(\"]symbol[\");text(Symbol(\"s\"));text(\"]end\");",
+      "status": "completed",
+      "observed_output": "undefined[undefined]null[null]false[false]zero[0]object[{\"probe\":1}]array[[1,\"x\"]]bigint[1]function[undefined]symbol[undefined]end",
+      "limits": "Objects, arrays, functions, symbols, and big integers were runtime probes beyond the narrow declared union; no guarantee of undocumented input stability."
+    },
+    {
+      "id": "throw-preserves-prior-output-and-store",
+      "provenance": "reduced outer result plus later observed store value",
+      "input": "store(\"probe_failure_state\",\"changed-before-failure\");\ntext(\"BEFORE_FAILURE\");\nthrow new Error(\"EXPECTED_SCRIPT_FAILURE\");",
+      "status": "failed",
+      "observed_output": "BEFORE_FAILUREScript error:\nError: EXPECTED_SCRIPT_FAILURE\n    at exec_main.mjs:3:7",
+      "subsequent_state": "changed-before-failure",
+      "limits": "The displayed transcript concatenates output and error. Content-part boundaries were not captured."
+    },
+    {
+      "id": "exit-is-success-and-stops-evaluation",
+      "provenance": "reduced outer result plus later observed store value",
+      "input": "store(\"probe_exit_state\",\"before\");\ntext(\"BEFORE_EXIT\");\nexit();\nstore(\"probe_exit_state\",\"after\");\ntext(\"AFTER_EXIT\");",
+      "status": "completed",
+      "observed_output": "BEFORE_EXIT",
+      "subsequent_state": "before"
+    },
+    {
+      "id": "unawaited-timer-is-discarded",
+      "provenance": "reduced outer result plus later observed store value",
+      "input": "store(\"probe_unawaited_timer_ran\",false);\nsetTimeout(()=>{store(\"probe_unawaited_timer_ran\",true);text(\"LATE_UNAWAITED_TIMER\");},200);\ntext(\"IMMEDIATE_OUTPUT\");",
+      "status": "completed",
+      "observed_output": "IMMEDIATE_OUTPUT",
+      "observed_wall_time_seconds": 0,
+      "subsequent_state": false,
+      "limits": "Subsequent cell explicitly awaited 300 ms; no late output was observed. Underlying unawaited host-command behavior was not tested."
+    },
+    {
+      "id": "awaited-and-cleared-timers",
+      "provenance": "reduced outer result",
+      "input": "const start=Date.now();\nlet cancelledCallbackRan=false;\nconst cancelledId=setTimeout(()=>{cancelledCallbackRan=true;},20);\nclearTimeout(cancelledId);\nawait new Promise(resolve=>setTimeout(resolve,300));",
+      "status": "completed",
+      "observed_awaited_timer_elapsed_ms": 302,
+      "cancelled_callback_ran": false,
+      "limits": "Elapsed time is a sample, not an exact timeout guarantee."
+    },
+    {
+      "id": "throw-in-timer-fails-script",
+      "provenance": "reduced outer result plus later observed store value",
+      "input": "store(\"probe_timer_failure_state\",\"before\");\nsetTimeout(()=>{store(\"probe_timer_failure_state\",\"callback-ran\");throw new Error(\"EXPECTED_TIMER_FAILURE\");},10);\nawait new Promise(resolve=>setTimeout(resolve,100));\ntext(\"AFTER_TIMER_FAILURE\");",
+      "status": "failed",
+      "observed_output": "Script error:\nError: EXPECTED_TIMER_FAILURE\n    at exec_main.mjs:2:73",
+      "subsequent_state": "callback-ran"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "case_group": "command-long-waits",
+  "cases": [
+    {
+      "case_id": "empty-poll-omitted-yield",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "printf 'START\\n'; sleep 12; printf 'END\\n'",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 250,
+        "max_output_tokens": 500
+      },
+      "initial": {
+        "chunk_id": "323638",
+        "wall_time_seconds": 0.2512925,
+        "session_id": 31872,
+        "original_token_count": 2,
+        "output": "START\n"
+      },
+      "poll": {
+        "arguments": {
+          "session_id": 31872,
+          "chars": "",
+          "max_output_tokens": 500
+        },
+        "result": {
+          "chunk_id": "9cef65",
+          "wall_time_seconds": 5.001971833,
+          "session_id": 31872,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "caller_elapsed_ms": 5003
+      },
+      "cleanup": {
+        "chunk_id": "7d97da",
+        "wall_time_seconds": 6.618048334,
+        "exit_code": 0,
+        "original_token_count": 1,
+        "output": "END\n"
+      }
+    },
+    {
+      "case_id": "upper-yield-bound",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "printf 'START\\n'; sleep 32; printf 'END\\n'",
+        "shell": "/bin/sh",
+        "login": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 30001,
+        "max_output_tokens": 500
+      },
+      "caller_elapsed_ms": 30160,
+      "result": {
+        "chunk_id": "6656b3",
+        "wall_time_seconds": 30.002126416,
+        "session_id": 36523,
+        "original_token_count": 2,
+        "output": "START\n"
+      },
+      "cleanup": {
+        "chunk_id": "6e40bf",
+        "wall_time_seconds": 1.869301209,
+        "exit_code": 0,
+        "original_token_count": 1,
+        "output": "END\n"
+      }
+    }
+  ]
+}

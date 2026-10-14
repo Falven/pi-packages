@@ -1,0 +1,37 @@
+{
+  "case_id": "patch-17-match-before-write",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Add File: /tmp/core-tools-file-evidence/fixtures/nonmatch-first.txt\n+created\n*** Update File: /tmp/core-tools-file-evidence/fixtures/repeated.txt\n@@\n-absent text\n+replacement\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/nonmatch-first.txt": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/repeated.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "c3RhcnQKQ0hBTkdFRAptaWQKc2FtZQplbmQK",
+      "sha256": "46e3b994032ad4dfbe3409c267f841ac2e7631188994a530acd4b9ae088f005f",
+      "text": "start\nCHANGED\nmid\nsame\nend\n"
+    }
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/repeated.txt:\nabsent text",
+    "string": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/repeated.txt:\nabsent text"
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/nonmatch-first.txt": {
+      "exists": false
+    },
+    "/tmp/core-tools-file-evidence/fixtures/repeated.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "c3RhcnQKQ0hBTkdFRAptaWQKc2FtZQplbmQK",
+      "sha256": "46e3b994032ad4dfbe3409c267f841ac2e7631188994a530acd4b9ae088f005f",
+      "text": "start\nCHANGED\nmid\nsame\nend\n"
+    }
+  }
+}

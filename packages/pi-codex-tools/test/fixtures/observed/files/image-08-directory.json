@@ -1,0 +1,20 @@
+{
+  "case_id": "image-08-directory",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "view_image",
+  "input": {
+    "path": "/tmp/core-tools-file-evidence/fixtures/image-directory"
+  },
+  "outcome": {
+    "kind": "threw",
+    "type": "string",
+    "value": "image path `/tmp/core-tools-file-evidence/fixtures/image-directory` is not a file",
+    "string": "image path `/tmp/core-tools-file-evidence/fixtures/image-directory` is not a file"
+  },
+  "fixture": {
+    "exists": true,
+    "mode": 493,
+    "kind": "directory"
+  }
+}

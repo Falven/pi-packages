@@ -1,0 +1,78 @@
+{
+  "case_group": "shell-mode-observation",
+  "scope": "Supplemental public-interface observation; runtime build identity unverified.",
+  "cases": [
+    {
+      "case_id": "login-false-tty-false",
+      "arguments": {
+        "cmd": "printf 'login:%s interactive:%s\\n' $options[login] $options[interactive]",
+        "shell": "/bin/zsh",
+        "login": false,
+        "tty": false,
+        "workdir": "/tmp",
+        "max_output_tokens": 100
+      },
+      "result": {
+        "chunk_id": "eb812f",
+        "wall_time_seconds": 0.0000165,
+        "exit_code": 0,
+        "original_token_count": 7,
+        "output": "login:off interactive:off\n"
+      }
+    },
+    {
+      "case_id": "login-true-tty-false",
+      "arguments": {
+        "cmd": "printf 'login:%s interactive:%s\\n' $options[login] $options[interactive]",
+        "shell": "/bin/zsh",
+        "login": true,
+        "tty": false,
+        "workdir": "/tmp",
+        "max_output_tokens": 100
+      },
+      "result": {
+        "chunk_id": "6d1ab1",
+        "wall_time_seconds": 0.00001125,
+        "exit_code": 0,
+        "original_token_count": 7,
+        "output": "login:on interactive:off\n"
+      }
+    },
+    {
+      "case_id": "login-false-tty-true",
+      "arguments": {
+        "cmd": "printf 'login:%s interactive:%s\\n' $options[login] $options[interactive]",
+        "shell": "/bin/zsh",
+        "login": false,
+        "tty": true,
+        "workdir": "/tmp",
+        "max_output_tokens": 100
+      },
+      "result": {
+        "chunk_id": "cf82a1",
+        "wall_time_seconds": 0.000010042,
+        "exit_code": 0,
+        "original_token_count": 7,
+        "output": "login:off interactive:off\r\n"
+      }
+    },
+    {
+      "case_id": "login-true-tty-true",
+      "arguments": {
+        "cmd": "printf 'login:%s interactive:%s\\n' $options[login] $options[interactive]",
+        "shell": "/bin/zsh",
+        "login": true,
+        "tty": true,
+        "workdir": "/tmp",
+        "max_output_tokens": 100
+      },
+      "result": {
+        "chunk_id": "af248e",
+        "wall_time_seconds": 0.000008792,
+        "exit_code": 0,
+        "original_token_count": 7,
+        "output": "login:on interactive:off\r\n"
+      }
+    }
+  ]
+}

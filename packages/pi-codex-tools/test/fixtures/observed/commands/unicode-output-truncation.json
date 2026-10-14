@@ -1,0 +1,78 @@
+{
+  "case_group": "unicode-output-truncation",
+  "scope": "Supplemental runtime observations; frozen declarations remain unchanged.",
+  "cases": [
+    {
+      "id": "emoji-full",
+      "provenance": "actual nested tool response",
+      "arguments": {
+        "cmd": "python3 -c 'print(\"🙂\"*40+\"END\")'",
+        "workdir": "/tmp",
+        "login": false,
+        "yield_time_ms": 1000,
+        "max_output_tokens": 1000
+      },
+      "result": {
+        "chunk_id": "816a0c",
+        "wall_time_seconds": 0.128155291,
+        "exit_code": 0,
+        "original_token_count": 41,
+        "output": "🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂END\n"
+      }
+    },
+    {
+      "id": "emoji-truncated",
+      "provenance": "actual nested tool response",
+      "arguments": {
+        "cmd": "python3 -c 'print(\"🙂\"*40+\"END\")'",
+        "workdir": "/tmp",
+        "login": false,
+        "yield_time_ms": 1000,
+        "max_output_tokens": 5
+      },
+      "result": {
+        "chunk_id": "28dffa",
+        "wall_time_seconds": 0.101687666,
+        "exit_code": 0,
+        "original_token_count": 41,
+        "output": "Warning: truncated output (original token count: 41)\nTotal output lines: 1\n\n🙂🙂…36 tokens truncated…🙂END\n"
+      }
+    },
+    {
+      "id": "combining-full",
+      "provenance": "actual nested tool response",
+      "arguments": {
+        "cmd": "python3 -c 'print(\"e\\u0301\"*40+\"END\")'",
+        "workdir": "/tmp",
+        "login": false,
+        "yield_time_ms": 1000,
+        "max_output_tokens": 1000
+      },
+      "result": {
+        "chunk_id": "68978b",
+        "wall_time_seconds": 0.137055333,
+        "exit_code": 0,
+        "original_token_count": 31,
+        "output": "ééééééééééééééééééééééééééééééééééééééééEND\n"
+      }
+    },
+    {
+      "id": "ascii-odd-budget",
+      "provenance": "actual nested tool response",
+      "arguments": {
+        "cmd": "python3 -c 'print(\"0123456789\"*20)'",
+        "workdir": "/tmp",
+        "login": false,
+        "yield_time_ms": 1000,
+        "max_output_tokens": 5
+      },
+      "result": {
+        "chunk_id": "bbf01f",
+        "wall_time_seconds": 0.150423125,
+        "exit_code": 0,
+        "original_token_count": 51,
+        "output": "Warning: truncated output (original token count: 51)\nTotal output lines: 1\n\n0123456789…46 tokens truncated…123456789\n"
+      }
+    }
+  ]
+}

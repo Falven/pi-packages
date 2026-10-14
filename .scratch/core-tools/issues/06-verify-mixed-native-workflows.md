@@ -6,7 +6,7 @@
 
 **Blocked by:** 02 — Continue interactive commands across prompts; 03 — Yield and resume execution cells; 04 — Apply file patches through native dispatch; 05 — Return local images through Pi's image pipeline.
 
-**Status:** ready-for-agent
+**Status:** blocked by 03 — public nested-call lifetime; partial composition checked
 
 - [ ] Demonstrate a mixed workflow that inspects a project, changes a file, validates the change, and inspects a local image through the selected toolset.
 - [ ] Verify normal package loading and reloading, activation in an existing conversation, and explicit tool inclusions/exclusions. Distinguish hidden declarations from callable-tool access and preserve historical calls.
@@ -17,3 +17,11 @@
 - [ ] Verify cancellation and result interception across a mixed sequence, including a blocked nested call and a redacted result that stays redacted in the next model request.
 - [ ] Keep user-entered shell commands on their native path and avoid changes to terminal, keybinding, editor, or clipboard ownership.
 - [ ] Reuse the same host fixture for integration checks; run the affected existing companion checks only where this slice changes shared behavior.
+
+## Partial composition evidence
+
+A temporary probe reused [the native host](../../../fixtures/native-host.ts) and [the shared model-loop fixture](../../../packages/pi-codex-tools/test/fixtures/model-loop.ts) with the configured composer, attachments, skill references, chat, prompt/lifecycle extension at 4.13.0, and web extension at 1.6.0. Four controlled checks passed at integration commit `5507b77`: a companion-only control, the core toolset loaded first, the core toolset loaded last, and raw call history after deselection.
+
+Both core load orders completed a real command → patch → validation → image sequence. Checks covered all four selected names in `ALL_TOOLS`, native nested events and retained records, and image content in the next request. The observed requests also retained attachment image bytes, one expanded skill block, one prompt-extension section, the existing web-search declaration, and model-dependent URL-tool hiding. Native blocking preserved web-tool ownership, reload retained the draft and history, and a user-entered shell command stayed on its native path without a model request.
+
+This is partial composition evidence using controlled provider responses. The probe blocked the actual web network call through a native hook. It did not establish retained execution cells, new/resumed/forked session behavior, the complete session lifecycle, or matched live-model trials. [Ticket 03](03-yield-and-resume-execution-cells.md) still blocks the continued-execution criteria, so this ticket remains open.

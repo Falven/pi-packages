@@ -1,0 +1,756 @@
+{
+  "baseline_id": "local-tools-reference-20261013",
+  "source_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "declarations": "declaration-check.json",
+  "observation_class": "Supplemental current-runtime calls; not evidence of historical runtime identity or emitted provider content.",
+  "recorded_utc": "2026-10-14T03:49:21.245827+00:00",
+  "cases": [
+    {
+      "case_id": "image-01-tiny-default",
+      "file": "image-01-tiny-default.json",
+      "sha256": "a5c22935fe40231e1a0137f68c736d0b1fb2fd2e91ae4f7c462bbfa44852d77a",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 70,
+        "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "image-02-tiny-high",
+      "file": "image-02-tiny-high.json",
+      "sha256": "b1b67022aeb0b2d7362195ebedc89666f9aad8d3243bb2907fdfdddd60380010",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 70,
+        "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "image-03-tiny-original",
+      "file": "image-03-tiny-original.json",
+      "sha256": "9682e6145adc4fe06b50d1b5a81c622506a9a6d478849e4e78a94aadafe9ab9a",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 70,
+        "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5",
+        "detail": "original",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "image-04-large-default",
+      "file": "image-04-large-default.json",
+      "sha256": "4bcaaa5526e971352856b855d57a9f6bc08a3bc3bfeeda6b62f1400f23fae29f",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 14792,
+        "sha256": "cde8d4444b003dcc4238c153f89c9ac6e8e883f9846d2759b8d135f67226d605",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2400,
+        "height": 1600
+      }
+    },
+    {
+      "case_id": "image-05-large-original",
+      "file": "image-05-large-original.json",
+      "sha256": "dd6a1b672e80cc322ef2c42a59686c44156cff84647b70bfaf235a3521872b71",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 14792,
+        "sha256": "cde8d4444b003dcc4238c153f89c9ac6e8e883f9846d2759b8d135f67226d605",
+        "detail": "original",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2400,
+        "height": 1600
+      }
+    },
+    {
+      "case_id": "image-06-png-wrong-extension",
+      "file": "image-06-png-wrong-extension.json",
+      "sha256": "289b10474d854a89106e4780717f0de7db306b38c8c4338d7f9a8203c1e52fc8",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 70,
+        "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "image-07-missing",
+      "file": "image-07-missing.json",
+      "sha256": "0344ffe2ec601e00a3a7fe39d9c1daec4a457ab5cbcd94eb72cda74340a44f2b",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to locate image at `/tmp/core-tools-file-evidence/fixtures/missing-image.png`: No such file or directory (os error 2)"
+    },
+    {
+      "case_id": "image-08-directory",
+      "file": "image-08-directory.json",
+      "sha256": "9cec9836e9c1ba65bd56a5aa66c945dc824a54db8845d7edf70ff3cdbfa8ab1a",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "image path `/tmp/core-tools-file-evidence/fixtures/image-directory` is not a file"
+    },
+    {
+      "case_id": "image-09-text-file",
+      "file": "image-09-text-file.json",
+      "sha256": "bf58dc192cf90e6644a948723e1f53496f7728338ba867bce7886afdd40161f3",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to process image: invalid or unsupported image data"
+    },
+    {
+      "case_id": "image-10-broken-png",
+      "file": "image-10-broken-png.json",
+      "sha256": "8d90daba991a285f0cee8e6043c845078b86545ea036f75c315c8b583ab4e928",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to process image: invalid or unsupported image data"
+    },
+    {
+      "case_id": "image-11-svg",
+      "file": "image-11-svg.json",
+      "sha256": "d4b71a2432067a0148108144b3eaea2f973c62c901159150de2f549cfa4939d4",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to process image: invalid or unsupported image data"
+    },
+    {
+      "case_id": "image-12-unreadable",
+      "file": "image-12-unreadable.json",
+      "sha256": "65e13f82b722134606600251c10b343949d64b35657d1b1397602dc4186e758c",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to read image at `/tmp/core-tools-file-evidence/fixtures/unreadable.png`: Permission denied (os error 13)"
+    },
+    {
+      "case_id": "image-13-invalid-detail",
+      "file": "image-13-invalid-detail.json",
+      "sha256": "49b15337a44eb201c3ec3158a3d7225a768fcf2c5a102e922e2229c8aa37d4f1",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "view_image.detail only supports `high` or `original`; omit `detail` for default high resized behavior, got `low`"
+    },
+    {
+      "case_id": "image-14-invalid-path-type",
+      "file": "image-14-invalid-path-type.json",
+      "sha256": "6b76cf011410fef4b4587998edf37775502587f32e9e5d643c49e3a2b0364e5a",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "failed to parse function arguments: invalid type: integer `123`, expected a string at line 1 column 11"
+    },
+    {
+      "case_id": "image-15-missing-path",
+      "file": "image-15-missing-path.json",
+      "sha256": "466b8ac39f966738ee33b565fbcc45e4fffdc45d0d46a3a757c6565219014861",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "failed to parse function arguments: missing field `path` at line 1 column 2"
+    },
+    {
+      "case_id": "image-16-wide-default",
+      "file": "image-16-wide-default.json",
+      "sha256": "543dbccdce914bdd2ca282a972b1e05710de38f0319f3bd08c54da9d5577d870",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 54065,
+        "sha256": "ada517182d82d32f9e9f94f2410226af9093e18230e747eb43851030fa67880f",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 8192,
+        "height": 2048
+      }
+    },
+    {
+      "case_id": "image-17-wide-original",
+      "file": "image-17-wide-original.json",
+      "sha256": "1f79946a9ee3bb9f625f8225d5cd6c9c6529b37821c4d8cc4b2345c43a05a0de",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 54065,
+        "sha256": "ada517182d82d32f9e9f94f2410226af9093e18230e747eb43851030fa67880f",
+        "detail": "original",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 8192,
+        "height": 2048
+      }
+    },
+    {
+      "case_id": "image-18-bmp",
+      "file": "image-18-bmp.json",
+      "sha256": "6d41be30e61a3186b081f1e07b59f10163cb8c89025838e51fe6ac6a93d71b4c",
+      "tool": "view_image",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "unable to process image: invalid or unsupported image data"
+    },
+    {
+      "case_id": "image-19-gif",
+      "file": "image-19-gif.json",
+      "sha256": "065544c4a9cd3dcf10bb391138e78fc33fd951bedfad6113a0854bfb3ebcc231",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 34,
+        "sha256": "1e85ec81b9800b4c443d39caca0d0926089a3ac201120db1ceb45b93789480b8",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "gif",
+        "width": 1,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "image-20-relative-path",
+      "file": "image-20-relative-path.json",
+      "sha256": "64b2b2375c8bf03773caf5d6969a8a65cee52a7b784c2907781de6d3159067eb",
+      "tool": "view_image",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "derived": {
+        "data_url_header": "data:application/octet-stream;base64",
+        "bytes": 70,
+        "sha256": "66faef078fcfdf273a310406f68bf7988aa09f24e0172deefef9af336d48d8f5",
+        "detail": "high",
+        "result_keys": ["image_url", "detail"],
+        "format": "png",
+        "width": 2,
+        "height": 1
+      }
+    },
+    {
+      "case_id": "patch-01-add",
+      "file": "patch-01-add.json",
+      "sha256": "b3feeb566c8712a415ab87a0f41de73e85330aaf772989a0177a57f7f29fe2e0",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"
+      ]
+    },
+    {
+      "case_id": "patch-02-update",
+      "file": "patch-02-update.json",
+      "sha256": "487cd250e0fcdf3fe9749b45aed4027fcbf27a5da9baca132ca18452e0664cf7",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"
+      ]
+    },
+    {
+      "case_id": "patch-03-move-update",
+      "file": "patch-03-move-update.json",
+      "sha256": "a4056b9101bf782eb3cb2b9d61cae1f63d1c98853d97abc04a63eb4a3a96d5b9",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt",
+        "/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt"
+      ]
+    },
+    {
+      "case_id": "patch-04-delete",
+      "file": "patch-04-delete.json",
+      "sha256": "607358c052af1b63e777cf3cb4431a06e41f38ffbe41d436c3bd7cd57c8e84ae",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt"
+      ]
+    },
+    {
+      "case_id": "patch-05-add-existing",
+      "file": "patch-05-add-existing.json",
+      "sha256": "1b22988fb2e341c5e3a70770f81648f6f5425154e5e8e653a3cd019e301c2f70",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/not-image.txt"]
+    },
+    {
+      "case_id": "patch-06-missing-update",
+      "file": "patch-06-missing-update.json",
+      "sha256": "6eefad61b43d36141a6ed9d2cbefcd8793d84f4eebf6dddc1db2d70c7ea6c48c",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "error": "apply_patch verification failed: Failed to read file to update /tmp/core-tools-file-evidence/fixtures/missing.txt: No such file or directory (os error 2)",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-07-empty",
+      "file": "patch-07-empty.json",
+      "sha256": "74c6ef476167135b8db19a639b94119117bd4f1b7ebe66e97d119d433a86c72e",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "error": "patch rejected: empty patch",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-08-crlf",
+      "file": "patch-08-crlf.json",
+      "sha256": "615d83c8756b36272934630e059f3d85c4a41be41b7d96f03b080763f7f30696",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/crlf.txt"]
+    },
+    {
+      "case_id": "patch-09-bom-unrelated",
+      "file": "patch-09-bom-unrelated.json",
+      "sha256": "4691c008cf7de0c6b0cc915596b32bfa59ea28d05790ca3b7e8dcb255139016a",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/bom.txt"]
+    },
+    {
+      "case_id": "patch-10-bom-first-line",
+      "file": "patch-10-bom-first-line.json",
+      "sha256": "6618c816da39a5f7a5531078855657d556f51485822918b65b602bbc5614b19e",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/bom.txt:\nfirst\nSECOND",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-11-no-final-newline",
+      "file": "patch-11-no-final-newline.json",
+      "sha256": "9b28e45dbfa5453366486afb37bc3abd851e7f46d068492dd064facd942016d8",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/no-final-newline.txt"
+      ]
+    },
+    {
+      "case_id": "patch-12-whitespace-match",
+      "file": "patch-12-whitespace-match.json",
+      "sha256": "0b3df06a6cd81e1cc24c827c83802123bc91ca2aebd829b3dd64f895a11aa460",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/whitespace.txt"]
+    },
+    {
+      "case_id": "patch-13-repeated-match",
+      "file": "patch-13-repeated-match.json",
+      "sha256": "0719c17d17993fa97851d0bad8f4a6696a5b0a8089886155a7daf28b4bdaa9e8",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/repeated.txt"]
+    },
+    {
+      "case_id": "patch-14-nonmatching",
+      "file": "patch-14-nonmatching.json",
+      "sha256": "caa4d153003be28defe947aaac822a9847b0d02ef6338dc1a520a9b41ffe92be",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/repeated.txt:\nno such line",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-15-parse-before-write",
+      "file": "patch-15-parse-before-write.json",
+      "sha256": "986565253b9a38a6eea516d1dbf9b42884b7aa26c099815f2c5bb2f6b0b85649",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: invalid hunk at line 4, '*** Invalid File: /tmp/core-tools-file-evidence/fixtures/invalid.txt' is not a valid hunk header. Valid hunk headers: '*** Add File: {path}', '*** Delete File: {path}', '*** Update File: {path}'",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-16-missing-before-write",
+      "file": "patch-16-missing-before-write.json",
+      "sha256": "fa16dd35cc5499f99586d1bf7dd314fafe77965bf575b15026b009d8f5b651ee",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to read file to update /tmp/core-tools-file-evidence/fixtures/missing-again.txt: No such file or directory (os error 2)",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-17-match-before-write",
+      "file": "patch-17-match-before-write.json",
+      "sha256": "6fdd14c8d5e1384a4db680522d35c68e3ec785765920c97596bc6bc94f2733f5",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/repeated.txt:\nabsent text",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-18-runtime-partial-failure",
+      "file": "patch-18-runtime-partial-failure.json",
+      "sha256": "d956378efe66f4a080858f5614e7353e46fe4aa52828818de86d50522c5d0265",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to write file /tmp/core-tools-file-evidence/fixtures/file-as-parent/child.txt\n",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/file-as-parent"]
+    },
+    {
+      "case_id": "patch-19-missing-delete-validation",
+      "file": "patch-19-missing-delete-validation.json",
+      "sha256": "34ed785e5f77225ab4b201b36a90d70d34fad24ca164560a314f02145882d24d",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to read /tmp/core-tools-file-evidence/fixtures/delete-missing.txt: No such file or directory (os error 2)",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-20-anchored-eof-match",
+      "file": "patch-20-anchored-eof-match.json",
+      "sha256": "1819fca4090a1f366c8e37cd78d1a6f9c7b8d898bbd8d9815f69eb456f35cbb2",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/repeated.txt"]
+    },
+    {
+      "case_id": "patch-21-multiple-hunks",
+      "file": "patch-21-multiple-hunks.json",
+      "sha256": "e68d63bab078627f34f81bb6ca24d1b0c7765b58f74cdae3d7e2bdf1c4bfea37",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/multi.txt"
+      ]
+    },
+    {
+      "case_id": "patch-22-multiple-hunks-new-content",
+      "file": "patch-22-multiple-hunks-new-content.json",
+      "sha256": "31f9bdc3dbd412b68544d0cf3e0232e585eecfcc87b3d1a47978a23865c59b5c",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to find expected lines in /tmp/core-tools-file-evidence/fixtures/patch-more/multi-dependent.txt:\nONE",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-23-repeated-path-disjoint",
+      "file": "patch-23-repeated-path-disjoint.json",
+      "sha256": "254879542d8b724ed3f359163252bac0ea1732101cf5a86bda593b5565bc4b12",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: invalid patch: multiple operations target /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-disjoint.txt",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-24-repeated-path-overlap",
+      "file": "patch-24-repeated-path-overlap.json",
+      "sha256": "c955bacf0fc79d16b0780f52ee0f78eac75027043a041f5e5b96f1ec2c48198b",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: invalid patch: multiple operations target /tmp/core-tools-file-evidence/fixtures/patch-more/repeat-overlap.txt",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-25-add-then-update-same-path",
+      "file": "patch-25-add-then-update-same-path.json",
+      "sha256": "1be221eba53dbd15f9b94f6a794555a34e475c85f91efef8dd8711eb8888fc24",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: invalid patch: multiple operations target /tmp/core-tools-file-evidence/fixtures/patch-more/added-then-updated.txt",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-26-exact-match-priority",
+      "file": "patch-26-exact-match-priority.json",
+      "sha256": "75690f16caa68e00a15e620c1075de306e61d3a53b843a9c5abfdf4edbee1564",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-exact.txt"
+      ]
+    },
+    {
+      "case_id": "patch-27-trailing-space-priority",
+      "file": "patch-27-trailing-space-priority.json",
+      "sha256": "074e885b5fda9a00d1c88cc87a77d24ff112aa7ca9b48a6a54505e38fa18a2de",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt"
+      ]
+    },
+    {
+      "case_id": "patch-28-unicode-normalization",
+      "file": "patch-28-unicode-normalization.json",
+      "sha256": "cb0cda8a8b47ca46100e4957eb3c35a4badb4c7fe0d746825c31e50979cab11d",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-unicode.txt"
+      ]
+    },
+    {
+      "case_id": "patch-29-mixed-newlines-first-crlf",
+      "file": "patch-29-mixed-newlines-first-crlf.json",
+      "sha256": "cbdb43b5f644d0dc0aaa8d3d799577d4982d5dac0ae3efc65e5a31dff15e0e4c",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-crlf.txt"
+      ]
+    },
+    {
+      "case_id": "patch-30-mixed-newlines-first-lf",
+      "file": "patch-30-mixed-newlines-first-lf.json",
+      "sha256": "32711ddf00bba8db641401c8467cd0e11694f81bf4b3c5835ad7714c81a723e3",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-lf.txt"
+      ]
+    },
+    {
+      "case_id": "patch-31-invalid-utf8-update",
+      "file": "patch-31-invalid-utf8-update.json",
+      "sha256": "45230b2afa4b228dfe1799639f0d542af2dd1e8ef2ed4c7529c0d4908c9f24c4",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to read file to update /tmp/core-tools-file-evidence/fixtures/patch-more/invalid-update.txt: invalid utf-8 sequence of 1 bytes from index 6",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-32-invalid-utf8-delete",
+      "file": "patch-32-invalid-utf8-delete.json",
+      "sha256": "4614681805d7881932a5e4c470e719ced8dd87e6f1b58535ff68d4d4610ba09c",
+      "tool": "apply_patch",
+      "outcome_kind": "threw",
+      "outcome_type": "string",
+      "error": "apply_patch verification failed: Failed to read /tmp/core-tools-file-evidence/fixtures/patch-more/invalid-delete.txt: invalid utf-8 sequence of 1 bytes from index 6",
+      "changed_paths": []
+    },
+    {
+      "case_id": "patch-33-move-existing-destination",
+      "file": "patch-33-move-existing-destination.json",
+      "sha256": "4301ad4c03beefefc061d1de2689ae8988d663dce268b58aee2bc777385b42e6",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/move-source.txt",
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/move-destination.txt"
+      ]
+    },
+    {
+      "case_id": "patch-34-mixed-first-crlf-minority",
+      "file": "patch-34-mixed-first-crlf-minority.json",
+      "sha256": "2b51f62dfc6caf61d89d272af128a57194de3c7ea0bd47b0d3a71d59e4cf95ee",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-crlf.txt"
+      ]
+    },
+    {
+      "case_id": "patch-35-mixed-first-lf-minority",
+      "file": "patch-35-mixed-first-lf-minority.json",
+      "sha256": "e1c69887fe90d0153c11f4137a8eae064d52b1a85d087179ff0d5a80ceae4a4f",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-lf.txt"
+      ]
+    },
+    {
+      "case_id": "patch-36-mixed-context-unrelated-eof",
+      "file": "patch-36-mixed-context-unrelated-eof.json",
+      "sha256": "5a875aafaebe906cb24c718f0d61bf96aab3e4261ed3088dbe77bdd7c7245e50",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object",
+      "changed_paths": [
+        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-context-no-final.txt"
+      ]
+    },
+    {
+      "case_id": "patch-37-insertion-only",
+      "file": "patch-37-insertion-only.json",
+      "sha256": "00d225cdd76804ad61d8ef88bc4b5f38269e1ed097ffce47949436236bf0cde5",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-38-implicit-first-hunk",
+      "file": "patch-38-implicit-first-hunk.json",
+      "sha256": "df17114d9c3639f3b78b1c6a5c85c9683c788cedfef674400832e97c37914e4c",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-39-empty-add",
+      "file": "patch-39-empty-add.json",
+      "sha256": "f8ce6a57f78c54d6aa214e4b900620a15e1d775a43fb10a61baeffe84f6645e6",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-40-empty-update-hunk",
+      "file": "patch-40-empty-update-hunk.json",
+      "sha256": "94e71ef76518d54891d88e3ee1066faa2301dbb8d124dd423b45dc6bb22507da",
+      "tool": "apply_patch",
+      "outcome_kind": "thrown",
+      "outcome_type": "string"
+    },
+    {
+      "case_id": "patch-41-eof-earlier-match",
+      "file": "patch-41-eof-earlier-match.json",
+      "sha256": "3af31db43500f93b520b327606248c8444aaf7069b74bb79a54f1fcd74656d63",
+      "tool": "apply_patch",
+      "outcome_kind": "thrown",
+      "outcome_type": "string"
+    },
+    {
+      "case_id": "patch-42-move-self",
+      "file": "patch-42-move-self.json",
+      "sha256": "816cfeb3c86fdd3d4c3f556355ad7af3dc2f246abebe6f9fa202ed11b34b9365",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-43-relative-missing",
+      "file": "patch-43-relative-missing.json",
+      "sha256": "b83390c55dbd2c87a3a7f5ecc10580e756c43d85a2440bb967504bf79b531923",
+      "tool": "apply_patch",
+      "outcome_kind": "thrown",
+      "outcome_type": "string"
+    },
+    {
+      "case_id": "patch-44-append-missing-final-newline",
+      "file": "patch-44-append-missing-final-newline.json",
+      "sha256": "be0d5bc62a2a16ae208edbb474c6ebaa4e46c9e9b34ff43c69edef96d8fd951b",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-45-context-append-missing-final-newline",
+      "file": "patch-45-context-append-missing-final-newline.json",
+      "sha256": "6d70119fe40c7103fe277ab633aa1ecf2ea396495d76018e55bd8c3b4d7bd393",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    },
+    {
+      "case_id": "patch-46-empty-update-no-marker",
+      "file": "patch-46-empty-update-no-marker.json",
+      "sha256": "52dbc420217dc4b900d6fbe193247ffcbb7d4574bc618dfb342fd0c5de2982fc",
+      "tool": "apply_patch",
+      "outcome_kind": "thrown",
+      "outcome_type": "string"
+    },
+    {
+      "case_id": "patch-47-remove-all-lines",
+      "file": "patch-47-remove-all-lines.json",
+      "sha256": "a922159cf3341398ba69e4ee3705943bf839044e22611a375c7c6b8189a83e43",
+      "tool": "apply_patch",
+      "outcome_kind": "returned",
+      "outcome_type": "object"
+    }
+  ],
+  "supplemental_batches": [
+    {
+      "case_ids": [
+        "patch-21-multiple-hunks",
+        "patch-22-multiple-hunks-new-content",
+        "patch-23-repeated-path-disjoint",
+        "patch-24-repeated-path-overlap",
+        "patch-25-add-then-update-same-path",
+        "patch-26-exact-match-priority",
+        "patch-27-trailing-space-priority",
+        "patch-28-unicode-normalization",
+        "patch-29-mixed-newlines-first-crlf",
+        "patch-30-mixed-newlines-first-lf",
+        "patch-31-invalid-utf8-update",
+        "patch-32-invalid-utf8-delete",
+        "patch-33-move-existing-destination",
+        "patch-34-mixed-first-crlf-minority",
+        "patch-35-mixed-first-lf-minority",
+        "patch-36-mixed-context-unrelated-eof"
+      ],
+      "recorded_utc": "2026-10-14T03:24:41.636361+00:00",
+      "fixtures_removed": "/tmp/core-tools-file-evidence/fixtures/patch-more",
+      "live_process_sessions": 0
+    }
+  ]
+}

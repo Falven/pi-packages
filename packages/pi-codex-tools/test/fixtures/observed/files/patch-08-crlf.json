@@ -1,0 +1,31 @@
+{
+  "case_id": "patch-08-crlf",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** Update File: /tmp/core-tools-file-evidence/fixtures/crlf.txt\n@@\n first\n-second\n+SECOND\n third\n*** End Patch\n",
+  "before": {
+    "/tmp/core-tools-file-evidence/fixtures/crlf.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "Zmlyc3QNCnNlY29uZA0KdGhpcmQNCg==",
+      "sha256": "a4a3c24cceaa27476772e4fab11d2248299fee9598af6940121666f5af1094c7",
+      "text": "first\r\nsecond\r\nthird\r\n"
+    }
+  },
+  "outcome": {
+    "kind": "returned",
+    "type": "object",
+    "value": {},
+    "own_keys": []
+  },
+  "after": {
+    "/tmp/core-tools-file-evidence/fixtures/crlf.txt": {
+      "exists": true,
+      "kind": "file",
+      "bytes_base64": "Zmlyc3QNClNFQ09ORA0KdGhpcmQNCg==",
+      "sha256": "f9a21ec253c0fd020046f803db6e422fab27c3d836c14503aabb4c9755e0575d",
+      "text": "first\r\nSECOND\r\nthird\r\n"
+    }
+  }
+}

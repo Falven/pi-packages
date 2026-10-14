@@ -1,0 +1,13 @@
+{
+  "case_id": "patch-07-empty",
+  "baseline_id": "local-tools-reference-20261013",
+  "observation": "supplemental-current-runtime",
+  "tool": "apply_patch",
+  "input": "*** Begin Patch\n*** End Patch\n",
+  "before": {},
+  "outcome": {
+    "kind": "threw",
+    "string": "patch rejected: empty patch"
+  },
+  "after": {}
+}

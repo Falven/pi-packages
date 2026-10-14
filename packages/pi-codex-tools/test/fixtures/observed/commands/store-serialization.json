@@ -1,0 +1,32 @@
+{
+  "case_group": "store-serialization",
+  "observations": [
+    {
+      "case_id": "store-copy-isolation",
+      "evidence_kind": "observed",
+      "stored_after_mutating_original_and_loaded_copy": {
+        "nested": {
+          "value": 1
+        }
+      }
+    },
+    {
+      "case_id": "store-cycle",
+      "evidence_kind": "observed",
+      "accepted": false,
+      "error": "TypeError: Converting circular structure to JSON\n    --> starting at object with constructor 'Object'\n    --- property 'self' closes the circle\n    at exec_main.mjs:7:6"
+    },
+    {
+      "case_id": "store-bigint",
+      "evidence_kind": "observed",
+      "accepted": false,
+      "error": "TypeError: Do not know how to serialize a BigInt\n    at exec_main.mjs:7:6"
+    },
+    {
+      "case_id": "store-undefined",
+      "evidence_kind": "observed",
+      "accepted": false,
+      "error": "Unable to store \"probe_store_undefined\". Only plain serializable objects can be stored."
+    }
+  ]
+}

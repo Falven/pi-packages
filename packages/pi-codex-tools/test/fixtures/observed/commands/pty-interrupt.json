@@ -1,0 +1,42 @@
+{
+  "case_group": "pty-interrupt",
+  "cases": [
+    {
+      "case_id": "pty-interrupt",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "printf 'READY\\n'; sleep 30; printf 'AFTER\\n'",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": true,
+        "workdir": "/tmp",
+        "yield_time_ms": 250,
+        "max_output_tokens": 100
+      },
+      "initial": {
+        "chunk_id": "cd8d74",
+        "wall_time_seconds": 0.252611292,
+        "session_id": 21853,
+        "original_token_count": 2,
+        "output": "READY\r\n"
+      },
+      "steps": [
+        {
+          "arguments": {
+            "session_id": 21853,
+            "chars": "\u0003",
+            "yield_time_ms": 1000,
+            "max_output_tokens": 100
+          },
+          "result": {
+            "chunk_id": "5fcf11",
+            "wall_time_seconds": 0.000041917,
+            "exit_code": 1,
+            "original_token_count": 1,
+            "output": "^C"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "baseline_id": "local-tools-reference-20261013",
+  "baseline_source_sha256": "c96638241baa0167c3603823374d67a616a4d4df5142496a1d13971ece498843",
+  "case": "declaration-comparison",
+  "evidence_kind": "observed textual comparison",
+  "nested": [
+    {
+      "baseline_sha256": "e383074c19e29a092b2f6aa501902524916871ba14e4075791e7e043838a9de2",
+      "current_sha256": "e383074c19e29a092b2f6aa501902524916871ba14e4075791e7e043838a9de2",
+      "equal_after_heading_removal_and_outer_whitespace": true,
+      "tool": "exec_command"
+    },
+    {
+      "baseline_sha256": "9479728f956ddacfa4ffad348fb7dde43ea8ba7f612e8f3bc5faea21d4b2d298",
+      "current_sha256": "9479728f956ddacfa4ffad348fb7dde43ea8ba7f612e8f3bc5faea21d4b2d298",
+      "equal_after_heading_removal_and_outer_whitespace": true,
+      "tool": "write_stdin"
+    },
+    {
+      "baseline_sha256": "f78614ad4e4f793fef02aa2d7575af8ddc9d6a8bc57aff49f9f6575e8392da88",
+      "current_sha256": "f78614ad4e4f793fef02aa2d7575af8ddc9d6a8bc57aff49f9f6575e8392da88",
+      "equal_after_heading_removal_and_outer_whitespace": true,
+      "tool": "apply_patch"
+    },
+    {
+      "baseline_sha256": "f6d29379a35fabfd5eb1c5d3dc00a5977e355da5b79bf594db3257a77c8fdf37",
+      "current_sha256": "f6d29379a35fabfd5eb1c5d3dc00a5977e355da5b79bf594db3257a77c8fdf37",
+      "equal_after_heading_removal_and_outer_whitespace": true,
+      "tool": "view_image"
+    }
+  ],
+  "outer_helpers_and_wait": {
+    "evidence_kind": "manual comparison of visible current declarations with source",
+    "matching": "yield defaults, output defaults, helper lifecycle, wait schema and descriptions",
+    "runtime_build_identity": "unverified"
+  }
+}

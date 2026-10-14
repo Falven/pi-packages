@@ -6,7 +6,7 @@
 
 **Blocked by:** 06 — Preserve complete workflows in mixed Pi sessions.
 
-**Status:** ready-for-agent
+**Status:** blocked by 06 — mixed workflows remain incomplete
 
 - [ ] Run the accumulated slice checks and close any missing selected-contract cases. Preserve the source capture identity and the separate scoped fixture identity.
 - [ ] Compare actual outgoing names, namespaces, descriptions, grammar, schemas, defaults, optional fields, argument encoding, results, errors, truncation, and image content. Assert the absence of excluded tools and helper overloads.
@@ -18,3 +18,11 @@
 - [ ] Keep raw comparison evidence sufficient to inspect inputs and outputs, with only incidental identifiers or measurements normalized in deterministic assertions. Exclude credentials, unrelated conversations, and prohibited source-product names from repository fixtures.
 - [ ] Record verification results in the approved spec/tickets and normal test artifacts. Create no additional research report, general design document, application dependency, or automatic baseline-update mechanism.
 - [ ] State remaining public-API or behavioral limits and the exact checks performed before declaring the package complete.
+
+## Retained evidence
+
+The [command observations](../../../packages/pi-codex-tools/test/fixtures/observed/commands/index.json) and [file observations](../../../packages/pi-codex-tools/test/fixtures/observed/files/index.json) preserve supplemental inputs and outcomes separately from the frozen contract. Their runtime identity, formatting, hash validation, and observation limits are recorded in the specification.
+
+Accumulated repository validation at integration commit `5507b77` passed: `pnpm test` completed 948 tests with no failures, cancellations, skips, or todos; formatting checked 216 files, and lint and type checking passed. The separate four-check configured-companion probe is recorded in ticket 06 and is outside that test count.
+
+These are partial accumulated checks. They do not complete full conformance or matched live-model trials. [Ticket 06](06-verify-mixed-native-workflows.md) remains blocked by ticket 03, and this ticket remains blocked by 06.

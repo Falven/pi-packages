@@ -1,0 +1,98 @@
+{
+  "case_group": "outer-numeric-validation",
+  "baseline": "local-tools-reference-20261013",
+  "provenance": "reduced model-visible outer tool observations",
+  "cases": [
+    {
+      "id": "pragma-negative-yield",
+      "pragma": {
+        "yield_time_ms": -1
+      },
+      "status": "rejected",
+      "observed_error": "exec pragma fields `yield_time_ms` and `max_output_tokens` must be non-negative safe integers: invalid number"
+    },
+    {
+      "id": "pragma-fractional-yield",
+      "pragma": {
+        "yield_time_ms": 1.5
+      },
+      "status": "rejected",
+      "observed_error": "exec pragma fields `yield_time_ms` and `max_output_tokens` must be non-negative safe integers: invalid number"
+    },
+    {
+      "id": "pragma-negative-output-budget",
+      "pragma": {
+        "max_output_tokens": -1
+      },
+      "status": "rejected",
+      "observed_error": "exec pragma fields `yield_time_ms` and `max_output_tokens` must be non-negative safe integers: invalid number"
+    },
+    {
+      "id": "pragma-fractional-output-budget",
+      "pragma": {
+        "max_output_tokens": 1.5
+      },
+      "status": "rejected",
+      "observed_error": "exec pragma fields `yield_time_ms` and `max_output_tokens` must be non-negative safe integers: invalid number"
+    },
+    {
+      "id": "pragma-unsafe-integer-yield",
+      "pragma": {
+        "yield_time_ms": 9007199254740992
+      },
+      "status": "rejected",
+      "observed_error": "exec pragma field `yield_time_ms` must be a non-negative safe integer"
+    },
+    {
+      "id": "pragma-zero-yield",
+      "input": "// @exec: {\"yield_time_ms\": 0, \"max_output_tokens\": 1000}\nawait new Promise(resolve=>setTimeout(resolve,100));\ntext(\"ZERO_YIELD_COMPLETED\");",
+      "observed_events": [
+        {
+          "tool": "exec",
+          "status": "running",
+          "cell_id": "48",
+          "wall_time_seconds": 0,
+          "output": ""
+        },
+        {
+          "tool": "wait",
+          "arguments": {
+            "cell_id": "48",
+            "yield_time_ms": 1000,
+            "max_tokens": 1000
+          },
+          "status": "completed",
+          "wall_time_seconds": 0,
+          "output": "ZERO_YIELD_COMPLETED"
+        }
+      ]
+    },
+    {
+      "id": "pragma-zero-output-budget",
+      "input": "// @exec: {\"max_output_tokens\": 0}\ntext(\"BUDGET\");",
+      "status": "completed",
+      "observed_output": "Warning: truncated output (original token count: 2)\nTotal output lines: 1\n\n…2 tokens truncated…"
+    },
+    {
+      "id": "wait-negative-output-budget",
+      "arguments": {
+        "cell_id": "48",
+        "yield_time_ms": 0,
+        "max_tokens": -1
+      },
+      "status": "argument-error",
+      "observed_error": "failed to parse function arguments: invalid value: integer `-1`, expected usize at line 1 column 49"
+    },
+    {
+      "id": "wait-fractional-output-budget",
+      "arguments": {
+        "cell_id": "48",
+        "yield_time_ms": 0,
+        "max_tokens": 1.5
+      },
+      "status": "argument-error",
+      "observed_error": "failed to parse function arguments: invalid type: floating point `1.5`, expected usize at line 1 column 50"
+    }
+  ],
+  "limits": "No maximum script duration was inferred. Wait argument rejection occurs before stale-handle lookup in the two budget probes. Upper limits for wait duration and output policy caps were not measured."
+}

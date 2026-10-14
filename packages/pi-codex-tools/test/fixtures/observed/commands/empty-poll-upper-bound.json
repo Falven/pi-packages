@@ -1,0 +1,56 @@
+{
+  "case_group": "empty-poll-upper-bound",
+  "cases": [
+    {
+      "case_id": "empty-poll-upper-clamp",
+      "evidence_kind": "observed",
+      "arguments": {
+        "cmd": "printf 'UPPER_READY\\n'; sleep 310; printf 'UPPER_DONE\\n'",
+        "shell": "/bin/sh",
+        "login": false,
+        "tty": false,
+        "workdir": "/tmp",
+        "yield_time_ms": 250,
+        "max_output_tokens": 100
+      },
+      "initial": {
+        "chunk_id": "9f7a0f",
+        "wall_time_seconds": 0.250364083,
+        "session_id": 72649,
+        "original_token_count": 3,
+        "output": "UPPER_READY\n"
+      },
+      "poll": {
+        "arguments": {
+          "session_id": 72649,
+          "chars": "",
+          "yield_time_ms": 400000,
+          "max_output_tokens": 100
+        },
+        "result": {
+          "chunk_id": "a87331",
+          "wall_time_seconds": 300.001593208,
+          "session_id": 72649,
+          "original_token_count": 0,
+          "output": ""
+        },
+        "caller_elapsed_ms": 300005
+      },
+      "cleanup": {
+        "arguments": {
+          "session_id": 72649,
+          "chars": "",
+          "yield_time_ms": 1000,
+          "max_output_tokens": 100
+        },
+        "result": {
+          "chunk_id": "e69e22",
+          "wall_time_seconds": 0.000021458,
+          "exit_code": 0,
+          "original_token_count": 3,
+          "output": "UPPER_DONE\n"
+        }
+      }
+    }
+  ]
+}
