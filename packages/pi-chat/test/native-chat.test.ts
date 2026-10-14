@@ -1072,14 +1072,8 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   await host.frame()
   assert.match(screen(), /CUSTOM LATE RESULT/)
   assert.match(screen(), /▼ Called a tool, read files/)
-  const workRow = host
-    .screenLines()
-    .findIndex((line) =>
-      /Worked for \d+m \d+s ▼/.test(stripTerminalSequences(line)),
-    )
-  assert(workRow >= 0)
-  await host.key(`\x1b[<0;2;${workRow + 1}M`)
-  await host.key(`\x1b[<0;2;${workRow + 1}m`)
+  await host.key("\x1b[A")
+  await host.key("\r")
   assert.doesNotMatch(await host.frame(), /CUSTOM LATE RESULT|CUSTOM CALL/)
   assert.match(screen(), /Received\./)
   await host.key("\x1b")
@@ -1096,6 +1090,7 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
       },
     },
     { pause: true },
+    { event: { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] } },
     done,
     end,
   )
@@ -1108,7 +1103,9 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   assert.equal(resultPresenters, 1)
   host.resumeResponse()
   await host.settled()
-  await openWork(host)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.key("\x1b")
   const later = await host.frame()
   assert.match(later, /CUSTOM UPDATE DURING LATER REQUEST/)
   assert.match(later, /▼ Called a tool, read files/)

@@ -1362,4 +1362,37 @@ test("a standalone native message after the final keeps its source position", as
     retainedReplay,
     /Retained-only steering[\s\S]*Notice without earlier work[\s\S]*Retained-only answer/,
   )
+
+  const boundaryRequest = host.requests.length + 2
+  host.queueResponse(
+    delta("Work before unidentified notice", "one.txt"),
+    finish("tool_calls"),
+    done,
+  )
+  host.queueResponse(
+    { pause: true },
+    delta("Answer after unidentified notice"),
+    finish(),
+    done,
+  )
+  await host.type("Preserve an unidentified native boundary")
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(host.requests.length, boundaryRequest))
+  host.ui.notify("Boundary without a session occurrence", "warning")
+  host.resumeResponse()
+  await host.settled()
+  const boundary = await host.frame()
+  assert.match(
+    boundary,
+    /Work before unidentified notice[\s\S]*Boundary without a session occurrence[\s\S]*Answer after unidentified notice/,
+  )
+  assert.equal((boundary.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  assert.doesNotMatch(
+    JSON.stringify(host.session.messages),
+    /Boundary without a session occurrence/,
+  )
+  assert.doesNotMatch(
+    JSON.stringify(host.requests.at(-1)),
+    /Boundary without a session occurrence/,
+  )
 })
