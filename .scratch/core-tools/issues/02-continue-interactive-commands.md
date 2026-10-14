@@ -39,6 +39,10 @@ The real-host checks cover repeated input across ordinary prompts, empty polling
 
 After merging the completed command, patch, and image slices, all 114 package tests pass. The package type check, lint, formatting check, and `git diff --check` pass. Timing tests directly exercise the 10-second command default, 250 ms input minimum, 5-second empty default/minimum, and 30-second command/input maximum. The 300-second empty-poll maximum is directly measured in the reference evidence; it is not repeated as a five-minute host test.
 
+A later full repository run at `0d80487` exposed three test setup races: startup output was assumed to arrive within the initial 250 ms. A temporary 600 ms startup delay reproduced all three failures. The tests now collect pending startup output through a real poll, wait for valid child PIDs, control output phases with release files, and compare complete output across incidental collection boundaries. Exact input ordering, token counts, truncation, UTF-8, private permissions, cleanup, and measured wait assertions remain covered. Runtime code is unchanged.
+
+The same delayed-startup probe passed all three cases after the test fixes. After removing that temporary delay, all 117 package tests passed, as did package type checking, targeted lint, formatting, and whitespace checks. The full repository rerun remains separate from this focused verification.
+
 Evidence is retained in the [command index](../../../packages/pi-codex-tools/test/fixtures/observed/commands/index.json). Relevant indexed cases are `command-long-waits.json`, `command-pty-boundaries.json`, `empty-poll-upper-bound.json`, `command-input-validation.json`, `post-exit-handles.json`, `concurrent-process-polls.json`, `concurrent-process-input.json`, and `pty-interrupt.json`. The [dependency probe](../../../packages/pi-codex-tools/test/fixtures/observed/commands/pty-dependency-gate.json) is a separate unindexed observation. These supplemental observations do not establish the runtime build identity of the frozen capture.
 
 ## Dependency and remaining limits

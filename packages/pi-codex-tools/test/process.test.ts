@@ -2,7 +2,7 @@
 import assert from "node:assert/strict"
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import test from "node:test"
+import test, { type TestContext } from "node:test"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
@@ -36,6 +36,44 @@ async function request(
   return output(host, id)
 }
 
+async function expectRunningOutput(
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+  initial: ReturnType<typeof result>,
+  expected: string,
+) {
+  const chunks = [initial]
+  if (initial.output !== expected) {
+    await request(
+      host,
+      `text(await tools.write_stdin({session_id:${initial.session_id}}));`,
+      "ready",
+    )
+    chunks.push(result(host, "ready"))
+  }
+  assert.equal(chunks.map((chunk) => chunk.output).join(""), expected)
+  for (const chunk of chunks) {
+    assert.equal(chunk.session_id, initial.session_id)
+    assert.equal("exit_code" in chunk, false)
+    assert.equal(
+      chunk.original_token_count,
+      Math.ceil(Buffer.byteLength(chunk.output) / 4),
+    )
+  }
+}
+
+async function readPids(t: TestContext, file: string, count = 1) {
+  return t.waitFor(
+    async () => {
+      const text = (await readFile(file, "utf8")).trim()
+      assert.match(text, /^[1-9]\d*(?: [1-9]\d*)*$/)
+      const pids = text.split(" ").map(Number)
+      assert.equal(pids.length, count)
+      return pids
+    },
+    { timeout: 5000 },
+  )
+}
+
 test("a PTY continues through fresh tool calls and ordinary prompts", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -56,8 +94,7 @@ test("a PTY continues through fresh tool calls and ordinary prompts", async (t) 
   host.queueResponse(completed)
   await host.session.prompt("Start an interactive command")
   const initial = result(host, "start")
-  assert.equal(initial.output, "READY\r\n")
-  assert.equal(initial.original_token_count, 2)
+  await expectRunningOutput(host, initial, "READY\r\n")
   assert.equal(typeof initial.session_id, "number")
   assert(initial.session_id! > 0 && initial.session_id! <= 2147483647)
   assert.equal("exit_code" in initial, false)
@@ -127,6 +164,7 @@ test("interrupt input preserves terminal output and the observed exit status", a
   host.queueResponse(completed)
   await host.session.prompt("Start an interruptible command")
   const initial = result(host, "start")
+  await expectRunningOutput(host, initial, "READY\r\n")
   host.queueResponse(
     ...call(
       `text(await tools.write_stdin(${JSON.stringify({ session_id: initial.session_id, chars: "\u0003" })}));`,
@@ -159,7 +197,7 @@ test("empty polls default to five seconds and clamp short waits without consumin
     "start",
   )
   const initial = result(host, "start")
-  assert.equal(initial.output, "READY\r\n")
+  await expectRunningOutput(host, initial, "READY\r\n")
   assert(initial.wall_time_seconds >= 0.24)
   assert(initial.wall_time_seconds < 2)
   await request(
@@ -210,7 +248,7 @@ test("pipe mode closes stdin and keeps unread completion output after failed inp
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: `echo $$ > '${pidFile}'; printf 'EARLY\\n'; IFS= read -r line; printf 'EOF:%s\\n' "$?"; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'LATE\\n'; exit 7`,
+      cmd: `printf 'EARLY\\n'; IFS= read -r line; printf 'EOF:%s\\n' "$?"; echo $$ > '${pidFile}'; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'LATE\\n'; exit 7`,
       shell: "/bin/sh",
       login: false,
       yield_time_ms: 250,
@@ -218,11 +256,10 @@ test("pipe mode closes stdin and keeps unread completion output after failed inp
     "start",
   )
   const initial = result(host, "start")
-  assert.equal(initial.output, "EARLY\nEOF:1\n")
+  const [pid] = await readPids(t, pidFile)
   await writeFile(gate, "finish")
-  const pid = Number(await readFile(pidFile, "utf8"))
   await t.waitFor(() =>
-    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }),
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" }),
   )
   const failed = await request(
     host,
@@ -239,9 +276,12 @@ test("pipe mode closes stdin and keeps unread completion output after failed inp
     "drain",
   )
   const drained = result(host, "drain")
-  assert.equal(drained.output, "LATE\n")
+  assert.equal(initial.output + drained.output, "EARLY\nEOF:1\nLATE\n")
   assert.equal(drained.exit_code, 7)
-  assert.equal(drained.original_token_count, 2)
+  assert.equal(
+    drained.original_token_count,
+    Math.ceil(Buffer.byteLength(drained.output) / 4),
+  )
   assert.equal("session_id" in drained, false)
 })
 
@@ -259,24 +299,23 @@ test("unread output stays private and a later budget preserves split UTF-8 and t
     else process.env["TMPDIR"] = previousTmp
   })
   const program = join(host.directory, "output.mjs")
+  const start = join(host.directory, "start")
   const gate = join(host.directory, "finish")
   const pidFile = join(host.directory, "owned.pid")
   await writeFile(
     program,
     `
 import { existsSync, writeFileSync } from "node:fs";
+import { setTimeout } from "node:timers/promises";
+while (!existsSync(${JSON.stringify(start)})) await setTimeout(10);
+await new Promise((resolve) => process.stdout.write("FIRST\\n", resolve));
 writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));
-process.stdout.write("FIRST\\n");
-const waiting = setInterval(() => {
-  if (!existsSync(${JSON.stringify(gate)})) return;
-  clearInterval(waiting);
-  process.stdout.write(Buffer.from([0xf0, 0x9f]));
-  setTimeout(() => {
-    process.stdout.write(Buffer.from([0x99, 0x82]));
-    process.stdout.write("🙂".repeat(39) + "END\\n");
-    process.exitCode = 7;
-  }, 20);
-}, 10);
+while (!existsSync(${JSON.stringify(gate)})) await setTimeout(10);
+process.stdout.write(Buffer.from([0xf0, 0x9f]));
+await setTimeout(20);
+process.stdout.write(Buffer.from([0x99, 0x82]));
+process.stdout.write("🙂".repeat(39) + "END\\n");
+process.exitCode = 7;
 `,
   )
   await request(
@@ -285,11 +324,8 @@ const waiting = setInterval(() => {
     "start",
   )
   const initial = result(host, "start")
-  assert.equal(initial.original_token_count, 2)
-  assert.equal(
-    initial.output,
-    "Warning: truncated output (original token count: 2)\nTotal output lines: 1\n\nFI…1 tokens truncated…T\n",
-  )
+  assert.equal(initial.output, "")
+  assert.equal(initial.original_token_count, 0)
   const directories = await readdir(spills)
   assert.equal(directories.length, 1)
   const directory = join(spills, directories[0]!)
@@ -297,10 +333,22 @@ const waiting = setInterval(() => {
   const files = await readdir(directory)
   assert.equal(files.length, 1)
   assert.equal((await stat(join(directory, files[0]!))).mode & 0o777, 0o600)
+  await writeFile(start, "start")
+  const [pid] = await readPids(t, pidFile)
+  await request(
+    host,
+    `text(await tools.write_stdin({session_id:${initial.session_id}, max_output_tokens:1}));`,
+    "first",
+  )
+  const first = result(host, "first")
+  assert.equal(first.original_token_count, 2)
+  assert.equal(
+    first.output,
+    "Warning: truncated output (original token count: 2)\nTotal output lines: 1\n\nFI…1 tokens truncated…T\n",
+  )
   await writeFile(gate, "finish")
-  const pid = Number(await readFile(pidFile, "utf8"))
   await t.waitFor(() =>
-    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }),
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" }),
   )
   await request(
     host,
@@ -323,7 +371,7 @@ test("reload awaits the PTY and its waiting child and makes the old handle stale
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: `trap '' HUP; sleep 30 & child=$!; printf '%s %s' $$ "$child" > '${pidFile}'; printf 'PARTIAL\\n'; wait`,
+      cmd: `trap '' HUP; sleep 30 & child=$!; printf 'PARTIAL\\n'; printf '%s %s' $$ "$child" > '${pidFile}'; wait`,
       shell: "/bin/sh",
       login: false,
       tty: true,
@@ -332,9 +380,8 @@ test("reload awaits the PTY and its waiting child and makes the old handle stale
     "start",
   )
   const initial = result(host, "start")
-  assert.equal(initial.output, "PARTIAL\r\n")
-  const pids = (await readFile(pidFile, "utf8")).split(" ").map(Number)
-  assert.equal(pids.length, 2)
+  const pids = await readPids(t, pidFile, 2)
+  await expectRunningOutput(host, initial, "PARTIAL\r\n")
   const messages = structuredClone(host.session.messages)
   await host.reload()
   for (const pid of pids)
@@ -373,10 +420,11 @@ test("concurrent final polls drain once and reject the retired handle", async (t
     extensionPaths: [extension],
     providerApi,
   })
+  const gate = join(host.directory, "finish")
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: "printf 'START\\n'; sleep 1; printf 'END\\n'; exit 7",
+      cmd: `printf 'START\\n'; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'END\\n'; exit 7`,
       shell: "/bin/sh",
       login: false,
       yield_time_ms: 250,
@@ -384,6 +432,7 @@ test("concurrent final polls drain once and reject the retired handle", async (t
     "start",
   )
   const initial = result(host, "start")
+  await writeFile(gate, "finish")
   const text = await request(
     host,
     `text(await Promise.allSettled([tools.write_stdin({session_id:${initial.session_id}}), tools.write_stdin({session_id:${initial.session_id}})]));`,
@@ -391,7 +440,7 @@ test("concurrent final polls drain once and reject the retired handle", async (t
   )
   const outcomes = JSON.parse(text.slice(text.indexOf("[")))
   assert.equal(outcomes[0].status, "fulfilled")
-  assert.equal(outcomes[0].value.output, "END\n")
+  assert.equal(initial.output + outcomes[0].value.output, "START\nEND\n")
   assert.equal(outcomes[0].value.exit_code, 7)
   assert.equal("session_id" in outcomes[0].value, false)
   assert.deepEqual(outcomes[1], {
@@ -417,6 +466,7 @@ test("concurrent writes deliver input and collect output in call order", async (
     "start",
   )
   const initial = result(host, "start")
+  await expectRunningOutput(host, initial, "READY\r\n")
   const text = await request(
     host,
     `text(await Promise.all([tools.write_stdin({session_id:${initial.session_id}, chars:"alpha\\n"}), tools.write_stdin({session_id:${initial.session_id}, chars:"beta\\n"})]));`,
@@ -493,7 +543,9 @@ test("later input preserves native policy edits, redaction, events, and call own
   )
   assert.match(finished, /processed-input$/)
   assert.doesNotMatch(finished, /discarded-secret|edited/)
-  assert.equal(await readFile(delivered, "utf8"), "edited")
+  await t.waitFor(async () =>
+    assert.equal(await readFile(delivered, "utf8"), "edited"),
+  )
   assert.deepEqual(
     events
       .filter(
@@ -556,7 +608,7 @@ test("cancelling a later poll awaits owned children and retains that call's part
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: `printf 'READY\\n'; IFS= read -r line; sleep 30 & child=$!; printf '%s %s' $$ "$child" > '${pidFile}'; printf 'PARTIAL:%s\\n' "$line"; wait`,
+      cmd: `printf 'READY\\n'; IFS= read -r line; sleep 30 & child=$!; printf 'PARTIAL:%s\\n' "$line"; printf '%s %s' $$ "$child" > '${pidFile}'; wait`,
       shell: "/bin/sh",
       login: false,
       tty: true,
@@ -572,11 +624,7 @@ test("cancelling a later poll awaits owned children and retains that call's part
     ),
   )
   const running = host.session.prompt("Send input and wait")
-  let pids: number[] = []
-  await t.waitFor(async () => {
-    pids = (await readFile(pidFile, "utf8")).split(" ").map(Number)
-    assert.equal(pids.length, 2)
-  })
+  const pids = await readPids(t, pidFile, 2)
   await host.session.abort()
   await running
   for (const pid of pids)
@@ -608,7 +656,7 @@ test("normal shutdown awaits pipe children and keeps the active call's partial o
   host.queueResponse(
     ...call(
       `text(await tools.exec_command(${JSON.stringify({
-        cmd: `trap '' HUP; sleep 30 & child=$!; printf '%s %s' $$ "$child" > '${pidFile}'; printf 'PARTIAL\\n'; wait`,
+        cmd: `trap '' HUP; sleep 30 & child=$!; printf 'PARTIAL\\n'; printf '%s %s' $$ "$child" > '${pidFile}'; wait`,
         shell: "/bin/sh",
         login: false,
       })}));`,
@@ -617,11 +665,7 @@ test("normal shutdown awaits pipe children and keeps the active call's partial o
   )
   const session = host.session
   const running = session.prompt("Start a command before shutdown")
-  let pids: number[] = []
-  await t.waitFor(async () => {
-    pids = (await readFile(pidFile, "utf8")).split(" ").map(Number)
-    assert.equal(pids.length, 2)
-  })
+  const pids = await readPids(t, pidFile, 2)
   await host.close()
   await running
   for (const pid of pids)
@@ -645,7 +689,7 @@ test("a completed PTY ignores late input while returning its unread final output
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: `echo $$ > '${pidFile}'; printf 'EARLY\\n'; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'LATE\\n'; exit 7`,
+      cmd: `printf 'EARLY\\n'; echo $$ > '${pidFile}'; while [ ! -e '${gate}' ]; do sleep 0.02; done; printf 'LATE\\n'; exit 7`,
       shell: "/bin/sh",
       login: false,
       tty: true,
@@ -654,10 +698,10 @@ test("a completed PTY ignores late input while returning its unread final output
     "start",
   )
   const initial = result(host, "start")
+  const [pid] = await readPids(t, pidFile)
   await writeFile(gate, "finish")
-  const pid = Number(await readFile(pidFile, "utf8"))
   await t.waitFor(() =>
-    assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }),
+    assert.throws(() => process.kill(pid!, 0), { code: "ESRCH" }),
   )
   await request(
     host,
@@ -665,7 +709,7 @@ test("a completed PTY ignores late input while returning its unread final output
     "drain",
   )
   const drained = result(host, "drain")
-  assert.equal(drained.output, "LATE\r\n")
+  assert.equal(initial.output + drained.output, "EARLY\r\nLATE\r\n")
   assert.equal(drained.exit_code, 7)
   assert.equal("session_id" in drained, false)
 })
@@ -687,7 +731,7 @@ test("command defaults and command/input upper waits match the measured boundari
     "terminal",
   )
   const terminal = result(host, "terminal")
-  assert.equal(terminal.output, "24 80\r\n")
+  await expectRunningOutput(host, terminal, "24 80\r\n")
   const command = {
     cmd: "printf START; sleep 31; printf END; exit 7",
     shell: "/bin/sh",
