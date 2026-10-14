@@ -325,7 +325,11 @@ test("a native text rendering failure leaves preview content and membership reco
 
 for (const view of ["formatted", "source"]) {
   for (const position of ["before", "inside", "after", "repeated"]) {
-    test(`Restore Inline maps ${position} references across a ${view} code selection`, async (t) => {
+    const name =
+      position === "inside"
+        ? `a reference inside a ${view} code selection remains literal text`
+        : `Restore Inline maps ${position} references across a ${view} code selection`
+    test(name, async (t) => {
       const host = await nativePi(t, [composerPath])
       const source = join(host.directory, "code.txt")
       const contents = `\tconst literal = \`/skill:sample @file **literal**\`;\r\n// ${"x".repeat(5001)}\r\n`
@@ -359,10 +363,24 @@ for (const view of ["formatted", "source"]) {
       } else {
         for (let i = 0; i < 3; i++) host.input("\x1b[1;2D")
       }
+      if (position === "inside") {
+        await host.runtime.session.prompt("/attachments")
+        assert.match(host.render(), /No attachments in this draft/)
+        assert.equal(host.ui.getEditorText(), before)
+        host.input("chosen")
+        assert.equal(
+          host.ui.getEditorText(),
+          before.replace(`${reference}\nKeep old`, "chosen"),
+        )
+        host.input("\x1b[122;9u")
+        assert.equal(host.ui.getEditorText(), before)
+        assert.equal(await readFile(path, "utf8"), contents)
+        return
+      }
       const { pending } = await startAction(host, "Restore Inline")
       await pending
       const inline = contents.replaceAll("\r\n", "\n")
-      const after = `${prefix.replaceAll(reference, "")}\`\`\`text\n${position === "inside" ? "" : "Keep "}${inline}\n\`\`\`${suffix.replaceAll(reference, "")}`
+      const after = `${prefix.replaceAll(reference, "")}\`\`\`text\nKeep ${inline}\n\`\`\`${suffix.replaceAll(reference, "")}`
       assert.equal(host.ui.getEditorText(), after)
       assert.doesNotMatch(host.render(), /Manage attachments|\[paste #/)
       host.input("!")
@@ -379,11 +397,10 @@ for (const view of ["formatted", "source"]) {
       assert.equal(host.ui.getEditorText(), after)
       host.input("\x1b[122;9u")
       host.input("chosen")
-      const reselected =
-        position === "inside"
-          ? before.replace(`${reference}\nKeep old`, "chosen")
-          : before.replace("Keep old", "Keep chosen")
-      assert.equal(host.ui.getEditorText(), reselected)
+      assert.equal(
+        host.ui.getEditorText(),
+        before.replace("Keep old", "Keep chosen"),
+      )
       assert.equal(await readFile(path, "utf8"), contents)
       assert.equal(host.requests.length, 0)
     })

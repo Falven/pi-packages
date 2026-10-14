@@ -186,7 +186,7 @@ test("the paste decorator preserves Attach Text read observation and composer se
   assert.doesNotMatch(host.render(), /Manage attachments/)
   host.input("\x1b[122;10u")
   assert.equal(snapshotPath(host.ui.getEditorText()), path)
-  assertAttachments(host.ui.getEditorText(), host.render(), 1)
+  assert.doesNotMatch(host.render(), /Manage attachments/)
 })
 
 test("a failed paste snapshot write leaves the selection and captured bytes recoverable", async (t) => {

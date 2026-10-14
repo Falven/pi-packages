@@ -1,5 +1,5 @@
 import { readFile, realpath } from "node:fs/promises"
-import { basename, resolve, sep } from "node:path"
+import { basename, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   type ExtensionAPI,
@@ -21,32 +21,13 @@ import {
   Image,
 } from "@earendil-works/pi-tui"
 import { registerRecovery, saveRequest } from "./recovery.ts"
+import { attachmentPaths } from "./references.ts"
 
 const THUMBNAIL_SETTING = "pi-attachments.thumbnailSize"
 const THUMBNAIL_BOUNDS = {
   small: { columns: 12, rows: 2 },
   medium: { columns: 24, rows: 4 },
   large: { columns: 48, rows: 8 },
-}
-
-export function attachmentReferences(text: string, storage: string) {
-  const references: { path: string; from: number; to: number }[] = []
-  for (const match of text.matchAll(/\[Attachment: [^[\]]+\]\(<([^<>]+)>\)/g)) {
-    const path = match[1] && resolve(match[1])
-    if (path?.startsWith(storage + sep))
-      references.push({
-        path,
-        from: match.index,
-        to: match.index + match[0].length,
-      })
-  }
-  return references
-}
-
-export function attachmentPaths(text: string, storage: string): string[] {
-  return [
-    ...new Set(attachmentReferences(text, storage).map(({ path }) => path)),
-  ]
 }
 
 export async function snapshotFile(
@@ -76,6 +57,7 @@ export function registerImages(
   pi: ExtensionAPI,
   storage: string,
   signal: AbortSignal,
+  draftPaths: (ctx: ExtensionContext) => string[],
 ): void {
   pi.registerSetting({
     id: THUMBNAIL_SETTING,
@@ -122,7 +104,8 @@ export function registerImages(
   }
 
   pi.on("input", async (event, ctx) => {
-    if (attachmentPaths(event.text, storage).length === 0) return undefined
+    if (attachmentPaths(event.text, storage, ctx.cwd).length === 0)
+      return undefined
     try {
       // Save the requesting draft before authentication, queueing, or editor clearing.
       await retain(event, ctx)
@@ -137,7 +120,7 @@ export function registerImages(
   pi.on("input_delivery", async (event, ctx) => {
     const settings = pi.getSettings().images
     if (settings?.blockImages) return undefined
-    const paths = attachmentPaths(event.text, storage)
+    const paths = attachmentPaths(event.text, storage, ctx.cwd)
     if (paths.length === 0) return undefined
     const resizeOptions = ctx.model?.inputLimits?.images?.resize
     const autoResize = settings?.autoResize ?? true
@@ -241,7 +224,7 @@ export function registerImages(
       return {
         render(width) {
           if (signal.aborted) return []
-          const paths = attachmentPaths(ctx.ui.getEditorText(), storage)
+          const paths = draftPaths(ctx)
           if (paths.length === 0) return []
           const capabilities = getCapabilities()
           const settings = pi.getSettings()

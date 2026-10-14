@@ -134,6 +134,7 @@ export async function saveSnapshot(storage: string, request: SnapshotRequest) {
     unsaved.delete(request)
     return {
       reference,
+      paths: files.map(({ path }) => path),
       recovery,
       problem: images.some(
         (image) => image.status === "fulfilled" && image.value,

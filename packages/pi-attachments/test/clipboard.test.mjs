@@ -277,7 +277,7 @@ test("a fragmented image-path paste replaces a composer selection in code and it
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const after = host.ui.getEditorText()
   assert.match(after, /^```text\nKeep \n\[Attachment:/)
-  await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
+  assert.doesNotMatch(host.render(), /Manage attachments|\[Image:/)
   host.input("\x1b[122;9u")
   assert.equal(host.ui.getEditorText(), before)
   assert.doesNotMatch(host.render(), /Manage attachments/)
@@ -286,6 +286,7 @@ test("a fragmented image-path paste replaces a composer selection in code and it
 
   const reference = after.trim().split("\n").at(-1)
   host.ui.setEditorText(reference)
+  await waitFor(() => assert.match(host.render(), /\[Image: .*2x1/))
   host.input("\x1b[109;10u")
   host.input("\x7f")
   host.input("\x7f")

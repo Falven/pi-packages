@@ -893,8 +893,9 @@ export class SourceEditor extends CustomEditor {
     if (keys.matches(data, "tui.input.submit") || submitAlias) {
       if (this.disableSubmit || !this.getText().trim()) return
       const text = this.getText()
+      const identity = this.getEditorTextIdentity()
       this.setText("")
-      this.onSubmit?.(text)
+      this.onSubmit?.(text, identity)
       return
     }
     if (movementMatches("tui.editor.cursorUp")) {

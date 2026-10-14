@@ -12,16 +12,23 @@ import {
   truncateToVisualLines,
 } from "@earendil-works/pi-coding-agent"
 import { type Editor, type TuiMouseEvent } from "@earendil-works/pi-tui"
-import {
-  attachmentPaths,
-  attachmentReferences,
-  registerImages,
-  snapshotFile,
-} from "./images.ts"
+import { registerImages, snapshotFile } from "./images.ts"
+import { registerMarkdown } from "./markdown.ts"
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
 import { registerPaste, sourcePath } from "./paste.ts"
 import { TextPreview } from "./preview.ts"
+
+function mergeRanges(ranges: { from: number; to: number }[]) {
+  const merged: { from: number; to: number }[] = []
+  for (const range of ranges.toSorted((a, b) => a.from - b.from)) {
+    const previous = merged.at(-1)
+    if (previous && range.from <= previous.to)
+      previous.to = Math.max(previous.to, range.to)
+    else merged.push({ ...range })
+  }
+  return merged
+}
 
 export default function piAttachments(pi: ExtensionAPI): void {
   const storage = resolve(getAgentDir(), "pi-attachments")
@@ -36,14 +43,27 @@ export default function piAttachments(pi: ExtensionAPI): void {
   const withPaste = registerPaste(attach, lifetime.signal, () => {
     revision++
   })
-  registerImages(pi, storage, lifetime.signal)
+  const markdown = registerMarkdown(pi, storage, lifetime.signal)
+  const paths = (text: string, ctx: ExtensionContext) => [
+    ...new Set(markdown.references(text, ctx).map(({ path }) => path)),
+  ]
+  registerImages(pi, storage, lifetime.signal, (ctx) =>
+    paths(ctx.ui.getEditorText(), ctx),
+  )
   registerCleanup(pi, storage)
 
-  function withoutAttachment(text: string, path: string): string {
-    for (const reference of attachmentReferences(text, storage).toReversed()) {
-      if (reference.path === path)
-        text = text.slice(0, reference.from) + text.slice(reference.to)
-    }
+  function withoutAttachment(
+    text: string,
+    path: string,
+    ctx: ExtensionContext,
+  ): string {
+    const references = mergeRanges(
+      markdown
+        .references(text, ctx)
+        .filter((reference) => reference.path === path),
+    )
+    for (const reference of references.toReversed())
+      text = text.slice(0, reference.from) + text.slice(reference.to)
     return text
   }
 
@@ -69,6 +89,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
       insertText = editor.insertTextAtCursor?.bind(editor)
       let restoration: ((text: string) => void) | undefined
       let removingReferences = false
+      let replacingDraft = false
+      const capture = markdown.observe(ctx)
       restoreInline = (path, contents) => {
         if (!editor.insertTextAtCursor)
           throw new Error("The active editor cannot insert text")
@@ -78,9 +100,9 @@ export default function piAttachments(pi: ExtensionAPI): void {
         if (typeof getCursor !== "function")
           throw new Error("The active editor cannot report its native cursor")
         const before = editor.getText()
-        const references = attachmentReferences(before, storage).filter(
-          (reference) => reference.path === path,
-        )
+        const references = markdown
+          .references(before, ctx)
+          .filter((reference) => reference.path === path)
         restoration = (text) => {
           const cursor = getCursor.call(editor)
           const end =
@@ -129,15 +151,16 @@ export default function piAttachments(pi: ExtensionAPI): void {
             throw new Error(
               "Could not map the editor insertion; attachment retained",
             )
-          const ranges = references
-            .flatMap((reference) =>
-              retained.map((range) => ({
-                from: Math.max(reference.from, range.from) + range.delta,
-                to: Math.min(reference.to, range.to) + range.delta,
-              })),
-            )
-            .filter((range) => range.from < range.to)
-            .toSorted((a, b) => a.from - b.from)
+          const ranges = mergeRanges(
+            references
+              .flatMap((reference) =>
+                retained.map((range) => ({
+                  from: Math.max(reference.from, range.from) + range.delta,
+                  to: Math.min(reference.to, range.to) + range.delta,
+                })),
+              )
+              .filter((range) => range.from < range.to),
+          )
           let expanded = editor.getExpandedText?.() ?? text
           if (expanded !== text) {
             // Keep native paste contents when setText retires their display markers.
@@ -155,7 +178,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
                 inserted +
                 expanded.slice(offset + span.length)
             }
-            editor.setText(withoutAttachment(expanded, path))
+            editor.setText(withoutAttachment(expanded, path, ctx))
             return
           }
           for (const range of ranges.toReversed()) {
@@ -169,7 +192,11 @@ export default function piAttachments(pi: ExtensionAPI): void {
           if (restoration && contents === "") {
             restoration = undefined
             editor.setText(
-              withoutAttachment(editor.getExpandedText?.() ?? before, path),
+              withoutAttachment(
+                editor.getExpandedText?.() ?? before,
+                path,
+                ctx,
+              ),
             )
           }
         } finally {
@@ -188,6 +215,12 @@ export default function piAttachments(pi: ExtensionAPI): void {
               return value.call(target)
             }
           }
+          if (property === "addToHistory" && typeof value === "function") {
+            return (text: string, identity?: object) =>
+              capture.addToHistory(text, identity, (prepared) =>
+                value.call(target, prepared, identity),
+              )
+          }
           if (property === "handleMouse") {
             return (event: TuiMouseEvent) => {
               if (event.button !== "right" || event.type === "press") revision++
@@ -202,7 +235,12 @@ export default function piAttachments(pi: ExtensionAPI): void {
           ) {
             return (...args: unknown[]) => {
               revision++
-              return value.apply(target, args)
+              replacingDraft = property === "setText"
+              try {
+                return value.apply(target, args)
+              } finally {
+                replacingDraft = false
+              }
             }
           }
           return typeof value === "function" ? value.bind(target) : value
@@ -226,6 +264,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
                 text = target.getText()
               }
               value?.(text, origin)
+              capture.change(origin, replacingDraft)
             }
             return true
           }
@@ -470,8 +509,8 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const requestedRevision = revision
     const sessionId = ctx.sessionManager.getSessionId()
     const submission = submissions
-    const paths = attachmentPaths(draft, storage)
-    if (paths.length === 0) {
+    const attached = paths(draft, ctx)
+    if (attached.length === 0) {
       ctx.ui.notify("No attachments in this draft", "info")
       return
     }
@@ -489,19 +528,19 @@ export default function piAttachments(pi: ExtensionAPI): void {
       )
         return true
       ctx.ui.notify(
-        `The requesting draft changed. Attachments retained: ${paths.join(", ")}`,
+        `The requesting draft changed. Attachments retained: ${attached.join(", ")}`,
         "warning",
       )
       return false
     }
-    const choices = paths.map(
+    const choices = attached.map(
       (path, index) => `${index + 1}. ${basename(path)}`,
     )
     const choice = await ctx.ui.select("Choose attachment", choices, {
       signal: lifetime.signal,
     })
     if (choice === undefined || !unchanged()) return
-    const path = paths[choices.indexOf(choice)]!
+    const path = attached[choices.indexOf(choice)]!
     const action = await ctx.ui.select(
       basename(path),
       ["Preview text", "Restore Inline", "Remove from draft"],
@@ -513,7 +552,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
     const inputs = terminalInputs
     try {
       if (action === "Remove from draft") {
-        ctx.ui.setEditorText(withoutAttachment(draft, path))
+        ctx.ui.setEditorText(withoutAttachment(draft, path, ctx))
         return
       }
       const file = await snapshotFile(path, storage)
