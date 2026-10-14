@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** implemented — the package adapter and capture integration run on unmodified Pi 1.0.2 with both editors. Composer and attachment action checks pass 470 of 471 cases; only the unrelated fullscreen key expectation fails. After the identity lifetime correction, all 87 targeted adapter, Markdown, and submission checks pass. The earlier 71-case feasibility experiment is separate evidence. Ticket 07 still requires integrated acceptance on the restored installation.
+**Status:** implemented — the package adapter and capture integration run on unmodified Pi 1.0.2 with both editors. Composer and attachment action checks pass 470 of 471 cases; only the unrelated fullscreen key expectation fails. After the identity lifetime correction, all 87 targeted adapter, Markdown, and submission checks pass. The earlier 71-case feasibility experiment is separate evidence. Ticket 07 records subsequent production checks, successful restored Pi 1.1.0 and official Pi 1.2.0 execution, and pending physical acceptance.
 
 **Specification:** [Pi Attachments](../../../docs/specs/pi-attachments.md) and [Pi Composer](../../../docs/specs/pi-composer.md), including their applicable architecture decisions.
 
