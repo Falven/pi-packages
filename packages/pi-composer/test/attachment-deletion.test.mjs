@@ -21,9 +21,7 @@ for (const view of ["formatted", "source"]) {
     const source = join(host.directory, "context.txt")
     const contents = "Captured context\r\n\tKeep original bytes\r\n"
     await writeFile(source, contents)
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const snapshot = snapshotPath(reference)
     const before = `Keep\n${reference}\nTail`
@@ -55,9 +53,7 @@ for (const view of ["formatted", "source"]) {
     const host = await openHost(t, { extensionPaths: [attachments] })
     const source = join(host.directory, "image.png")
     await writeFile(source, Buffer.from(imageData, "base64"))
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const snapshot = snapshotPath(reference)
     assert(reference.endsWith(">)"))

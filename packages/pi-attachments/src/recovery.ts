@@ -17,7 +17,11 @@ type RequestContext = {
   text: string
   [unpublishedKey]?: UnpublishedCapture[]
 }
-type ImageRequest = InputEvent & RequestContext
+type ImageRequest = Pick<
+  InputEvent,
+  "submissionId" | "text" | "images" | "streamingBehavior"
+> &
+  RequestContext
 export type Snapshot =
   | { name: string; contents: string | Uint8Array; image?: true }
   | { name: string; path: string; contents?: Uint8Array | undefined }
@@ -186,7 +190,7 @@ export async function saveRequest(
     unpublished = undefined
     await writeFile(
       path,
-      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}${request.cwd === undefined ? "" : `Working directory: ${request.cwd}\n`}Delivery: ${request.streamingBehavior ?? "normal"}\n\n${request.text}\n\n${references.join("\n")}\n`,
+      `# Attachment request\n\nSession: ${request.sessionId}\n${request.sessionFile ? `Session file: ${request.sessionFile}\n` : ""}${request.cwd === undefined ? "" : `Working directory: ${request.cwd}\n`}${request.submissionId ? `Submission: ${request.submissionId}\n` : ""}Delivery: ${request.streamingBehavior ?? "normal"}\n\n${request.text}\n\n${references.join("\n")}\n`,
       { flag: "wx", mode: 0o600, flush: true },
     )
     try {

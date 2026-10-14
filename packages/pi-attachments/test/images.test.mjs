@@ -34,6 +34,8 @@ const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
 const BMP =
   "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA=="
+const TALL_PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAIAAAAW4yFwAAAADUlEQVR4nGP4zwAC/wEIAAH/2ZC7NQAAAABJRU5ErkJggg=="
 const inputExtension = fileURLToPath(
   new URL("../fixtures/image-input.ts", import.meta.url),
 )
@@ -54,7 +56,7 @@ for (const [name, extensions] of [
     })
     const source = join(host.directory, "hidden.png")
     await writeFile(source, Buffer.from(PNG, "base64"))
-    await host.runtime.session.prompt(`/attach-file ${source}`)
+    await host.attachFile(source)
     const draft = host.ui.getEditorText()
     const path = snapshotPath(draft)
     await waitFor(() => assert.match(host.render(), /\[Image: hidden\.png/))
@@ -81,7 +83,7 @@ test("image previews link retained files through native click handling beside th
   const source = join(host.directory, name)
   await writeFile(source, Buffer.from(PNG, "base64"))
   host.ui.setEditorText("Review this picture")
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   const target = pathToFileURL(path).href.replace(
@@ -181,7 +183,7 @@ test("native image-only submission sends the captured image after its source is 
   const host = await nativePi(t)
   const source = join(host.directory, "picture.data")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  host.submit(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = await waitFor(() => snapshotPath(host.ui.getEditorText()))
   const draft = host.ui.getEditorText().trim()
   assert.equal((await readFile(path)).toString("base64"), PNG)
@@ -212,7 +214,7 @@ test("native submission keeps original attachment dimensions when effective auto
   })
   const source = join(host.directory, "unresized.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   host.runtime.session.settingsManager.applyOverrides({
     images: { autoResize: false },
@@ -227,7 +229,7 @@ test("native submission keeps original attachment dimensions when effective auto
   assert.equal((await readFile(path)).toString("base64"), PNG)
 })
 
-test("native image-only steering converts the captured image before queueing it for the intended request", async (t) => {
+test("native image-only steering converts the captured image at delivery for the intended request", async (t) => {
   const response = Promise.withResolvers()
   t.after(() => response.resolve())
   const host = await nativePi(t)
@@ -236,7 +238,7 @@ test("native image-only steering converts the captured image before queueing it 
   await waitFor(() => assert.equal(host.requests.length, 1))
   const source = join(host.directory, "steer.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   await rm(source)
@@ -279,7 +281,7 @@ test("native image-only follow-up resizes for the current model while retaining 
   await waitFor(() => assert.equal(host.requests.length, 1))
   const source = join(host.directory, "follow-up.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   host.input("\x1b\r")
@@ -312,7 +314,7 @@ test("an image preparation failure stops native submission and retains a readabl
   const source = join(host.directory, "broken.png")
   const broken = Buffer.from(PNG, "base64").subarray(0, 33)
   await writeFile(source, broken)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   const draft = host.ui.getEditorText().trim()
   const sessionId = host.runtime.session.sessionId
@@ -333,7 +335,7 @@ test("an image preview decode failure stays visible without removing its capture
   const source = join(host.directory, "unrenderable.png")
   const broken = Buffer.from(PNG, "base64").subarray(0, 33)
   await writeFile(source, broken)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   await waitFor(() =>
@@ -360,7 +362,7 @@ test("native image delivery preserves earlier images, handler order, and unique 
   })
   const source = join(host.directory, "ordered.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const reference = host.ui.getEditorText().trim()
   const draft = `${reference}\n${reference}`
   host.submit(draft)
@@ -386,7 +388,7 @@ test("native image delivery preserves earlier images, handler order, and unique 
     data: PNG,
     mimeType: "image/png",
   })
-  assert.equal(host.inputs[0].images.length, 2)
+  assert.equal(host.inputs[0].images.length, 1)
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
 })
 
@@ -394,7 +396,7 @@ test("an earlier handled input keeps native precedence over attachment delivery"
   const host = await nativePi(t, [inputExtension])
   const source = join(host.directory, "handled.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   host.submit(`Handled here\n${host.ui.getEditorText()}`)
   await waitFor(() =>
@@ -410,7 +412,7 @@ test("image preparation failure retains incoming images as readable snapshots wi
   const host = await nativePi(t, [inputExtension])
   const source = join(host.directory, "broken-with-incoming.png")
   await writeFile(source, Buffer.from(PNG, "base64").subarray(0, 33))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   host.submit()
   await waitFor(() => assert.match(host.render(), /Image request not sent/))
@@ -431,7 +433,7 @@ test("a first-turn native auth failure preserves image request files without ove
   const host = await nativePi(t)
   const source = join(host.directory, "auth-failure.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const sessionFile = host.runtime.session.sessionFile
@@ -460,7 +462,7 @@ test("the native fullscreen widget emits small PNG graphics for converted image 
   const host = await nativePi(t)
   const source = join(host.directory, "graphics.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   await waitFor(() => {
     host.render()
@@ -488,7 +490,7 @@ test("effective image width caps native preview graphics without recapturing the
   const bytes = await readFile(new URL("../fixtures/wide.png", import.meta.url))
   const source = join(host.directory, "wide.png")
   await writeFile(source, bytes)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   const dimensions = () => {
@@ -513,13 +515,91 @@ test("effective image width caps native preview graphics without recapturing the
   assert.equal(host.ui.getEditorText(), draft)
   assert.deepEqual(await readFile(path), bytes)
 })
+
+test("Pi standard settings offers the registered attachment thumbnail sizes", async (t) => {
+  const host = await nativePi(t)
+  const setting = host.runtime.session.extensionRunner
+    .getExtensionSettings()
+    .find(({ id }) => id === "pi-attachments.thumbnailSize")
+  assert.ok(setting)
+  assert.equal(
+    host.runtime.session.settingsManager.getExtensionSetting(setting),
+    "medium",
+  )
+  host.submit("/settings")
+  await waitFor(() => assert.match(host.render(), /Auto-compact/))
+  for (const character of setting.label) host.input(character)
+  await waitFor(() => assert.match(host.render(), /Attachment thumbnail size/))
+  host.input("\r")
+  assert.equal(
+    host.runtime.session.settingsManager.getExtensionSetting(setting),
+    "large",
+  )
+})
+
+for (const [shape, image, expected] of [
+  ["wide", PNG, { small: [8, 2], medium: [16, 4], large: [32, 8] }],
+  ["tall", TALL_PNG, { small: [2, 2], medium: [4, 4], large: [8, 8] }],
+]) {
+  test(`${shape} native thumbnails follow the effective size and width ceilings without changing the snapshot`, async (t) => {
+    const caps = getCapabilities()
+    setCapabilities({ ...caps, images: "kitty" })
+    t.after(() => setCapabilities(caps))
+    const host = await nativePi(t, [], {
+      settings: { images: { autoResize: false } },
+    })
+    const source = join(host.directory, `${shape}.png`)
+    const bytes = Buffer.from(image, "base64")
+    await writeFile(source, bytes)
+    await host.attachFile(source)
+    const draft = host.ui.getEditorText()
+    const path = snapshotPath(draft)
+    const dimensions = () => {
+      host.render()
+      const match = /\x1b_Ga=p,[^;]*c=(\d+),r=(\d+)/.exec(host.output)
+      assert.ok(match, "native preview emitted image graphics")
+      return [Number(match[1]), Number(match[2])]
+    }
+
+    assert.deepEqual(await waitFor(dimensions), expected.medium)
+    for (const size of ["small", "large", "medium"]) {
+      host.runtime.session.settingsManager.applyOverrides({
+        extensionSettings: { "pi-attachments.thumbnailSize": size },
+      })
+      // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
+      assert.deepEqual(await waitFor(dimensions), expected[size])
+    }
+    host.runtime.session.settingsManager.applyOverrides({
+      extensionSettings: { "pi-attachments.thumbnailSize": "large" },
+      terminal: { imageWidthCells: 6 },
+    })
+    assert.ok((await waitFor(dimensions))[0] <= 6)
+    host.runtime.session.settingsManager.applyOverrides({
+      terminal: { imageWidthCells: 60 },
+    })
+    host.resize(14, 40)
+    for (const size of ["small", "medium", "large"]) {
+      host.runtime.session.settingsManager.applyOverrides({
+        extensionSettings: { "pi-attachments.thumbnailSize": size },
+      })
+      // eslint-disable-next-line no-await-in-loop -- Each selection changes the same live view.
+      await waitFor(() => {
+        const [columns, rows] = dimensions()
+        assert.ok(columns <= Math.min(14, expected[size][0]))
+        assert.ok(rows <= expected[size][1])
+      })
+    }
+    assert.equal(host.ui.getEditorText(), draft)
+    assert.deepEqual(await readFile(path), bytes)
+  })
+}
 /* eslint-enable no-control-regex */
 
 test("a delayed image preview cannot replace previews for the current draft", async (t) => {
   const host = await nativePi(t)
   const source = join(host.directory, "old.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const path = snapshotPath(host.ui.getEditorText())
   const held = holdFileRead(t, path)
   host.render()
@@ -527,7 +607,7 @@ test("a delayed image preview cannot replace previews for the current draft", as
   host.ui.setEditorText("New draft")
   const newer = join(host.directory, "new.bmp")
   await writeFile(newer, Buffer.from(BMP, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${newer}`)
+  await host.attachFile(newer)
   const currentDraft = host.ui.getEditorText()
   await waitFor(() => assert.match(host.render(), /\[Image: new\.bmp/))
   held.release()
@@ -541,7 +621,7 @@ test("delayed image delivery uses the submitted references while a newer draft i
   const host = await nativePi(t)
   const source = join(host.directory, "submitted.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const held = holdFileRead(t, path)
@@ -560,35 +640,48 @@ test("delayed image delivery uses the submitted references while a newer draft i
 })
 
 test("a native session switch during image preparation retains the old request without sending into the new session", async (t) => {
+  const recordedSessions = []
   const host = await nativePi(t, [], {
     extensionFactories: [
-      (pi) =>
+      (pi) => {
         pi.registerCommand("new-test-session", {
           description: "Switch the native session during an image read",
           handler: async (_args, ctx) => {
             await ctx.newSession()
           },
-        }),
+        })
+        pi.on("message_end", (event, ctx) => {
+          if (event.message.role === "user")
+            recordedSessions.push(ctx.sessionManager.getSessionId())
+        })
+      },
     ],
   })
   const source = join(host.directory, "old-session.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const sessionId = host.runtime.session.sessionId
   const held = holdFileRead(t, snapshotPath(draft))
   host.submit()
   await held.started()
-  await host.runtime.session.prompt("/new-test-session")
-  host.ui.setEditorText("New session's draft")
+  const switching = host.runtime.session.prompt("/new-test-session")
   held.release()
+  await switching
+  host.ui.setEditorText("New session's draft")
   const recovery = await waitFor(() => retainedRequest(host, "Delivery:"))
   assert.ok(recovery.text.includes(sessionId))
   assert.ok(recovery.text.includes(draft))
   assert.notEqual(host.runtime.session.sessionId, sessionId)
   assert.equal(host.ui.getEditorText(), "New session's draft")
   assert.equal(host.requests.length, 0)
-  assert.equal(host.users.length, 0)
+  assert.deepEqual(recordedSessions, [sessionId])
+  assert.equal(host.users[0].content[0].text, draft)
+  assert.equal(
+    host.runtime.session.messages.filter((message) => message.role === "user")
+      .length,
+    0,
+  )
   host.submit("A request in the new session")
   await waitFor(() => assert.equal(host.requests.length, 1))
   const user = host.requests[0].messages.find(
@@ -610,7 +703,7 @@ for (const behavior of ["steer", "followUp"]) {
     await waitFor(() => assert.equal(host.requests.length, 1))
     const source = join(host.directory, "dequeued.png")
     await writeFile(source, Buffer.from(PNG, "base64"))
-    await host.runtime.session.prompt(`/attach-file ${source}`)
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     host.input(behavior === "steer" ? "\r" : "\x1b\r")
     await waitFor(() =>
@@ -658,7 +751,7 @@ test("image recovery remains writable when the native session checkpoint cannot 
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   const source = join(host.directory, "checkpoint.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const sessionFile = host.runtime.session.sessionFile
   await chmod(sessionFile, 0o400)
@@ -680,7 +773,7 @@ test("a failed image recovery write stops delivery and preserves incoming images
   const host = await nativePi(t, [inputExtension])
   const source = join(host.directory, "disk-failure.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   const path = snapshotPath(draft)
   const storage = join(host.agentDir, "pi-attachments")
@@ -721,9 +814,7 @@ test("failed image recovery and native append are durably retried in an already-
 
   const source = join(host.directory, "retry.bmp")
   await writeFile(source, Buffer.from(BMP, "base64"))
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const snapshot = snapshotPath(draft)
   const storage = join(host.agentDir, "pi-attachments")
@@ -770,7 +861,7 @@ test("a provider rejection retains the image request and leaves later draft edit
   const host = await nativePi(t)
   const source = join(host.directory, "rejected.png")
   await writeFile(source, Buffer.from(PNG, "base64"))
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText().trim()
   host.replies.push(response.promise)
   host.submit()
@@ -798,7 +889,7 @@ test("composer image insertion, membership, undo, and redo use the same retained
   await writeFile(source, Buffer.from(PNG, "base64"))
   host.ui.setEditorText("Keep draft")
   for (let index = 0; index < 5; index++) host.input("\x1b[1;2D")
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   assert.match(draft, /^Keep \n\[Attachment:/)

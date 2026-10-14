@@ -20,7 +20,7 @@ import {
 } from "./images.ts"
 import { saveSnapshot, type Snapshot } from "./recovery.ts"
 import { registerCleanup } from "./cleanup.ts"
-import { registerPaste } from "./paste.ts"
+import { registerPaste, sourcePath } from "./paste.ts"
 import { TextPreview } from "./preview.ts"
 
 export default function piAttachments(pi: ExtensionAPI): void {
@@ -33,7 +33,7 @@ export default function piAttachments(pi: ExtensionAPI): void {
   let restoreInline: ((path: string, contents: string) => void) | undefined
   let insertText: ((text: string) => void) | undefined
   const lifetime = new AbortController()
-  const withPaste = registerPaste(pi, attach, lifetime.signal, () => {
+  const withPaste = registerPaste(attach, lifetime.signal, () => {
     revision++
   })
   registerImages(pi, storage, lifetime.signal)
@@ -424,34 +424,43 @@ export default function piAttachments(pi: ExtensionAPI): void {
     )
   }
 
-  function attachText(text: string, ctx: ExtensionContext): Promise<void> {
+  function attachText(ctx: ExtensionContext): Promise<void> {
     return attach(ctx, async () => {
-      const contents = text || (await editText(ctx))
+      const contents = await editText(ctx)
       return contents === undefined
         ? undefined
         : [{ name: "text.txt", contents }]
     })
   }
 
-  function attachFile(paths: string, ctx: ExtensionContext): Promise<void> {
+  function attachFile(ctx: ExtensionContext): Promise<void> {
     const cwd = ctx.cwd
     return attach(ctx, async () => {
-      const selected =
-        paths ||
-        (await ctx.ui.input("Attach file", "File path", {
-          signal: lifetime.signal,
-        }))
+      const selected = await ctx.ui.input("Attach file", "File path", {
+        signal: lifetime.signal,
+      })
       if (selected === undefined) return undefined
       if (!selected) throw new Error("A file path is required")
-      return selected.split("\n").map((path) => {
-        if (!path || /\p{Cc}/u.test(path)) throw new Error("Invalid file path")
-        const source = resolve(cwd, path)
-        return {
+      const source = sourcePath(selected, cwd)
+      return [
+        {
           name: basename(source).replaceAll(/[<>[\]\\\p{Cc}]/gu, "_"),
           path: source,
-        }
-      })
+        },
+      ]
     })
+  }
+
+  async function attachChoice(ctx: ExtensionContext): Promise<void> {
+    const choice = await ctx.ui.select(
+      "Attach",
+      ["File path…", "Create from text…"],
+      {
+        signal: lifetime.signal,
+      },
+    )
+    if (choice === "File path…") await attachFile(ctx)
+    else if (choice === "Create from text…") await attachText(ctx)
   }
 
   async function attachments(ctx: ExtensionContext): Promise<void> {
@@ -600,26 +609,20 @@ export default function piAttachments(pi: ExtensionAPI): void {
     description: "Preview, restore inline, or remove draft attachments",
     handler: (_args, ctx) => attachments(ctx),
   })
-  pi.registerShortcut("ctrl+alt+a", {
-    description: "Draft attachments",
+  pi.registerAction("extension.attachments.manage", {
+    description: "Manage attachments",
+    defaultKeys: "ctrl+alt+a",
     handler: attachments,
   })
 
-  pi.registerCommand("attach-text", {
-    description: "Attach text as a preserved file",
-    handler: attachText,
+  pi.registerCommand("attach", {
+    description: "Attach a file path or entered text",
+    handler: (_args, ctx) => attachChoice(ctx),
   })
 
-  pi.registerCommand("attach-file", {
-    description: "Attach file snapshots; one path per line",
-    handler: attachFile,
-  })
-  pi.registerShortcut("ctrl+alt+t", {
-    description: "Attach text",
-    handler: (ctx) => attachText("", ctx),
-  })
-  pi.registerShortcut("ctrl+alt+f", {
-    description: "Attach file",
-    handler: (ctx) => attachFile("", ctx),
+  pi.registerAction("extension.attachments.attach", {
+    description: "Attach",
+    defaultKeys: "ctrl+alt+f",
+    handler: attachChoice,
   })
 }

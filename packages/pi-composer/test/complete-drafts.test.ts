@@ -72,9 +72,7 @@ test("complete mixed drafts and their isolated histories survive cwd switches, r
   const beforeImage = host.ui.getEditorText()
   const image = join(host.directory, "image.png")
   await writeFile(image, Buffer.from(imageData, "base64"))
-  await host.session.sendUserMessage(`/attach-file ${image}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(image)
   const draftA = host.ui.getEditorText()
   const imagePath = snapshotPath(draftA.slice(beforeImage.length))
   await rm(image)
@@ -96,9 +94,7 @@ test("complete mixed drafts and their isolated histories survive cwd switches, r
   await host.key("\x1b[122;10u")
   assert.equal(host.ui.getEditorText(), "")
   host.ui.setEditorText("Draft B /skill:review @src/b.ts\n")
-  await host.session.sendUserMessage("/attach-text Captured B", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Captured B")
   const draftB = host.ui.getEditorText()
   const pathB = snapshotPath(draftB)
   host.ui.pasteToEditor("B later edit")
@@ -201,14 +197,10 @@ test("native forks restore mixed membership and restart independently of their p
   host.ui.setEditorText(
     "## Forked draft\n\n**Review** /skill:review @source.ts\n",
   )
-  await host.session.sendUserMessage("/attach-text Captured fork text", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Captured fork text")
   const textPath = snapshotPath(host.ui.getEditorText())
   const beforeImage = host.ui.getEditorText()
-  await host.session.sendUserMessage(`/attach-file ${image}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(image)
   const draft = host.ui.getEditorText().trim()
   const imagePath = snapshotPath(
     host.ui.getEditorText().slice(beforeImage.length),

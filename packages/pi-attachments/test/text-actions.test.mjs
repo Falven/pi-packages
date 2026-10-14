@@ -30,9 +30,10 @@ test("Create from text follows effective editor padding and preserves entered by
   })
   host.runtime.session.settingsManager.applyOverrides({ editorPaddingX: 3 })
   host.ui.setEditorText("Keep this draft")
-  const pending = host.runtime.session.sendUserMessage("/attach-text", {
-    expandPromptTemplates: true,
-  })
+  const pending = host.runtime.session.prompt("/attach")
+  await waitFor(() => assert.match(host.render(), /File path…/))
+  host.input("\x1b[B")
+  host.input("\r")
   await waitFor(() => assert.match(host.render(), /Attach text/))
   host.input("Entered text")
   host.render()
@@ -81,9 +82,7 @@ test("native attachment preview shows the captured text without changing the dra
   const contents = "# Captured notes\n\n```js\n\tconst answer = 42;\n```\n"
   await writeFile(source, contents)
   host.ui.setEditorText("Review this")
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const before = host.ui.getEditorText()
   const path = snapshotPath(before)
   await writeFile(source, "Changed original")
@@ -116,9 +115,7 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
   const source = join(host.directory, "context.txt")
   const contents = `\t// ${"context ".repeat(720)}\r\nconst answer = 42;\r\n`
   await writeFile(source, contents)
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   const before = `Lead\n${reference}\nKeep old\nTail`
@@ -160,17 +157,10 @@ test("Restore Inline replaces composer selection after cleanup and keeps members
 for (const selection of ["prose", "attachment"]) {
   test(`Restore Inline across preserved Markdown delimiters from ${selection} removes original references in one edit`, async (t) => {
     const host = await nativePi(t, [composerPath, skillsPath])
-    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-      expandPromptTemplates: true,
-    })
+    await host.attachText("CAPTURED")
     const chosen = host.ui.getEditorText().trim()
     host.ui.setEditorText("")
-    await host.runtime.session.sendUserMessage(
-      "/attach-text Other captured text",
-      {
-        expandPromptTemplates: true,
-      },
-    )
+    await host.attachText("Other captured text")
     const other = host.ui.getEditorText().trim()
     const line =
       selection === "prose" ? "**aa bb** cc" : `**aa ${chosen} bb** cc`
@@ -225,17 +215,11 @@ for (const selection of ["prose", "attachment"]) {
 
 test("Remove from draft removes repeated membership in one composer edit and retains other files", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Remove this membership",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Remove this membership")
   const first = host.ui.getEditorText().trim()
   const firstPath = snapshotPath(first)
   host.ui.setEditorText("")
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Keep this membership",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Keep this membership")
   const second = host.ui.getEditorText().trim()
   const secondPath = snapshotPath(second)
   const before = `Head\n${first}\n${second}\n${first}\nTail`
@@ -270,9 +254,7 @@ for (const unfinished of [
 ]) {
   test(`Remove from draft preserves prose before an ${unfinished.includes("(<") ? "incomplete destination" : "incomplete label"}`, async (t) => {
     const host = await nativePi(t)
-    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-      expandPromptTemplates: true,
-    })
+    await host.attachText("CAPTURED")
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const before = `Keep ${unfinished}${reference}\nTail`
@@ -284,9 +266,7 @@ for (const unfinished of [
   })
   test(`Restore Inline preserves prose before an ${unfinished.includes("(<") ? "incomplete destination" : "incomplete label"}`, async (t) => {
     const host = await nativePi(t)
-    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-      expandPromptTemplates: true,
-    })
+    await host.attachText("CAPTURED")
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const before = `Keep ${unfinished}${reference}\nTail`
@@ -300,10 +280,7 @@ for (const unfinished of [
 
 test("a pending restore cannot replace a newer composer selection", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Captured before moving",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Captured before moving")
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   const before = `${reference}\nMove here`
@@ -323,10 +300,7 @@ test("a pending restore cannot replace a newer composer selection", async (t) =>
 
 test("a native text rendering failure leaves preview content and membership recoverable", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Captured preview body",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Captured preview body")
   const before = host.ui.getEditorText()
   const path = snapshotPath(before)
   const { pending } = await startAction(host, "Preview text")
@@ -356,9 +330,7 @@ for (const view of ["formatted", "source"]) {
       const source = join(host.directory, "code.txt")
       const contents = `\tconst literal = \`/skill:sample @file **literal**\`;\r\n// ${"x".repeat(5001)}\r\n`
       await writeFile(source, contents)
-      await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-        expandPromptTemplates: true,
-      })
+      await host.attachFile(source)
       const reference = host.ui.getEditorText().trim()
       const path = snapshotPath(reference)
       const prefix =
@@ -422,9 +394,7 @@ test("native Restore Inline removes an empty captured text attachment", async (t
   const host = await nativePi(t)
   const source = join(host.directory, "empty.txt")
   await writeFile(source, "")
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   host.ui.setEditorText(`Keep\n${reference}\nTail`)
@@ -441,9 +411,7 @@ for (const editor of ["native", "composer"]) {
     const source = join(host.directory, "utf8.txt")
     const contents = `\ufeff\tconst value = "😀";\r\n// ${"x".repeat(5001)}\r\n`
     await writeFile(source, contents)
-    await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     host.ui.setEditorText(`Keep\n${reference}\nTail`)
@@ -462,9 +430,7 @@ for (const editor of ["native", "composer"]) {
 
   test(`${editor} Restore Inline keeps the captured body when the caret is inside its reference`, async (t) => {
     const host = await nativePi(t, editor === "composer" ? [composerPath] : [])
-    await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-      expandPromptTemplates: true,
-    })
+    await host.attachText("CAPTURED")
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const before = `Keep\n${reference}\nTail`
@@ -499,9 +465,7 @@ test("the attachment widget exposes its shortcut and composer preview scrolls wi
     "A middle captured line\r\n".repeat(60) +
     "Final captured line\r\n"
   await writeFile(source, contents)
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   const before = `${reference}\nKeep old`
@@ -535,9 +499,7 @@ test("preview reaches the end of a long Unicode line and stays navigable through
   const contents =
     `BEGIN ${"a".repeat(4200)}界🙂\tMID ` + "b".repeat(40000) + " END界🙂"
   await writeFile(source, contents)
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const before = host.ui.getEditorText()
   const path = snapshotPath(before)
   const { pending } = await startAction(host, "Preview text")
@@ -581,9 +543,7 @@ test("preview keeps the final logical line visible when width and height change"
     (_, index) => `line ${index} ${"x".repeat(30)}`,
   ).join("\n")
   await writeFile(source, contents)
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const before = host.ui.getEditorText()
   host.resize(80, 30)
   const { pending } = await startAction(host, "Preview text")
@@ -604,10 +564,7 @@ test("preview keeps the final logical line visible when width and height change"
 for (const action of ["Preview text", "Restore Inline"]) {
   test(`${action} preserves the selected draft when the snapshot is unreadable`, async (t) => {
     const host = await nativePi(t, [composerPath])
-    await host.runtime.session.sendUserMessage(
-      "/attach-text Recoverable bytes",
-      { expandPromptTemplates: true },
-    )
+    await host.attachText("Recoverable bytes")
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const before = `${reference}\nKeep old`
@@ -634,10 +591,7 @@ for (const action of ["Preview text", "Restore Inline"]) {
         t,
         change === "same-text edit" ? [composerPath] : [],
       )
-      await host.runtime.session.sendUserMessage(
-        "/attach-text Retained delayed bytes",
-        { expandPromptTemplates: true },
-      )
+      await host.attachText("Retained delayed bytes")
       const before = host.ui.getEditorText()
       const path = snapshotPath(before)
       const read = holdFileRead(t, path)
@@ -665,9 +619,7 @@ for (const action of ["Preview text", "Restore Inline"]) {
 
 test("a changed draft cancels removal while the attachment picker is open", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage("/attach-text Keep membership", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Keep membership")
   const before = host.ui.getEditorText()
   const path = snapshotPath(before)
   const pending = host.runtime.session.sendUserMessage("/attachments", {
@@ -685,10 +637,7 @@ test("a changed draft cancels removal while the attachment picker is open", asyn
 
 test("Remove from draft preserves a snapshot used by a submitted request and another session draft", async (t) => {
   const host = await nativePi(t, [composerPath])
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Shared captured bytes",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Shared captured bytes")
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   const sessionFile = host.runtime.session.sessionFile
@@ -721,14 +670,10 @@ test("all three packages preserve one native change callback, formatted selectio
   const source = join(host.directory, "chosen.txt")
   const contents = "\tCAPTURED\n`literal code`\n"
   await writeFile(source, contents)
-  await host.runtime.session.sendUserMessage(`/attach-file ${source}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachFile(source)
   const first = host.ui.getEditorText().trim()
   host.ui.setEditorText("")
-  await host.runtime.session.sendUserMessage("/attach-text Other attachment", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("Other attachment")
   const second = host.ui.getEditorText().trim()
   const edits = []
   let nativeEditor
@@ -779,9 +724,7 @@ test("all three packages preserve one native change callback, formatted selectio
 
 test("native Restore Inline retains pasted text around the caret and removes membership inside it", async (t) => {
   const host = await nativePi(t)
-  await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("CAPTURED")
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   host.ui.setEditorText("Left ")
@@ -809,9 +752,7 @@ test("native Restore Inline retains pasted text around the caret and removes mem
 
 test("native Restore Inline keeps pasted text when inserting inside a visible reference", async (t) => {
   const host = await nativePi(t)
-  await host.runtime.session.sendUserMessage("/attach-text CAPTURED", {
-    expandPromptTemplates: true,
-  })
+  await host.attachText("CAPTURED")
   const reference = host.ui.getEditorText().trim()
   const path = snapshotPath(reference)
   const pasted = "Earlier paste ".repeat(100)
@@ -832,9 +773,7 @@ test("native Restore Inline keeps pasted text when inserting inside a visible re
 test("attachment pickers and text preview honor effective native keybindings", async (t) => {
   const host = await nativePi(t, [composerPath])
   const contents = "First line\n" + "Middle line\n".repeat(25) + "Last line"
-  await host.runtime.session.sendUserMessage(`/attach-text ${contents}`, {
-    expandPromptTemplates: true,
-  })
+  await host.attachText(contents)
   const before = host.ui.getEditorText()
   const path = snapshotPath(before)
   await writeFile(

@@ -78,7 +78,7 @@ async function failedPreparation(t, hold = false) {
   assert.ok(bytes.length > 100_000)
   const source = join(host.directory, "source.png")
   await writeFile(source, bytes)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   const snapshot = snapshotPath(draft)
   const original = await retainedRequest(host)
@@ -191,10 +191,7 @@ test("cleanup preserves pending writes, then reclaims their abandoned bytes afte
   await host.runtime.newSession()
   await waitFor(() => retainedRequest(host, "Delivery:"))
   assert.deepEqual(await readFile(abandoned[0]), bytes)
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Retained after cleanup",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Retained after cleanup")
   const snapshot = snapshotPath(host.ui.getEditorText())
   const recovery = await retainedRequest(host, "[Attachment: text.txt]")
   const sessionId = host.runtime.session.sessionManager.getSessionId()
@@ -362,10 +359,7 @@ test("composer recovery restores attachment membership after cleanup and stays u
     fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
   ])
   host.ui.setEditorText("**Recover this complete draft**")
-  await host.runtime.session.sendUserMessage(
-    "/attach-text Retained restored text",
-    { expandPromptTemplates: true },
-  )
+  await host.attachText("Retained restored text")
   const draft = host.ui.getEditorText()
   const path = snapshotPath(draft)
   host.ui.setEditorText("")
@@ -420,7 +414,7 @@ test("an image recovery record remains readable after a late write failure, retr
   )
   const source = join(host.directory, "recovery.png")
   await writeFile(source, bytes)
-  await host.runtime.session.prompt(`/attach-file ${source}`)
+  await host.attachFile(source)
   const draft = host.ui.getEditorText()
   await host.runtime.session.prompt(draft)
   assert.match(host.render(), /Recovery metadata flush failed/)

@@ -223,7 +223,7 @@ for (const sourceView of [false, true]) {
 test("fullscreen viewport keys retain ownership before the composer", async (t) => {
   const host = await openHost(t)
   const original = "row0\nrow1\nrow2\nrow3\nrow4\nrow5\nrow6\nrow7\nrow8"
-  for (const input of ["\x1b[5~", "\x1b[6~", "\x1b[H", "\x1b[F"]) {
+  for (const input of ["\x1b[5~", "\x1b[6~", "\x1b[1;5H", "\x1b[1;5F"]) {
     host.ui.setEditorText(original)
     await host.output()
     await host.key("\x01")

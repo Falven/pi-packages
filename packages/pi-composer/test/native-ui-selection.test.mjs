@@ -79,9 +79,7 @@ for (const view of ["formatted", "source"]) {
     })
     const source = join(host.directory, "picker.png")
     await writeFile(source, Buffer.from(PNG, "base64"))
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const held = holdFileRead(t, path)
@@ -174,17 +172,13 @@ for (const view of ["formatted", "source"]) {
       "Last captured line"
     const source = join(host.directory, "context.txt")
     await writeFile(source, contents)
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const textReference = host.ui.getEditorText().trim()
     const textPath = snapshotPath(textReference)
     host.ui.setEditorText("")
     const picture = join(host.directory, "context.png")
     await writeFile(picture, Buffer.from(PNG, "base64"))
-    await host.session.sendUserMessage(`/attach-file ${picture}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(picture)
     const imageReference = host.ui.getEditorText().trim()
     const imagePath = snapshotPath(imageReference)
     const draft = `${textReference}\n${imageReference}\nApply /skill:review\n**Keep** old`
@@ -326,9 +320,7 @@ for (const view of ["formatted", "source"]) {
     const source = join(host.directory, "selected.png")
     const bytes = Buffer.from(PNG, "base64")
     await writeFile(source, bytes)
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const held = holdFileRead(t, path)
@@ -400,9 +392,7 @@ for (const view of ["formatted", "source"]) {
     const source = join(host.directory, "selected.png")
     const bytes = Buffer.from(PNG, "base64")
     await writeFile(source, bytes)
-    await host.session.sendUserMessage(`/attach-file ${source}`, {
-      expandPromptTemplates: true,
-    })
+    await host.attachFile(source)
     const reference = host.ui.getEditorText().trim()
     const path = snapshotPath(reference)
     const held = holdFileRead(t, path)
@@ -464,9 +454,7 @@ for (const view of ["formatted", "source"]) {
             ? Buffer.from(PNG, "base64")
             : Buffer.from(PNG, "base64").subarray(0, 33)
         await writeFile(source, bytes)
-        await host.session.sendUserMessage(`/attach-file ${source}`, {
-          expandPromptTemplates: true,
-        })
+        await host.attachFile(source)
         const reference = host.ui.getEditorText().trim()
         const path = snapshotPath(reference)
         const held = holdFileRead(t, path)
