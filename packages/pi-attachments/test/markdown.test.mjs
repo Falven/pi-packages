@@ -503,6 +503,7 @@ test("Send awaits an existing capture and recalls its retained destination witho
   host.ui.setEditorText(original)
   await read.started()
   host.submit()
+  assert.equal(host.ui.getEditorText(), original)
   host.ui.setEditorText("A newer unrelated draft")
   await writeFile(source, "Later source contents")
   assert.equal(host.requests.length, 0)
@@ -846,7 +847,7 @@ for (const composer of [false, true]) {
     host.ui.setEditorText("Previous [file](previous.txt)")
     await read.started()
     host.submit()
-    await waitFor(() => assert.equal(host.ui.getEditorText(), ""))
+    assert.equal(host.ui.getEditorText(), "Previous [file](previous.txt)")
     await host.runtime.newSession()
     host.ui.setEditorText("Current session draft")
     read.release()
@@ -895,6 +896,7 @@ test("a delayed Markdown destination change preserves unrelated typing and the s
 
 test("a failed pending capture rejects Send visibly and retains its requesting draft", async (t) => {
   const host = await nativePi(t, [], { noSession: true })
+  const sessionId = host.runtime.session.sessionManager.getSessionId()
   const source = join(host.directory, "failed.txt")
   await writeFile(source, "Captured before the failed write")
   const write = fs.writeFile
@@ -918,7 +920,7 @@ test("a failed pending capture rejects Send visibly and retains its requesting d
   host.ui.setEditorText(original)
   await read.started()
   host.submit()
-  await waitFor(() => assert.equal(host.ui.getEditorText(), ""))
+  assert.equal(host.ui.getEditorText(), original)
   host.ui.setEditorText("Unrelated later draft")
   read.release()
   await waitFor(() =>
@@ -927,19 +929,11 @@ test("a failed pending capture rejects Send visibly and retains its requesting d
   await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
   assert.equal(host.requests.length, 0)
   assert.equal(host.ui.getEditorText(), "Unrelated later draft")
-  const rejected = host.runtime.session.sessionManager
-    .getEntries()
-    .find(
-      (entry) =>
-        entry.type === "custom" && entry.customType === "input-rejected",
-    )
-  assert.ok(rejected)
   assert.equal(host.inputs.length, 0)
-  const request = await retainedRequest(
-    host,
-    `Submission: ${rejected.data.submissionId}`,
-  )
+  const request = await retainedRequest(host, "Delivery: normal")
   assert.ok(request.text.includes(original))
+  assert.ok(request.text.includes(`Session: ${sessionId}`))
+  assert.ok(request.text.includes(`Working directory: ${host.directory}`))
   assert.equal(host.runtime.session.sessionFile, undefined)
   host.submit("A later valid request")
   await waitFor(() => assert.equal(host.requests.length, 1))

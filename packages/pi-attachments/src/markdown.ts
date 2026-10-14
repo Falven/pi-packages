@@ -1,9 +1,7 @@
 import { stat } from "node:fs/promises"
 import { basename, sep } from "node:path"
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-} from "@earendil-works/pi-coding-agent"
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent"
+import type { AttachmentEditorAccess, AttachmentSubmission } from "./editor.ts"
 import {
   attachmentReferences,
   fileDestination,
@@ -23,11 +21,16 @@ type Capture = {
   outcome?: Outcome
   submitted: boolean
 }
+type Replacement = { from: number; to: number; text: string }
 type Draft = {
   text: string
   sessionId: string
   references: { reference: Reference; capture?: Capture }[]
-  prepared?: Promise<{ text: string; errors: string[] }>
+  prepared?: Promise<{
+    text: string
+    errors: string[]
+    replacements: Replacement[]
+  }>
 }
 
 function replacement(reference: Reference, path: string): string {
@@ -66,11 +69,7 @@ function movedRange(
   return undefined
 }
 
-export function registerMarkdown(
-  pi: ExtensionAPI,
-  storage: string,
-  signal: AbortSignal,
-) {
+export function registerMarkdown(storage: string, signal: AbortSignal) {
   const drafts = new WeakMap<object, Draft>()
 
   async function preserve(
@@ -102,7 +101,7 @@ export function registerMarkdown(
     }
   }
 
-  function prepare(draft: Draft) {
+  function prepareDraft(draft: Draft) {
     for (const { capture } of draft.references)
       if (capture) capture.submitted = true
     return (draft.prepared ??= Promise.all(
@@ -125,52 +124,64 @@ export function registerMarkdown(
         }
       }
       let text = draft.text
-      for (const [from, edit] of [...destinations].toSorted(
-        ([left], [right]) => right - left,
-      ))
-        text = text.slice(0, from) + edit.text + text.slice(edit.to)
-      return { text, errors: [...errors] }
+      const replacements = [...destinations]
+        .map(([from, edit]) => ({ from, to: edit.to, text: edit.text }))
+        .toSorted((left, right) => right.from - left.from)
+      for (const edit of replacements)
+        text = text.slice(0, edit.from) + edit.text + text.slice(edit.to)
+      return { text, errors: [...errors], replacements }
     }))
   }
 
-  pi.on("input_prepare", async (event, ctx) => {
-    if (!event.editorTextIdentity) return undefined
-    const sessionId = ctx.sessionManager.getSessionId()
-    const draft = drafts.get(event.editorTextIdentity)
-    if (
-      draft?.sessionId !== sessionId ||
-      !draft.references.some(({ capture }) => capture)
-    )
-      return undefined
-    const prepared = await prepare(draft)
-    const text = prepared.text.trim()
-    if (prepared.errors.length) {
-      let reason = `Attachment request not sent: ${prepared.errors.join("\n")}`
-      try {
-        reason += `\nRequest saved: ${await saveRequest(storage, {
-          ...event,
-          text,
-          sessionId,
-          sessionFile: ctx.sessionManager.getSessionFile(),
-          cwd: ctx.cwd,
-        })}`
-      } catch (error) {
-        reason += `\nCould not save recovery: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`
-      }
-      return { action: "reject", reason }
-    }
-    return { action: "transform", text }
-  })
-
   return {
-    observe(ctx: ExtensionContext) {
+    hasCaptures(identity: object): boolean {
+      return (
+        drafts.get(identity)?.references.some(({ capture }) => capture) ?? false
+      )
+    },
+    async prepare(
+      request: AttachmentSubmission &
+        Pick<Parameters<typeof saveRequest>[1], "images">,
+    ): Promise<{ text: string; replacements: Replacement[] }> {
+      const draft = drafts.get(request.identity)
+      if (
+        draft?.sessionId !== request.sessionId ||
+        !draft.references.some(({ capture }) => capture)
+      )
+        return { text: request.text, replacements: [] }
+      const recovery = {
+        sessionId: request.sessionId,
+        sessionFile: request.sessionFile,
+        cwd: request.cwd,
+        text: request.text,
+        ...(request.streamingBehavior
+          ? { streamingBehavior: request.streamingBehavior }
+          : {}),
+        ...(request.images
+          ? { images: request.images.map((image) => ({ ...image })) }
+          : {}),
+      }
+      const prepared = await prepareDraft(draft)
+      if (prepared.errors.length) {
+        let reason = prepared.errors.join("\n")
+        try {
+          reason += `\nRequest saved: ${await saveRequest(storage, {
+            ...recovery,
+            text: prepared.text,
+          })}`
+        } catch (error) {
+          reason += `\nCould not save recovery: ${String(error)}\nContents retained in memory until Pi exits; use /attachments-recover.`
+        }
+        throw new Error(reason)
+      }
+      return { text: prepared.text, replacements: prepared.replacements }
+    },
+    observe(ctx: ExtensionContext, access: AttachmentEditorAccess) {
       let previous: Draft | undefined
-      let history: Promise<void> | undefined
       return {
         change(origin?: string, replaced = false) {
           if (signal.aborted) return
-          const text = ctx.ui.getEditorText()
-          const identity = ctx.ui.getEditorTextIdentity()
+          const { text, identity } = access.snapshot()
           const sessionId = ctx.sessionManager.getSessionId()
           let draft = drafts.get(identity)
           if (!draft) {
@@ -203,7 +214,7 @@ export function registerMarkdown(
                   draft.references.push({ reference, capture: earlier.capture })
                   continue
                 }
-                const edit = ctx.ui.captureEditorEdit(
+                const edit = access.captureEdit(
                   reference.destination.from,
                   reference.destination.to,
                 )
@@ -248,7 +259,7 @@ export function registerMarkdown(
                 }
                 if (!destinations.has(reference.destination.from)) {
                   destinations.add(reference.destination.from)
-                  const edit = ctx.ui.captureEditorEdit(
+                  const edit = access.captureEdit(
                     reference.destination.from,
                     reference.destination.to,
                   )
@@ -278,39 +289,12 @@ export function registerMarkdown(
           }
           previous = draft
         },
-        addToHistory(
-          text: string,
-          identity: object | undefined,
-          add: (text: string) => void,
-        ) {
-          if (signal.aborted) {
-            add(text)
-            return
-          }
-          const draft = identity ? drafts.get(identity) : undefined
-          if (
-            draft?.sessionId !== ctx.sessionManager.getSessionId() ||
-            !draft.references.some(({ capture }) => capture)
-          ) {
-            if (history) history = history.then(() => add(text))
-            else add(text)
-            return
-          }
-          const prepared = prepare(draft)
-          const pending = (history ?? Promise.resolve()).then(async () =>
-            add((await prepared).text),
-          )
-          history = pending
-          void pending.finally(() => {
-            if (history === pending) history = undefined
-          })
-        },
       }
     },
-    references(text: string, ctx: ExtensionContext) {
-      const draft = drafts.get(ctx.ui.getEditorTextIdentity())
+    references(text: string, cwd: string, identity?: object) {
+      const draft = identity ? drafts.get(identity) : undefined
       if (!draft || draft.text !== text)
-        return attachmentReferences(text, storage, ctx.cwd)
+        return attachmentReferences(text, storage, cwd)
       return draft.references.flatMap(({ reference, capture }) => {
         const outcome = capture?.outcome
         if (reference.legacyPath && (!outcome || "error" in outcome)) return []
