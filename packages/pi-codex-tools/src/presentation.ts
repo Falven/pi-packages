@@ -246,7 +246,7 @@ export function createExecutionRenderers(
                 )
               ? "interrupted or unknown"
               : (execution?.status ?? "completed")
-      const label =
+      const itemSummary =
         operations.length === 1 && operations[0]?.name === "view_image"
           ? "Image"
           : operations.length === 1 && operations[0]?.name === "apply_patch"
@@ -263,11 +263,11 @@ export function createExecutionRenderers(
             : status === "running"
               ? "warning"
               : "success",
-          `${label} · ${status}`,
+          `${itemSummary} · ${status}`,
         ),
       ]
       if (options.expanded) {
-        if (!details) lines.push("[Earlier operation details unavailable]")
+        if (!details) lines.push("[Earlier activity body unavailable]")
         for (const operation of operations) {
           lines.push(
             `${operation.name === "exec_command" ? "Command" : operation.name === "view_image" ? "Image" : operation.name === "apply_patch" ? "Patch" : operation.name} · ${operation.status}`,
@@ -295,7 +295,7 @@ export function createExecutionRenderers(
             lines.push(`Exit status: ${operation.exitCode}`)
         }
         if (execution?.omitted)
-          lines.push("… [earlier operation details omitted]")
+          lines.push("… [earlier activity bodies omitted]")
         const output = readable(
           execution?.output !== undefined
             ? execution.output

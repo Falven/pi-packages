@@ -53,7 +53,7 @@ const finish = (reason = "stop") => ({
 })
 const done = { event: "[DONE]" }
 
-test("settled work hides the earlier identical text and retains the final occurrence", async (t) => {
+test("settled agent activity hides the earlier identical text and retains the final occurrence", async (t) => {
   const appendNotice = { current: () => {} }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -298,7 +298,7 @@ test("identical delivered steering and follow-up retain separate request relatio
   assertNoticeGap()
 })
 
-test("without provider phase evidence work stays visible until the final stream settles", async (t) => {
+test("without provider phase evidence agent activity stays visible until the final stream settles", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 34 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -380,7 +380,7 @@ test("native user replacement preserves the delivered request relationship and p
   assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
 })
 
-test("a settled terminal assistant keeps its native thoughts in work and its text as one answer", async (t) => {
+test("a settled terminal assistant keeps its native thoughts in agent activity and its text as one answer", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 38,
@@ -494,7 +494,7 @@ test("all terminal text parts share one answer when a native extension interleav
   ])
 })
 
-test("native tool inspection keeps work open and work toggles preserve tool details", async (t) => {
+test("native tool inspection keeps agent activity open and agent activity toggles preserve activity bodies", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 34 })
   await writeFile(join(host.directory, "one.txt"), "INSPECTED BODY")
   host.queueResponse(
@@ -543,7 +543,7 @@ test("native tool inspection keeps work open and work toggles preserve tool deta
   assert.doesNotMatch(await host.frame(), /INSPECTED BODY|Inspected commentary/)
 })
 
-test("cancelling a partial final leaves work expanded", async (t) => {
+test("cancelling a partial final leaves agent activity expanded", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -564,7 +564,7 @@ test("cancelling a partial final leaves work expanded", async (t) => {
   assert.doesNotMatch(frame, /Worked/)
 })
 
-test("a terminal stream error leaves earlier work and its partial text visible", async (t) => {
+test("a terminal stream error leaves earlier agent activity and its partial text visible", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -590,7 +590,7 @@ test("a terminal stream error leaves earlier work and its partial text visible",
   assert.doesNotMatch(frame, /Worked/)
 })
 
-test("cleared and consumed inputs never create work relationships", async (t) => {
+test("cleared and consumed inputs never create agent activity relationships", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 34,
@@ -725,7 +725,7 @@ test("cancellation after agent_end stays expanded through the next request", asy
   assert.doesNotMatch(next, /Worked/)
 })
 
-test("a terminal response without answer text leaves work expanded", async (t) => {
+test("a terminal response without answer text leaves agent activity expanded", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 30 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -788,7 +788,7 @@ test("a truncated terminal text can be the final answer without hiding its nativ
   )
 })
 
-test("automatic folding clears a selected progress range even while reading scrollback", async (t) => {
+test("automatic collapse clears a selected progress range even while reading scrollback", async (t) => {
   const clipboard = getNativeClipboard()
   assertWritableClipboard(clipboard)
   let copied = ""
@@ -836,7 +836,7 @@ test("automatic folding clears a selected progress range even while reading scro
   await t.waitFor(() => assert.equal(copied, "Visible final"))
 })
 
-test("certified work relationships survive native journal reload", async (t) => {
+test("certified agent activity relationships survive native journal reload", async (t) => {
   const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
@@ -870,7 +870,7 @@ test("certified work relationships survive native journal reload", async (t) => 
   assert.match(reloaded, /Worked for \d+m \d+s ▶/)
 })
 
-test("history without delivery records leaves uncertain work unfolded", async (t) => {
+test("history without delivery records leaves uncertain agent activity expanded", async (t) => {
   const source = await openNativeHost(t, { persistSession: true, rows: 32 })
   await writeFile(join(source.directory, "one.txt"), "native result")
   source.queueResponse(
@@ -1149,7 +1149,7 @@ test("a fork remains usable when relationship metadata fails to append", async (
   assert.match(JSON.stringify(host.requests.at(-1)), /After failed metadata/)
 })
 
-test("copied journal restores work without changing provider context", async (t) => {
+test("copied journal restores agent activity without changing provider context", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     persistSession: true,

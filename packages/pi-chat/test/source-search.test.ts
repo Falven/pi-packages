@@ -46,7 +46,7 @@ const finish = (reason = "stop") => ({
 })
 const done = { event: "[DONE]" }
 
-test("native Find reveals a matching occurrence inside closed work", async (t) => {
+test("native Find reveals a matching occurrence inside closed agent activity", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 34,
@@ -79,7 +79,7 @@ test("native Find reveals a matching occurrence inside closed work", async (t) =
   assert.match(matched ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
 })
 
-test("Find opens a closed tool group and keeps the native result presenter", async (t) => {
+test("Find opens a closed render group and keeps the native result presenter", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 40,
@@ -615,7 +615,7 @@ test("Find indexes the literal native shell command and output", async (t) => {
   assert.match(await host.frame(), /2\/2/)
 })
 
-test("Find scrolls a bounded tool body to the selected source occurrence", async (t) => {
+test("Find scrolls a bounded activity body to the selected source occurrence", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 30,

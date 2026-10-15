@@ -8,7 +8,7 @@ import {
   NativeChatHost,
 } from "./native-host.ts"
 import { thoughtPresentation } from "./thought.ts"
-import { ActionLabels } from "./action-labels.ts"
+import { GroupSummaries } from "./group-summaries.ts"
 
 const relationshipRenderer = () => undefined
 
@@ -43,14 +43,14 @@ export default function piChat(pi: ExtensionAPI) {
   })
   pi.on("agent_end", clearHeading)
   pi.on("tool_execution_start", (event, context) =>
-    adapter?.actionLabels.start(event, context.cwd),
+    adapter?.groupSummaries.start(event, context.cwd),
   )
-  pi.on("tool_execution_end", (event) => adapter?.actionLabels.end(event))
-  pi.on("agent_end", () => adapter?.actionLabels.stop())
+  pi.on("tool_execution_end", (event) => adapter?.groupSummaries.end(event))
+  pi.on("agent_end", () => adapter?.groupSummaries.stop())
   const install = (host: Parameters<typeof NativeChatHost.install>[0]) => {
     adapter?.dispose()
     adapter = undefined
-    adapter = NativeChatHost.install(host, new ActionLabels(pi))
+    adapter = NativeChatHost.install(host, new GroupSummaries(pi))
   }
   const disarm = armHistoryBootstrap(relationshipRenderer, install)
 

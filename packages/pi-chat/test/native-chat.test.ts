@@ -512,7 +512,7 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   assert.match(screen(), /only/)
 })
 
-test("commentary between model iterations separates tool groups in source order", async (t) => {
+test("commentary between model iterations separates render groups in source order", async (t) => {
   let noticeBetweenCalls = false
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -641,7 +641,7 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
   assert.equal(screen.match(/▶ Read files/g)?.length, 1)
 })
 
-test("native Hide thinking controls whether reasoning separates tool groups", async (t) => {
+test("native Hide thinking controls whether reasoning separates render groups", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
@@ -946,7 +946,7 @@ test("copy uses the native selected text while a disclosure is focused", async (
   await t.waitFor(() => assert.equal(copied, "focused-copy"))
 })
 
-test("folding a group clears selected tool output before native copy", async (t) => {
+test("collapsing a render group clears selected tool output before native copy", async (t) => {
   const clipboard = getNativeClipboard()
   assertWritableClipboard(clipboard)
   let copied = ""

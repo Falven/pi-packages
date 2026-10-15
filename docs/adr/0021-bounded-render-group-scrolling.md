@@ -1,6 +1,6 @@
-# Bound expanded activity groups within the chat view
+# Bound expanded render groups within the chat view
 
-An expanded activity group uses a bounded inline viewport with its disclosure header outside the scrolling body, while the enclosing work history expands in normal chat flow and tools retain their native presentation and detail controls. The viewport composes Pi's `ScrollView` for scroll state and reuses native content-renderer instances, supplying available height, visible-range clipping, and child input and coordinate routing through the [owned chat-view adapter](0022-native-rows-in-an-owned-transcript.md). Scrolling requests a redraw without invalidating unchanged content or scanning history; additional caches require reliable invalidation and measured need.
+An expanded render group uses a bounded inline viewport with its disclosure header outside the scrolling body, while the enclosing agent activity expands in normal chat flow and tools retain their native presentation and disclosures. The viewport composes Pi's `ScrollView` for scroll state and reuses native content-renderer instances, supplying available height, visible-range clipping, and child input and coordinate routing through the [owned chat-view adapter](0022-native-rows-in-an-owned-transcript.md). Scrolling requests a redraw without invalidating unchanged content or scanning history; additional caches require reliable invalidation and measured need.
 
 ## Consequences
 

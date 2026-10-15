@@ -10,7 +10,7 @@
 
 ## Presentation delta
 
-- [x] Register parent call/result renderers for execution and waiting using native components, themes, expansion controls, and terminal-width utilities. Show a compact summary and status by default; expanded execution shows operations and readable results, never orchestration source or transport envelopes.
+- [x] Register parent call/result renderers for execution and waiting using native components, themes, disclosures, and terminal-width utilities. Show a compact summary and status by default; expanded execution shows operations and readable results, never orchestration source or transport envelopes.
 - [x] Carry stable operation identity, effective command context after settings and argument hooks, and processed results through tool-owned presentation details and complete pending updates. Keep nested operations in their parent execution card; do not rely on native nested-call IDs or independent child transcript rows.
 - [x] Preserve original source and transport results in retained history and leave model declarations, result content, encoding, hook processing, and output collection unchanged. Returned presentation must respect hook edits instead of recovering removed results.
 - [x] Retain compact incremental presentation records through public entries and make routine activity entries invisible in the chat view. Completed command presentation remains recoverable from available history; no separate history store or chat-package changes.

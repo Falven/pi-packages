@@ -5,7 +5,7 @@ import type { RelationshipFact } from "./relationships.ts"
 import type { MessagePhase } from "./provider-phase.ts"
 
 export type DeliveryKind = "initial" | "steering" | "follow-up"
-export type WorkHistory = {
+export type AgentActivity = {
   request: Occurrence
   lastAssistant?: Occurrence
   lastCommitted?: Occurrence
@@ -15,16 +15,16 @@ export type WorkHistory = {
   cancelled: boolean
   manualExpanded?: boolean
   keepOpen: boolean
-  header?: WorkHeader
+  header?: AgentActivityHeader
 }
 
-export class WorkIndex {
+export class AgentActivityIndex {
   private candidates = new WeakMap<object, DeliveryKind>()
-  private owners = new WeakMap<Occurrence, WorkHistory>()
+  private owners = new WeakMap<Occurrence, AgentActivity>()
   private phases = new WeakMap<Occurrence, Map<number, MessagePhase>>()
   private phaseEvidence = new WeakSet<Occurrence>()
-  private readonly entries = new Map<string, WorkHistory>()
-  private current: WorkHistory | undefined
+  private readonly entries = new Map<string, AgentActivity>()
+  private current: AgentActivity | undefined
 
   clear() {
     this.candidates = new WeakMap()
@@ -54,7 +54,7 @@ export class WorkIndex {
           keepOpen: false,
         }
       } else if (kind !== "steering") {
-        // A user row without observed delivery cannot establish a work boundary.
+        // A user row without observed delivery cannot establish an agent activity boundary.
         this.current = undefined
       }
       if (this.current) {
@@ -82,10 +82,11 @@ export class WorkIndex {
   }
 
   committed(occurrence: Occurrence): RelationshipFact | undefined {
-    const work = this.find(occurrence)
-    if (!work || !occurrence.entry || !work.request.entry) return
-    this.entries.set(occurrence.entry.id, work)
-    work.lastCommitted = occurrence
+    const agentActivity = this.find(occurrence)
+    if (!agentActivity || !occurrence.entry || !agentActivity.request.entry)
+      return
+    this.entries.set(occurrence.entry.id, agentActivity)
+    agentActivity.lastCommitted = occurrence
     const delivery =
       occurrence.message?.role === "user"
         ? this.candidates.get(occurrence.message)
@@ -93,13 +94,13 @@ export class WorkIndex {
     return {
       version: 1,
       kind: "member",
-      requestId: work.request.entry.id,
+      requestId: agentActivity.request.entry.id,
       sourceId: occurrence.entry.id,
       ...(delivery ? { delivery } : {}),
     }
   }
 
-  find(occurrence: Occurrence | undefined): WorkHistory | undefined {
+  find(occurrence: Occurrence | undefined): AgentActivity | undefined {
     if (!occurrence) return undefined
     const owner = occurrence.parent ?? occurrence
     return (
@@ -119,9 +120,9 @@ export class WorkIndex {
     phases: Map<number, MessagePhase>,
     hasEvidence: boolean,
   ) {
-    const work = this.find(occurrence)
+    const agentActivity = this.find(occurrence)
     const message = occurrence.message
-    if (!work || message?.role !== "assistant") return
+    if (!agentActivity || message?.role !== "assistant") return
     this.phases.set(occurrence, new Map(phases))
     if (hasEvidence) this.phaseEvidence.add(occurrence)
     const finalParts = [...phases]
@@ -133,22 +134,22 @@ export class WorkIndex {
       )
       .map(([index]) => index)
     if (finalParts.length) {
-      work.final = occurrence
-      work.finalParts = finalParts
-    } else if (this.same(work.final, occurrence)) {
-      delete work.final
-      delete work.finalParts
+      agentActivity.final = occurrence
+      agentActivity.finalParts = finalParts
+    } else if (this.same(agentActivity.final, occurrence)) {
+      delete agentActivity.final
+      delete agentActivity.finalParts
     }
   }
 
   settle(cancelled: boolean): RelationshipFact | undefined {
-    const work = this.current
-    if (!work || work.settled) return
-    work.settled = true
-    work.cancelled = cancelled
-    const candidate = work.lastAssistant
+    const agentActivity = this.current
+    if (!agentActivity || agentActivity.settled) return
+    agentActivity.settled = true
+    agentActivity.cancelled = cancelled
+    const candidate = agentActivity.lastAssistant
     const message = candidate?.message
-    const explicitFinal = Boolean(work.finalParts?.length)
+    const explicitFinal = Boolean(agentActivity.finalParts?.length)
     if (
       !explicitFinal &&
       candidate &&
@@ -160,19 +161,24 @@ export class WorkIndex {
       !message.content.some((part) => part.type === "toolCall") &&
       message.content.some((part) => part.type === "text" && part.text.trim())
     )
-      work.final = candidate
+      agentActivity.final = candidate
     else if (!explicitFinal) {
-      delete work.final
-      delete work.finalParts
+      delete agentActivity.final
+      delete agentActivity.finalParts
     }
-    if (!work.request.entry || !work.lastCommitted?.entry) return
+    if (!agentActivity.request.entry || !agentActivity.lastCommitted?.entry)
+      return
     return {
       version: 1,
       kind: "settled",
-      requestId: work.request.entry.id,
-      sourceId: work.lastCommitted.entry.id,
-      ...(work.final?.entry ? { finalId: work.final.entry.id } : {}),
-      ...(work.finalParts ? { finalParts: work.finalParts } : {}),
+      requestId: agentActivity.request.entry.id,
+      sourceId: agentActivity.lastCommitted.entry.id,
+      ...(agentActivity.final?.entry
+        ? { finalId: agentActivity.final.entry.id }
+        : {}),
+      ...(agentActivity.finalParts
+        ? { finalParts: agentActivity.finalParts }
+        : {}),
       cancelled,
     }
   }
@@ -182,7 +188,7 @@ export class WorkIndex {
     occurrenceFor: (id: string) => Occurrence | undefined,
   ) {
     this.clear()
-    const works = new Map<string, WorkHistory>()
+    const agentActivities = new Map<string, AgentActivity>()
     for (const fact of facts) {
       if (
         fact.kind !== "member" ||
@@ -192,96 +198,102 @@ export class WorkIndex {
         continue
       const request = occurrenceFor(fact.requestId)
       if (!request) continue
-      const work: WorkHistory = {
+      const agentActivity: AgentActivity = {
         request,
         settled: false,
         cancelled: false,
         keepOpen: false,
       }
-      works.set(fact.requestId, work)
-      this.current = work
+      agentActivities.set(fact.requestId, agentActivity)
+      this.current = agentActivity
     }
     for (const fact of facts) {
-      const work = works.get(fact.requestId)
-      if (!work) continue
+      const agentActivity = agentActivities.get(fact.requestId)
+      if (!agentActivity) continue
       if (fact.kind === "member") {
         if (fact.delivery === "steering") {
-          work.settled = false
-          work.cancelled = false
-          delete work.final
-          delete work.finalParts
+          agentActivity.settled = false
+          agentActivity.cancelled = false
+          delete agentActivity.final
+          delete agentActivity.finalParts
         }
-        this.entries.set(fact.sourceId, work)
+        this.entries.set(fact.sourceId, agentActivity)
         const source = occurrenceFor(fact.sourceId)
         if (source) {
-          work.lastCommitted = source
+          agentActivity.lastCommitted = source
           if (source.message?.role === "assistant") {
-            work.lastAssistant = source
-            delete work.final
-            delete work.finalParts
+            agentActivity.lastAssistant = source
+            delete agentActivity.final
+            delete agentActivity.finalParts
           }
         }
       } else if (fact.kind === "phase") {
         const source = occurrenceFor(fact.sourceId)
         if (source) this.notePhase(source, fact.contentIndex, fact.phase)
       } else if (fact.kind === "settled") {
-        work.settled = true
-        work.cancelled = fact.cancelled
+        agentActivity.settled = true
+        agentActivity.cancelled = fact.cancelled
         const final = fact.finalId ? occurrenceFor(fact.finalId) : undefined
-        if (final) work.final = final
-        else delete work.final
-        if (final && fact.finalParts) work.finalParts = fact.finalParts
-        else delete work.finalParts
+        if (final) agentActivity.final = final
+        else delete agentActivity.final
+        if (final && fact.finalParts) agentActivity.finalParts = fact.finalParts
+        else delete agentActivity.finalParts
       }
     }
     if (this.current?.settled) this.current = undefined
   }
 
-  isRequest(occurrence: Occurrence | undefined, work: WorkHistory) {
-    return this.same(occurrence?.parent ?? occurrence, work.request)
+  isRequest(occurrence: Occurrence | undefined, agentActivity: AgentActivity) {
+    return this.same(occurrence?.parent ?? occurrence, agentActivity.request)
   }
 
-  isFinal(occurrence: Occurrence | undefined, work: WorkHistory) {
+  isFinal(occurrence: Occurrence | undefined, agentActivity: AgentActivity) {
     const owner = occurrence?.parent ?? occurrence
     if (
-      !this.isFinalMessage(occurrence, work) ||
+      !this.isFinalMessage(occurrence, agentActivity) ||
       owner?.message?.role !== "assistant"
     )
       return false
     if (occurrence?.contentIndex !== undefined)
       return (
         owner.message.content[occurrence.contentIndex]?.type === "text" &&
-        (!work.finalParts || work.finalParts.includes(occurrence.contentIndex))
+        (!agentActivity.finalParts ||
+          agentActivity.finalParts.includes(occurrence.contentIndex))
       )
     return owner === occurrence && !this.needsParts(owner)
   }
 
-  isFinalMessage(occurrence: Occurrence | undefined, work: WorkHistory) {
-    return this.same(occurrence?.parent ?? occurrence, work.final)
+  isFinalMessage(
+    occurrence: Occurrence | undefined,
+    agentActivity: AgentActivity,
+  ) {
+    return this.same(occurrence?.parent ?? occurrence, agentActivity.final)
   }
 
   needsParts(occurrence: Occurrence) {
-    const work = this.find(occurrence)
+    const agentActivity = this.find(occurrence)
     return Boolean(
-      work &&
-      this.same(occurrence, work.final) &&
+      agentActivity &&
+      this.same(occurrence, agentActivity.final) &&
       occurrence.message?.role === "assistant" &&
-      (Boolean(work.finalParts?.length) ||
+      (Boolean(agentActivity.finalParts?.length) ||
         occurrence.message.content.some(
           (part) => part.type === "thinking" && part.thinking.trim(),
         )),
     )
   }
 
-  expanded(work: WorkHistory) {
+  expanded(agentActivity: AgentActivity) {
     return (
-      !work.final || work.cancelled || (work.manualExpanded ?? work.keepOpen)
+      !agentActivity.final ||
+      agentActivity.cancelled ||
+      (agentActivity.manualExpanded ?? agentActivity.keepOpen)
     )
   }
 
   inspect(occurrence: Occurrence | undefined) {
-    const work = this.find(occurrence)
-    if (work) work.keepOpen = true
+    const agentActivity = this.find(occurrence)
+    if (agentActivity) agentActivity.keepOpen = true
   }
 
   private same(left: Occurrence | undefined, right: Occurrence | undefined) {
@@ -298,33 +310,33 @@ export class WorkIndex {
   }
 }
 
-export class WorkHeader implements Component {
+export class AgentActivityHeader implements Component {
   focused = false
   readonly spacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,
-    readonly work: WorkHistory,
+    readonly agentActivity: AgentActivity,
   ) {}
 
   invalidate() {}
 
   render(width: number) {
-    const end = this.work.settled
-      ? Date.parse(this.work.lastCommitted!.entry!.timestamp)
+    const end = this.agentActivity.settled
+      ? Date.parse(this.agentActivity.lastCommitted!.entry!.timestamp)
       : Date.now()
     const seconds = Math.max(
       0,
       Math.floor(
-        (end - Date.parse(this.work.request.entry!.timestamp)) / 1_000,
+        (end - Date.parse(this.agentActivity.request.entry!.timestamp)) / 1_000,
       ),
     )
     const theme = this.adapter.extensionUI.theme
-    const label = `Worked for ${Math.floor(seconds / 60)}m ${seconds % 60}s ${this.adapter.work.expanded(this.work) ? "▼" : "▶"}`
+    const summary = `Worked for ${Math.floor(seconds / 60)}m ${seconds % 60}s ${this.adapter.agentActivity.expanded(this.agentActivity) ? "▼" : "▶"}`
     const header = new Box(this.adapter.host.outputPad, 0)
     header.addChild(
       new Text(
-        theme.fg("muted", this.focused ? theme.underline(label) : label),
+        theme.fg("muted", this.focused ? theme.underline(summary) : summary),
         0,
         0,
       ),
@@ -335,13 +347,13 @@ export class WorkHeader implements Component {
 
   handleInput(data: string) {
     this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleWork(this.work),
+      this.adapter.toggleAgentActivity(this.agentActivity),
     )
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
     if (event.type !== "click" || event.button !== "left") return undefined
-    this.adapter.toggleWork(this.work)
+    this.adapter.toggleAgentActivity(this.agentActivity)
     return { handled: true, focus: true }
   }
 }

@@ -501,7 +501,7 @@ test("bounded operation history keeps active commands and their late failure in 
     assert.match(frame, /operations · failed/)
     assert.match(frame, /ORIGIN-LATE-FAILURE/)
     assert.match(frame, /Exit status: 9/)
-    assert.match(frame, /earlier operation details omitted/)
+    assert.match(frame, /earlier activity bodies omitted/)
   }
   assertOrigin()
   assert.equal(host.requests.length, requests)
@@ -1063,7 +1063,7 @@ test("legacy yielded cards recover recorded status without inventing operation o
   const frame = stripVTControlCharacters(host.screenLines().join("\n"))
   assert.match(frame, /Execution · failed/)
   assert.match(frame, /LEGACY-TERMINAL/)
-  assert.match(frame, /Earlier operation details unavailable/)
+  assert.match(frame, /Earlier activity body unavailable/)
   assert.doesNotMatch(frame, /Command ·|Exit status:/)
 })
 

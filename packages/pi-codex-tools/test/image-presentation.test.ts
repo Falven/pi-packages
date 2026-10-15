@@ -113,7 +113,7 @@ test("missing and blocked image cards retain readable failures without image pay
   )
 })
 
-test("image removal and mixed text redaction suppress stale operation details", async (t) => {
+test("image removal and mixed text redaction suppress stale activity bodies", async (t) => {
   for (const mode of ["image", "text", "child"] as const) {
     await t.test(mode, async (caseContext) => {
       const host = await openNativeHost(caseContext, {

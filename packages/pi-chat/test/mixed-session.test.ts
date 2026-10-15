@@ -217,7 +217,7 @@ for (const [name, paths] of [
   })
 }
 
-test("mixed live work keeps native and custom tools, queued requests, search, and copy operable", async (t) => {
+test("mixed live agent activity keeps native and custom tools, queued requests, search, and copy operable", async (t) => {
   const clipboard = getNativeClipboard()
   writableClipboard(clipboard)
   let copied = ""

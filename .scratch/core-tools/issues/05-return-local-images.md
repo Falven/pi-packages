@@ -11,7 +11,7 @@
 ## Presentation delta
 
 - [x] Present image operation path, status, and readable errors within the originating parent card. Actual images appear once in the result that collects them, including a later `wait`, with native image display when permitted. Never use base64 data or a raw result envelope as ordinary card text.
-- [x] Respect effective image blocking, normal image processing, hook removal, terminal image visibility, and native expansion controls. Keep model image settings independent from terminal visibility and do not recover discarded image bytes through presentation metadata.
+- [x] Respect effective image blocking, normal image processing, hook removal, terminal image visibility, and native disclosures. Keep model image settings independent from terminal visibility and do not recover discarded image bytes through presentation metadata.
 - [x] Keep mixed script text and image operations readable and bounded in their originating execution. Preserve actual image placement in the collecting native result; do not duplicate images into the origin or journal, alter model content boundaries, or bypass native rendering and processing.
 - [x] Verify valid, blocked, missing, and hook-redacted image outcomes at the approved host seam, including terminal image preferences, emission after a yield, and the next provider request. Preserve the recorded native detail and normalization limitations.
 

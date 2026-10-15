@@ -179,21 +179,28 @@ test("selection copies every expanded body row between visible endpoints", async
       assert(host.screenLines().some((line) => line.includes("Copy expanded"))),
     { timeout: 2000 },
   )
-  const folded = host.screenLines().map(stripTerminalSequences)
-  const foldedFirst = folded.findIndex((line) => line.includes("Copy expanded"))
-  const foldedLast = folded.findIndex((line) => line.includes("Received."))
-  assert(foldedFirst >= 0 && foldedLast > foldedFirst, folded.join("\n"))
+  const collapsed = host.screenLines().map(stripTerminalSequences)
+  const collapsedFirst = collapsed.findIndex((line) =>
+    line.includes("Copy expanded"),
+  )
+  const collapsedLast = collapsed.findIndex((line) =>
+    line.includes("Received."),
+  )
+  assert(
+    collapsedFirst >= 0 && collapsedLast > collapsedFirst,
+    collapsed.join("\n"),
+  )
   copied = ""
-  await host.key(`\x1b[<0;${column};${foldedFirst + 1}M`)
-  await host.key(`\x1b[<32;10;${foldedLast + 1}M`)
-  await host.key(`\x1b[<0;10;${foldedLast + 1}m`)
+  await host.key(`\x1b[<0;${column};${collapsedFirst + 1}M`)
+  await host.key(`\x1b[<32;10;${collapsedLast + 1}M`)
+  await host.key(`\x1b[<0;10;${collapsedLast + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
   assert.match(copied, /Read files/)
   assert.doesNotMatch(copied, /first-row|second-row/)
 })
 
-test("action summaries combine native categories and distinct paths while execution updates the header", async (t) => {
+test("group summaries combine native categories and distinct paths while execution updates the header", async (t) => {
   const gate = Promise.withResolvers<void>()
   let waiting = false
   const host = await openNativeHost(t, {

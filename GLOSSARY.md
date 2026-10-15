@@ -1,53 +1,125 @@
 # Pi interaction
 
-The language used to describe composing prompts, pursuing goals, and reading conversation history in Pi. These user-facing concepts are shared across the packages.
+Terms for conversation structure, presentation, composition, and execution in Pi. Thread, turn, and item follow the [published conversation model](https://learn.chatgpt.com/docs/app-server#core-primitives); agent activity and its rendered items describe a separate presentation layer.
 
 ## Language
 
+### Conversation structure
+
+**Thread**:
+A conversation between a user and an agent, composed of turns.
+
+**Turn**:
+One user request together with the agent processing and response that follow it. A turn contains items; its agent activity is only part of the turn.
+
+**Item**:
+A unit of input or output within a turn, such as a user message, assistant message, tool call, command execution, or file change.
+_Avoid_: Activity item, when referring to conversation structure
+
+**Active branch**:
+The conversation path from the beginning of a thread to its currently selected point in history.
+
+**Retained history**:
+Recorded conversation content still available, including original content summarized during compaction.
+_Avoid_: Visible history, when content may be collapsed or absent from the chat view
+
+**Steering message**:
+A user message delivered during agent activity to redirect the current turn.
+
+**Queued follow-up**:
+A user request held until the current turn finishes, starting its own turn when delivered.
+
+**Final response**:
+The assistant's answer within a turn, presented separately from its preceding agent activity. It can still be streaming or remain partial after interruption.
+
+### Presentation
+
+**Chat view**:
+The primary display of conversation messages and current activity alongside the composer.
+
+**Transcript**:
+A separate overlay for reading and navigating conversation history over the chat view.
+
+**Agent activity**:
+The ordered commentary, thoughts, and tool activity within a turn, presented separately from its user messages and final response.
+_Avoid_: Turn, when referring only to the agent's activity
+
+**Render group**:
+Consecutive tool activity displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
+
+**Activity item**:
+A unit of displayed agent activity associated with an action or result. A conversation item or tool call can contribute several activity items; their boundaries need not match.
+
+**Summary**:
+A concise description shown at a disclosure. Qualify it as a group summary or item summary when identifying what it describes.
+
+**Group summary**:
+A short description of observed tool activity in a render group's header, including while a call is running. It does not replace the tool's own presentation.
+
+**Item summary**:
+A short description identifying the action and target of one activity item.
+
+**Activity body**:
+The content inspected when an activity item's disclosure is expanded.
+_Avoid_: Details, when naming the displayed region rather than tool-result metadata
+
+**Disclosure**:
+A control that switches its content between collapsed and expanded states without changing the underlying content.
+_Avoid_: Expansion control or fold, when naming the control
+
+**Collapsed**:
+The display state that hides content behind its summary or disclosure header.
+_Avoid_: Compaction, when only presentation changes
+
+**Expanded**:
+The display state that reveals the content associated with a disclosure.
+
+**Hide thinking**:
+The choice to omit thoughts from ordinary chat flow while retaining them in conversation history. Finding a thought can temporarily reveal that occurrence without changing the choice.
+
+**Inline thought**:
+A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or disclosure. It remains visible after thinking completes whenever thinking is shown and its enclosing agent activity is expanded.
+
+**Activity heading**:
+A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.
+
+### Composition
+
 **Composer**:
 The editing surface where a user prepares a prompt and its associated references and attachments before submission.
-_Avoid_: Text box, when referring to the entire composer
 
 **Draft**:
 A prompt being prepared for submission, including its text, references, and attachments.
-_Avoid_: Message, when the prompt has not been submitted
 
 **Reference**:
 Editable text within a draft that identifies a resource, such as a file or skill. A plain source path identifies the file whose current contents can be read.
-_Avoid_: Attachment, when referring only to a mention of a resource
 
 **Skill reference**:
 A reference identifying a skill the user explicitly wants applied to the request, independent of how the reference entered the draft.
-_Avoid_: Slash command, unless referring to a command invocation
 
 **Attachment**:
 Supplementary file contents included in a draft through a Markdown link or image pointing to a local file.
-_Avoid_: Reference, when referring to captured content
 
 **Attachment source**:
 An existing file or entered text from which an attachment is captured, independent of the kind of content it contains.
-_Avoid_: Attachment type, when referring to how content is supplied
-
-**Attachment snapshot**:
-A retained copy of contents captured from an attachment source. Later changes to the source do not change that copy.
 
 **Attachment capture**:
 Preservation of an attachment source's contents as a snapshot.
+
+**Attachment snapshot**:
+A retained copy of contents captured from an attachment source. Later changes to the source do not change that copy.
 
 **Text attachment**:
 Text associated with a draft as a file that the agent can read on demand.
 
 **Attachment thumbnail**:
 A compact image preview in the composer that identifies an attached image without opening its retained file in another application.
-_Avoid_: Attachment contents, when referring only to the preview
 
 **Attachment reference**:
 A Markdown link or image pointing to an existing local file whose contents are included as an attachment in a draft or submitted prompt.
-_Avoid_: File reference, when referring to captured attachment contents
 
 **Attachment membership**:
 The attachments included in a draft through local-file links and images in its Markdown. A plain path does not include a file as an attachment.
-_Avoid_: Attachment contents, when referring to which items the draft includes
 
 **Preview text**:
 Read-only inspection of an attachment's retained text without changing the draft or its attachment membership.
@@ -60,104 +132,49 @@ Removal of an attachment reference and therefore its membership in the current d
 
 **Source view**:
 A view of the draft's Markdown syntax that can be edited directly.
-_Avoid_: Separate draft, when switching how the same draft is displayed
 
 **Formatted view**:
 A view in which supported Markdown formatting appears within the editable draft.
-_Avoid_: Preview, when the displayed content is directly editable
 
 **Paste**:
 A user action that inserts copied content into a draft. Its content can be text, an image, or copied files.
-_Avoid_: Attachment, when referring to the action
 
 **Paste policy**:
 The rules that determine how pasted content enters a draft, including whether text appears inline or becomes an attachment.
 
-**Chat view**:
-The primary display of conversation messages and current activity alongside the composer.
-_Avoid_: Transcript, when referring to the main chat surface
-
-**Transcript**:
-A separate overlay for reading and navigating conversation history over the chat view.
-_Avoid_: Chat view, when referring to the history-reading overlay
-
-**Active branch**:
-The conversation path from the beginning of a session to its currently selected point in history.
-
-**Retained history**:
-Recorded conversation content still available in a session, including original content summarized during compaction.
-_Avoid_: Visible history, when content may be folded or absent from the current chat view
-
-**Fold**:
-A display state that replaces displayed conversation content with a summary or disclosure header while preserving the underlying content.
-_Avoid_: Compaction, when only the presentation changes
-
-**Core toolset**:
-The model-facing tools for Pi's built-in local command, file, and image capabilities. Tools from unrelated extensions are outside this set.
-_Avoid_: All tools, when referring only to these local coding operations
-
-**Execution cell**:
-One execution whose new output and eventual result can be collected across tool calls.
-_Avoid_: Process session, when referring to the execution coordinating commands and other operations
-
-**Process session**:
-A command that remains available for input or output collection until its final result is collected.
-_Avoid_: Execution cell, when referring to one running command
-
-**Activity group**:
-Consecutive tool calls presented together within a work history. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
-_Avoid_: Nested tool call, unless one tool actually called another
-
-**Action label**:
-A short description of observed tool activity in an activity group's collapsed header or while a call is running. It describes the action without replacing the tool's own presentation.
-_Avoid_: Tool title, when referring to the group's summary
-
-**Work history**:
-The ordered commentary, thoughts, and tool activity associated with answering a request, distinct from its final response.
-_Avoid_: Thought, when referring to all of the work preceding an answer
-
-**Steering message**:
-A user message delivered during ongoing work to redirect the current request.
-
-**Queued follow-up**:
-A user request held until the current request finishes, with its own work history and final response.
-
-**Final response**:
-The assistant's answer to a request, presented separately from the work history leading to it. It can still be streaming or remain partial after interruption.
-
-**Hide thinking**:
-The choice to omit thoughts from ordinary chat flow while retaining them in conversation history. Finding a thought can temporarily reveal that occurrence without changing the choice.
-
-**Inline thought**:
-A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or fold. It remains visible after thinking completes whenever thinking is shown and its enclosing work history is open.
-
-**Activity heading**:
-A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.
-
-**Goal**:
-An explicitly authorized outcome whose pursuit can continue within a session across successive work attempts.
-_Avoid_: Task list, when referring to the desired outcome
-
-**Objective**:
-The statement of what a goal must achieve, including its scope and constraints.
-_Avoid_: Plan, when referring to the desired outcome rather than the steps to reach it
-
-**Goal continuation**:
-A further work attempt toward an active goal after the previous attempt ends, without a new user request.
-_Avoid_: Queued follow-up, which originates from a user request
-
-**Goal pause**:
-A stop to future goal pursuit that retains the objective and consumed usage for an explicit resume.
-_Avoid_: Stop, when interruption of current work is not requested
-
-**Goal clear**:
-Removal of the current goal while retaining its conversation history.
-_Avoid_: Extension removal, which removes the goal capability itself
-
-**Goal budget**:
-An optional token allowance allocated to pursuing a goal.
-_Avoid_: Context limit, time limit, spending limit
+### Execution
 
 **Agent interface**:
 The instructions, messages, tool contracts, calls, and results available to the model during a conversation.
-_Avoid_: User interface, when referring to information exchanged with the model
+
+**Core toolset**:
+The model-facing tools for Pi's built-in local command, file, and image capabilities. Tools from unrelated extensions are outside this set.
+
+**Tool call**:
+An invocation of a tool with its inputs and eventual outcome. One tool call can contribute several activity items.
+
+**Execution cell**:
+One execution whose new output and eventual result can be collected across tool calls.
+
+**Process session**:
+A command that remains available for input or output collection until its final result is collected.
+
+### Goals
+
+**Goal**:
+An explicitly authorized outcome whose pursuit can continue within a session across successive work attempts.
+
+**Objective**:
+The statement of what a goal must achieve, including its scope and constraints.
+
+**Goal continuation**:
+A further work attempt toward an active goal after the previous attempt ends, without a new user request.
+
+**Goal pause**:
+A stop to future goal pursuit that retains the objective and consumed usage for an explicit resume.
+
+**Goal clear**:
+Removal of the current goal while retaining its conversation history.
+
+**Goal budget**:
+An optional token allowance allocated to pursuing a goal.

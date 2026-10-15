@@ -35,7 +35,7 @@ const nativeTools = new Map<string, Action["kind"]>([
 
 type Call = { id: string }
 type CallState = { action: Action; running: number }
-type Group = { calls: readonly { occurrence?: object }[] }
+type SummaryGroup = { items: readonly { occurrence?: object }[] }
 
 function sourcePath(path: string, cwd: string) {
   return resolve(
@@ -48,16 +48,16 @@ function sourcePath(path: string, cwd: string) {
   )
 }
 
-function detail(value: string) {
+function summaryText(value: string) {
   return stripTerminalSequences(value).replace(/\s+/g, " ").trim()
 }
 
-export class ActionLabels {
+export class GroupSummaries {
   private readonly calls = new WeakMap<object, CallState>()
   private readonly entries = new WeakMap<object, Map<number, CallState>>()
   private readonly live = new Map<string, CallState>()
   private readonly groups = new WeakMap<
-    Group,
+    SummaryGroup,
     { revision: number; owners: (object | undefined)[]; text: string }
   >()
   private revision = 0
@@ -114,31 +114,31 @@ export class ActionLabels {
     this.revision++
   }
 
-  summary(group: Group): string {
+  summary(group: SummaryGroup): string {
     const cached = this.groups.get(group)
     if (
       cached?.revision === this.revision &&
-      cached.owners.length === group.calls.length &&
-      group.calls.every(
-        (call, index) => call.occurrence === cached.owners[index],
+      cached.owners.length === group.items.length &&
+      group.items.every(
+        (item, index) => item.occurrence === cached.owners[index],
       )
     )
       return cached.text
 
     const counts = new Map<Action["kind"], Set<object | string>>()
     let running: CallState | undefined
-    for (const call of group.calls) {
-      const state = call.occurrence && this.calls.get(call.occurrence)
+    for (const item of group.items) {
+      const state = item.occurrence && this.calls.get(item.occurrence)
       if (state?.running && state.running > (running?.running ?? 0))
         running = state
       const action = state?.action ?? generic
       const items = counts.get(action.kind) ?? new Set<object | string>()
-      items.add(action.path ?? call.occurrence ?? call)
+      items.add(action.path ?? item.occurrence ?? item)
       counts.set(action.kind, items)
     }
-    const segments = Object.entries(completed).flatMap(([kind, labels]) => {
+    const segments = Object.entries(completed).flatMap(([kind, summaries]) => {
       const count = counts.get(kind as Action["kind"])?.size ?? 0
-      return count ? [labels[count === 1 ? 0 : 1]] : []
+      return count ? [summaries[count === 1 ? 0 : 1]] : []
     })
     const summary = segments.join(", ")
     const text =
@@ -146,7 +146,7 @@ export class ActionLabels {
       (summary ? summary[0]!.toUpperCase() + summary.slice(1) : "Worked")
     this.groups.set(group, {
       revision: this.revision,
-      owners: group.calls.map((call) => call.occurrence),
+      owners: group.items.map((item) => item.occurrence),
       text,
     })
     return text
@@ -161,11 +161,15 @@ export class ActionLabels {
     if (!kind) return generic
     const args: Record<string, unknown> = event.args ?? {}
     const path = typeof args["path"] === "string" ? args["path"] : undefined
-    const target = path ? detail(basename(path) || path) : undefined
+    const target = path ? summaryText(basename(path) || path) : undefined
     const pattern =
-      typeof args["pattern"] === "string" ? detail(args["pattern"]) : undefined
+      typeof args["pattern"] === "string"
+        ? summaryText(args["pattern"])
+        : undefined
     const command =
-      typeof args["command"] === "string" ? detail(args["command"]) : undefined
+      typeof args["command"] === "string"
+        ? summaryText(args["command"])
+        : undefined
     if (kind === "command")
       return {
         kind,
@@ -188,7 +192,7 @@ export class ActionLabels {
         ? {
             kind: "loaded",
             path: resolved,
-            active: `Reading ${detail(skill.name.replace(/^skill:/, ""))} skill`,
+            active: `Reading ${summaryText(skill.name.replace(/^skill:/, ""))} skill`,
           }
         : { kind, active: `Reading ${target}` }
     }

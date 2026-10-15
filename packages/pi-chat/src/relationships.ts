@@ -3,7 +3,7 @@ import type {
   SessionEntry,
   SessionManager,
 } from "@earendil-works/pi-coding-agent"
-import type { DeliveryKind } from "./work-history.ts"
+import type { DeliveryKind } from "./agent-activity.ts"
 import type { MessagePhase } from "./provider-phase.ts"
 
 const customType = "pi-chat.relationship"
@@ -96,7 +96,7 @@ export class RelationshipJournal {
       this.facts.push({ id, fact })
     } catch (cause) {
       this.writeFailure = new Error(
-        "pi-chat could not persist a work relationship",
+        "pi-chat could not persist an agent activity relationship",
         {
           cause,
         },

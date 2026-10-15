@@ -1,6 +1,6 @@
 # Target native fullscreen chat interaction
 
-The complete accordion interaction targets Pi's fullscreen mode with keyboard access to every disclosure and supplementary mouse interaction, preserving [Pi's ownership of input and terminal behavior](0001-preserve-pi-extension-contracts.md) and ordinary terminal scrolling without rewriting terminal-owned scrollback. Pi's global tool-expansion action controls activity groups and their tool details, while group-only toggles preserve child detail choices and the enclosing work-history fold remains independent. Manual fold choices stay in memory, survive redraws and resizing, and reset on application restart or extension reload.
+The complete disclosure interaction targets Pi's fullscreen mode with keyboard access to every disclosure and supplementary mouse interaction, preserving [Pi's ownership of input and terminal behavior](0001-preserve-pi-extension-contracts.md) and ordinary terminal scrolling without rewriting terminal-owned scrollback. Pi's global tool-expansion action controls render groups and their activity bodies, while group-only toggles preserve child activity-body disclosure choices and the enclosing agent activity disclosure remains independent. Manual disclosure choices stay in memory, survive redraws and resizing, and reset on application restart or extension reload.
 
 ## Consequences
 

@@ -25,14 +25,14 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui"
 import {
-  WorkHeader,
-  WorkIndex,
+  AgentActivityHeader,
+  AgentActivityIndex,
   type DeliveryKind,
-  type WorkHistory,
-} from "./work-history.ts"
+  type AgentActivity,
+} from "./agent-activity.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
-import type { ActionLabels } from "./action-labels.ts"
+import type { GroupSummaries } from "./group-summaries.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
@@ -286,36 +286,36 @@ class LayoutStack extends VStack {
   }
 }
 
-type Activity = {
+type ChatRow = {
   component: Component
   occurrence?: Occurrence
   owner?: Occurrence
   tool: boolean
-  work?: WorkHistory | undefined
+  agentActivity?: AgentActivity | undefined
   zoneStart?: boolean
   zoneEnd?: boolean
   body?: InlineViewport
   sourceZone?: number | undefined
 }
-type ToolGroup = {
-  calls: Activity[]
+type RenderGroup = {
+  items: ChatRow[]
   expanded: boolean
-  header?: GroupHeader
+  header?: RenderGroupHeader
   viewport: InlineViewport
 }
 
-type ToolPresenter = Component & {
+type NativeToolPresenter = Component & {
   expanded: boolean
   setExpanded(expanded: boolean): void
 }
 
-class GroupHeader implements Component {
+class RenderGroupHeader implements Component {
   focused = false
   readonly spacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,
-    readonly group: ToolGroup,
+    readonly group: RenderGroup,
   ) {}
 
   invalidate() {}
@@ -323,7 +323,7 @@ class GroupHeader implements Component {
   render(width: number) {
     return new Text(
       truncateToWidth(
-        `${this.group.expanded ? "▼" : "▶"} ${this.adapter.actionLabels.summary(this.group)}`,
+        `${this.group.expanded ? "▼" : "▶"} ${this.adapter.groupSummaries.summary(this.group)}`,
         Math.max(1, width - this.adapter.host.outputPad * 2),
       ),
       this.adapter.host.outputPad,
@@ -336,23 +336,23 @@ class GroupHeader implements Component {
 
   handleInput(data: string) {
     this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleGroup(this.group),
+      this.adapter.toggleRenderGroup(this.group),
     )
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
     if (event.type !== "click" || event.button !== "left") return undefined
-    this.adapter.toggleGroup(this.group)
+    this.adapter.toggleRenderGroup(this.group)
     return { handled: true, focus: true }
   }
 }
 
-class ToolFocus extends Container {
+class NativeToolDisclosure extends Container {
   focused = false
 
   constructor(
     private readonly adapter: NativeChatHost,
-    readonly tool: ToolPresenter,
+    readonly tool: NativeToolPresenter,
   ) {
     super()
     this.addChild(tool)
@@ -370,7 +370,7 @@ class ToolFocus extends Container {
 
   handleInput(data: string) {
     this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleTool(this.tool),
+      this.adapter.toggleToolDisclosure(this.tool),
     )
   }
 
@@ -390,7 +390,7 @@ class ToolFocus extends Container {
 export class NativeChatHost {
   readonly host: NativeMode
   readonly extensionUI: ExtensionContext["ui"]
-  readonly work = new WorkIndex()
+  readonly agentActivity = new AgentActivityIndex()
   private readonly providerPhases = new ProviderPhaseIndex()
   readonly relationships: RelationshipJournal
   private readonly deliveryCleanup: (() => void)[] = []
@@ -454,11 +454,15 @@ export class NativeChatHost {
   private readonly liveMessages = new WeakMap<object, Occurrence>()
   private readonly bashMessages = new WeakMap<object, Component>()
   private readonly toolResults = new WeakMap<object, Component>()
-  private readonly groups = new Map<Occurrence, ToolGroup>()
-  private readonly toolFocus = new Map<Component, ToolFocus>()
+  private readonly renderGroups = new Map<Occurrence, RenderGroup>()
+  private readonly toolDisclosures = new Map<Component, NativeToolDisclosure>()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
-  private visibleDisclosures: (GroupHeader | ToolFocus | WorkHeader)[] = []
+  private visibleDisclosures: (
+    | RenderGroupHeader
+    | NativeToolDisclosure
+    | AgentActivityHeader
+  )[] = []
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -486,7 +490,7 @@ export class NativeChatHost {
 
   private constructor(
     host: NativeMode,
-    readonly actionLabels: ActionLabels,
+    readonly groupSummaries: GroupSummaries,
   ) {
     this.host = host
     this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
@@ -524,7 +528,7 @@ export class NativeChatHost {
 
   static install(
     host: InteractiveMode,
-    actionLabels: ActionLabels,
+    groupSummaries: GroupSummaries,
   ): NativeChatHost {
     const mode = host as unknown as NativeMode
     if (
@@ -534,7 +538,7 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(mode, actionLabels)
+    const adapter = new NativeChatHost(mode, groupSummaries)
     try {
       adapter.wrapNativeConstruction()
       adapter.forkCleanup = carryObservedFork(
@@ -651,70 +655,73 @@ export class NativeChatHost {
       while (nextMissing < missing.length)
         components.push(...missing[nextMissing++]![1])
     }
-    const activities = this.orderedActivities(components)
-    let composed: Activity[] = []
-    for (let index = 0; index < activities.length;) {
-      const activity = activities[index]!
-      if (!activity.tool) {
-        composed.push(activity)
+    const chatRows = this.orderedChatRows(components)
+    let composed: ChatRow[] = []
+    for (let index = 0; index < chatRows.length;) {
+      const chatRow = chatRows[index]!
+      if (!chatRow.tool) {
+        composed.push(chatRow)
         index++
         continue
       }
-      const calls: Activity[] = []
+      const items: ChatRow[] = []
       while (
-        activities[index]?.tool &&
-        (!calls.length ||
-          activities[index]?.sourceZone === undefined ||
-          calls.at(-1)?.sourceZone === undefined ||
-          activities[index]?.sourceZone === calls.at(-1)?.sourceZone)
+        chatRows[index]?.tool &&
+        (!items.length ||
+          chatRows[index]?.sourceZone === undefined ||
+          items.at(-1)?.sourceZone === undefined ||
+          chatRows[index]?.sourceZone === items.at(-1)?.sourceZone)
       )
-        calls.push(activities[index++]!)
-      const first = calls[0]!.occurrence
+        items.push(chatRows[index++]!)
+      const first = items[0]!.occurrence
       if (!first) {
-        composed.push(...calls)
+        composed.push(...items)
         continue
       }
-      let group = this.groups.get(first)
+      let group = this.renderGroups.get(first)
       if (!group) {
-        group = { calls, expanded: false, viewport: new InlineViewport() }
-        group.header = new GroupHeader(this, group)
-        this.groups.set(first, group)
+        group = { items, expanded: false, viewport: new InlineViewport() }
+        group.header = new RenderGroupHeader(this, group)
+        this.renderGroups.set(first, group)
       }
-      group.calls = calls
+      group.items = items
       composed.push({
         component: group.header!,
         tool: false,
-        work: this.work.find(first),
+        agentActivity: this.agentActivity.find(first),
       })
       if (group.expanded) {
-        for (const call of calls) {
-          const focused = this.focusableTool(call)
+        for (const item of items) {
+          const focused = this.withToolDisclosure(item)
           focused.body = group.viewport
           composed.push(focused)
         }
       }
     }
-    composed = this.composeWork(composed).flatMap((activity, index, all) => {
-      const { component } = activity
-      const previous = all[index - 1]?.component
-      const spacing =
-        component instanceof GroupHeader || component instanceof WorkHeader
-          ? component.spacing
-          : previous instanceof WorkHeader
-            ? previous.spacing
-            : activity.occurrence &&
-              this.thoughts.get(activity.occurrence)?.spacing
-      return index > 0 &&
-        spacing &&
-        !(component instanceof Spacer) &&
-        !(previous instanceof Spacer)
-        ? [{ component: spacing, tool: false }, activity]
-        : [activity]
-    })
+    composed = this.composeAgentActivity(composed).flatMap(
+      (chatRow, index, all) => {
+        const { component } = chatRow
+        const previous = all[index - 1]?.component
+        const spacing =
+          component instanceof RenderGroupHeader ||
+          component instanceof AgentActivityHeader
+            ? component.spacing
+            : previous instanceof AgentActivityHeader
+              ? previous.spacing
+              : chatRow.occurrence &&
+                this.thoughts.get(chatRow.occurrence)?.spacing
+        return index > 0 &&
+          spacing &&
+          !(component instanceof Spacer) &&
+          !(previous instanceof Spacer)
+          ? [{ component: spacing, tool: false }, chatRow]
+          : [chatRow]
+      },
+    )
     this.visibleDisclosures = composed.flatMap(({ component }) =>
-      component instanceof WorkHeader ||
-      component instanceof GroupHeader ||
-      component instanceof ToolFocus
+      component instanceof AgentActivityHeader ||
+      component instanceof RenderGroupHeader ||
+      component instanceof NativeToolDisclosure
         ? [component]
         : [],
     )
@@ -801,11 +808,14 @@ export class NativeChatHost {
     }
     this.leaves = leaves
     if (
-      (renderer.getFocusedComponent() instanceof GroupHeader ||
-        renderer.getFocusedComponent() instanceof ToolFocus ||
-        renderer.getFocusedComponent() instanceof WorkHeader) &&
+      (renderer.getFocusedComponent() instanceof RenderGroupHeader ||
+        renderer.getFocusedComponent() instanceof NativeToolDisclosure ||
+        renderer.getFocusedComponent() instanceof AgentActivityHeader) &&
       !this.visibleDisclosures.includes(
-        renderer.getFocusedComponent() as GroupHeader | ToolFocus | WorkHeader,
+        renderer.getFocusedComponent() as
+          | RenderGroupHeader
+          | NativeToolDisclosure
+          | AgentActivityHeader,
       )
     )
       this.returnToComposer()
@@ -930,17 +940,20 @@ export class NativeChatHost {
       this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 })
   }
 
-  private focusableTool(activity: Activity): Activity {
-    let focus = this.toolFocus.get(activity.component)
+  private withToolDisclosure(chatRow: ChatRow): ChatRow {
+    let focus = this.toolDisclosures.get(chatRow.component)
     if (!focus) {
-      focus = new ToolFocus(this, activity.component as ToolPresenter)
-      this.toolFocus.set(activity.component, focus)
+      focus = new NativeToolDisclosure(
+        this,
+        chatRow.component as NativeToolPresenter,
+      )
+      this.toolDisclosures.set(chatRow.component, focus)
     }
-    return { ...activity, component: focus }
+    return { ...chatRow, component: focus }
   }
 
-  private orderedActivities(components: Component[]): Activity[] {
-    const activities: Activity[] = []
+  private orderedChatRows(components: Component[]): ChatRow[] {
+    const chatRows: ChatRow[] = []
     const hideThinking = this.host.settingsManager.getHideThinkingBlock()
     const revealed =
       this.searchState?.hits[this.searchState.selected]?.field.owner
@@ -967,19 +980,19 @@ export class NativeChatHost {
       if (
         owner?.message?.role !== "assistant" ||
         !("contentContainer" in component) ||
-        (!this.work.needsParts(owner) &&
+        (!this.agentActivity.needsParts(owner) &&
           !owner.message.content.some(
             (part) => part.type === "toolCall" || part.type === "thinking",
           ))
       ) {
-        activities.push({
+        chatRows.push({
           component,
           ...(owner ? { occurrence: owner } : {}),
           tool: false,
         })
         continue
       }
-      const activityStart = activities.length
+      const chatRowStart = chatRows.length
       const children = (component as NativeAssistant).contentContainer.children
       const hasVisibleContent = owner.message.content.some(
         (part) =>
@@ -990,11 +1003,11 @@ export class NativeChatHost {
       let position = leading ? 1 : 0
       const flush = () => {
         while (children[position] && !this.byComponent.has(children[position]!))
-          activities.push({
+          chatRows.push({
             component: children[position++]!,
             owner,
             tool: false,
-            work: this.work.find(owner),
+            agentActivity: this.agentActivity.find(owner),
           })
       }
       for (let index = 0; index < owner.message.content.length; index++) {
@@ -1003,7 +1016,7 @@ export class NativeChatHost {
         if (part.type === "toolCall") {
           flush()
           if (occurrence?.component)
-            activities.push({
+            chatRows.push({
               component: occurrence.component,
               occurrence,
               tool: true,
@@ -1029,60 +1042,62 @@ export class NativeChatHost {
             continue
           }
           if (leading) {
-            activities.push({
+            chatRows.push({
               component: leading,
               owner,
               tool: false,
-              work: this.work.find(owner),
+              agentActivity: this.agentActivity.find(owner),
             })
             leading = undefined
           }
           if (thought) {
             if (thought.body)
-              activities.push({
+              chatRows.push({
                 component: thought.body,
                 occurrence,
                 tool: false,
               })
           } else
-            activities.push({
+            chatRows.push({
               component: occurrence.component,
               occurrence,
               tool: false,
             })
         }
       }
-      const work = this.work.find(owner)
-      if (work && this.work.needsParts(owner)) {
-        const final = activities
-          .slice(activityStart)
-          .filter((activity) => this.work.isFinal(activity.occurrence, work))
-        for (const [index, activity] of final.entries()) {
-          let part = this.answerParts.get(activity.component)
+      const agentActivity = this.agentActivity.find(owner)
+      if (agentActivity && this.agentActivity.needsParts(owner)) {
+        const final = chatRows
+          .slice(chatRowStart)
+          .filter((chatRow) =>
+            this.agentActivity.isFinal(chatRow.occurrence, agentActivity),
+          )
+        for (const [index, chatRow] of final.entries()) {
+          let part = this.answerParts.get(chatRow.component)
           if (!part) {
             part = new Container()
-            part.addChild(activity.component)
-            this.answerParts.set(activity.component, part)
+            part.addChild(chatRow.component)
+            this.answerParts.set(chatRow.component, part)
           }
-          activity.zoneStart = index === 0
-          activity.zoneEnd = index === final.length - 1
+          chatRow.zoneStart = index === 0
+          chatRow.zoneEnd = index === final.length - 1
           part.children.splice(
             1,
             part.children.length - 1,
-            ...(activity.zoneEnd ? children.slice(position) : []),
+            ...(chatRow.zoneEnd ? children.slice(position) : []),
           )
-          activity.component = part
+          chatRow.component = part
         }
       } else {
         for (; position < children.length; position++)
-          activities.push({
+          chatRows.push({
             component: children[position]!,
             tool: false,
-            work,
+            agentActivity,
           })
         if (!owner.message.content.some((part) => part.type === "toolCall")) {
-          const first = activities[activityStart]
-          const last = activities.at(-1)
+          const first = chatRows[chatRowStart]
+          const last = chatRows.at(-1)
           if (first && last) {
             first.zoneStart = true
             last.zoneEnd = true
@@ -1090,7 +1105,7 @@ export class NativeChatHost {
         }
       }
     }
-    return activities
+    return chatRows
   }
 
   handleDisclosureInput(data: string, toggle: () => void) {
@@ -1131,7 +1146,7 @@ export class NativeChatHost {
   moveDisclosure(direction: number) {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     const index = this.visibleDisclosures.indexOf(
-      renderer.getFocusedComponent() as GroupHeader,
+      renderer.getFocusedComponent() as RenderGroupHeader,
     )
     const next = this.visibleDisclosures[index + direction]
     if (!next) return
@@ -1139,7 +1154,9 @@ export class NativeChatHost {
     this.revealDisclosure(next)
   }
 
-  private revealDisclosure(component: GroupHeader | ToolFocus | WorkHeader) {
+  private revealDisclosure(
+    component: RenderGroupHeader | NativeToolDisclosure | AgentActivityHeader,
+  ) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
     if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
@@ -1163,63 +1180,70 @@ export class NativeChatHost {
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
-  toggleGroup(group: ToolGroup) {
+  toggleRenderGroup(group: RenderGroup) {
     group.expanded = !group.expanded
-    if (group.expanded) this.work.inspect(group.calls[0]?.occurrence)
+    if (group.expanded) this.agentActivity.inspect(group.items[0]?.occurrence)
     this.clearSelection(this.host.renderer as unknown as TuiAltScreen)
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
-  toggleTool(tool: ToolPresenter) {
+  toggleToolDisclosure(tool: NativeToolPresenter) {
     tool.setExpanded(!tool.expanded)
     if (tool.expanded) this.inspectTool(tool)
     this.clearChatSelection()
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
-  toggleWork(work: WorkHistory) {
-    work.manualExpanded = !this.work.expanded(work)
+  toggleAgentActivity(agentActivity: AgentActivity) {
+    agentActivity.manualExpanded = !this.agentActivity.expanded(agentActivity)
     this.clearChatSelection()
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
   }
 
   inspectTool(tool: Component) {
-    this.work.inspect(this.byComponent.get(tool))
+    this.agentActivity.inspect(this.byComponent.get(tool))
   }
 
-  private composeWork(activities: Activity[]): Activity[] {
-    const result: Activity[] = []
-    for (let index = 0; index < activities.length;) {
-      const activity = activities[index]!
-      const work = activity.work ?? this.work.find(activity.occurrence)
+  private composeAgentActivity(chatRows: ChatRow[]): ChatRow[] {
+    const result: ChatRow[] = []
+    for (let index = 0; index < chatRows.length;) {
+      const chatRow = chatRows[index]!
+      const agentActivity =
+        chatRow.agentActivity ?? this.agentActivity.find(chatRow.occurrence)
       if (
-        !work ||
-        !work.final ||
-        this.work.isRequest(activity.occurrence, work)
+        !agentActivity ||
+        !agentActivity.final ||
+        this.agentActivity.isRequest(chatRow.occurrence, agentActivity)
       ) {
-        result.push(activity)
+        result.push(chatRow)
         index++
         continue
       }
-      const body: Activity[] = []
-      const final: Activity[] = []
-      const standaloneNotice = (item: Activity) =>
-        !item.work &&
-        !this.work.find(item.occurrence) &&
+      const body: ChatRow[] = []
+      const final: ChatRow[] = []
+      const standaloneNotice = (item: ChatRow) =>
+        !item.agentActivity &&
+        !this.agentActivity.find(item.occurrence) &&
         (item.occurrence?.entry?.type === "custom" ||
           item.occurrence?.message?.role === "custom")
-      const retained = (item: Activity) =>
+      const retained = (item: ChatRow) =>
         item.occurrence?.message?.role === "user" || standaloneNotice(item)
-      for (; index < activities.length; index++) {
-        const next = activities[index]!
-        const nextWork = next.work ?? this.work.find(next.occurrence)
-        if (nextWork !== work && !standaloneNotice(next)) break
+      for (; index < chatRows.length; index++) {
+        const next = chatRows[index]!
+        const nextAgentActivity =
+          next.agentActivity ?? this.agentActivity.find(next.occurrence)
+        if (nextAgentActivity !== agentActivity && !standaloneNotice(next))
+          break
         if (
           final.length &&
-          !this.work.isFinalMessage(next.occurrence ?? next.owner, work)
+          !this.agentActivity.isFinalMessage(
+            next.occurrence ?? next.owner,
+            agentActivity,
+          )
         )
           break
-        if (this.work.isFinal(next.occurrence, work)) final.push(next)
+        if (this.agentActivity.isFinal(next.occurrence, agentActivity))
+          final.push(next)
         else body.push(next)
       }
       if (
@@ -1228,9 +1252,9 @@ export class NativeChatHost {
         ) &&
         final.length
       ) {
-        work.header ??= new WorkHeader(this, work)
-        result.push({ component: work.header, tool: false })
-        if (this.work.expanded(work)) result.push(...body)
+        agentActivity.header ??= new AgentActivityHeader(this, agentActivity)
+        result.push({ component: agentActivity.header, tool: false })
+        if (this.agentActivity.expanded(agentActivity)) result.push(...body)
         else {
           const visible = body.filter(retained)
           result.push(...visible)
@@ -1239,7 +1263,10 @@ export class NativeChatHost {
             visible.at(-1)?.occurrence?.message?.role === "user" &&
             final[0]!.occurrence?.contentIndex !== undefined
           )
-            result.push({ component: work.header.spacing, tool: false })
+            result.push({
+              component: agentActivity.header.spacing,
+              tool: false,
+            })
         }
       } else result.push(...body)
       result.push(...final)
@@ -1568,10 +1595,10 @@ export class NativeChatHost {
   private revealSearchHit(hit: SourceHit<Occurrence>) {
     const owner = hit.field.owner
     let changed = this.materializeSearchHit(hit)
-    const work = this.work.find(owner)
-    if (work && !this.work.expanded(work)) {
-      work.manualExpanded = true
-      work.keepOpen = true
+    const agentActivity = this.agentActivity.find(owner)
+    if (agentActivity && !this.agentActivity.expanded(agentActivity)) {
+      agentActivity.manualExpanded = true
+      agentActivity.keepOpen = true
       changed = true
     }
     if (
@@ -1581,13 +1608,13 @@ export class NativeChatHost {
       "expanded" in owner.component &&
       !owner.component.expanded
     ) {
-      ;(owner.component as ToolPresenter).setExpanded(true)
+      ;(owner.component as NativeToolPresenter).setExpanded(true)
       changed = true
     }
     if (changed) this.layoutChat()
-    for (const group of this.groups.values()) {
+    for (const group of this.renderGroups.values()) {
       if (
-        group.calls.some((call) => call.occurrence === owner) &&
+        group.items.some((item) => item.occurrence === owner) &&
         !group.expanded
       ) {
         group.expanded = true
@@ -2148,7 +2175,7 @@ export class NativeChatHost {
       const phase = this.providerPhases.phaseFor(index, part)
       if (phase) phases.set(index, phase)
     }
-    this.work.reconcilePhases(
+    this.agentActivity.reconcilePhases(
       owner,
       phases,
       this.providerPhases.hasPhaseEvidence(),
@@ -2156,7 +2183,7 @@ export class NativeChatHost {
   }
 
   private restoreRelationships() {
-    this.work.restore(
+    this.agentActivity.restore(
       this.relationships.active(this.host.sessionManager.getBranch()),
       (id) => this.byEntryId.get(id),
     )
@@ -2184,13 +2211,13 @@ export class NativeChatHost {
       for (const part of new Set(owner?.parts.values() ?? [])) {
         if (part.component && owned.has(part.component)) delete part.component
         this.thoughts.delete(part)
-        this.groups.delete(part)
+        this.renderGroups.delete(part)
       }
       for (const component of components) {
         if (this.assistantMethods.has(component as NativeAssistant))
           this.releaseAssistant(component as NativeAssistant)
         this.byComponent.delete(component)
-        this.toolFocus.delete(component)
+        this.toolDisclosures.delete(component)
       }
     }
     this.historical.clear()
@@ -2301,11 +2328,11 @@ export class NativeChatHost {
     return occurrence
   }
 
-  private withSource<T>(source: Occurrence | undefined, work: () => T): T {
+  private withSource<T>(source: Occurrence | undefined, run: () => T): T {
     const previous = this.source
     this.source = source
     try {
-      return work()
+      return run()
     } finally {
       this.source = previous
     }
@@ -2365,7 +2392,7 @@ export class NativeChatHost {
         ? owner.message.content[index]
         : undefined
     if (content?.type === "toolCall")
-      this.actionLabels.bind(
+      this.groupSummaries.bind(
         part,
         content,
         this.streaming === owner,
@@ -2561,7 +2588,7 @@ export class NativeChatHost {
       const original = requireMethod(methods[name], name)
       const descriptor = Object.getOwnPropertyDescriptor(target, name)
       const record = (messages: Message[]) => {
-        if (this.active) this.work.observe(messages, kind)
+        if (this.active) this.agentActivity.observe(messages, kind)
       }
       const wrapped = function (this: unknown, ...args: unknown[]) {
         const messages = original.apply(this, args)
@@ -2633,8 +2660,8 @@ export class NativeChatHost {
             this.lastSourceZone = { withThinking: 0, withoutThinking: 0 }
             this.byComponent.clear()
             this.thoughts.clear()
-            this.groups.clear()
-            this.toolFocus.clear()
+            this.renderGroups.clear()
+            this.toolDisclosures.clear()
             this.visibleDisclosures = []
             this.streaming = undefined
           } else {
@@ -2688,7 +2715,7 @@ export class NativeChatHost {
         for (const component of components)
           if (component instanceof ToolExecutionComponent)
             component.setExpanded(expanded)
-      for (const group of this.groups.values()) group.expanded = expanded
+      for (const group of this.renderGroups.values()) group.expanded = expanded
       this.clearSelection(host.renderer as unknown as TuiAltScreen)
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
       return result
@@ -2809,7 +2836,7 @@ export class NativeChatHost {
             this.liveMessages.set(event.message, owner)
           }
           if (event.type === "message_start" && owner) {
-            const previous = this.work.start(owner)
+            const previous = this.agentActivity.start(owner)
             if (previous) this.recordRelationship(previous)
             if (event.message?.role === "user") this.deliveringUser = owner
             if (event.message?.role === "assistant") this.streaming = owner
@@ -2824,7 +2851,7 @@ export class NativeChatHost {
             this.applyProviderPhases(owner)
           }
           if (event.type === "agent_settled") {
-            const settled = this.work.settle(
+            const settled = this.agentActivity.settle(
               event.aborted ?? host.session._agentRunAbortRequested,
             )
             if (settled) this.recordRelationship(settled)
@@ -3018,14 +3045,20 @@ export class NativeChatHost {
             ? message.content[part.contentIndex]
             : undefined
         if (content?.type === "toolCall")
-          this.actionLabels.bind(part, content, false, entry, part.contentIndex)
+          this.groupSummaries.bind(
+            part,
+            content,
+            false,
+            entry,
+            part.contentIndex,
+          )
       }
-      const relationship = this.work.committed(occurrence)
+      const relationship = this.agentActivity.committed(occurrence)
       if (relationship) this.recordRelationship(relationship)
       if (message.role === "assistant") {
         this.applyProviderPhases(occurrence)
-        const work = this.work.find(occurrence)
-        if (work?.request.entry) {
+        const agentActivity = this.agentActivity.find(occurrence)
+        if (agentActivity?.request.entry) {
           for (let index = 0; index < message.content.length; index++) {
             const part = message.content[index]
             if (part?.type !== "text") continue
@@ -3034,7 +3067,7 @@ export class NativeChatHost {
               this.recordRelationship({
                 version: 1,
                 kind: "phase",
-                requestId: work.request.entry.id,
+                requestId: agentActivity.request.entry.id,
                 sourceId: id,
                 contentIndex: index,
                 phase,
@@ -3058,12 +3091,12 @@ export class NativeChatHost {
     if (this.host.fullscreenLayoutRoot === this.root)
       this.transcript.setScrollbar("hidden")
     this.active = false
-    this.actionLabels.stop()
+    this.groupSummaries.stop()
     this.unsubscribe?.()
     this.forkCleanup?.()
     for (const cleanup of this.deliveryCleanup) cleanup()
     this.deliveryCleanup.length = 0
-    this.work.clear()
+    this.agentActivity.clear()
     this.unbindRenderer()
     for (const [name] of this.originals) {
       const target =
@@ -3117,8 +3150,8 @@ export class NativeChatHost {
     this.byEntryId.clear()
     this.byComponent.clear()
     this.thoughts.clear()
-    this.groups.clear()
-    this.toolFocus.clear()
+    this.renderGroups.clear()
+    this.toolDisclosures.clear()
     this.visibleDisclosures = []
     this.projections.clear()
     this.indexedIds = []

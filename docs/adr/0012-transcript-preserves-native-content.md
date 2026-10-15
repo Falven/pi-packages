@@ -1,6 +1,6 @@
 # Chat presentation preserves native content
 
-To keep independent Pi extensions composable, `pi-chat` reuses Pi's native rendering and extension contracts, with the isolated runtime adapter in [ADR 0022](0022-native-rows-in-an-owned-transcript.md) supplying exact native-row access and chat composition while Pi retains conversation and session ownership. Fold state and source references stay outside original message content, and Pi owns the conversation text rather than the package keeping a second history buffer. Editing Pi's source files, forking or replacing its client, or adding external apps or services is outside this design; capabilities that require a broader approach return to discussion rather than silently expanding that boundary.
+To keep independent Pi extensions composable, `pi-chat` reuses Pi's native rendering and extension contracts, with the isolated runtime adapter in [ADR 0022](0022-native-rows-in-an-owned-transcript.md) supplying exact native-row access and chat composition while Pi retains conversation and session ownership. Disclosure state and source references stay outside original message content, and Pi owns the conversation text rather than the package keeping a second history buffer. Editing Pi's source files, forking or replacing its client, or adding external apps or services is outside this design; capabilities that require a broader approach return to discussion rather than silently expanding that boundary.
 
 ## Consequences
 

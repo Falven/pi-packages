@@ -2,7 +2,7 @@
 
 **What to build:** Find original retained content that Pi omitted from its current compaction-aware display and inspect it in source order.
 
-**Blocked by:** 10: Find and reveal content inside closed folds.
+**Blocked by:** 10: Find and reveal content inside collapsed disclosures.
 
 **Status:** done
 

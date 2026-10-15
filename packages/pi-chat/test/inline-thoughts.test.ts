@@ -363,7 +363,7 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   assert.equal(JSON.stringify(host.session.messages), stored)
 })
 
-test("native copy includes offscreen thought rows and whole-work collapse clears the selection", async (t) => {
+test("native copy includes offscreen thought rows and whole agent activity collapse clears the selection", async (t) => {
   const clipboard = getNativeClipboard()
   writableClipboard(clipboard)
   let copied = ""

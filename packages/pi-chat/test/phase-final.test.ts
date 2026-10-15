@@ -219,7 +219,7 @@ test("an explicit phase correction disqualifies the selected final", async (t) =
   assert.doesNotMatch(await host.frame(), /Worked/)
 })
 
-test("cancellation opens work despite an explicit streaming final", async (t) => {
+test("cancellation opens agent activity despite an explicit streaming final", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -380,7 +380,7 @@ test("an explicit final remains selected when the response is incomplete", async
   assert.doesNotMatch(frame, /Prior work/)
 })
 
-test("opening work during a final stream stays open after settlement", async (t) => {
+test("opening agent activity during a final stream stays open after settlement", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
