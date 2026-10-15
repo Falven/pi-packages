@@ -12,7 +12,7 @@ A public overlay can host a supplemental transcript reader, but leaves native ch
 
 ## Consequences
 
-The output-padding gutters, native output sizing, and global disclosure behavior described below are implemented on `codex/chat-scroll-integration`. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records current checks on Pi 1.1.0 and 1.0.2, review results, physical cmux observations, and remaining physical limits. The earlier verification evidence at the end of this ADR retains its historical scope.
+The earlier output-padding gutters, native output sizing, and global disclosure revision was implemented on `codex/chat-scroll-integration`. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records its checks on Pi 1.1.0 and 1.0.2, review results, physical cmux observations, and remaining physical limits. Independent native previews are a subsequent correction tracked there. Earlier verification evidence retains its historical scope.
 
 - **Host ownership.** Capture the actual `InteractiveMode` through a scoped observation of the native widget method, reached through `ctx.ui.setWidget`, and restore the prototype descriptor immediately. Save and replace the host's `fullscreenLayoutRoot`, reusing its layout entries, sizing, gap, and alignment while replacing only its transcript slot. Preserve the exact existing pending-message, status, widget, editor, and footer containers, including additional native layout children. Leave the native document, chat container, and event reducer intact. Regular mode and transcript-on-exit continue through Pi's original document.
 

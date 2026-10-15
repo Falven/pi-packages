@@ -4,7 +4,7 @@
 
 **Status:** in-progress — native output preview correction; earlier evidence remains historical
 
-**Tracker:** Existing [Chat 05](../../.scratch/pi-chat/issues/05-bounded-render-groups.md) → [Chat 03](../../.scratch/pi-chat/issues/03-navigate-select-copy.md), and [Chat 04](../../.scratch/pi-chat/issues/04-render-groups.md) → [Chat 07](../../.scratch/pi-chat/issues/07-settled-agent-activity-final.md), followed by [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) and [Core 06](../../.scratch/core-tools/issues/06-verify-mixed-native-workflows.md) acceptance. Implement on `codex/chat-scroll-integration`; the earlier [activity-item revision](../../.scratch/pi-chat/issues/13-activity-item-adapters-and-independent-bodies.md) retains its original scope and evidence.
+**Tracker:** Existing [Chat 04](../../.scratch/pi-chat/issues/04-render-groups.md) → [Chat 05](../../.scratch/pi-chat/issues/05-bounded-render-groups.md), followed by [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) and [Core 06](../../.scratch/core-tools/issues/06-verify-mixed-native-workflows.md) acceptance. Implement on `codex/chat-scroll-integration`; the earlier [activity-item revision](../../.scratch/pi-chat/issues/13-activity-item-adapters-and-independent-bodies.md) retains its original scope and evidence.
 
 ## Problem Statement
 
