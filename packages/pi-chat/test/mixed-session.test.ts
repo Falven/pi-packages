@@ -148,7 +148,11 @@ for (const [name, paths] of [
       providerApi: "openai-responses",
       persistSession: true,
       rows: 44,
-      keybindings: { "tui.altScreen.search": "ctrl+f" },
+      settings: { outputPad: name === "chat first" ? 0 : 1 },
+      keybindings: {
+        "tui.altScreen.search": "ctrl+f",
+        "app.tools.expand": "ctrl+e",
+      },
     })
     const image = join(host.directory, "diagram.png")
     await writeFile(image, Buffer.from(png, "base64"))
@@ -170,6 +174,14 @@ for (const [name, paths] of [
     await t.waitFor(() => assert.equal(host.requests.length, 1))
     const streaming = await host.frame()
     assert.match(streaming, /Worked for \d+m \d+s ▶/)
+    assert.equal(
+      host
+        .screenLines()
+        .map(stripTerminalSequences)
+        .find((line) => /Worked for \d+m \d+s ▶/.test(line))
+        ?.indexOf("Worked"),
+      name === "chat first" ? 0 : 1,
+    )
     assert.match(streaming, /Mixed answer/)
     assert.doesNotMatch(streaming, /Mixed progress/)
     assert.match(streaming, /Mixed acceptance fixture ready/)
@@ -178,8 +190,18 @@ for (const [name, paths] of [
     assert.match(request, /Review the mixed request exactly once/)
     assert.match(request, /iVBORw0KGgo/)
     assert.doesNotMatch(request, /Worked|Mixed progress|Mixed answer/)
+    await host.key("\x05")
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+    assert.match(await host.frame(), /Mixed progress/)
+    await host.key("\x0f")
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
     host.resumeResponse()
     await host.settled()
+    assert.match(await host.frame(), /Mixed answer/)
+    assert.match(await host.frame(), /Mixed progress/)
+    await host.key("\x05")
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+    assert.doesNotMatch(await host.frame(), /Mixed progress/)
     assert.match(await host.frame(), /Mixed answer/)
     assert.match(JSON.stringify(host.session.messages), /diagram\.png/)
     await host.key("\x1b[112;7u")

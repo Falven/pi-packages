@@ -619,7 +619,11 @@ test("Find scrolls native activity output in the conversation to the selected so
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 30,
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    keybindings: {
+      "tui.altScreen.search": "ctrl+f",
+      "tui.altScreen.top": "home",
+      "tui.altScreen.bottom": "end",
+    },
   })
   await writeFile(
     join(host.directory, "large.txt"),
@@ -642,6 +646,17 @@ test("Find scrolls native activity output in the conversation to the selected so
     stripTerminalSequences(line).includes("row-82 telescope"),
   )
   assert.match(selected ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
+  await host.key("\x1b")
+  await host.key("\x1b[H")
+  const top = await host.frame()
+  assert.match(top, /▼ Read files/)
+  assert.match(top, /row-0 ordinary/)
+  assert.doesNotMatch(top, /row-82 telescope/)
+  await host.key("\x1b[F")
+  const bottom = await host.frame()
+  assert.match(bottom, /row-89 ordinary/)
+  assert.match(bottom, /Done/)
+  assert.doesNotMatch(bottom, /Read files|row-0 ordinary/)
 })
 
 test("Find uses native case, Unicode, and whitespace matching", async (t) => {
@@ -914,15 +929,14 @@ test("Find restores separate retained calls with reused IDs and their own result
   assert.equal(host.requests.length, requests)
 })
 
-test("native global tool expansion reaches a revealed retained call", async (t) => {
-  let native: { setToolsExpanded(expanded: boolean): void } | undefined
+test("configured native global expansion reaches a revealed retained call", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     persistSession: true,
     rows: 44,
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
-    onMount: (mode) => {
-      native = mode as unknown as typeof native
+    keybindings: {
+      "tui.altScreen.search": "ctrl+f",
+      "app.tools.expand": "ctrl+e",
     },
   })
   await writeFile(
@@ -943,11 +957,17 @@ test("native global tool expansion reaches a revealed retained call", async (t) 
   await host.type("retained-tool-needle")
   assert.match(await host.frame(), /retained-tool-needle output/)
   await host.key("\x1b")
-  assert(native)
-  native.setToolsExpanded(true)
+  await host.key("\x05")
   assert.match(await host.frame(), /retained-tool-needle output/)
-  native.setToolsExpanded(false)
+  await host.key("\x05")
   assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
+  await host.key("\x0f")
+  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /▼ Called a tool/)
+  assert.match(await host.frame(), /▼ Called read/)
+  assert.match(await host.frame(), /retained-tool-needle output/)
+  assert.equal(host.requests.length, 2)
 })
 
 test("Find includes displayed native custom messages before and after compaction", async (t) => {

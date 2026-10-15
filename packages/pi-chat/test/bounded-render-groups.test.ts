@@ -204,7 +204,9 @@ test("selection copies expanded native output across offscreen conversation rows
   await host.key("\x18")
   await t.waitFor(() => assert.equal(copied, expandedText))
   await host.key("\u000f")
-  await host.frame()
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await openWork(host)
+  assert.match(await host.frame(), /> Read files/)
   // Native copy flashes briefly cover the right-aligned user text.
   await t.waitFor(
     () =>
@@ -228,7 +230,7 @@ test("selection copies expanded native output across offscreen conversation rows
   await host.key(`\x1b[<0;${lastColumn};${collapsedLast + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
-  assert.match(copied, /Read files/)
+  assert.match(copied, /^> Read files$/m)
   assert.doesNotMatch(copied, /first-row|second-row/)
 })
 
@@ -296,7 +298,10 @@ test("default activity bodies and surrounding entries scroll together in the con
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 28,
-    keybindings: { "tui.altScreen.top": "home" },
+    keybindings: {
+      "tui.altScreen.top": "home",
+      "tui.altScreen.bottom": "end",
+    },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
