@@ -1,5 +1,23 @@
 # 04: Group and toggle consecutive activity items
 
+**What to build:** Use Pi’s configured native tool-expansion action for render-group, activity-item, and native-output disclosure state, including newly arriving items.
+
+**Blocked by:** None (can start immediately); earlier adapter and grouping prerequisites are complete.
+
+**Status:** ready-for-agent
+
+## Native-flow and disclosure delta — approved 2026-10-15
+
+- [ ] Reuse the configured native app.tools.expand action and Pi’s global output-expansion state. Ctrl+O is only the default binding; introduce no hard-coded shortcut or separate expansion setting.
+- [ ] On an explicit global action, expand or collapse every available render group, activity item, and native output body consistently. Collapsed items remain summary-only; opened items retain the agreed native built-in or generic default expanded rendering.
+- [ ] New render groups and activity items inherit the current native global expansion state rather than unconditionally starting collapsed. Preserve remembered individual choices through redraw, growth, settlement, settings reconstruction, and resize until an explicit individual/global change; retain the existing in-memory lifetime.
+- [ ] Individual ancestor closure and reopening preserve descendant choices; a later explicit global action sets every applicable descendant. Group summaries, item summaries, adapter ownership, source data, and grouping boundaries remain unchanged.
+- [ ] Update existing real-Pi host cases to verify a remapped app.tools.expand binding, default-state inheritance, future arrivals after both global states, native bodies, independent toggles, and retained choices. Reuse the established fixture and existing cases only. Ticket 07 adds the enclosing agent activity disclosure.
+
+These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+## Prior accepted revision and evidence
+
 **What to build:** Use one adapter path for built-ins and extensions, with type-derived group summaries and independently disclosed default activity bodies.
 
 **Blocked by:** None — earlier navigation prerequisites are complete.

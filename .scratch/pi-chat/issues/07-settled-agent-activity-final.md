@@ -1,5 +1,23 @@
 # 07: Collapse settled agent activity while keeping the final response visible
 
+**What to build:** Include every available enclosing agent activity disclosure in native global expansion and closure while preserving final-response visibility and automatic-collapse eligibility.
+
+**Blocked by:** 04: Group and toggle consecutive activity items.
+
+**Status:** ready-for-agent
+
+## Native-flow and disclosure delta — approved 2026-10-15
+
+- [ ] An explicit configured native app.tools.expand action expands or collapses all available disclosure levels, including the enclosing Worked for… agent activity block, render groups, activity items, and native output bodies. Ctrl+O remains only Pi’s default binding.
+- [ ] Explicit individual and global disclosure choices take precedence over automatic collapse eligibility. Cancellation, an unfinished request, or no qualifying final response must not undo a user’s explicit collapse of an available disclosure; without an explicit choice, preserve the existing automatic behavior.
+- [ ] Individual agent activity closure/reopening preserves descendant disclosure choices; a global action explicitly sets all available levels. Preserve choices across redraw, growth, settlement, settings reconstruction, and resize with the existing in-memory/reload lifetime.
+- [ ] Keep final responses, retained user messages, unrelated notices, source order, Hide thinking, delivery/phase boundaries, history, elapsed summaries, cancellation outcomes, and image ownership intact. Do not invent disclosures for activity with no available representation or add persisted policy for future turns.
+- [ ] Update existing real-Pi host cases for the configured/remapped action, all-level expansion/closure, explicit precedence during streaming/cancellation/missing-final scenarios, and unchanged no-choice automatic behavior. Reuse existing cases and fixture only; add no test cases, files, or provider contracts.
+
+These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+## Prior accepted revision and evidence
+
 **What to build:** Collapse the agent's activity for an actually delivered request while every user message, unrelated standalone extension notice, and final response remains visible in native order, including identical progress and final text.
 
 **Blocked by:** 04: Group and toggle consecutive tool calls; the correction delta in 02: Display native conversations in the owned chat view.

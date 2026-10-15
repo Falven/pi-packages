@@ -1,5 +1,24 @@
 # 12: Complete a mixed session with existing extensions
 
+**What to build:** Verify the combined native-flow, padding-gutter, and configured global-disclosure revision through existing mixed real-Pi workflows.
+
+**Blocked by:** 03: Navigate, select, and copy chat content; 05: Expand render groups and native activity bodies in conversation flow; 07: Collapse settled agent activity while keeping the final response visible. Earlier adapter, retained-item, and core workflow prerequisites are complete.
+
+**Status:** ready-for-agent
+
+## Native-flow and disclosure delta — approved 2026-10-15
+
+- [ ] Exercise both normal extension load orders, built-ins, core tools, unknown/replacement extensions, hooks, and live/retained activity through the established real-Pi host fixture. Update existing cases only; add no test cases, files, fixtures, or alternate seam.
+- [ ] Verify full render-group expansion in conversation flow and standard native expanded output sizing with independent summary-only collapsed items. Verify configured/remapped app.tools.expand reaches Worked for…, groups, items, and native output, while future groups/items inherit the native global flag and explicit choices retain precedence.
+- [ ] Verify zero and nonzero/live outputPad without extra width, inset, or setting; gutter/header wheel routing; native scrollbar modes and priority; child-first scrolling with edge handoff where supported; and primary conversation scrolling for standard native bodies.
+- [ ] Preserve source, Find/reveal, meaningful indentation, offscreen copy/selection, anchors, end following, resize, single-owner images, notices/final responses, themes, image preferences, native input/overlays, and composer behavior.
+- [ ] Exercise cancellation, late updates, later prompts, reload, branch/session replacement, and other already-covered lifecycle paths without stale callbacks or resource resurrection. Do not change provider contracts, execution cells/process sessions, model collection, or the unresolved raw execution-output policy.
+- [ ] Run focused existing checks, required static checks, and standards/spec review on the integration revision; record actual runtimes and results. Distinguish recorded native frames from physical-terminal pixels/input, and leave unavailable physical acceptance explicit. Prior revision evidence below does not certify these deltas.
+
+These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+## Prior accepted revision and evidence
+
 **What to build:** Verify the combined activity-item revision with all surrounding chat behavior and both extension load orders.
 
 **Blocked by:** Chat 11: retained-item reveal; Core 02–05: commands, continuation, patches, and images.

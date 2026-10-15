@@ -1,5 +1,24 @@
 # 06: Preserve complete workflows in mixed Pi sessions
 
+**What to build:** Verify existing command, continuation, patch, and image workflows through the revised native-flow chat with padding gutters and configured global disclosures.
+
+**Blocked by:** Chat 03: Navigate, select, and copy chat content; Chat 05: Expand render groups and native activity bodies in conversation flow; Chat 07: Collapse settled agent activity while keeping the final response visible. Existing core operation-facts prerequisites are complete.
+
+**Status:** ready-for-agent
+
+## Native-flow and disclosure delta — approved 2026-10-15
+
+- [ ] Reuse the established real-Pi mixed-workflow fixture in both normal extension load orders and update existing cases only. Verify commands, process continuation, patches, images, effective hooks, retained records, and actual file/process effects without new test cases, files, or seams.
+- [ ] Verify all activity items are exposed in an open group in conversation flow, with independent standard native expanded bodies, summary-only closed rows, and no added group/body scroll viewport or height cap.
+- [ ] Verify configured native app.tools.expand, including a remapped binding, reaches enclosing agent activity, groups, items, and native output; Ctrl+O is only the default. New groups/items inherit the global flag, individual ancestor toggles retain descendants, and explicit choices override automatic collapse.
+- [ ] Verify existing outputPad is counted once, zero creates no gutter, gutter/header wheel movement reaches the conversation directly, and native scrollbar priority and supported child edge handoff remain intact. Preserve source/Find/copy, images, resize, settings, unrelated notices, and final-response visibility.
+- [ ] Verify late outcomes and later collection through cancellation, subsequent prompts, reload, and session/branch lifecycle without changing public tool contracts, result details, execution cells/process sessions, collection cursors, provider facts, or unresolved raw execution-output policy.
+- [ ] Record exact checks and runtime revisions independently of historical evidence; coordinate combined acceptance with Chat 12. Separate automated native-frame checks from physical-terminal acceptance and retain unperformed checks as pending.
+
+These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+## Prior accepted revision and evidence
+
 **What to build:** Verify complete command, continuation, patch, and image workflows through the combined default activity-body path.
 
 **Specification:** [Core toolset](../spec.md).

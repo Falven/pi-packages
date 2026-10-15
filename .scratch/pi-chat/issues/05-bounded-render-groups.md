@@ -1,4 +1,23 @@
-# 05: Scroll expanded render groups within bounded bodies
+# 05: Expand render groups and native activity bodies in conversation flow
+
+**What to build:** Open a render group to expose every activity item in ordinary conversation flow, with independent native-sized activity bodies.
+
+**Blocked by:** None (can start immediately); existing common activity-item rendering is complete.
+
+**Status:** in-progress
+
+## Native-flow and disclosure delta — approved 2026-10-15
+
+- [ ] Remove the shared render-group scrolling area and height cap. An expanded group exposes all of its activity-item rows; its header and children participate in the primary conversation flow.
+- [ ] Use Pi’s standard expanded output sizes for each opened native built-in or generic default activity body. Add no replacement preview, body cap, percentage limit, row limit, or independently bounded body viewport. Short bodies use only their native required height.
+- [ ] Preserve summary-only collapsed items, independent item disclosures, stable source identities and order, native default content, images, meaningful indentation, and native output expansion. Global-state inheritance and all-level toggling are coordinated by tickets 04 and 07, not prerequisites for this slice.
+- [ ] Keep the primary scrollbar and native full-width painting windows required for image clipping; those painting windows are not user scroll controls. Preserve one native image crop/placement owner, reservation rows, resize behavior, and image-tail recovery.
+- [ ] Preserve source Find/reveal, copying of expanded offscreen rows, collapsed exclusions, selection validity, reading anchors, end following, and unchanged-content caches without history rescans on ordinary scrolling.
+- [ ] Update the existing bounded-group, source-search, and related real-Pi host cases for full native flow and long bodies while retaining meaningful image, selection, cache, anchor, and source checks. Reuse the established fixture and existing cases; add no test cases or files. Keep physical-terminal acceptance distinct from recorded-frame assertions.
+
+These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+## Prior accepted revision and evidence
 
 **What to build:** Read long render groups within a bounded inline body while their headers, native tool controls, selection, and images remain correct.
 
