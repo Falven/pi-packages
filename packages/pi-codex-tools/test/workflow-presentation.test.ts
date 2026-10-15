@@ -44,13 +44,6 @@ async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
   return stripVTControlCharacters(host.screenLines().join("\n"))
 }
 
-async function expand(host: Awaited<ReturnType<typeof openNativeHost>>) {
-  await openWork(host)
-  await host.key("\x0f")
-  await setTimeout(60)
-  return stripVTControlCharacters(host.screenLines().join("\n"))
-}
-
 test("the companion-only control loads without extension errors", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: companions,
@@ -62,9 +55,11 @@ test("the companion-only control loads without extension errors", async (t) => {
 
 for (const order of ["first", "last"] as const) {
   test(
-    `mixed operations retain native presentation with the toolset loaded ${order}`,
+    `mixed operations retain native flow and disclosures with the toolset loaded ${order}`,
     { timeout: 15000 },
     async (t) => {
+      const outputPad = order === "first" ? 1 : 0
+      const expandKey = order === "first" ? "\x0f" : "\x05"
       const host = await openNativeHost(t, {
         extensionPaths:
           order === "first"
@@ -72,10 +67,12 @@ for (const order of ["first", "last"] as const) {
             : [...companions, extension],
         providerApi,
         providerProtocol: "responses",
-        rows: 180,
+        rows: 260,
         columns: 100,
+        keybindings: order === "last" ? { "app.tools.expand": "ctrl+e" } : {},
         settings: {
           theme: order === "first" ? "dark" : "light",
+          outputPad,
           terminal: { showImages: false },
         },
         extension(pi) {
@@ -101,7 +98,17 @@ for (const order of ["first", "last"] as const) {
               event.toolName === "exec_command" &&
               event.input["cmd"] === "cat changed.txt"
             )
-              return { content: [{ type: "text", text: "validated-result" }] }
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `validated-result\n${Array.from(
+                      { length: 40 },
+                      (_, index) => `validated-line-${index}`,
+                    ).join("\n")}`,
+                  },
+                ],
+              }
             return undefined
           })
         },
@@ -137,9 +144,13 @@ for (const order of ["first", "last"] as const) {
           stripVTControlCharacters(line).includes("Edited files"),
         )
       assert(groupRow >= 0)
+      assert.equal(
+        stripVTControlCharacters(host.screenLines()[groupRow]!).indexOf(">"),
+        outputPad,
+      )
       await host.key(`\x1b[<0;2;${groupRow + 1}M`)
       await host.key(`\x1b[<0;2;${groupRow + 1}m`)
-      host.terminal.resize(160, 180)
+      host.terminal.resize(160, 260)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /> Edited .*\/changed\.txt \+1 -0/)
@@ -157,6 +168,10 @@ for (const order of ["first", "last"] as const) {
           stripVTControlCharacters(line).includes("Read changed.txt"),
         )
       assert(commandRow >= 0)
+      assert.equal(
+        stripVTControlCharacters(host.screenLines()[commandRow]!).indexOf(">"),
+        outputPad,
+      )
       await host.key(`\x1b[<0;2;${commandRow + 1}M`)
       await host.key(`\x1b[<0;2;${commandRow + 1}m`)
       await host.frame()
@@ -164,10 +179,46 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /exec_command/)
       assert.match(screen, /"cmd": "cat changed\.txt"/)
       assert.match(screen, /validated-result/)
+      assert.equal(
+        (screen.match(/^\s*validated-line-\d+\s*$/gm) ?? []).length,
+        40,
+      )
+      assert.match(screen, /> Ran printf inspect-project/)
+      assert.match(screen, /> Execution failed/)
       assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
-      screen = await expand(host)
+      await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+      await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+      assert.doesNotMatch(await host.frame(), /validated-result/)
+      await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+      await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /validated-line-39/)
+      assert.match(screen, /> Ran printf inspect-project/)
+      const activityRow = host
+        .screenLines()
+        .findIndex((line) => stripVTControlCharacters(line).includes("Worked"))
+      assert(activityRow >= 0)
+      await host.key(`\x1b[<0;2;${activityRow + 1}M`)
+      await host.key(`\x1b[<0;2;${activityRow + 1}m`)
+      if (order === "last") await host.key("\x0f")
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /Worked for \d+m \d+s ▶/)
+      assert.doesNotMatch(screen, /Edited files|validated-result/)
+      assert.match(screen, /Unrelated workflow notice/)
+      assert.match(screen, /Received\./)
+      await host.key(expandKey)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /Worked for \d+m \d+s ▼/)
+      assert.match(screen, /▼ Edited files/)
+      assert.match(screen, /▼ Ran command/)
+      assert.match(screen, /▼ Execution failed/)
+      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 9)
       assert.match(screen, /inspect-project/)
       assert.match(screen, /validated-result/)
+      assert.match(screen, /validated-line-39/)
       assert.match(screen, /local\.png/)
       assert.match(screen, /late\.png/)
       assert.match(screen, /LATE-MIXED-RESULT/)
@@ -182,12 +233,32 @@ for (const order of ["first", "last"] as const) {
       assert.match(output(host, "mixed"), /validated-result/)
       assert.doesNotMatch(output(host, "mixed"), /CHANGED/)
       assert.match(JSON.stringify(host.requests.at(-1)), /"type":"input_image"/)
+      await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+      await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+      assert.doesNotMatch(await host.frame(), /validated-result/)
       host.queueResponse(
         ...functionCall("wait", { cell_id: id }, "collect-mixed", "functions"),
       )
       await host.session.prompt("Collect the execution")
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-RESULT/)
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-FAILURE/)
+      screen = await openWork(host)
+      assert.match(screen, /> Edited files/)
+      assert.match(screen, /▼ Collected output/)
+      assert.match(screen, /▼ Collected output from/)
+      assert.match(screen, /"cell_status": "failed"/)
+      assert.equal(
+        (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
+        1,
+      )
+      assert.doesNotMatch(screen, /validated-result|LATE-MIXED/)
+      await host.key(expandKey)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.equal((screen.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
+      assert.doesNotMatch(screen, /Edited files|Collected output|LATE-MIXED/)
+      assert.match(screen, /Unrelated workflow notice/)
+      assert.equal((screen.match(/Received\./g) ?? []).length, 2)
       await host.reload()
       screen = await openWork(host)
       assert.match(screen, /> Collected output/)
@@ -199,7 +270,7 @@ for (const order of ["first", "last"] as const) {
       assert(retainedGroup >= 0)
       await host.key(`\x1b[<0;2;${retainedGroup + 1}M`)
       await host.key(`\x1b[<0;2;${retainedGroup + 1}m`)
-      host.terminal.resize(160, 180)
+      host.terminal.resize(160, 260)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.equal((screen.match(/> Read changed\.txt/g) ?? []).length, 1)
@@ -247,7 +318,7 @@ for (const order of ["first", "last"] as const) {
       )
       assert.doesNotMatch(screen, /interrupted or unknown/)
       assert.match(screen, /Unrelated workflow notice/)
-      host.terminal.resize(100, 180)
+      host.terminal.resize(100, 260)
       await host.frame()
       assert(host.screenLines().every((line) => visibleWidth(line) <= 100))
       const history = host.session.sessionManager.getBranch()
