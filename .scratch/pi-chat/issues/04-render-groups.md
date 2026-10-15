@@ -4,17 +4,23 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** in-progress
+**Status:** resolved — native preview correction implemented; verification and limits below
 
 ## Native output preview correction — approved 2026-10-15
 
-- [ ] Keep a closed item summary-only. Opening it reveals the native output control in its own current state, showing the native collapsed preview by default. Native output clicks expand/collapse output without closing the item.
-- [ ] Use native built-in renderers and generic default extension rendering for both output states. Keep specific command summaries for previews; permit the generic command summary only when native output is expanded.
-- [ ] Preserve item and native-output states independently across updates, item/group/Worked-for closure and reopening, and settings reconstruction. New controls inherit the native global state; configured app.tools.expand still sets all available levels without a new shortcut or persisted policy.
-- [ ] Find expands only the selected native output enough to reveal its matching source. Preserve source, contracts, selection validity, gutters, image ownership, and existing reload lifetime.
-- [ ] Reproduce and verify using existing real-Pi cases only, including long output, native clicks, remapped global expansion, settings reconstruction, and source Find.
+- [x] Keep a closed item summary-only. Opening it reveals the native output control in its own current state, showing the native collapsed preview by default. Native output clicks expand/collapse output without closing the item.
+- [x] Use native built-in renderers and generic default extension rendering for both output states. Keep specific command summaries for previews; permit the generic command summary only when native output is expanded.
+- [x] Preserve item and native-output states independently across updates, item/group/Worked-for closure and reopening, and settings reconstruction. New controls inherit the native global state; configured app.tools.expand still sets all available levels without a new shortcut or persisted policy.
+- [x] Find expands only the selected native output enough to reveal its matching source. Preserve source, contracts, selection validity, gutters, image ownership, and existing reload lifetime.
+- [x] Reproduce and verify using existing real-Pi cases only, including long output, native clicks, remapped global expansion, settings reconstruction, and source Find.
 
 This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+### Verification — 2026-10-15
+
+Implemented by `37c61a2` and `50fbcfb`, integrated at `39e0e5d`. Item disclosure controls visibility; Pi's native output control owns its separate preview/full state. Generic extensions now select Pi's native fallback composition instead of the raw path that ignored expansion. Native clicks leave enclosing disclosures open, and both choices survive updates and reconstruction.
+
+All 116 existing chat cases pass on Pi 1.1.0 and 1.0.2. They cover independent native clicks, specific summaries, retained choices, configured global expansion, and selected-only Find reveal. [Chat 12](12-mixed-session-acceptance.md) records the combined checks, reviews, and physical-terminal limits.
 
 ## Prior native-flow revision and evidence
 

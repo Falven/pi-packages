@@ -2,9 +2,9 @@
 
 **Current revision:** Independent native output previews inside activity items, preserving native conversation flow, padding gutters, and configured global disclosure.
 
-**Status:** in-progress — native output preview correction; earlier evidence remains historical
+**Status:** resolved — native output preview correction implemented and verified through the native host; physical-terminal limits recorded in Chat 12
 
-**Tracker:** Existing [Chat 04](../../.scratch/pi-chat/issues/04-render-groups.md) → [Chat 05](../../.scratch/pi-chat/issues/05-bounded-render-groups.md), followed by [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) and [Core 06](../../.scratch/core-tools/issues/06-verify-mixed-native-workflows.md) acceptance. Implement on `codex/chat-scroll-integration`; the earlier [activity-item revision](../../.scratch/pi-chat/issues/13-activity-item-adapters-and-independent-bodies.md) retains its original scope and evidence.
+**Tracker:** Existing [Chat 04](../../.scratch/pi-chat/issues/04-render-groups.md) → [Chat 05](../../.scratch/pi-chat/issues/05-bounded-render-groups.md), followed by [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) and [Core 06](../../.scratch/core-tools/issues/06-verify-mixed-native-workflows.md) acceptance. Implemented on `codex/chat-scroll-integration`; the earlier [activity-item revision](../../.scratch/pi-chat/issues/13-activity-item-adapters-and-independent-bodies.md) retains its original scope and evidence.
 
 ## Problem Statement
 
@@ -342,7 +342,7 @@ The [command classifier](../../packages/pi-chat/src/tool-adapters/command.ts) is
 
 To change a mapping, edit its named adapter and the corresponding catalog row. A new mapping supplies the existing `CallFacts` → `ActivityItem[]` contract and enters the registry before the fallback. Each item needs a stable identity, operation type, actual status, and its own applicable body; a call need not produce exactly one item. Keep required provider facts and provenance checks in that adapter. Keep shared summary formatting and disclosure code independent of the new tool family.
 
-**Native preview correction (2026-10-15):** The open item and its native output control have separate states. The preview is the native default, not a replacement for the closed item summary. This supersedes forced full-output expansion in the earlier revision. Existing Chat 04/05 and Chat 12/Core 06 tickets track the implementation and verification; prior counts do not certify this correction.
+**Native preview correction (2026-10-15):** The open item and its native output control have separate states. The preview is the native default, not a replacement for the closed item summary. This supersedes forced full-output expansion in the earlier revision. At `39e0e5d`, all 116 existing chat cases and four core workflow cases pass on each of Pi 1.1.0 and 1.0.2; typechecks, lint, formatting, and diff checks pass. Independent Standards and Spec reviews found no actionable findings. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records exact checks and unperformed physical-terminal, full-suite, and live-model checks. Earlier evidence retains its original revision scope.
 
 **Earlier activity-item revision:** Q1–Q6 and the subsequent adapter-ownership clarification are incorporated. The three disclosure levels, default expanded rendering, per-item disclosures, script-owned execution activity items, optional verified edit counts, and retained compact descriptions are required together. This supersedes earlier one-item-per-call, built-in-only labeling, custom-renderer preservation, and shared-parent-body requirements. The [companion core-tool specification](../../.scratch/core-tools/spec.md) covers factual inputs to the chat adapter. The linked tracker issue coordinates implementation of the approved existing-ticket deltas.
 

@@ -4,15 +4,21 @@
 
 **Blocked by:** 04: Separate item disclosure from native output expansion.
 
-**Status:** in-progress
+**Status:** resolved — native preview correction implemented; verification and limits below
 
 ## Native output preview correction — approved 2026-10-15
 
-- [ ] Retain full render-group expansion in ordinary conversation flow. Each open item uses Pi’s native preview or full-output size according to its independent output state.
-- [ ] Keep existing padding gutters, primary scrolling, native scrollbar priority, supported child edge handoff, image painting, copy bounds, and source anchors. Add no output viewport, cap, custom preview, or setting.
-- [ ] Update relevant existing flow/selection/image cases to explicitly expand native output when full-output inspection is required; keep summary-only closed-item assertions.
+- [x] Retain full render-group expansion in ordinary conversation flow. Each open item uses Pi’s native preview or full-output size according to its independent output state.
+- [x] Keep existing padding gutters, primary scrolling, native scrollbar priority, supported child edge handoff, image painting, copy bounds, and source anchors. Add no output viewport, cap, custom preview, or setting.
+- [x] Update relevant existing flow/selection/image cases to explicitly expand native output when full-output inspection is required; keep summary-only closed-item assertions.
 
 This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+### Verification — 2026-10-15
+
+Implemented at `39e0e5d`. Each open item uses its native preview or full-output size without an extra viewport or cap. Existing flow, padding, selection, image, and input cases explicitly open full output where needed; their native geometry and ownership assertions remain intact.
+
+All 116 existing chat cases pass on Pi 1.1.0 and 1.0.2. [Chat 12](12-mixed-session-acceptance.md) records combined acceptance and limits. No test cases, fixtures, settings, or rendering abstractions were added.
 
 ## Prior native-flow revision and evidence
 

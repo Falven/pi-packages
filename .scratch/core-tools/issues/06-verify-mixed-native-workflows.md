@@ -4,15 +4,23 @@
 
 **Blocked by:** Chat 04 and Chat 05 native preview correction.
 
-**Status:** in-progress
+**Status:** resolved — native preview correction implemented; verification and limits below
 
 ## Native output preview correction — approved 2026-10-15
 
-- [ ] Extend the existing two load-order workflow cases to verify a core command starts with Pi’s generic native preview when its item opens, then native click exposes its full output independently of siblings.
-- [ ] Preserve global expansion, ancestor choices, commands, continuation, per-file changes, errors, images, hooks, late outcomes, collection, and replay assertions. No core runtime, contract, provider-fact, or raw-output policy changes.
-- [ ] Coordinate both-runtime acceptance with Chat 12. Update existing cases only; record exact checks and retain earlier physical limits.
+- [x] Extend the existing two load-order workflow cases to verify a core command starts with Pi’s generic native preview when its item opens, then native click exposes its full output independently of siblings.
+- [x] Preserve global expansion, ancestor choices, commands, continuation, per-file changes, errors, images, hooks, late outcomes, collection, and replay assertions. No core runtime, contract, provider-fact, or raw-output policy changes.
+- [x] Coordinate both-runtime acceptance with Chat 12. Update existing cases only; record exact checks and retain earlier physical limits.
 
 This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+### Verification — 2026-10-15
+
+At `39e0e5d`, all **4/4** existing workflow-presentation cases pass on both Pi 1.1.0 and 1.0.2. Both extension load orders verify a generic native command preview, native expansion to all retained lines, ancestor reopen preserving full output, and native collapse leaving the item/group open. Existing global expansion, replay, hook, image, continuation, and late-status assertions remain intact.
+
+The primary run includes these cases with all 116 chat cases (**120/120**); both runtime typechecks and root lint/format/diff checks pass. Independent Standards and Spec reviews found no actionable findings. No core production code, contracts, provider facts, or raw-output policy changed. Existing tests were updated without new cases or seams.
+
+[Chat 12](../../pi-chat/issues/12-mixed-session-acceptance.md) records exact revisions, commands, logs, and the unperformed physical-terminal/full-suite/live-model checks. Earlier evidence below is unchanged.
 
 ## Prior native-flow revision and evidence
 

@@ -4,15 +4,28 @@
 
 **Blocked by:** Chat 04 and Chat 05 native preview correction.
 
-**Status:** in-progress
+**Status:** resolved — native preview correction implemented; verification and limits below
 
 ## Native output preview correction — approved 2026-10-15
 
-- [ ] Use the existing real-Pi seam and existing cases to verify built-ins and extensions: summary-only item, open item with native preview, then independent full native output, with native collapse leaving the item open.
-- [ ] Verify configured/remapped global expansion, ancestor choice preservation, settings rebuild, Find beyond preview limits, meaningful copy, images, and existing lifecycle in both supported runtimes.
-- [ ] Run relevant checks and standards/spec review. Record revision-specific evidence and preserve earlier evidence; distinguish native recorded-frame/input checks from physical-terminal observations.
+- [x] Use the existing real-Pi seam and existing cases to verify built-ins and extensions: summary-only item, open item with native preview, then independent full native output, with native collapse leaving the item open.
+- [x] Verify configured/remapped global expansion, ancestor choice preservation, settings rebuild, Find beyond preview limits, meaningful copy, images, and existing lifecycle in both supported runtimes.
+- [x] Run relevant checks and standards/spec review. Record revision-specific evidence and preserve earlier evidence; distinguish native recorded-frame/input checks from physical-terminal observations.
 
 This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+### Verification — 2026-10-15
+
+Runtime changes `37c61a2` and `50fbcfb` are integrated at `39e0e5dfd6f210644167edfcb7446236edf72b64` on `codex/chat-scroll-integration`. Production changes are confined to the existing `native-host.ts` adapter. The initial regression reproduced forced full output; a second generic-tool regression identified Pi's raw-renderer path. Both now pass using native controls.
+
+- Primary Pi 1.1.0: an immutable archive of `39e0e5d` passed `node --test --test-concurrency=2 packages/pi-chat/test/*.test.ts packages/pi-codex-tools/test/workflow-presentation.test.ts`: **120/120**, no skips. Typechecking passed. ESM resolution confirmed one coherent Pi 1.1.0 coding-agent/TUI dependency tree.
+- Secondary Pi 1.0.2: `node --test packages/pi-chat/test/*.test.ts` passed **116/116** and `node --test packages/pi-codex-tools/test/workflow-presentation.test.ts` passed **4/4**. The chat source/tests are unchanged from the worker's checked runtime through `39e0e5d`; final core workflow checks include the replay-layout correction.
+- Root `pnpm typecheck`, `pnpm lint`, `pnpm format:check`, and `git diff --check a901939..39e0e5d` passed. Existing cases cover preview/full/preview input, open ancestors after native collapse, retained state, configured/remapped global expansion, settings, hidden-source Find, copy, images, both extension load orders, replay, and streaming outcomes. No new test cases, files, fixtures, or seams were added.
+- Independent Standards and Spec reviews of `a901939..39e0e5d` found no actionable findings. The earlier tracker-graph and evidence-scope findings were corrected at `035c6c5`. Historical ticket bodies remain unchanged below.
+
+Logs, revision and dependency records, and review reports are in `/var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-native-preview-hmc3u7ql`. These are real native-host recorded-frame/input checks, not physical-terminal acceptance. No new physical-terminal check, full-repository suite, or live-model trial was run for this correction. Earlier physical observations and full-suite failures retain their recorded scope below.
+
+The configured local package resolves to `/Users/fran/Source/pi-packages/packages/pi-chat`. A running Pi session needs `/reload` to load this code; no input was sent to the user's active session.
 
 ## Prior native-flow revision and evidence
 
