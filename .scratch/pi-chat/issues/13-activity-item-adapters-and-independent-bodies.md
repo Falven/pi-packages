@@ -2,6 +2,8 @@
 
 **Status:** resolved — approved ticket deltas implemented on `codex/activity-items-integration`; verification limits recorded below
 
+**Rendering follow-up (2026-10-15):** The native preview correction in [Chat 04](04-render-groups.md), [Chat 05](05-bounded-render-groups.md), [Chat 12](12-mixed-session-acceptance.md), and [Core 06](../../core-tools/issues/06-verify-mixed-native-workflows.md) supersedes forced full-output expansion when an item opens. Each item now requires its own native preview/full-output control. The accepted breakdown and evidence below retain their original revision scope.
+
 **Scope:** pi-chat and the operation facts supplied by pi-codex-tools.
 
 **Specifications:** [pi-chat](../../../docs/specs/pi-chat.md) and [core toolset](../../core-tools/spec.md). This issue coordinates the revision across both packages. Earlier completed tickets retain their recorded scope and evidence.
