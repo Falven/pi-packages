@@ -62,11 +62,12 @@ function writableClipboard(
   assert(clipboard?.setText)
 }
 
-test("long expanded groups retain their header, answer, and cached Markdown while scrolling", async (t) => {
+test("expanded groups expose all native output in conversation flow without invalidating cached Markdown", async (t) => {
   let markdownTransforms = 0
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 28,
+    rows: 80,
+    keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
       (pi) => {
         pi.registerMarkdownTransformer((markdown) => {
@@ -114,30 +115,28 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
   assert(lines.some((line) => line.includes("Read files")))
+  assert(lines.some((line) => line.includes("first-row-0")))
+  assert(lines.some((line) => line.includes("first-row-19")))
+  assert(lines.some((line) => line.includes("second-row-0")))
   assert(lines.some((line) => line.includes("second-row-19")))
   assert(lines.some((line) => line.includes("Received.")))
-  assert(!lines.some((line) => line.includes("first-row-0")))
-  const header = lines.findIndex((line) => line.includes("Read files"))
-  const body = lines.findIndex((line) => line.includes("second-row-19"))
+  host.terminal.resize(82, 28)
+  await host.frame()
+  const before = host.screenLines().map(stripTerminalSequences)
+  const body = before.findIndex((line) => line.includes("second-row-19"))
+  assert(body >= 0)
+  assert(!before.some((line) => line.includes("Read files")))
   const transformsBeforeScrolling = markdownTransforms
   await host.key(`\x1b[<64;3;${body + 1}M`)
   await host.output()
   assert.equal(markdownTransforms, transformsBeforeScrolling)
   const scrolled = host.screenLines().map(stripTerminalSequences)
-  assert.equal(
-    scrolled.findIndex((line) => line.includes("Read files")),
-    header,
-  )
-  assert.notDeepEqual(
-    scrolled.slice(header + 1, body + 1),
-    lines.slice(header + 1, body + 1),
-  )
-  assert(scrolled.some((line) => line.includes("Received.")))
-  await host.key("\x1bg")
+  assert.notDeepEqual(scrolled, before)
+  await host.key("\x1b[H")
   assert.match(await host.frame(), /▼ Read files/)
 })
 
-test("selection copies every expanded body row between visible endpoints", async (t) => {
+test("selection copies expanded native output across offscreen conversation rows", async (t) => {
   const clipboard = getNativeClipboard()
   writableClipboard(clipboard)
   let copied = ""
@@ -147,6 +146,7 @@ test("selection copies every expanded body row between visible endpoints", async
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
+    keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
   })
   await writeFile(
@@ -163,13 +163,21 @@ test("selection copies every expanded body row between visible endpoints", async
   await host.settled()
   await openWork(host)
   await host.key("\u000f")
+  await host.key("\x1b[H")
+  await host.frame()
+  const initial = host.screenLines().map(stripTerminalSequences)
+  const first = initial.findIndex((line) => line.includes("Copy expanded"))
+  assert(first >= 0)
+  assert(!initial.some((line) => line.includes("Received.")))
+  const column = initial[first]!.indexOf("Copy expanded") + 1
+  await host.key(`\x1b[<0;${column};${first + 1}M`)
+  // oxlint-disable-next-line eslint/no-await-in-loop -- Mouse gestures must preserve terminal order.
+  for (let n = 0; n < 64; n++) await host.key(`\x1b[<65;3;${first + 1}M`)
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
-  const first = lines.findIndex((line) => line.includes("Copy expanded"))
   const last = lines.findIndex((line) => line.includes("Received."))
-  assert(first >= 0 && last > first)
-  const column = lines[first]!.indexOf("Copy expanded") + 1
-  await host.key(`\x1b[<0;${column};${first + 1}M`)
+  assert(last >= 0, lines.join("\n"))
+  assert(!lines.some((line) => line.includes("Copy expanded")))
   await host.key(`\x1b[<32;10;${last + 1}M`)
   await host.key(`\x1b[<0;10;${last + 1}m`)
   await host.key("\x18")
@@ -274,11 +282,12 @@ test("group summaries combine native categories and distinct paths while executi
   assert.match(await host.frame(), /> Edited a file, read files, ran commands/)
 })
 
-test("default activity bodies scroll inside their group before wheel movement bubbles outward", async (t) => {
+test("default activity bodies and surrounding entries scroll together in the conversation", async (t) => {
   let appendPrefix: (() => void) | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 28,
+    keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
@@ -326,23 +335,21 @@ test("default activity bodies scroll inside their group before wheel movement bu
   await host.key(`\x1b[<64;3;${row + 1}M`)
   await host.frame()
   assert.notDeepEqual(screen(), before)
-  await host.key("\x1bg")
-  await host.key("\x1b[B")
+  await host.key("\x1b[H")
   await host.frame()
-  const first = screen().findIndex((line) => line.includes("first-row-0"))
-  const header = screen().findIndex((line) => line.includes("Called tools"))
-  assert(first > header && header >= 0)
-  await host.key(`\x1b[<64;3;${first + 1}M`)
+  assert(screen().some((line) => line.includes("prefix-0")))
+  assert(!screen().some((line) => line.includes("second-row-19")))
+  await host.key("\x1b[F")
   await host.frame()
-  assert(screen().findIndex((line) => line.includes("Called tools")) > header)
-  await host.key("\x1b")
-  await host.key("\x1b[6~")
+  assert(screen().some((line) => line.includes("second-row-19")))
+  assert(!screen().some((line) => line.includes("Called tools")))
+  await host.key("\x1b[5~")
   await host.frame()
-  assert(screen().some((line) => line.includes("first-row-0")))
+  assert(screen().some((line) => /first-row-\d/.test(line)))
   assert(!screen().some((line) => line.includes("second-row-19")))
 })
 
-test("growing output and resizing preserve a body anchor and follow only an already followed end", async (t) => {
+test("growing output and resizing preserve a conversation anchor and follow only an already followed end", async (t) => {
   const lengths: Record<string, number> = { prefix: 20, target: 40 }
   const updates = new Map<string, (length: number) => void>()
   const gates = {
@@ -398,7 +405,7 @@ test("growing output and resizing preserve a body anchor and follow only an alre
     await host.output()
     const anchor = screen()
       .find((line) => /target-\d/.test(line))
-      ?.trim()
+      ?.match(/target-\d+/)?.[0]
     assert(anchor)
     lengths["prefix"] = 40
     updates.get("prefix")!(40)
@@ -406,7 +413,7 @@ test("growing output and resizing preserve a body anchor and follow only an alre
     assert.equal(
       screen()
         .find((line) => /target-\d/.test(line))
-        ?.trim(),
+        ?.match(/target-\d+/)?.[0],
       anchor,
     )
     host.terminal.resize(60, 36)
@@ -414,7 +421,7 @@ test("growing output and resizing preserve a body anchor and follow only an alre
     assert.equal(
       screen()
         .find((line) => /target-\d/.test(line))
-        ?.trim(),
+        ?.match(/target-\d+/)?.[0],
       anchor,
     )
     lengths["target"] = 41
@@ -423,7 +430,7 @@ test("growing output and resizing preserve a body anchor and follow only an alre
     assert.equal(
       screen()
         .find((line) => /target-\d/.test(line))
-        ?.trim(),
+        ?.match(/target-\d+/)?.[0],
       anchor,
     )
     assert(!screen().some((line) => line.includes("target-40")))
@@ -477,7 +484,7 @@ function kittyPlacements(output: string) {
     .filter((command) => command["r"])
 }
 
-test("native image crops combine logical clips once and retain their identity and reservation rows", async (t) => {
+test("native images crop once against the conversation and retain their identity and reservation rows", async (t) => {
   const capabilities = getCapabilities()
   const cells = getCellDimensions()
   setCapabilities({ ...capabilities, images: "kitty" })
@@ -537,19 +544,30 @@ test("native image crops combine logical clips once and retain their identity an
   await host.key("\u000f")
   await host.key("\x1b[H")
   await host.frame()
+  assert.equal(kittyPlacements(host.terminal.output).length, 0)
+  await host.key("\x1b[6~")
+  await host.frame()
   const first = kittyPlacements(host.terminal.output).at(-1)
   assert(first, host.terminal.output)
-  assert.equal(first["y"], "360")
-  assert.equal(first["h"], "225")
-  assert.equal(first["r"], "5")
+  assert.equal(first["y"], "0")
+  assert.equal(first["h"], "135")
+  assert.equal(first["r"], "3")
   await host.key("\x1b[6~")
   await host.frame()
   const second = kittyPlacements(host.terminal.output).at(-1)
   assert(second)
   assert.equal(second["i"], first["i"])
-  assert.equal(second["y"], "405")
-  assert.equal(second["h"], "675")
-  assert.equal(second["r"], "15")
+  assert.equal(second["y"], "0")
+  assert.equal(second["h"], "945")
+  assert.equal(second["r"], "21")
+  await host.key("\x1b[6~")
+  await host.frame()
+  const third = kittyPlacements(host.terminal.output).at(-1)
+  assert(third)
+  assert.equal(third["i"], first["i"])
+  assert.equal(third["y"], "675")
+  assert.equal(third["h"], "405")
+  assert.equal(third["r"], "9")
   const imageRow = host
     .screenLines()
     .findIndex((line) => kittyPlacements(line).length)
@@ -557,7 +575,7 @@ test("native image crops combine logical clips once and retain their identity an
   assert(
     host
       .screenLines()
-      .slice(imageRow + 1, imageRow + 15)
+      .slice(imageRow + 1, imageRow + 9)
       .every((line) => stripTerminalSequences(line).slice(0, -1).trim() === ""),
   )
   assert.match(
@@ -565,7 +583,7 @@ test("native image crops combine logical clips once and retain their identity an
     /[┃│]/,
   )
   assert.match(
-    stripTerminalSequences(host.screenLines()[imageRow + 16] ?? ""),
+    stripTerminalSequences(host.screenLines()[imageRow + 10] ?? ""),
     /Received\./,
   )
   host.terminal.resize(60, 28)

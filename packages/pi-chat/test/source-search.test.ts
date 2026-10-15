@@ -615,7 +615,7 @@ test("Find indexes the literal native shell command and output", async (t) => {
   assert.match(await host.frame(), /2\/2/)
 })
 
-test("Find scrolls a bounded activity body to the selected source occurrence", async (t) => {
+test("Find scrolls native activity output in the conversation to the selected source occurrence", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 30,

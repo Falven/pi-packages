@@ -31,7 +31,6 @@ import {
   type AgentActivity,
 } from "./agent-activity.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
-import { InlineViewport } from "./inline-viewport.ts"
 import { GroupSummaries } from "./group-summaries.ts"
 import { ActivityItems } from "./activity-items.ts"
 import { itemSummary } from "./item-summary.ts"
@@ -203,14 +202,6 @@ type Leaf = {
   left: number
   start: number
   top: number
-  offset: number
-  body?: InlineViewport
-}
-
-function currentTop(leaf: Leaf) {
-  return leaf.body
-    ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
-    : leaf.top
 }
 
 type VisibleInterval = {
@@ -300,14 +291,12 @@ type ChatRow = {
   agentActivity?: AgentActivity | undefined
   zoneStart?: boolean
   zoneEnd?: boolean
-  body?: InlineViewport
   sourceZone?: number | undefined
 }
 type RenderGroup = {
   items: ChatRow[]
   expanded: boolean
   header?: RenderGroupHeader
-  viewport: InlineViewport
 }
 
 type NativeToolPresenter = Component & {
@@ -734,17 +723,11 @@ export class NativeChatHost {
     const anchor = !wasFollowing
       ? oldLeaves.find(
           (leaf) =>
-            previousTop >= Math.max(currentTop(leaf), leaf.body?.top ?? 0) &&
-            previousTop <
-              Math.min(
-                currentTop(leaf) + leaf.rows.length,
-                leaf.body
-                  ? leaf.body.top + leaf.body.scroll.viewportHeight
-                  : Infinity,
-              ),
+            previousTop >= leaf.top &&
+            previousTop < leaf.top + leaf.rows.length,
         )
       : undefined
-    const anchorRow = anchor ? previousTop - currentTop(anchor) : 0
+    const anchorRow = anchor ? previousTop - anchor.top : 0
     let start = 0
     const missing = [...this.historical].toSorted(
       ([left], [right]) =>
@@ -802,7 +785,6 @@ export class NativeChatHost {
         group = {
           items,
           expanded: this.retainedDisclosures(first)?.group ?? false,
-          viewport: new InlineViewport(),
         }
         group.header = new RenderGroupHeader(this, group)
         this.renderGroups.set(first, group)
@@ -813,11 +795,7 @@ export class NativeChatHost {
         tool: false,
         agentActivity: this.agentActivity.find(first),
       })
-      if (group.expanded) {
-        for (const item of items) {
-          composed.push({ ...item, body: group.viewport })
-        }
-      }
+      if (group.expanded) composed.push(...items)
     }
     composed = this.composeAgentActivity(composed).flatMap(
       (chatRow, index, all) => {
@@ -847,7 +825,7 @@ export class NativeChatHost {
         : [],
     )
     const leaves = composed.map(
-      ({ component, occurrence, body, zoneStart, zoneEnd }) => {
+      ({ component, occurrence, zoneStart, zoneEnd }) => {
         let rows = component.render(contentWidth)
         let left = 0
         if (component instanceof UserMessageComponent) {
@@ -898,34 +876,15 @@ export class NativeChatHost {
           left,
           start,
           top: 0,
-          offset: 0,
         }
-        if (body) leaf.body = body
         start += rows.length
         return leaf
       },
     )
     let contentHeight = 0
-    for (let index = 0; index < leaves.length;) {
-      const leaf = leaves[index]!
-      if (!leaf.body) {
-        leaf.top = contentHeight
-        contentHeight += leaf.rows.length
-        index++
-        continue
-      }
-      const body = leaf.body
-      const children: Leaf[] = []
-      while (leaves[index]?.body === body) children.push(leaves[index++]!)
-      body.top = contentHeight
-      body.update(
-        children,
-        Math.max(1, Math.min(16, (available ?? 0) - 3)),
-        () => renderer.requestRender(),
-      )
-      for (const child of children)
-        child.top = body.top + child.offset - body.scroll.scrollTop
-      contentHeight += body.scroll.viewportHeight
+    for (const leaf of leaves) {
+      leaf.top = contentHeight
+      contentHeight += leaf.rows.length
     }
     this.leaves = leaves
     if (
@@ -953,7 +912,7 @@ export class NativeChatHost {
       if (next)
         this.transcript.scrollTo(
           Math.max(
-            next.body?.top ?? 0,
+            0,
             next.top + Math.min(anchorRow, Math.max(0, next.rows.length - 1)),
           ),
           { disableFollow: true },
@@ -1008,18 +967,8 @@ export class NativeChatHost {
     const top = this.transcript.scrollTop
     const bottom = top + this.viewportHeight
     for (const leaf of leaves) {
-      const sourceStart = Math.max(
-        0,
-        top - leaf.top,
-        (leaf.body?.top ?? leaf.top) - leaf.top,
-      )
-      const sourceEnd = Math.min(
-        leaf.rows.length,
-        bottom - leaf.top,
-        leaf.body
-          ? leaf.body.top + leaf.body.scroll.viewportHeight - leaf.top
-          : leaf.rows.length,
-      )
+      const sourceStart = Math.max(0, top - leaf.top)
+      const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.top)
       if (sourceEnd <= sourceStart) continue
       const raw = new RawLeaf(leaf.component, leaf.rows, leaf.left)
       const window = new ScrollView(raw, {
@@ -1337,10 +1286,7 @@ export class NativeChatHost {
   ) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
-    if (leaf.body) leaf.body.scroll.scrollTo(leaf.offset)
-    const top = leaf.body
-      ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
-      : leaf.top
+    const top = leaf.top
     if (top < this.transcript.scrollTop) this.transcript.scrollTo(top)
     else if (top >= this.transcript.scrollTop + this.viewportHeight)
       this.transcript.scrollTo(top - this.viewportHeight + 1)
@@ -1463,20 +1409,11 @@ export class NativeChatHost {
   }
 
   private visibleInterval(leaf: Leaf): VisibleInterval | undefined {
-    const top = leaf.body
-      ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
-      : leaf.top
-    const start = Math.max(
-      0,
-      this.transcript.scrollTop - top,
-      (leaf.body?.top ?? top) - top,
-    )
+    const top = leaf.top
+    const start = Math.max(0, this.transcript.scrollTop - top)
     const end = Math.min(
       leaf.rows.length,
       this.transcript.scrollTop + this.viewportHeight - top,
-      leaf.body
-        ? leaf.body.top + leaf.body.scroll.viewportHeight - top
-        : leaf.rows.length,
     )
     return end > start
       ? { leaf, start, end, top: top + start - this.transcript.scrollTop }
@@ -1900,14 +1837,7 @@ export class NativeChatHost {
     const leaf = this.searchLeaf(hit)
     if (!leaf) return changed
     const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0
-    if (leaf.body) {
-      const before = leaf.body.scroll.scrollTop
-      const target = leaf.offset + row
-      if (target < before || target >= before + leaf.body.scroll.viewportHeight)
-        leaf.body.scroll.scrollTo(target, { disableFollow: true })
-      changed ||= leaf.body.scroll.scrollTop !== before
-    }
-    const top = currentTop(leaf) + row
+    const top = leaf.top + row
     const before = this.transcript.scrollTop
     if (top < before || top >= before + this.viewportHeight)
       this.transcript.scrollTo(
@@ -2213,12 +2143,7 @@ export class NativeChatHost {
       (original) => (event: { x: number; y: number }, delta: number) => {
         if (!this.ownsRenderer(renderer) || event.y >= this.viewportHeight)
           return original.call(renderer, event, delta)
-        const interval = this.intervals.find(
-          (item) =>
-            event.y >= item.top && event.y < item.top + item.end - item.start,
-        )
-        const remaining = interval?.leaf.body?.scroll.scrollBy(delta) ?? delta
-        if (remaining) this.transcript.scrollBy(remaining)
+        this.transcript.scrollBy(delta)
         original.call(renderer, event, 0)
       },
     )
@@ -2230,9 +2155,7 @@ export class NativeChatHost {
       for (const leaf of direction < 0
         ? this.leaves.toReversed()
         : this.leaves) {
-        const top = leaf.body
-          ? leaf.body.top + leaf.offset - leaf.body.scroll.scrollTop
-          : leaf.top
+        const top = leaf.top
         if (direction < 0 && top >= this.transcript.scrollTop) continue
         if (
           direction > 0 &&
