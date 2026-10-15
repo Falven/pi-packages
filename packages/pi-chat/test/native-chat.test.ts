@@ -444,10 +444,20 @@ test("consecutive native calls start as one closed group and open from the compo
   assert.doesNotMatch(screen(), /Read one\.txt|FIRST TOOL BODY/)
 })
 
-test("a finished call stays grouped while another iteration may join it", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
-  await writeFile(join(host.directory, "one.txt"), "first")
-  await writeFile(join(host.directory, "two.txt"), "second")
+test("a finished call retains choices while arriving groups and items inherit native expansion", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 60,
+    keybindings: { "app.tools.expand": "ctrl+e" },
+  })
+  await Promise.all(
+    ["one", "two", "three", "four"].map((name) =>
+      writeFile(
+        join(host.directory, `${name}.txt`),
+        `${name.toUpperCase()} BODY`,
+      ),
+    ),
+  )
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
   host.queueResponse(
     { pause: true },
@@ -456,23 +466,73 @@ test("a finished call stays grouped while another iteration may join it", async 
     done,
     end,
   )
-  await host.type("Read twice")
+  host.queueResponse(
+    { pause: true },
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Boundary" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    readDelta("third", "three.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  host.queueResponse(
+    { pause: true },
+    readDelta("fourth", "four.txt"),
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Read across native expansion choices")
   await host.key("\r")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /Read files/)
-  assert.doesNotMatch(screen(), /Read one\.txt/)
+  assert.match(screen(), /> Read files/)
   await host.key("\x1bg")
   await host.key("\r")
+  assert.match(await host.frame(), /> Read one\.txt/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.equal(host.requests.length, 3))
   await host.frame()
-  assert.match(screen(), /Read one\.txt/)
+  assert.equal(screen().match(/▼ Read files/g)?.length, 1)
+  assert.match(screen(), /> Read one\.txt/)
+  assert.match(screen(), /> Read two\.txt/)
+  assert.doesNotMatch(screen(), /ONE BODY|TWO BODY/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /ONE BODY[\s\S]*TWO BODY/)
+  await host.key("\x1b[B")
+  await host.key("\r")
+  assert.doesNotMatch(await host.frame(), /ONE BODY/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.equal(host.requests.length, 4))
+  await host.frame()
+  assert.match(screen(), /THREE BODY/)
+  assert.equal(screen().match(/▼ Read files/g)?.length, 2)
+  assert.doesNotMatch(screen(), /ONE BODY/)
+  assert.match(screen(), /TWO BODY/)
+  await host.key("\x05")
+  assert.doesNotMatch(await host.frame(), /ONE BODY|TWO BODY|THREE BODY/)
   host.resumeResponse()
   await host.settled()
   await host.frame()
-  assert.match(screen(), /Read files/)
-  assert.match(screen(), /Read one\.txt/)
-  assert.match(screen(), /Read two\.txt/)
+  if (/Worked for \d+m \d+s ▶/.test(screen())) await openWork(host)
+  await host.frame()
+  assert.equal(screen().match(/> Read files/g)?.length, 3)
+  assert.doesNotMatch(screen(), /Read four\.txt|FOUR BODY/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /> Read four\.txt/)
+  assert.doesNotMatch(screen(), /FOUR BODY/)
 })
 
 test("a single tool call stays grouped and collapsed after completion", async (t) => {
@@ -709,6 +769,7 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
       "tui.select.down": "ctrl+j",
       "tui.select.confirm": "ctrl+y",
       "tui.select.cancel": "ctrl+q",
+      "app.tools.expand": "ctrl+e",
     },
   })
   await writeFile(join(host.directory, "one.txt"), "first")
@@ -760,7 +821,17 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   await host.key("\u0019")
   await host.frame()
   assert.equal(screen().match(/Read one\.txt/g)?.length, 2)
+  await host.key("\u000f")
+  assert.doesNotMatch(await host.frame(), /first|second/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /first[\s\S]*second/)
+  await host.key("\x05")
+  assert.doesNotMatch(await host.frame(), /Read one\.txt|Read two\.txt/)
   await host.key("\u0011")
+  await host.key("\u000f")
+  assert.doesNotMatch(await host.frame(), /Read one\.txt|Read two\.txt/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /first[\s\S]*second/)
   await host.type("draft after cancel")
   await host.frame()
   assert.match(screen(), /draft after cancel/)
@@ -923,6 +994,21 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
     lines().find((line) => line.includes("Read one.txt")) ?? "",
     /^ ▼ Read one\.txt/,
   )
+  await host.key("\x1b")
+  await host.key("\u000f")
+  await host.key("\u000f")
+  assert.doesNotMatch(await host.frame(), /Read one\.txt|FIRST TOOL BODY/)
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  await host.frame()
+  assert.doesNotMatch(lines().join("\n"), /Read one\.txt|FIRST TOOL BODY/)
+  await click(lines().findIndex((line) => line.includes("> Read files")))
+  await host.frame()
+  assert.match(lines().join("\n"), /> Read one\.txt/)
+  assert.doesNotMatch(lines().join("\n"), /FIRST TOOL BODY/)
 })
 
 test("copy uses the native selected text while a disclosure is focused", async (t) => {

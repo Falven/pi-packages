@@ -554,7 +554,7 @@ export class NativeChatHost {
     Occurrence,
     Map<string, ActivityItemDisclosure>
   >()
-  private readonly disclosureChoices = new WeakMap<
+  private disclosureChoices = new WeakMap<
     Entry,
     Map<number, { group: boolean; items: Map<string, boolean> }>
   >()
@@ -784,7 +784,9 @@ export class NativeChatHost {
       if (!group) {
         group = {
           items,
-          expanded: this.retainedDisclosures(first)?.group ?? false,
+          expanded:
+            this.retainedDisclosures(first)?.group ??
+            this.host.toolOutputExpanded,
         }
         group.header = new RenderGroupHeader(this, group)
         this.renderGroups.set(first, group)
@@ -1041,7 +1043,8 @@ export class NativeChatHost {
         occurrence.sourceCall = source
         disclosure = new ActivityItemDisclosure(this, occurrence, item)
         disclosure.setExpanded(
-          this.retainedDisclosures(source)?.items.get(item.id) ?? false,
+          this.retainedDisclosures(source)?.items.get(item.id) ??
+            this.host.toolOutputExpanded,
         )
         occurrence.component = disclosure
         disclosures.set(item.id, disclosure)
@@ -2945,6 +2948,7 @@ export class NativeChatHost {
     })
     wrap("setToolsExpanded", (original) => (expanded: boolean) => {
       const result = original.call(host, expanded as never)
+      this.disclosureChoices = new WeakMap()
       for (const components of this.historical.values())
         for (const component of components)
           if (component instanceof ToolExecutionComponent)
