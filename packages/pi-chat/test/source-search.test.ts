@@ -153,8 +153,8 @@ test("Find includes the native tool-call name", async (t) => {
   )
   const call = host
     .screenLines()
-    .find((line) => stripTerminalSequences(line).includes("read one.txt"))
-  assert.match(call ?? "", /\x1b\[48;5;52m[^\n]*read/)
+    .find((line) => stripTerminalSequences(line).includes("Read one.txt"))
+  assert.match(call ?? "", /\x1b\[48;5;52m[^\n]*Read/)
 })
 
 test("Find searches original tool argument values with escapes", async (t) => {
@@ -300,7 +300,7 @@ test("native Find navigation keeps duplicate occurrences distinct", async (t) =>
   assert.match(await host.frame(), /1\/2/)
 })
 
-test("Find highlights the owning call when a custom renderer omits source text", async (t) => {
+test("Find reveals source through default bodies despite a custom renderer", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     persistSession: true,
@@ -357,13 +357,13 @@ test("Find highlights the owning call when a custom renderer omits source text",
   await host.frame()
   const lines = host.screenLines()
   const call = lines.find((line) =>
-    stripTerminalSequences(line).includes("CUSTOM CALL"),
+    stripTerminalSequences(line).includes("unrendered telescope"),
   )
   assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/)
   assert.match(call ?? "", /\x1b\[48;5;52m/)
   assert.doesNotMatch(
     lines.map(stripTerminalSequences).join("\n"),
-    /unrendered telescope/,
+    /CUSTOM CALL|CUSTOM RESULT/,
   )
   await host.key("\x1b")
   const file = host.session.sessionFile!
@@ -378,7 +378,7 @@ test("Find highlights the owning call when a custom renderer omits source text",
   assert.match(retained.map(stripTerminalSequences).join("\n"), /1\/1/)
   assert.match(
     retained.find((line) =>
-      stripTerminalSequences(line).includes("CUSTOM CALL"),
+      stripTerminalSequences(line).includes("unrendered telescope"),
     ) ?? "",
     /\x1b\[48;5;52m/,
   )
@@ -884,14 +884,14 @@ test("Find restores separate retained calls with reused IDs and their own result
   assert.match(await host.frame(), /1\/1/)
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
-    /read first\.txt[\s\S]*first-needle output/,
+    /"path": "first\.txt"[\s\S]*first-needle output/,
   )
   await host.key("\x1b")
   await host.key("\x06")
   await host.type("second-needle")
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /read second\.txt[\s\S]*second-needle output/)
+  assert.match(screen, /"path": "second\.txt"[\s\S]*second-needle output/)
   assert.match(screen, /▼ Called a tool/)
   assert.doesNotMatch(screen, /Called tools/)
   await host.key("\x1b")
@@ -907,8 +907,8 @@ test("Find restores separate retained calls with reused IDs and their own result
     host
       .screenLines()
       .map(stripTerminalSequences)
-      .find((line) => line.includes("read first.txt"))
-      ?.indexOf("read first.txt"),
+      .find((line) => line.trim() === "read")
+      ?.indexOf("read"),
     "setOutputPad" in ToolExecutionComponent.prototype ? 0 : 1,
   )
   assert.equal(host.requests.length, requests)

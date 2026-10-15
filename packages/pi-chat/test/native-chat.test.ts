@@ -339,7 +339,7 @@ test("native tool calls and results survive session replay without rerunning the
   await openWork(host)
   await host.key("\u000f")
   const frame = await host.frame()
-  assert.match(frame, /read note\.txt/)
+  assert.match(frame, /Called read[\s\S]*"path": "note\.txt"/)
   assert.match(frame, /Retained native tool result/)
   assert.equal(host.requests.length, 2)
 })
@@ -405,7 +405,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await host.frame()
   assert.match(screen(), /Native status row/)
   assert.match(screen(), /Read files/)
-  assert.doesNotMatch(screen(), /read one\.txt|read two\.txt/)
+  assert.doesNotMatch(screen(), /Read one\.txt|Read two\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
@@ -426,13 +426,13 @@ test("consecutive native calls start as one closed group and open from the compo
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /> Read files/)
-  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+  assert.doesNotMatch(screen(), /Read one\.txt|FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /FIRST TOOL BODY/)
   await host.key("\u000f")
   await host.frame()
-  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+  assert.doesNotMatch(screen(), /Read one\.txt|FIRST TOOL BODY/)
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /> Read one\.txt/)
@@ -441,7 +441,7 @@ test("consecutive native calls start as one closed group and open from the compo
   await openWork(host)
   await host.frame()
   assert.match(screen(), /Called tools/)
-  assert.doesNotMatch(screen(), /read one\.txt|FIRST TOOL BODY/)
+  assert.doesNotMatch(screen(), /Read one\.txt|FIRST TOOL BODY/)
 })
 
 test("a finished call stays grouped while another iteration may join it", async (t) => {
@@ -462,17 +462,17 @@ test("a finished call stays grouped while another iteration may join it", async 
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /Read files/)
-  assert.doesNotMatch(screen(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /Read one\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /Read one\.txt/)
   host.resumeResponse()
   await host.settled()
   await host.frame()
   assert.match(screen(), /Read files/)
-  assert.match(screen(), /read one\.txt/)
-  assert.match(screen(), /read two\.txt/)
+  assert.match(screen(), /Read one\.txt/)
+  assert.match(screen(), /Read two\.txt/)
 })
 
 test("a single tool call stays grouped and collapsed after completion", async (t) => {
@@ -502,18 +502,18 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /Read files/)
-  assert.doesNotMatch(screen(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /Read one\.txt/)
   host.resumeResponse()
   await host.settled()
   await openWork(host)
   await host.frame()
-  assert.match(screen(), /▶ Read files/)
-  assert.doesNotMatch(screen(), /read one\.txt/)
+  assert.match(screen(), /> Read files/)
+  assert.doesNotMatch(screen(), /Read one\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
   assert.match(screen(), /▼ Read files/)
-  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /Read one\.txt/)
   await host.key("\x1b[B")
   await host.key("\r")
   await host.frame()
@@ -566,8 +566,8 @@ test("commentary between model iterations separates render groups in source orde
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
   assert.match(screen(), /Read files[\s\S]*Between calls[\s\S]*Called a tool/)
-  assert.equal(screen().match(/▶ /g)?.length, 2)
-  assert.doesNotMatch(screen(), /Reading |read one\.txt|read two\.txt/)
+  assert.equal(screen().match(/> /g)?.length, 2)
+  assert.doesNotMatch(screen(), /Reading |Read one\.txt|Read two\.txt/)
   host.resumeResponse()
   await host.settled()
 
@@ -593,7 +593,7 @@ test("commentary between model iterations separates render groups in source orde
     /Worked for \d+m \d+s ▶[\s\S]*Notice between calls[\s\S]*Received\./,
   )
   assert.equal((closed.match(/Notice between calls/g) ?? []).length, 1)
-  assert.doesNotMatch(closed, /▶ Read files/)
+  assert.doesNotMatch(closed, /> Read files/)
   const noticeWorkRow = host
     .screenLines()
     .findLastIndex((line) =>
@@ -605,14 +605,14 @@ test("commentary between model iterations separates render groups in source orde
   const expanded = await host.frame()
   assert.match(
     expanded,
-    /▶ Read files[\s\S]*Notice between calls[\s\S]*▶ Read files[\s\S]*Received\./,
+    /> Read files[\s\S]*Notice between calls[\s\S]*> Read files[\s\S]*Received\./,
   )
-  assert.equal((expanded.match(/▶ Read files/g) ?? []).length, 2)
+  assert.equal((expanded.match(/> Read files/g) ?? []).length, 2)
   assert.equal((expanded.match(/Notice between calls/g) ?? []).length, 1)
   await host.reload()
   const replayed = await host.frame()
   assert.equal((replayed.match(/Notice between calls/g) ?? []).length, 1)
-  assert.doesNotMatch(replayed, /▶ Read files/)
+  assert.doesNotMatch(replayed, /> Read files/)
 })
 
 test("a later assistant's trailing prose follows consecutive calls", async (t) => {
@@ -646,7 +646,7 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
     .map(stripTerminalSequences)
     .join("\n")
   assert.match(screen, /Read files[\s\S]*After both calls/)
-  assert.equal(screen.match(/▶ Read files/g)?.length, 1)
+  assert.equal(screen.match(/> Read files/g)?.length, 1)
 })
 
 test("native Hide thinking controls whether reasoning separates render groups", async (t) => {
@@ -687,16 +687,16 @@ test("native Hide thinking controls whether reasoning separates render groups", 
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(
     screen,
-    /▶ Read files[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*▶ Read files/,
+    /> Read files[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*> Read files/,
   )
-  assert.doesNotMatch(screen, /read one\.txt|read two\.txt|Thought/)
+  assert.doesNotMatch(screen, /Read one\.txt|Read two\.txt|Thought/)
   await host.key("\x14")
   const hidden = await host.frame()
-  assert.equal(hidden.match(/▶ Read files/g)?.length, 1)
+  assert.equal(hidden.match(/> Read files/g)?.length, 1)
   assert.doesNotMatch(hidden, /Considering next call|Thought/)
   await host.key("\x14")
   const visible = await host.frame()
-  assert.equal(visible.match(/▶ Read files/g)?.length, 2)
+  assert.equal(visible.match(/> Read files/g)?.length, 2)
   assert.match(visible, /Considering next call/)
 })
 
@@ -749,17 +749,17 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
   )
   assert(firstHeader >= 0 && secondHeader > firstHeader)
   assert.match(lines[firstHeader] ?? "", /^ ▼ Read files/)
-  assert.match(lines[secondHeader] ?? "", /^ ▶/)
+  assert.match(lines[secondHeader] ?? "", /^ >/)
   const selectedBg = host.ui.theme.getBgAnsi("selectedBg")
   assert(host.screenLines()[firstHeader]?.includes(selectedBg))
   assert(!host.screenLines()[secondHeader]?.includes(selectedBg))
-  assert.match(screen(), /read one\.txt/)
+  assert.match(screen(), /Read one\.txt/)
   await host.key("\u000a")
   await host.key("\u000a")
   await host.key("\u000a")
   await host.key("\u0019")
   await host.frame()
-  assert.equal(screen().match(/read one\.txt/g)?.length, 2)
+  assert.equal(screen().match(/Read one\.txt/g)?.length, 2)
   await host.key("\u0011")
   await host.type("draft after cancel")
   await host.frame()
@@ -821,8 +821,8 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /read one\.txt/)
-  assert.doesNotMatch(screen(), /read three\.txt/)
+  assert.match(screen(), /Read one\.txt/)
+  assert.doesNotMatch(screen(), /Read three\.txt/)
 })
 
 test("group pointer toggles retain native tool clicks and overlay focus", async (t) => {
@@ -868,14 +868,28 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   const lightBg = host.ui.theme.getBgAnsi("selectedBg")
   assert.notEqual(lightBg, darkBg)
   assert(host.screenLines()[header]?.includes(lightBg))
-  assert.match(lines().join("\n"), /read one\.txt/)
-  const call = lines().findIndex((line) => line.includes("read one.txt"))
+  assert.match(lines().join("\n"), /Read one\.txt/)
+  const call = lines().findIndex((line) => line.includes("Read one.txt"))
   assert(call >= 0)
   await click(call)
   await host.frame()
   assert.match(lines().join("\n"), /FIRST TOOL BODY/)
+  const nativeCall = lines().findIndex((line) => line.includes("read one.txt"))
+  assert(nativeCall >= 0)
+  await click(nativeCall)
+  assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY/)
+  await click(lines().findIndex((line) => line.includes("> Read one.txt")))
+  assert.match(await host.frame(), /FIRST TOOL BODY/)
 
   await host.key("\x1bg")
+  /* eslint-disable no-await-in-loop -- Native focus follows each rendered key event. */
+  for (let move = 0; move < 3; move++) {
+    await host.frame()
+    if (host.screenLines()[header]?.includes(lightBg)) break
+    await host.key("\x1b[A")
+  }
+  /* eslint-enable no-await-in-loop */
+  assert(host.screenLines()[header]?.includes(lightBg))
   let submitted = 0
   const input = new Input({ prompt: "Overlay" })
   input.onSubmit = () => {
@@ -888,9 +902,9 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   overlay.hide()
   await host.key("\r")
   await host.frame()
-  assert.match(lines()[header] ?? "", /^▶ Read files/)
+  assert.match(lines()[header] ?? "", /^> Read files/)
   assert(host.screenLines()[header]?.includes(lightBg))
-  assert.doesNotMatch(lines().join("\n"), /read one\.txt|FIRST TOOL BODY/)
+  assert.doesNotMatch(lines().join("\n"), /Read one\.txt|FIRST TOOL BODY/)
   await host.key("\x1b")
   await host.type("/settings")
   await host.key("\r")
@@ -898,7 +912,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await host.key("\r")
   await host.key("\x1b")
   await host.frame()
-  assert.match(lines()[header] ?? "", /^ ▶ Read files/)
+  assert.match(lines()[header] ?? "", /^ > Read files/)
   assert.match(
     lines().find((line) => line.includes("Worked")) ?? "",
     /^ Worked for \d+m \d+s ▼/,
@@ -906,8 +920,8 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await click(header)
   await host.frame()
   assert.match(
-    lines().find((line) => line.includes("read one.txt")) ?? "",
-    /^ read one\.txt/,
+    lines().find((line) => line.includes("Read one.txt")) ?? "",
+    /^ ▼ Read one\.txt/,
   )
 })
 
@@ -1069,20 +1083,32 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /CUSTOM CALL/)
-  assert.match(screen(), /CUSTOM RESULT/)
-  assert.match(screen(), /Called a tool, read files/)
+  assert.match(screen(), /> Read missing\.txt/)
+  assert.match(screen(), /> Called mystery/)
+  assert.doesNotMatch(screen(), /ENOENT|CUSTOM CALL|CUSTOM RESULT/)
+  await host.key("\x1b[B")
+  await host.key("\r")
+  assert.match(await host.frame(), /ENOENT/)
+  await host.key("\x1b[B")
+  await host.key("\r")
+  const opened = await host.frame()
+  assert.match(opened, /"path":/)
+  assert.match(opened, /custom/)
+  assert.doesNotMatch(opened, /CUSTOM CALL|CUSTOM RESULT/)
   assert(result)
   assert(invalidateResult)
   assert.equal(resultPresenters, 1)
   result.setText("CUSTOM LATE RESULT")
   invalidateResult()
-  await host.frame()
-  assert.match(screen(), /CUSTOM LATE RESULT/)
+  assert.doesNotMatch(await host.frame(), /CUSTOM LATE RESULT/)
   assert.match(screen(), /▼ Called a tool, read files/)
   await host.key("\x1b[A")
+  await host.key("\x1b[A")
   await host.key("\r")
-  assert.doesNotMatch(await host.frame(), /CUSTOM LATE RESULT|CUSTOM CALL/)
+  assert.doesNotMatch(
+    await host.frame(),
+    /ENOENT|CUSTOM LATE RESULT|CUSTOM CALL/,
+  )
   assert.match(screen(), /Received\./)
   await host.key("\x1b")
   host.queueResponse(
@@ -1115,13 +1141,10 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   await host.key("\r")
   await host.key("\x1b")
   const later = await host.frame()
-  assert.match(later, /CUSTOM UPDATE DURING LATER REQUEST/)
+  assert.doesNotMatch(later, /CUSTOM CALL|CUSTOM UPDATE DURING LATER REQUEST/)
   assert.match(later, /▼ Called a tool, read files/)
-  assert.equal((later.match(/CUSTOM CALL/g) ?? []).length, 1)
-  assert.equal(
-    (later.match(/CUSTOM UPDATE DURING LATER REQUEST/g) ?? []).length,
-    1,
-  )
+  assert.match(later, /ENOENT/)
+  assert.match(later, /"path":/)
   assert.equal(resultPresenters, 1)
 })
 

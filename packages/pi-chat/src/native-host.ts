@@ -551,6 +551,10 @@ export class NativeChatHost {
     Occurrence,
     Map<string, ActivityItemDisclosure>
   >()
+  private readonly disclosureChoices = new WeakMap<
+    Entry,
+    Map<number, { group: boolean; items: Map<string, boolean> }>
+  >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
   private visibleDisclosures: (
@@ -781,7 +785,11 @@ export class NativeChatHost {
       }
       let group = this.renderGroups.get(first)
       if (!group) {
-        group = { items, expanded: false, viewport: new InlineViewport() }
+        group = {
+          items,
+          expanded: this.retainedDisclosures(first)?.group ?? false,
+          viewport: new InlineViewport(),
+        }
         group.header = new RenderGroupHeader(this, group)
         this.renderGroups.set(first, group)
       }
@@ -1063,6 +1071,9 @@ export class NativeChatHost {
           occurrence.contentIndex = source.contentIndex
         occurrence.sourceCall = source
         disclosure = new ActivityItemDisclosure(this, occurrence, item)
+        disclosure.setExpanded(
+          this.retainedDisclosures(source)?.items.get(item.id) ?? false,
+        )
         occurrence.component = disclosure
         disclosures.set(item.id, disclosure)
         this.byComponent.set(disclosure, occurrence)
@@ -1080,6 +1091,24 @@ export class NativeChatHost {
         tool: true,
       }
     })
+  }
+
+  private retainedDisclosures(source: Occurrence) {
+    return source.entry && source.contentIndex !== undefined
+      ? this.disclosureChoices.get(source.entry)?.get(source.contentIndex)
+      : undefined
+  }
+
+  private rememberDisclosures() {
+    for (const [source, items] of this.activityDisclosures) {
+      if (!source.entry || source.contentIndex === undefined) continue
+      const choices = this.disclosureChoices.get(source.entry) ?? new Map()
+      choices.set(source.contentIndex, {
+        group: this.renderGroups.get(source)?.expanded ?? false,
+        items: new Map([...items].map(([id, item]) => [id, item.expanded])),
+      })
+      this.disclosureChoices.set(source.entry, choices)
+    }
   }
 
   private orderedChatRows(components: Component[]): ChatRow[] {
@@ -1602,7 +1631,8 @@ export class NativeChatHost {
 
   private searchLeaf(hit: SourceHit<Occurrence>): Leaf | undefined {
     for (
-      let owner: Occurrence | undefined = hit.field.owner;
+      let owner: Occurrence | undefined =
+        this.searchDisclosure(hit)?.occurrence ?? hit.field.owner;
       owner;
       owner = owner.parent
     ) {
@@ -1612,6 +1642,27 @@ export class NativeChatHost {
       if (leaf) return leaf
     }
     return undefined
+  }
+
+  private searchDisclosure(hit: SourceHit<Occurrence>) {
+    const owner = hit.field.owner
+    if (owner.component instanceof ActivityItemDisclosure)
+      return owner.component
+    const items = [...(this.activityDisclosures.get(owner)?.values() ?? [])]
+    if (items.length < 2) return items[0]
+    const fields = items.map((item) => ({
+      owner: item.occurrence,
+      key: "activity-payload",
+      sourceRef: {},
+      source: JSON.stringify({
+        args: item.item.body.args,
+        content: item.item.body.result?.content,
+      }),
+      markdown: false,
+      tool: true,
+    }))
+    const matched = this.sourceSearch.find(fields, hit.query)[0]?.field.owner
+    return items.find((item) => item.occurrence === matched) ?? items[0]
   }
 
   private searchSegments(hit: SourceHit<Occurrence>, leaf: Leaf) {
@@ -1683,7 +1734,7 @@ export class NativeChatHost {
             call.id,
             call.arguments,
             options,
-            this.host.getRegisteredToolDefinition(call.name),
+            undefined,
             this.host.ui,
             this.host.sessionManager.getCwd(),
           )
@@ -1730,28 +1781,27 @@ export class NativeChatHost {
       agentActivity.keepOpen = true
       changed = true
     }
-    if (
-      hit.field.tool &&
-      owner.component &&
-      "setExpanded" in owner.component &&
-      "expanded" in owner.component &&
-      !owner.component.expanded
-    ) {
-      ;(owner.component as NativeToolPresenter).setExpanded(true)
+    if (changed) this.layoutChat()
+    const disclosure = hit.field.tool ? this.searchDisclosure(hit) : undefined
+    if (disclosure && !disclosure.expanded) {
+      disclosure.setExpanded(true)
       changed = true
     }
-    if (changed) this.layoutChat()
     for (const group of this.renderGroups.values()) {
       if (
-        group.items.some((item) => item.occurrence === owner) &&
+        group.items.some(
+          (item) =>
+            item.occurrence === disclosure?.occurrence ||
+            item.sourceCall === owner,
+        ) &&
         !group.expanded
       ) {
         group.expanded = true
-        this.layoutChat()
         changed = true
         break
       }
     }
+    if (changed) this.layoutChat()
     const leaf = this.searchLeaf(hit)
     if (!leaf) return changed
     const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0
@@ -2345,8 +2395,8 @@ export class NativeChatHost {
       for (const component of components) {
         if (this.assistantMethods.has(component as NativeAssistant))
           this.releaseAssistant(component as NativeAssistant)
-        this.byComponent.delete(component)
         this.activityDisclosures.delete(this.byComponent.get(component)!)
+        this.byComponent.delete(component)
       }
     }
     this.historical.clear()
@@ -2778,6 +2828,7 @@ export class NativeChatHost {
           const result = original.apply(host.chatContainer, args)
           if (!this.active) return result
           if (name === "clear") {
+            this.rememberDisclosures()
             this.clearHistorical()
             for (const component of this.assistantMethods.keys())
               this.releaseAssistant(component)

@@ -73,14 +73,11 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
     typeof details["patch"] === "string"
   ) {
     const lines = details["patch"].split("\n")
-    item.changes = {
-      added: lines.filter(
-        (line) => line.startsWith("+") && !line.startsWith("+++"),
-      ).length,
-      removed: lines.filter(
-        (line) => line.startsWith("-") && !line.startsWith("---"),
-      ).length,
-    }
+    if (lines[0]?.startsWith("--- ") && lines[1]?.startsWith("+++ "))
+      item.changes = {
+        added: lines.slice(2).filter((line) => line.startsWith("+")).length,
+        removed: lines.slice(2).filter((line) => line.startsWith("-")).length,
+      }
   }
   return [item]
 }
