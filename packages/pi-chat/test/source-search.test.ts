@@ -901,14 +901,14 @@ test("Find restores separate retained calls with reused IDs and their own result
   assert.match(await host.frame(), /1\/1/)
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
-    /"path": "first\.txt"[\s\S]*first-needle output/,
+    /path: first\.txt[\s\S]*first-needle output/,
   )
   await host.key("\x1b")
   await host.key("\x06")
   await host.type("second-needle")
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /"path": "second\.txt"[\s\S]*second-needle output/)
+  assert.match(screen, /path: second\.txt[\s\S]*second-needle output/)
   assert.match(screen, /▼ Called a tool/)
   assert.doesNotMatch(screen, /Called tools/)
   await host.key("\x1b")

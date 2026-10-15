@@ -436,7 +436,8 @@ class ActivityItemDisclosure extends Container {
           this.item.id,
           this.item.body.args,
           options,
-          this.item.body.renderers?.(),
+          // Without a definition, Pi's raw renderer ignores output expansion.
+          this.item.body.renderers?.() ?? {},
           this.adapter.host.ui,
           this.item.body.cwd,
         )

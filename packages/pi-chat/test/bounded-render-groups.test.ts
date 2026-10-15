@@ -556,7 +556,7 @@ test("native images crop once against the conversation and retain their identity
             assert(entry.data)
             return new Text(
               Array.from(
-                { length: entry.data.name === "prefix" ? 7 : 8 },
+                { length: entry.data.name === "prefix" ? 13 : 8 },
                 (_, n) => `${entry.data!.name}-${n}`,
               ).join("\n"),
               0,
