@@ -37,6 +37,10 @@ The assistant's answer within a turn, presented separately from its preceding ag
 **Chat view**:
 The primary display of conversation messages and current activity alongside the composer.
 
+**Conversation gutter**:
+The side padding beside conversation content that belongs to the conversation's scrolling surface.
+_Avoid_: Scrollbar gutter, when referring to this area
+
 **Transcript**:
 A separate overlay for reading and navigating conversation history over the chat view.
 
