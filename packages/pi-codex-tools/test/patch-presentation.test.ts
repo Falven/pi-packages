@@ -83,8 +83,13 @@ test("failed patch cards retain completed changes without claiming unexecuted ch
   const screen = stripVTControlCharacters(host.screenLines().join("\n"))
   assert.match(screen, /Patch · failed/)
   assert.match(screen, /Added: .*parent-file/)
+  assert.match(screen, /Added \(failed\): .*child\.txt/)
+  assert.match(screen, /Added \(unattempted\): .*never\.txt/)
   assert.match(screen, /Failed to write file .*parent-file\/child\.txt/)
-  assert.doesNotMatch(screen, /Added: .*child|never\.txt|Wall time|Exit code:/)
+  assert.doesNotMatch(
+    screen,
+    /Added: .*child|Added: .*never|Wall time|Exit code:/,
+  )
   assert.equal(
     await readFile(join(host.directory, "parent-file"), "utf8"),
     "first\n",
@@ -257,21 +262,36 @@ test("a self move reports its actual write and deletion rather than an existing 
   await host.key("\x0f")
   await setTimeout(60)
   const screen = stripVTControlCharacters(host.screenLines().join("\n"))
-  assert.match(screen, /Updated: .*same\.txt/)
   assert.match(screen, /Deleted: .*same\.txt/)
-  assert.doesNotMatch(screen, /Moved:/)
+  assert.doesNotMatch(screen, /Updated:|Moved:/)
   await assert.rejects(readFile(join(host.directory, "same.txt")), {
     code: "ENOENT",
   })
   assert.match(output(host), /\n\{\}$/)
 })
 
-test("large patches retain bounded file previews with an explicit omission", async (t) => {
+test("large patches retain every file fact with bounded bodies", async (t) => {
+  let details:
+    | {
+        patchChanges?: {
+          id: string
+          output?: string
+          outputOmitted?: boolean
+        }[]
+      }
+    | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
     rows: 100,
     columns: 200,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          details = event.details as typeof details
+        return undefined
+      })
+    },
   })
   const patch = `*** Begin Patch\n${Array.from({ length: 18 }, (_, index) => `*** Add File: file-${index}.txt\n+${index}`).join("\n")}\n*** End Patch`
   host.queueResponse(
@@ -282,9 +302,14 @@ test("large patches retain bounded file previews with an explicit omission", asy
   await host.key("\x0f")
   await setTimeout(60)
   const screen = stripVTControlCharacters(host.screenLines().join("\n"))
-  assert.match(screen, /earlier file changes omitted/)
+  assert.match(screen, /earlier file change bodies omitted/)
   assert.match(screen, /Added: .*file-17\.txt/)
-  assert.doesNotMatch(screen, /Added: .*file-0\.txt/)
+  assert.match(screen, /Added: .*file-0\.txt/)
+  assert.equal(details?.patchChanges?.length, 18)
+  assert.equal(details.patchChanges[0]?.id, "0")
+  assert.equal(details.patchChanges[0]?.output, undefined)
+  assert.equal(details.patchChanges[0]?.outputOmitted, true)
+  assert.equal(details.patchChanges[17]?.output, "+17\n")
   assert.equal(
     await readFile(join(host.directory, "file-0.txt"), "utf8"),
     "0\n",

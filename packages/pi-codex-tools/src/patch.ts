@@ -246,6 +246,88 @@ function update(
   return result.map((line) => line.text + (line.ending || ending)).join("")
 }
 
+const diffLine = (prefix: string, text: string) =>
+  `${prefix}${text}${text.endsWith("\n") ? "" : "\n\\ No newline at end of file\n"}`
+
+function fileDiff(
+  before: string,
+  after: string,
+): {
+  added?: number
+  removed?: number
+  output?: string
+} {
+  const oldLines = before.match(/[^\n]*\n|[^\n]+$/g) ?? []
+  const newLines = after.match(/[^\n]*\n|[^\n]+$/g) ?? []
+  let start = 0
+  while (oldLines[start] === newLines[start] && start < oldLines.length) start++
+  let oldEnd = oldLines.length
+  let newEnd = newLines.length
+  while (
+    oldEnd > start &&
+    newEnd > start &&
+    oldLines[oldEnd - 1] === newLines[newEnd - 1]
+  ) {
+    oldEnd--
+    newEnd--
+  }
+  const old = oldLines.slice(start, oldEnd)
+  const next = newLines.slice(start, newEnd)
+  if (!old.length || !next.length)
+    return {
+      added: next.length,
+      removed: old.length,
+      output:
+        old.map((line) => diffLine("-", line)).join("") +
+        next.map((line) => diffLine("+", line)).join(""),
+    }
+  if (old.length * next.length > 100_000 || old.length + next.length > 10_000)
+    return {}
+  const common = Array.from(
+    { length: old.length + 1 },
+    () => new Uint32Array(next.length + 1),
+  )
+  for (let i = old.length - 1; i >= 0; i--)
+    for (let j = next.length - 1; j >= 0; j--)
+      common[i]![j] =
+        old[i] === next[j]
+          ? common[i + 1]![j + 1]! + 1
+          : Math.max(common[i + 1]![j]!, common[i]![j + 1]!)
+  let i = 0
+  let j = 0
+  let added = 0
+  let removed = 0
+  const output: string[] = []
+  while (i < old.length || j < next.length) {
+    if (i < old.length && j < next.length && old[i] === next[j]) {
+      i++
+      j++
+    } else if (
+      i < old.length &&
+      (j === next.length || common[i + 1]![j]! >= common[i]![j + 1]!)
+    ) {
+      output.push(diffLine("-", old[i++]!))
+      removed++
+    } else {
+      output.push(diffLine("+", next[j++]!))
+      added++
+    }
+  }
+  return { added, removed, output: output.join("") }
+}
+
+async function priorContent(path: string): Promise<string | null | undefined> {
+  try {
+    return decode(await readFile(path))
+  } catch (error) {
+    return ["ENOENT", "ENOTDIR"].includes(
+      (error as NodeJS.ErrnoException).code ?? "",
+    )
+      ? null
+      : undefined
+  }
+}
+
 async function coordinated<T>(
   paths: string[],
   action: () => Promise<T>,
@@ -290,18 +372,43 @@ export function createPatch(
     async execute(_id, args, signal, _onUpdate, ctx) {
       const patchChanges: PatchChange[] = []
       let patchOmitted = false
-      const changed = (change: PatchChange) => {
-        if (patchChanges.length === 16) {
-          patchChanges.shift()
+      const bodies: PatchChange[] = []
+      const body = (change: PatchChange, text: string) => {
+        if (!text) return
+        if (bodies.length === 16) {
+          const earlier = bodies.shift()!
+          delete earlier.output
+          earlier.outputOmitted = true
           patchOmitted = true
         }
-        patchChanges.push({
-          ...change,
-          path: boundedPreview(change.path),
-          ...(change.destination
-            ? { destination: boundedPreview(change.destination) }
-            : {}),
-        })
+        change.output = boundedPreview(text)
+        if (change.output !== text) change.outputOmitted = true
+        bodies.push(change)
+      }
+      const changed = (
+        change: PatchChange,
+        before: string | null | undefined,
+        after: string | null,
+      ) => {
+        change.status = "completed"
+        delete change.added
+        delete change.removed
+        delete change.output
+        delete change.outputOmitted
+        const previous = bodies.indexOf(change)
+        if (previous >= 0) bodies.splice(previous, 1)
+        if (before === undefined) {
+          if (after !== null) body(change, `Written content:\n${after}`)
+          return
+        }
+        const diff = fileDiff(before ?? "", after ?? "")
+        if (diff.added !== undefined) change.added = diff.added
+        if (diff.removed !== undefined) change.removed = diff.removed
+        if (diff.output !== undefined) body(change, diff.output)
+        else {
+          change.outputOmitted = true
+          patchOmitted = true
+        }
       }
       const details = (text: string): PatchDetails => ({
         contentHash: contentHash([{ type: "text", text }]),
@@ -316,6 +423,23 @@ export function createPatch(
             "File patches are not available in the active tool scope",
           )
         const operations = parse(args.input, ctx.cwd)
+        const records = operations.map((operation, index): PatchChange => ({
+          id: String(index),
+          action:
+            operation.kind === "add"
+              ? "Added"
+              : operation.kind === "delete"
+                ? "Deleted"
+                : operation.destination
+                  ? "Moved"
+                  : "Updated",
+          path: boundedPreview(operation.path),
+          ...(operation.kind === "update" && operation.destination
+            ? { destination: boundedPreview(operation.destination) }
+            : {}),
+          status: "unattempted",
+        }))
+        patchChanges.push(...records)
         await coordinated(
           operations.flatMap((operation) =>
             operation.kind === "update" && operation.destination
@@ -323,28 +447,42 @@ export function createPatch(
               : [operation.path],
           ),
           async () => {
-            const plans: { operation: Operation; content?: string }[] = []
-            for (const operation of operations) {
-              abort.throwIfAborted()
-              if (operation.kind === "add")
-                plans.push({ operation, content: operation.content })
-              else {
-                let content: string
-                try {
-                  content = decode(await readFile(operation.path))
-                } catch (error) {
-                  throw new Error(
-                    `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error)}`,
-                    { cause: error },
-                  )
-                }
+            const plans: {
+              operation: Operation
+              content?: string
+              before?: string
+            }[] = []
+            for (const [index, operation] of operations.entries()) {
+              try {
                 abort.throwIfAborted()
-                plans.push({
-                  operation,
-                  ...(operation.kind === "update"
-                    ? { content: update(content, operation) }
-                    : {}),
-                })
+                if (operation.kind === "add")
+                  plans.push({ operation, content: operation.content })
+                else {
+                  let before: string
+                  try {
+                    before = decode(await readFile(operation.path))
+                  } catch (error) {
+                    throw new Error(
+                      `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error)}`,
+                      { cause: error },
+                    )
+                  }
+                  abort.throwIfAborted()
+                  plans.push({
+                    operation,
+                    before,
+                    ...(operation.kind === "update"
+                      ? { content: update(before, operation) }
+                      : {}),
+                  })
+                }
+              } catch (error) {
+                records[index]!.status = "failed"
+                body(
+                  records[index]!,
+                  error instanceof Error ? error.message : String(error),
+                )
+                throw error
               }
             }
             const started = performance.now()
@@ -352,25 +490,44 @@ export function createPatch(
               new Error(
                 `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}`,
               )
-            for (const { operation, content } of plans) {
+            for (const [
+              index,
+              { operation, content, before },
+            ] of plans.entries()) {
               abort.throwIfAborted()
+              const change = records[index]!
+              let destinationBefore: string | null | undefined
               if (operation.kind !== "delete") {
                 const path =
                   operation.kind === "update"
                     ? (operation.destination ?? operation.path)
                     : operation.path
+                destinationBefore =
+                  operation.kind === "update" && !operation.destination
+                    ? before
+                    : await priorContent(path)
                 try {
                   await mkdir(dirname(path), { recursive: true })
                   abort.throwIfAborted()
                   await writeFile(path, content!)
-                  changed({
-                    action: operation.kind === "add" ? "Added" : "Updated",
-                    path,
-                  })
                 } catch {
                   abort.throwIfAborted()
-                  throw failure(`Failed to write file ${path}`)
+                  change.status = "failed"
+                  const reason = `Failed to write file ${path}`
+                  body(change, reason)
+                  throw failure(reason)
                 }
+                if (operation.kind === "update" && operation.destination) {
+                  change.action =
+                    destinationBefore === null ? "Added" : "Updated"
+                  change.path = boundedPreview(path)
+                  delete change.destination
+                } else if (
+                  operation.kind === "add" &&
+                  destinationBefore !== null
+                )
+                  change.action = "Updated"
+                changed(change, destinationBefore, content!)
                 abort.throwIfAborted()
               }
               if (
@@ -379,22 +536,55 @@ export function createPatch(
               ) {
                 try {
                   await unlink(operation.path)
-                  if (
-                    operation.kind === "update" &&
-                    operation.destination &&
-                    operation.destination !== operation.path
-                  ) {
-                    patchChanges.pop()
-                    changed({
-                      action: "Moved",
-                      path: operation.path,
-                      destination: operation.destination,
-                    })
-                  } else changed({ action: "Deleted", path: operation.path })
                 } catch {
                   abort.throwIfAborted()
-                  throw failure(`Failed to delete file ${operation.path}`)
+                  const reason = `Failed to delete file ${operation.path}`
+                  if (operation.kind === "update" && operation.destination) {
+                    const source: PatchChange = {
+                      id: `${index}:source`,
+                      action: "Deleted",
+                      path: boundedPreview(operation.path),
+                      status: "failed",
+                    }
+                    patchChanges.splice(
+                      patchChanges.indexOf(change) + 1,
+                      0,
+                      source,
+                    )
+                    body(source, reason)
+                  } else {
+                    change.status = "failed"
+                    body(change, reason)
+                  }
+                  throw failure(reason)
                 }
+                if (operation.kind === "update" && operation.destination) {
+                  if (operation.destination !== operation.path) {
+                    change.action = "Moved"
+                    change.path = boundedPreview(operation.path)
+                    change.destination = boundedPreview(operation.destination)
+                    changed(change, before, content!)
+                    if (destinationBefore !== null) {
+                      const overwritten: PatchChange = {
+                        id: `${index}:destination`,
+                        action: "Updated",
+                        path: boundedPreview(operation.destination),
+                        status: "unattempted",
+                      }
+                      patchChanges.splice(
+                        patchChanges.indexOf(change) + 1,
+                        0,
+                        overwritten,
+                      )
+                      changed(overwritten, destinationBefore, content!)
+                    }
+                  } else {
+                    change.action = "Deleted"
+                    change.path = boundedPreview(operation.path)
+                    delete change.destination
+                    changed(change, before, null)
+                  }
+                } else changed(change, before, null)
                 abort.throwIfAborted()
               }
             }

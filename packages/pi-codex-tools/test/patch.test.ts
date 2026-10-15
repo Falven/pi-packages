@@ -20,9 +20,17 @@ import {
 } from "./fixtures/model-loop.ts"
 
 test("a raw patch creates a file and returns its result in the next request", async (t) => {
+  let changes: unknown
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
   })
   const patch =
     "*** Begin Patch\n*** Add File: nested/new.txt\n+alpha\n+beta\n*** End Patch"
@@ -59,12 +67,33 @@ test("a raw patch creates a file and returns its result in the next request", as
     ),
     false,
   )
+  assert.deepEqual(changes, [
+    {
+      id: "0",
+      action: "Added",
+      path: join(host.directory, "nested/new.txt"),
+      status: "completed",
+      added: 2,
+      removed: 0,
+      output: "+alpha\n+beta\n",
+    },
+  ])
 })
 
 test("patches update, move over an existing file, and delete with the observed file modes", async (t) => {
+  const changes: unknown[] = []
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes.push(
+            (event.details as { patchChanges?: unknown }).patchChanges,
+          )
+        return undefined
+      })
+    },
   })
   const source = join(host.directory, "original.txt")
   const destination = join(host.directory, "destination.txt")
@@ -93,6 +122,61 @@ test("patches update, move over an existing file, and delete with the observed f
   assert.equal((await stat(destination)).mode & 0o777, 0o600)
   await assert.rejects(readFile(source), { code: "ENOENT" })
   await assert.rejects(readFile(removed), { code: "ENOENT" })
+  assert.deepEqual(
+    (
+      changes as {
+        action: string
+        status: string
+        path: string
+        added?: number
+        removed?: number
+      }[][]
+    ).map((patch) =>
+      patch.map(({ action, status, path, added, removed: removedCount }) => ({
+        action,
+        status,
+        path,
+        added,
+        removed: removedCount,
+      })),
+    ),
+    [
+      [
+        {
+          action: "Updated",
+          status: "completed",
+          path: source,
+          added: 1,
+          removed: 1,
+        },
+      ],
+      [
+        {
+          action: "Moved",
+          status: "completed",
+          path: source,
+          added: 1,
+          removed: 1,
+        },
+        {
+          action: "Updated",
+          status: "completed",
+          path: destination,
+          added: 3,
+          removed: 1,
+        },
+      ],
+      [
+        {
+          action: "Deleted",
+          status: "completed",
+          path: removed,
+          added: 0,
+          removed: 1,
+        },
+      ],
+    ],
+  )
 })
 
 test("patch matching follows the measured priority and preserves unrelated bytes", async (t) => {
@@ -347,9 +431,17 @@ test("validation failures return measured string errors before any file is chang
 })
 
 test("a later write failure keeps completed changes and reports the measured failure", async (t) => {
+  let changes: unknown
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
   })
   const first = join(host.directory, "file-as-parent")
   const failed = join(first, "child.txt")
@@ -370,12 +462,30 @@ test("a later write failure keeps completed changes and reports the measured fai
   assert.equal(await readFile(first, "utf8"), "created\n")
   await assert.rejects(readFile(failed), { code: "ENOTDIR" })
   await assert.rejects(readFile(later), { code: "ENOENT" })
+  assert.deepEqual(
+    (changes as { id: string; status: string; added?: number }[]).map(
+      ({ id, status, added }) => ({ id, status, added }),
+    ),
+    [
+      { id: "0", status: "completed", added: 1 },
+      { id: "1", status: "failed", added: undefined },
+      { id: "2", status: "unattempted", added: undefined },
+    ],
+  )
 })
 
 test("an empty Add creates a zero-byte file and overwriting retains its existing mode", async (t) => {
+  let changes: unknown
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
   })
   const path = join(host.directory, "file.txt")
   await writeFile(path, "previous\n", { mode: 0o600 })
@@ -388,6 +498,12 @@ test("an empty Add creates a zero-byte file and overwriting retains its existing
   assert.match(output(host), /\n\{\}$/)
   assert.equal((await readFile(path)).length, 0)
   assert.equal((await stat(path)).mode & 0o777, 0o600)
+  assert.deepEqual(
+    (changes as { action: string; added: number; removed: number }[]).map(
+      ({ action, added, removed }) => ({ action, added, removed }),
+    ),
+    [{ action: "Updated", added: 0, removed: 1 }],
+  )
 })
 
 test("patch writes honor the file's operating-system permissions", async (t) => {
