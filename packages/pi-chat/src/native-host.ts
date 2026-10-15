@@ -244,6 +244,8 @@ class RawLeaf extends Container {
     readonly component: Component,
     readonly rows: string[],
     readonly left: number,
+    readonly outputPad: number,
+    readonly contentWidth: number,
   ) {
     super()
     this.children.push(component)
@@ -258,7 +260,11 @@ class RawLeaf extends Container {
   override handleMouse(
     event: Parameters<NonNullable<Component["handleMouse"]>>[0],
   ) {
-    if (event.x < this.left) return
+    if (
+      event.x < Math.max(this.left, this.outputPad) ||
+      event.x >= this.contentWidth - this.outputPad
+    )
+      return
     return dispatchMouseEvent(this.component, {
       ...event,
       x: event.x - this.left,
@@ -428,6 +434,21 @@ class ActivityItemDisclosure extends Container {
       this.children.push(this.body)
     }
     return super.render(width)
+  }
+
+  contentPadding(row: number) {
+    if (row === 0) return this.adapter.host.outputPad
+    // Native tool cells can keep an inset distinct from the current setting.
+    const body = this.body as unknown as {
+      children: Component[]
+      contentBox: Component & { paddingX: number }
+      contentText: { paddingX: number }
+      contentTextRegion: Component
+    }
+    if (body.children.includes(body.contentBox)) return body.contentBox.paddingX
+    if (body.children.includes(body.contentTextRegion))
+      return body.contentText.paddingX
+    return 0
   }
 
   syncSettings() {
@@ -972,7 +993,13 @@ export class NativeChatHost {
       const sourceStart = Math.max(0, top - leaf.top)
       const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.top)
       if (sourceEnd <= sourceStart) continue
-      const raw = new RawLeaf(leaf.component, leaf.rows, leaf.left)
+      const raw = new RawLeaf(
+        leaf.component,
+        leaf.rows,
+        leaf.left,
+        this.host.outputPad,
+        contentWidth,
+      )
       const window = new ScrollView(raw, {
         follow: "none",
         scrollbar: "hidden",
@@ -1945,15 +1972,18 @@ export class NativeChatHost {
           if (segment.row < interval.start || segment.row >= interval.end)
             continue
           const row = box.rect.y + segment.row - interval.window.scrollTop
+          const content = this.contentBounds(leaf, segment.row)
           const start = Math.max(
-            box.rect.x,
+            box.rect.x + content.start,
             box.clip.x,
             box.rect.x + segment.startCol,
           )
           const end = Math.min(
-            box.rect.x + box.rect.width,
+            box.rect.x + content.end,
             box.clip.x + box.clip.width,
             box.rect.x + segment.endCol,
+            renderer.terminal.columns -
+              (this.transcript.isScrollbarVisible ? 1 : 0),
           )
           if (
             row < box.clip.y ||
@@ -2006,6 +2036,21 @@ export class NativeChatHost {
     return painted
   }
 
+  private contentBounds(leaf: Leaf, row: number) {
+    const { component, occurrence } = leaf
+    const padding =
+      component instanceof ActivityItemDisclosure
+        ? component.contentPadding(row)
+        : component instanceof UserMessageComponent ||
+            component instanceof RenderGroupHeader ||
+            component instanceof AgentActivityHeader ||
+            occurrence?.message?.role === "assistant"
+          ? this.host.outputPad
+          : 0
+    const start = Math.min(this.layoutWidth, leaf.left + padding)
+    return { start, end: Math.max(start, this.layoutWidth - padding) }
+  }
+
   private pointAt(x: number, y: number): SelectionPoint {
     const visible = this.leaves.flatMap((leaf) => {
       const interval = this.visibleInterval(leaf)
@@ -2023,9 +2068,16 @@ export class NativeChatHost {
         )
       : 0
     const row = leaf ? leaf.start + localRow : 0
+    const bounds = leaf ? this.contentBounds(leaf, localRow) : undefined
     return {
       row,
-      col: Math.max(0, Math.min(this.layoutWidth - 1, x)),
+      col: Math.max(
+        0,
+        Math.min(
+          this.layoutWidth - 1,
+          bounds ? Math.max(bounds.start, Math.min(bounds.end - 1, x)) : x,
+        ),
+      ),
       scrollView: this.transcript,
       ...(leaf
         ? {
@@ -2062,10 +2114,12 @@ export class NativeChatHost {
       for (let row = first; row <= last; row++) {
         const line = leaf.rows[row - leaf.start]!
         const range = columns.call(renderer, line, row, bounds)
-        const start = Math.max(leaf.left, range.start)
+        const content = this.contentBounds(leaf, row - leaf.start)
+        const start = Math.max(content.start, range.start)
+        const end = Math.min(content.end, range.end)
         lines.push(
           stripTerminalSequences(
-            sliceByColumn(line, start, Math.max(0, range.end - start), true),
+            sliceByColumn(line, start, Math.max(0, end - start), true),
           ).trimEnd(),
         )
       }
@@ -2304,21 +2358,30 @@ export class NativeChatHost {
               layout,
             ) as string[]
             const width = renderer.terminal.columns
-            const contentWidth = this.transcript.getContentWidth(width)
             highlighted.splice(
               interval.top,
               rows.length,
-              ...rows.map((line, row) =>
-                contentWidth < width
-                  ? compositeTuiLine(
-                      screen[interval.top + row] ?? "",
-                      line,
-                      0,
-                      contentWidth,
-                      width,
-                    )
-                  : line,
-              ),
+              ...rows.map((line, row) => {
+                if (isImageLine(line)) return line
+                const { start, end } = this.contentBounds(
+                  interval.leaf,
+                  interval.start + row,
+                )
+                const length = Math.max(
+                  0,
+                  Math.min(
+                    end,
+                    width - (this.transcript.isScrollbarVisible ? 1 : 0),
+                  ) - start,
+                )
+                return compositeTuiLine(
+                  screen[interval.top + row] ?? "",
+                  sliceByColumn(line, start, length, true),
+                  start,
+                  length,
+                  width,
+                )
+              }),
             )
           }
           return highlighted

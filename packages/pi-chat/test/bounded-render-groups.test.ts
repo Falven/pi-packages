@@ -50,8 +50,10 @@ async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
       /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
     )
   assert(row >= 0)
-  await host.key(`\x1b[<0;2;${row + 1}M`)
-  await host.key(`\x1b[<0;2;${row + 1}m`)
+  const column =
+    stripTerminalSequences(host.screenLines()[row]!).indexOf("Worked") + 1
+  await host.key(`\x1b[<0;${column};${row + 1}M`)
+  await host.key(`\x1b[<0;${column};${row + 1}m`)
   await host.key("\x1b")
 }
 
@@ -147,11 +149,14 @@ test("selection copies expanded native output across offscreen conversation rows
     extensionPaths: [chat],
     rows: 44,
     keybindings: { "tui.altScreen.top": "home" },
-    settings: { fullscreenCopyOnSelect: false },
+    settings: { fullscreenCopyOnSelect: false, outputPad: 1 },
   })
   await writeFile(
     join(host.directory, "one.txt"),
-    Array.from({ length: 20 }, (_, n) => `first-row-${n} 界`).join("\n"),
+    Array.from(
+      { length: 20 },
+      (_, n) => `${n === 1 ? "  " : ""}first-row-${n} 界`,
+    ).join("\n"),
   )
   await writeFile(
     join(host.directory, "two.txt"),
@@ -178,11 +183,15 @@ test("selection copies expanded native output across offscreen conversation rows
   const last = lines.findIndex((line) => line.includes("Received."))
   assert(last >= 0, lines.join("\n"))
   assert(!lines.some((line) => line.includes("Copy expanded")))
-  await host.key(`\x1b[<32;10;${last + 1}M`)
-  await host.key(`\x1b[<0;10;${last + 1}m`)
+  const lastColumn = lines[last]!.indexOf("Received.") + "Received.".length
+  await host.key(`\x1b[<32;${lastColumn};${last + 1}M`)
+  await host.key(`\x1b[<0;${lastColumn};${last + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
-  assert.match(copied, /first-row-0 界/)
+  assert.match(copied, /^first-row-0 界$/m)
+  assert.match(copied, /^  first-row-1 界$/m)
+  assert.match(copied, /^▼ Read files$/m)
+  assert.match(copied, /^Received\.$/m)
   assert.match(copied, /first-row-19 界/)
   assert.match(copied, /second-row-0/)
   assert.match(copied, /second-row-19/)
@@ -215,8 +224,8 @@ test("selection copies expanded native output across offscreen conversation rows
   )
   copied = ""
   await host.key(`\x1b[<0;${column};${collapsedFirst + 1}M`)
-  await host.key(`\x1b[<32;10;${collapsedLast + 1}M`)
-  await host.key(`\x1b[<0;10;${collapsedLast + 1}m`)
+  await host.key(`\x1b[<32;${lastColumn};${collapsedLast + 1}M`)
+  await host.key(`\x1b[<0;${lastColumn};${collapsedLast + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
   assert.match(copied, /Read files/)

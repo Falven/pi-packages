@@ -160,7 +160,7 @@ test("native Markdown transforms still apply without changing stored or requeste
   })
   const widths: number[] = []
   const prose =
-    "Aligned **界** content retains the full native wrapping width and Markdown layout while the user text moves to the right within its bar."
+    "Aligned **界** content retains the full native wrapping width and Markdown layout while the user text moves to the right within its bar.\n\n```text\n  kept-indent\n```"
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 34,
@@ -200,13 +200,31 @@ test("native Markdown transforms still apply without changing stored or requeste
   const last = lines.findIndex((line, row) => row > first && !line.trim()) - 1
   assert(last > first)
   const lastColumn = visibleWidth(lines[last]!.trimEnd())
-  await host.key(`\x1b[<0;${column + 1};${first + 1}M`)
+  await host.key(`\x1b[<0;1;${first + 1}M`)
   await host.key(`\x1b[<32;${lastColumn};${last + 1}M`)
   await host.key(`\x1b[<0;${lastColumn};${last + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
-  assert.equal(copied.replace(/\s+/g, " "), prose.replaceAll("**", ""))
-  assert(copied.split("\n").every((line) => line.search(/\S/) <= 1))
+  assert.equal(
+    copied.replace(/\s+/g, " "),
+    prose.split("\n\n")[0]!.replaceAll("**", ""),
+  )
+  assert(copied.split("\n").every((line) => line.search(/\S/) === 0))
+  const selectedLine = host.screenLines()[first + 1]!
+  for (const cell of [0, host.terminal.columns - 1]) {
+    const gutter = sliceByColumn(selectedLine, cell, 1, true)
+    assert(
+      gutter.lastIndexOf("\x1b[7m") <=
+        Math.max(gutter.lastIndexOf("\x1b[0m"), gutter.lastIndexOf("\x1b[27m")),
+    )
+  }
+  const indented = lines.findIndex((line) => line.includes("kept-indent"))
+  assert(indented > last)
+  await host.key(`\x1b[<0;1;${indented + 1}M`)
+  await host.key(`\x1b[<32;${host.terminal.columns};${indented + 1}M`)
+  await host.key(`\x1b[<0;${host.terminal.columns};${indented + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "    kept-indent"))
   host.terminal.resize(32, 34)
   await host.frame()
   assert.equal(widths.at(-1), 30)
@@ -922,9 +940,9 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   )
   await openWork(host)
   const lines = () => host.screenLines().map(stripTerminalSequences)
-  const click = async (row: number) => {
-    await host.key(`\x1b[<0;3;${row + 1}M`)
-    await host.key(`\x1b[<0;3;${row + 1}m`)
+  const click = async (row: number, column = 3) => {
+    await host.key(`\x1b[<0;${column};${row + 1}M`)
+    await host.key(`\x1b[<0;${column};${row + 1}m`)
   }
   await host.frame()
   const header = lines().findIndex((line) => line.includes("Read files"))
@@ -988,12 +1006,21 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
     lines().find((line) => line.includes("Worked")) ?? "",
     /^ Worked for \d+m \d+s ▼/,
   )
+  await click(header, 1)
+  await click(header, host.terminal.columns)
+  assert.match(lines()[header] ?? "", /^ > Read files/)
   await click(header)
   await host.frame()
-  assert.match(
-    lines().find((line) => line.includes("Read one.txt")) ?? "",
-    /^ ▼ Read one\.txt/,
-  )
+  const itemRow = lines().findIndex((line) => line.includes("Read one.txt"))
+  assert.match(lines()[itemRow] ?? "", /^ ▼ Read one\.txt/)
+  await click(itemRow, 1)
+  await click(itemRow, host.terminal.columns)
+  const bodyRow = lines().findIndex((line) => line.includes("FIRST TOOL BODY"))
+  assert(bodyRow > itemRow)
+  await click(bodyRow, 1)
+  await click(bodyRow, host.terminal.columns)
+  assert.match(lines()[itemRow] ?? "", /^ ▼ Read one\.txt/)
+  assert.match(lines().join("\n"), /FIRST TOOL BODY/)
   await host.key("\x1b")
   await host.key("\u000f")
   await host.key("\u000f")
@@ -1667,7 +1694,7 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 17,
-    settings: { fullscreenScrollbar: "always" },
+    settings: { fullscreenScrollbar: "always", outputPad: 0 },
     keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
       (pi) => {
@@ -1741,6 +1768,55 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   assert(
     gutter.lastIndexOf("\x1b[7m") <
       Math.max(gutter.lastIndexOf("\x1b[0m"), gutter.lastIndexOf("\x1b[27m")),
+  )
+  /* oxlint-disable eslint/no-await-in-loop -- Native scrollbar settings cycle in order. */
+  for (let step = 0; step < 2; step++) {
+    await host.type("/settings")
+    await host.key("\r")
+    await host.type("Fullscreen scrollbar")
+    await host.key("\r")
+    await host.key("\x1b")
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+  await host.key("\x1b[<64;1;2M")
+  await host.frame()
+  const row = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("copy-row"))
+  assert(row >= 0)
+  await host.key(`\x1b[<0;1;${row + 1}M`)
+  await host.key(`\x1b[<32;${host.terminal.columns};${row + 1}M`)
+  await host.key(`\x1b[<0;${host.terminal.columns};${row + 1}m`)
+  await host.key(`\x1b[<35;${host.terminal.columns};1M`)
+  await host.frame()
+  await t.waitFor(
+    () =>
+      assert.match(
+        stripTerminalSequences(
+          sliceByColumn(
+            host.screenLines()[row]!,
+            host.terminal.columns - 1,
+            1,
+            true,
+          ),
+        ),
+        /[┃█│]/,
+      ),
+    { timeout: 2000 },
+  )
+  const overlayBar = sliceByColumn(
+    host.screenLines()[row]!,
+    host.terminal.columns - 1,
+    1,
+    true,
+  )
+  assert.match(stripTerminalSequences(overlayBar), /[┃█│]/)
+  assert(
+    overlayBar.lastIndexOf("\x1b[7m") <=
+      Math.max(
+        overlayBar.lastIndexOf("\x1b[0m"),
+        overlayBar.lastIndexOf("\x1b[27m"),
+      ),
   )
 })
 
@@ -1838,13 +1914,16 @@ test("changing selected rendered content clears the native selection", async (t)
   await t.waitFor(() => assert.equal(copied, "Received."))
 })
 
-test("native child pointer handlers receive source rows and focused overlays keep priority", async (t) => {
+test("native child input keeps source coordinates while padding routes wheels to the conversation", async (t) => {
   const sendRef: { current?: () => void } = {}
   const clicked: number[] = []
+  const wheeled: { x: number; y: number }[] = []
+  let childHasRoom = true
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 17,
+    settings: { outputPad: 0, fullscreenScrollbar: "hidden" },
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
     },
@@ -1863,6 +1942,10 @@ test("native child pointer handlers receive source rows and focused overlays kee
                 0,
               ),
               (event) => {
+                if (event.type === "wheel") {
+                  wheeled.push({ x: event.x, y: event.y })
+                  return childHasRoom ? { handled: true } : undefined
+                }
                 if (event.type === "click") clicked.push(event.y)
                 return event.type === "press" || event.type === "click"
                   ? { handled: true }
@@ -1884,6 +1967,55 @@ test("native child pointer handlers receive source rows and focused overlays kee
   await host.key(`\x1b[<0;1;${target + 1}M`)
   await host.key(`\x1b[<0;1;${target + 1}m`)
   assert.deepEqual(clicked, [20])
+  const initialTop = renderer.viewportTop
+  await host.key(`\x1b[<64;1;${target + 1}M`)
+  await host.key(`\x1b[<64;${host.terminal.columns};${target + 1}M`)
+  assert.equal(renderer.viewportTop, initialTop)
+  assert.deepEqual(wheeled, [
+    { x: 0, y: 20 },
+    { x: 59, y: 20 },
+  ])
+
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  renderer.scrollToBottom()
+  await host.frame()
+  const bodyRow = () =>
+    host
+      .screenLines()
+      .findIndex((line) => stripTerminalSequences(line).includes("pointer-20"))
+  wheeled.length = 0
+  const paddedTop = renderer.viewportTop
+  assert(bodyRow() >= 0)
+  await host.key(`\x1b[<64;1;${bodyRow() + 1}M`)
+  assert.equal(wheeled.length, 0)
+  assert(renderer.viewportTop < paddedTop)
+  renderer.scrollToBottom()
+  await host.frame()
+  await host.key(`\x1b[<64;${host.terminal.columns};${bodyRow() + 1}M`)
+  assert.equal(wheeled.length, 0)
+  assert(renderer.viewportTop < paddedTop)
+  renderer.scrollToBottom()
+  await host.frame()
+  await host.key(`\x1b[<64;2;${bodyRow() + 1}M`)
+  assert.deepEqual(wheeled, [{ x: 1, y: 20 }])
+  assert.equal(renderer.viewportTop, paddedTop)
+  childHasRoom = false
+  await host.key(`\x1b[<64;2;${bodyRow() + 1}M`)
+  assert.equal(wheeled.length, 2)
+  assert(renderer.viewportTop < paddedTop)
+  childHasRoom = true
+  host.terminal.resize(42, 17)
+  renderer.scrollToBottom()
+  await host.frame()
+  const resizedTop = renderer.viewportTop
+  wheeled.length = 0
+  await host.key(`\x1b[<64;42;${bodyRow() + 1}M`)
+  assert.equal(wheeled.length, 0)
+  assert(renderer.viewportTop < resizedTop)
   const before = renderer.viewportTop
   const overlay = renderer.showOverlay(new Input({ prompt: "Overlay" }))
   await host.key("\x1b[5~")
