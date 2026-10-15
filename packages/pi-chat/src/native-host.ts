@@ -577,7 +577,7 @@ export class NativeChatHost {
   >()
   private disclosureChoices = new WeakMap<
     Entry,
-    Map<number, { group: boolean; items: Map<string, boolean> }>
+    Map<number, { group: boolean | undefined; items: Map<string, boolean> }>
   >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
@@ -1103,7 +1103,9 @@ export class NativeChatHost {
       if (!source.entry || source.contentIndex === undefined) continue
       const choices = this.disclosureChoices.get(source.entry) ?? new Map()
       choices.set(source.contentIndex, {
-        group: this.renderGroups.get(source)?.expanded ?? false,
+        group:
+          this.renderGroups.get(source)?.expanded ??
+          choices.get(source.contentIndex)?.group,
         items: new Map([...items].map(([id, item]) => [id, item.expanded])),
       })
       this.disclosureChoices.set(source.entry, choices)

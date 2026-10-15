@@ -734,11 +734,14 @@ test("native Hide thinking controls whether reasoning separates render groups", 
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
-    settings: { hideThinkingBlock: false },
-    keybindings: { "app.thinking.toggle": "ctrl+t" },
+    settings: { hideThinkingBlock: true, outputPad: 0 },
+    keybindings: {
+      "app.thinking.toggle": "ctrl+t",
+      "app.tools.expand": "ctrl+e",
+    },
   })
-  await writeFile(join(host.directory, "one.txt"), "first")
-  await writeFile(join(host.directory, "two.txt"), "second")
+  await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
+  await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
   host.queueResponse(
     {
@@ -763,6 +766,31 @@ test("native Hide thinking controls whether reasoning separates render groups", 
   await host.type("Read with thought")
   await host.key("\r")
   await host.settled()
+  await openWork(host)
+  const collapsed = await host.frame()
+  assert.equal(collapsed.match(/> Read files/g)?.length, 1)
+  assert.doesNotMatch(
+    collapsed,
+    /Read one\.txt|Read two\.txt|Considering next call/,
+  )
+  await host.key("\x05")
+  assert.match(await host.frame(), /FIRST TOOL BODY[\s\S]*SECOND TOOL BODY/)
+  await host.type("/settings")
+  await host.key("\r")
+  await host.type("Output padding")
+  await host.key("\r")
+  await host.key("\x1b")
+  const reconstructed = await host.frame()
+  assert.equal(reconstructed.match(/▼ Read files/g)?.length, 1)
+  assert.match(reconstructed, /FIRST TOOL BODY[\s\S]*SECOND TOOL BODY/)
+  await host.key("\x14")
+  const split = await host.frame()
+  assert.equal(split.match(/▼ Read files/g)?.length, 2)
+  assert.match(
+    split,
+    /FIRST TOOL BODY[\s\S]*Considering next call[\s\S]*SECOND TOOL BODY/,
+  )
+  await host.key("\x05")
   await openWork(host)
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")

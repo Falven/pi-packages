@@ -119,8 +119,8 @@ Pi continues to own conversation data, execution, effective Markdown, default ex
 88. As a Pi user, I want extension operations to use Pi's generic default expanded rendering, so that an extension's custom renderer does not replace the agreed activity-body view.
 89. As a Pi user, I want one execution cell's commands to have separate activity items and disclosures, so that inspecting one command does not require opening every command's output.
 90. As a Pi user, I want one patch's changed files to have separate activity items and disclosures, so that I can inspect a single file's change independently.
-91. As a Pi user, I want newly arriving activity items to inherit the native global expansion state while existing choices survive updates and individual ancestor toggles, so that streaming respects my inspection mode.
-92. As a Pi user, I want newly arriving activity items to start collapsed while existing row choices survive updates and group collapsing, so that streaming preserves my chosen disclosure state.
+91. As a Pi user, I want every expanded activity item to remain closable by mouse and keyboard, so that inspection never leaves a permanently open body.
+92. As a Pi user, I want newly arriving activity items to inherit the native global expansion state while existing choices survive updates and individual ancestor toggles, so that streaming respects my inspection mode.
 93. As a Pi user, I want built-ins and extensions to pass through the same activity-item and grouping path, so that summaries and disclosure behavior stay consistent across tool providers.
 94. As a Pi user, I want an unmodified or unknown extension to receive a useful tool-name fallback and generic activity bodies, so that it remains usable without implementing a new provider protocol.
 95. As a package operator, I want named tool-adapter modules and one explicit registry inside pi-chat, so that I can find and change a mapping without editing unrelated providers or chat layout code.
