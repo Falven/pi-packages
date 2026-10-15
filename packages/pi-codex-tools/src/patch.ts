@@ -381,7 +381,6 @@ export function createPatch(
     exposure: "codemode",
     async execute(_id, args, signal, _onUpdate, ctx) {
       const patchChanges: PatchChange[] = []
-      let patchOmitted = false
       const bodies: PatchChange[] = []
       const body = (change: PatchChange, text: string) => {
         if (!text) return
@@ -389,13 +388,9 @@ export function createPatch(
           const earlier = bodies.shift()!
           delete earlier.output
           earlier.outputOmitted = true
-          patchOmitted = true
         }
         change.output = boundedPreview(text)
-        if (change.output !== text) {
-          change.outputOmitted = true
-          patchOmitted = true
-        }
+        if (change.output !== text) change.outputOmitted = true
         bodies.push(change)
       }
       const changed = (
@@ -418,19 +413,15 @@ export function createPatch(
         if (diff.added !== undefined) change.added = diff.added
         if (diff.removed !== undefined) change.removed = diff.removed
         if (diff.output !== undefined) body(change, diff.output)
-        else {
-          change.outputOmitted = true
-          patchOmitted = true
-        }
-        if (diff.outputOmitted) {
-          change.outputOmitted = true
-          patchOmitted = true
-        }
+        else change.outputOmitted = true
+        if (diff.outputOmitted) change.outputOmitted = true
       }
       const details = (text: string): PatchDetails => ({
         contentHash: contentHash([{ type: "text", text }]),
         patchChanges: structuredClone(patchChanges),
-        ...(patchOmitted ? { patchOmitted: true } : {}),
+        ...(patchChanges.some((change) => change.outputOmitted)
+          ? { patchOmitted: true }
+          : {}),
       })
       try {
         const abort = signal ? AbortSignal.any([signal, lifetime]) : lifetime
