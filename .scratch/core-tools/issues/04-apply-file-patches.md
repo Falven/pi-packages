@@ -6,14 +6,18 @@
 
 **Blocked by:** Core 01: common core-operation projection.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Capture per-file facts at mutation time, including stable identity, actual action/target, applicable detail content, and verified additions/deletions when available.
-- [ ] One patch can produce several independently disclosed edit items through the pi-chat adapter. Never repeat the full patch body in every file row.
-- [ ] Preserve completed files before a later failure and distinguish failed or unattempted changes from successful edits.
-- [ ] Retain all compact file descriptions beyond the previous sixteen-file window, with bounded bodies and unchanged mutation/model contracts.
+- [x] Capture per-file facts at mutation time, including stable identity, actual action/target, applicable detail content, and verified additions/deletions when available.
+- [x] One patch can produce several independently disclosed edit items through the pi-chat adapter. Never repeat the full patch body in every file row.
+- [x] Preserve completed files before a later failure and distinguish failed or unattempted changes from successful edits.
+- [x] Retain all compact file descriptions beyond the previous sixteen-file window, with bounded bodies and unchanged mutation/model contracts.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Mutation-time patch facts retain stable per-file identity, actual action/target, individual status, and applicable content. Pi-chat projects separate file items with generic default expanded bodies. Completed files remain completed after later failure; failed and unattempted changes remain distinct. Counts come from verified prior/written content and bounded comparison; unavailable counts are omitted.
+
+All compact file records survive the sixteen-body window. Omission belongs only to the affected file, not every sibling in the patch. Existing patch, patch-presentation, workflow, and chat cases passed; temporary probes covered 10,000-file bounded retention and per-file omission. The closing spec review verified the omission repair. Mutation and model-facing patch contracts are unchanged. Exact checks are in [ticket 07](07-verify-contract-and-matched-trials.md).
 
 ## Earlier revision
 

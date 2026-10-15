@@ -6,14 +6,18 @@
 
 **Blocked by:** Core 02: live command ownership.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Preserve independent operation and execution entries through yields, waits, termination, and late failures; successful children retain their outcomes.
-- [ ] Reconcile latest active-branch facts without restoring workers or processes, rerunning tools, or assigning work to a later request.
-- [ ] Retain compact operation descriptions and known outcomes beyond existing body windows; unavailable bodies have an explicit notice only when opened.
-- [ ] Honor authoritative processed results and context edits during replay, while preserving exact continuation collection behavior.
+- [x] Preserve independent operation and execution entries through yields, waits, termination, and late failures; successful children retain their outcomes.
+- [x] Reconcile latest active-branch facts without restoring workers or processes, rerunning tools, or assigning work to a later request.
+- [x] Retain compact operation descriptions and known outcomes beyond existing body windows; unavailable bodies have an explicit notice only when opened.
+- [x] Honor authoritative processed results and context edits during replay, while preserving exact continuation collection behavior.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Revisioned activity records reconcile late progress and terminal outcomes with the initiating cell and operation across yields, waits, later prompts, and active-branch replay. A later script failure leaves completed children successful. Replay restores descriptions and outcomes without workers, processes, or tool execution; authoritative processed results and context edits remain the source of body content.
+
+The eight-settled-operation body window no longer deletes compact operation records. An unavailable body exposes an omission notice only inside its opened item. Existing execution, presentation, continuation, workflow, reload, and branch checks passed; [ticket 07](07-verify-contract-and-matched-trials.md) records the final verification. Primitive output attribution retains the explicit limit in [ticket 01](01-execute-command-through-model-loop.md).
 
 ## Earlier revision
 

@@ -1,8 +1,6 @@
 # 13: Give every activity item a specific summary and independent body
 
-**Triage:** ready-for-agent
-
-**Status:** in-progress — approved ticket deltas on `codex/activity-items-integration`
+**Status:** resolved — approved ticket deltas implemented on `codex/activity-items-integration`; verification limits recorded below
 
 **Scope:** pi-chat and the operation facts supplied by pi-codex-tools.
 
@@ -124,4 +122,6 @@ The vocabulary follows the [glossary](../../../GLOSSARY.md). The governing decis
 
 The approved graph updates existing tickets while retaining their earlier evidence: Chat 04 → Core 01 → Core 02 → Core 03; Core 04 follows Core 01; Core 05 follows Core 03; Chat 10 follows Core 03–05 and gates Chat 11; Chat 12 and Core 06 combine acceptance; Core 07 verifies the contract and reviews the integration. Each delta delivers a usable path through provider facts, adapters, presentation, and existing host checks.
 
-The primary chat specification and companion core specification supersede earlier one-item-per-call, shared-parent-body, built-in-only summaries, and custom-renderer-preservation requirements for this revision. Earlier tracker items remain historical records, including their pending physical-terminal checks. Implementation is in progress on the integration branch. No combined acceptance is claimed until the updated tickets record it.
+The primary chat specification and companion core specification supersede earlier one-item-per-call, shared-parent-body, built-in-only summaries, and custom-renderer-preservation requirements for this revision. The approved deltas are resolved at production revision `f6004ab` on the integration branch. [Chat 12](12-mixed-session-acceptance.md) records combined and physical acceptance; [Core 07](../../core-tools/issues/07-verify-contract-and-matched-trials.md) records final checks, six resolved review findings, and two unrelated full-repository failures reproduced on the starting commit. Earlier tracker sections retain their original evidence and pending physical checks.
+
+Primitive strings do not preserve producing-operation identity. A string returned by a tool or hook, or caught as a rejection, can appear in both child and execution bodies when emitted through `text`. The implementation keeps the existing helper contract and does not discard equal but potentially genuine script text. Object-owned forwarding is attributed; complete primitive attribution is not claimed. The [provider fact schema](../../core-tools/spec.md#provider-facts-for-chat) records the precise limit.

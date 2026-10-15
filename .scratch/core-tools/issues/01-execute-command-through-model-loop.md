@@ -6,14 +6,18 @@
 
 **Blocked by:** Chat 04: common activity-item path.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Publish factual operation updates independently of custom renderer subscription and document their schema through Pi’s event bus and retained results/activity records.
-- [ ] Project several commands in one execution cell into stable ordered activity items with applicable effective inputs and processed results, using generic default expanded bodies.
-- [ ] Preserve output ownership before serialization: omit attributed child duplicates and empty execution entries, retain genuine script text even when equal to child output, and expose pre-child script failures.
-- [ ] Keep successful children successful after a script failure and respect authoritative result hooks and model-facing output.
+- [x] Publish factual operation updates independently of custom renderer subscription and document their schema through Pi’s event bus and retained results/activity records.
+- [x] Project several commands in one execution cell into stable ordered activity items with applicable effective inputs and processed results, using generic default expanded bodies.
+- [x] Preserve output ownership before serialization: omit attributed child duplicates and empty execution entries, retain genuine script text even when equal to child output, and expose pre-child script failures.
+- [x] Keep successful children successful after a script failure and respect authoritative result hooks and model-facing output.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Public `core-tools.activity` updates and retained execution records publish operation identity, effective inputs, actual outcome, and applicable processed content without requiring a custom renderer subscription. Pi-chat creates ordered, independently disclosed command items and a separate nonempty execution item for script-owned content. Result metadata is checked against processed content before retained facts are reused; malformed or removed metadata uses the generic processed-result fallback. Successful children retain their outcomes after a script failure, including failures before any child starts.
+
+Object identity attributes forwarded child results before serialization; empty entries and explicitly attributed child duplicates are omitted. Primitive values have no identity, so a string result or rejection emitted through `text` can also appear in the execution body. Text equality is not used to discard it, and the native helper contract remains unchanged. This limit is documented in the [provider fact schema](../spec.md#provider-facts-for-chat), rather than presented as complete primitive attribution. Existing command, presentation, workflow, hook, and contract checks pass; [ticket 07](07-verify-contract-and-matched-trials.md) records exact integrated verification.
 
 ## Earlier revision
 

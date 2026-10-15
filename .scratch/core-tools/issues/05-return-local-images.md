@@ -6,13 +6,17 @@
 
 **Blocked by:** Core 03: continuation and replay.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Use the same adapter and disclosure path for image operations and collecting wait results; collapsed items expose no image or preview.
-- [ ] Keep path/status at the originating operation and the image in its collecting native result, including a later wait, without duplicate visible owners.
-- [ ] Preserve image blocking, normalization, terminal preferences, processed-result hooks, model content, and native default expanded rendering.
+- [x] Use the same adapter and disclosure path for image operations and collecting wait results; collapsed items expose no image or preview.
+- [x] Keep path/status at the originating operation and the image in its collecting native result, including a later wait, without duplicate visible owners.
+- [x] Preserve image blocking, normalization, terminal preferences, processed-result hooks, model content, and native default expanded rendering.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Image operations and collecting wait results use the common adapter/disclosure path. Path and status stay at the originating operation; image bytes appear once in the collecting native result, including a later wait. Collapsed items expose no image. Processed-result hooks, image preferences, blocking, normalization, and model content remain authoritative.
+
+Invalid or mismatched image ownership metadata falls back to the native processed result rather than dropping the image. Existing image and image-presentation cases, combined workflows, and native image-layout checks passed. The saved malformed-origin reproduction and closing standards review verified the fallback repair. Physical observations and their narrower scope are recorded in [chat ticket 12](../../pi-chat/issues/12-mixed-session-acceptance.md); exact automated totals are in [ticket 07](07-verify-contract-and-matched-trials.md).
 
 ## Earlier revision
 

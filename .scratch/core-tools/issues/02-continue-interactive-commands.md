@@ -6,14 +6,18 @@
 
 **Blocked by:** Core 01: completed commands and execution-owned content.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Publish live pipe/PTY output and process status before calls return, including when the custom execution renderer has never subscribed.
-- [ ] Input or collection from another execution updates the original command and retains its own meaningful outcome without replaying command output.
-- [ ] Preserve command, cell, and process-session distinctions, initial order, and manual disclosure choices through later prompts and failures.
-- [ ] Display observation does not consume collection cursors, dispatch calls, poll, change result hooks, or create notifications or model turns.
+- [x] Publish live pipe/PTY output and process status before calls return, including when the custom execution renderer has never subscribed.
+- [x] Input or collection from another execution updates the original command and retains its own meaningful outcome without replaying command output.
+- [x] Preserve command, cell, and process-session distinctions, initial order, and manual disclosure choices through later prompts and failures.
+- [x] Display observation does not consume collection cursors, dispatch calls, poll, change result hooks, or create notifications or model turns.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Live pipe/PTY process facts update their originating operation before the outer call returns and after later input, collection, or prompts. Initial operation order and disclosure choices remain stable. Input/collection actions retain their own outcome; a returned live process handle keeps the command running without incorrectly leaving a completed `write_stdin` action running. Command, process-session, and execution-cell status stay distinct.
+
+Presentation observes existing events without polling, consuming collection cursors, dispatching extra tools, or creating notifications/model turns. Existing process, command, presentation, and mixed-workflow checks passed, including final status-repair checks. See [ticket 07](07-verify-contract-and-matched-trials.md) for exact versions and totals.
 
 ## Earlier revision
 

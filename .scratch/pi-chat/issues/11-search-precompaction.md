@@ -4,13 +4,17 @@
 
 **Blocked by:** Chat 10: split-item source reveal.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Materialize reliable per-operation history with default expanded bodies and honest generic fallbacks where facts are missing.
-- [ ] Preserve omission markers, source order, native settings, and image ownership without rerunning tools, speculative previews, or resurrected live handles.
-- [ ] Reload and branch changes release stale subscriptions and reset only the documented manual presentation state.
+- [x] Materialize reliable per-operation history with default expanded bodies and honest generic fallbacks where facts are missing.
+- [x] Preserve omission markers, source order, native settings, and image ownership without rerunning tools, speculative previews, or resurrected live handles.
+- [x] Reload and branch changes release stale subscriptions and reset only the documented manual presentation state.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Retained and pre-compaction source uses the same adapter registry and per-item default bodies as live activity. Valid active-branch records recover compact operation facts; missing, removed, or invalid metadata falls back to the authoritative processed result. Omission notices stay inside affected opened bodies. Historical materialization does not execute tools, request previews, restore process handles, or change editor history.
+
+Reload, branch/session replacement, and cleanup release live subscriptions and synthetic disclosure references. Existing real-host source-search, activity, mixed-session, and settings cases pass within the final 116/116 chat suites on Pi 1.1.0 and 1.0.2. The stale historical-reference repair passed the closing standards review. See [ticket 12](12-mixed-session-acceptance.md) for the combined scope and remaining physical checks.
 
 ## Earlier revision
 

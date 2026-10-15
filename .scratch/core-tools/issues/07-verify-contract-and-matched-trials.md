@@ -6,14 +6,37 @@
 
 **Blocked by:** Core 06 and Chat 12: combined acceptance.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Run existing deterministic contract, hooks, collection, lifecycle, and resource-bound checks plus typechecking, lint, formatting, and whitespace validation.
-- [ ] Review standards and spec conformance against the integration starting commit; resolve findings and record any review-tool limitation.
-- [ ] Repeat live-model comparisons only if agent-interface or execution behavior changed; record configured-terminal limits without claiming physical acceptance.
-- [ ] Close only verified deltas and preserve earlier measurements and pending acceptance evidence.
+- [x] Run existing deterministic contract, hooks, collection, lifecycle, and resource-bound checks plus typechecking, lint, formatting, and whitespace validation.
+- [x] Review standards and spec conformance against the integration starting commit; resolve findings and record any review-tool limitation.
+- [x] Repeat live-model comparisons only if agent-interface or execution behavior changed; record configured-terminal limits without claiming physical acceptance.
+- [x] Close only verified deltas and preserve earlier measurements and pending acceptance evidence.
+
+**Revision evidence (2026-10-15, production tip `f6004ab`):** Final verification uses the existing tests and real Pi host seam. The following evidence belongs to this activity-item revision; the earlier measurements below retain their own revisions.
+
+| Environment and revision            | Check                                                              | Result                                                              |
+| ----------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| Coherent Pi 1.1.0, `f6004ab`        | `pnpm typecheck`                                                   | Passed                                                              |
+| Coherent Pi 1.1.0, `f6004ab`        | `node --test packages/pi-chat/test/*.test.ts`                      | 116/116 passed                                                      |
+| Coherent Pi 1.1.0, `f6004ab`        | `node --test packages/pi-codex-tools/test/*.test.ts`               | 207/207 passed                                                      |
+| Workspace Pi 1.0.2, `f6004ab`       | `pnpm run typecheck`                                               | Passed                                                              |
+| Workspace Pi 1.0.2, `f6004ab`       | `node --test --test-timeout=20000 packages/pi-chat/test/*.test.ts` | 116/116 passed                                                      |
+| Repair checkout Pi 1.0.2, `f6004ab` | Existing affected chat and core cases                              | 127/127 passed: 37 chat and 90 core                                 |
+| Integration branch                  | `pnpm run lint`, `pnpm run format:check`, `git diff --check`       | Passed                                                              |
+| Workspace Pi 1.0.2, `72123e0`       | `node --test --test-concurrency=2`                                 | 1,372 total: 1,361 passed, two failed, nine skipped, zero cancelled |
+
+The primary archive at `/tmp/pi-activity-1.1.0-repair.JDUYu5` uses temporary native-package overrides; its tracked chat/core files byte-match `f6004ab`. All tested fixture/extension importers resolve one physical coding-agent 1.1.0 and one physical TUI 1.1.0. No repository dependency, lockfile, workspace configuration, or host fixture change was needed. Secondary checks use the workspace's existing 1.0.2 packages. No new test cases or test files were added.
+
+The full-repository failures are the existing composer case “fullscreen viewport keys retain ownership before the composer” (`packages/pi-composer/test/jump-page.test.ts:223`) and goal case “an abort after an empty final suppresses the empty stop” (`packages/pi-goal/test/guards.test.ts:485`). Both reproduce in isolation on base `2345de6` with the same actual/expected values. Neither package nor the host fixture changed in this branch. The full repository suite was not rerun after the scoped final repairs; final affected-suite results are listed above.
+
+Independent standards and spec reviews covered the integration diff from `2345de6`. One implementer repaired all six actionable findings at `f6004ab`: malformed optional metadata validation, invalid image-owner fallback, stale historical disclosure cleanup, ambiguous source-call Find ownership, completed input status, and per-file omission ownership. Both closing reviews report their three findings resolved and no new actionable issue. A possible duplication between Find argument walkers remains a nonblocking maintainability observation, not an unresolved correctness finding. Saved malformed-metadata/image reproductions and temporary Find/status/omission probes passed.
+
+The frozen tool contract, dependency declarations, native result `details` names, model-facing helper values, collection cursors/limits, and mutation semantics remain unchanged. Existing deterministic contract, hook, command, continuation, patch, image, and lifecycle checks passed. Broader live-model comparisons were not repeated because this revision changes presentation facts and disclosure rather than the public agent interface or execution contract. Object-owned forwarding is attributed; primitive result/rejection text cannot carry identity and can appear in both child and execution bodies. [Ticket 01](01-execute-command-through-model-loop.md) and the [provider fact schema](../spec.md#provider-facts-for-chat) record that limit without an equality heuristic or changed helper values.
+
+[Chat ticket 12](../../pi-chat/issues/12-mixed-session-acceptance.md) records fresh physical cmux/Pi 1.1.0 acceptance at `f6004ab`, including disclosures, images, resize, reload, Find, and printed exit. Ghostty was denied by CUA, and clipboard/other unrepeated physical checks remain explicit. These observations do not relabel the earlier PTY, controlled-host, live-model, or pending physical evidence below.
 
 ## Earlier revision
 

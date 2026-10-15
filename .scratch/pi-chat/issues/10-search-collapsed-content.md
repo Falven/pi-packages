@@ -4,13 +4,17 @@
 
 **Blocked by:** Core 03: continuation/replay; Core 04: per-file patches; Core 05: images.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Bind split items to original call/result source references and route reliable command, file, and output hits to the matching item.
-- [ ] When source cannot identify one split operation, reveal and highlight its owning call without fabricating a match or reviving the aggregate custom renderer.
-- [ ] Preserve source text, active-branch restriction, native Find controls, and copying of expanded content only.
+- [x] Bind split items to original call/result source references and route reliable command, file, and output hits to the matching item.
+- [x] When source cannot identify one split operation, reveal and highlight its owning call without fabricating a match or reviving the aggregate custom renderer.
+- [x] Preserve source text, active-branch restriction, native Find controls, and copying of expanded content only.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Find indexes applicable item arguments and processed bodies alongside canonical source. A reliable command, file, or output hit opens only its matching item. A source-call hit that cannot identify one child reveals and highlights the owning call's item headers without choosing the first child, claiming an exact body match, or recreating the aggregate custom renderer. Existing source-search and bounded-group cases cover source preservation, native Find controls, expanded-only copying, active-branch restriction, and current settings.
+
+The final full chat suite passes 116/116 on Pi 1.1.0 and 1.0.2. The ambiguous-source repair also passed a temporary assert probe and the closing spec review. [Ticket 12](12-mixed-session-acceptance.md) records combined evidence and physical limits.
 
 ## Earlier revision
 

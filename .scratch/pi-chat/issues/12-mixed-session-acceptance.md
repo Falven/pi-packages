@@ -4,14 +4,22 @@
 
 **Blocked by:** Chat 11: retained-item reveal; Core 02–05: commands, continuation, patches, and images.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Run affected existing real-host cases on primary Pi 1.1.0 and secondary 1.0.2 with both extension load orders, built-ins, unknown/replacement extensions, hooks, and live/retained activity.
-- [ ] Verify three disclosure states, independent controls, native default bodies, copying/Find, notices/final responses, settings, cancellation, and session lifecycles.
-- [ ] Run configured-terminal acceptance where available and distinguish emitted bytes from verified physical pixels and input.
-- [ ] Record exact checks and remaining limits; retain earlier physical-terminal acceptance as pending until verified.
+- [x] Run affected existing real-host cases on primary Pi 1.1.0 and secondary 1.0.2 with both extension load orders, built-ins, unknown/replacement extensions, hooks, and live/retained activity.
+- [x] Verify three disclosure states, independent controls, native default bodies, copying/Find, notices/final responses, settings, cancellation, and session lifecycles.
+- [x] Run configured-terminal acceptance where available and distinguish emitted bytes from verified physical pixels and input.
+- [x] Record exact checks and remaining limits; retain earlier physical-terminal acceptance as pending until verified.
+
+**Revision evidence (2026-10-15, production tip `f6004ab`):** The activity-item implementation is verified independently of the earlier aggregate renderer. The complete existing chat suite passes 116/116 on coherent Pi 1.1.0 and secondary Pi 1.0.2. The complete core suite passes 207/207 on Pi 1.1.0. The primary snapshot's tracked chat/core source matches the final production tip; fixture and extension imports resolve one physical copy of each native package. Both extension load orders run through the normal real-host fixture, alongside built-ins, unknown/replacement tools, hooks, retained history, native settings, cancellation, Find/copy, and final/notice ordering. Existing cases were updated; no test cases, files, dependencies, or primary seam were added.
+
+Physical acceptance used a fresh cmux 0.65.1 terminal on macOS with coherent Pi 1.1.0, staged `f6004ab`, the real `InteractiveMode`/`AgentSessionRuntime`, and a local controlled provider. CUA mouse, keyboard, and wheel actions verified closed group summaries, initially closed independent items, native default command/error/file bodies, independent closure, a single image with bounded scrolling, resize, `/reload`, Find revealing a closed error, and `/quit` printed exit with shell status zero. Reload left the provider request count at two; the retained collecting result contains one image. Opening the large image follows it within the existing bounded group viewport; wheel movement reveals the earlier rows without moving the group header or final answer. This is expected scrolling, not image overpainting.
+
+The outside-repository [physical evidence note](/Users/fran/.codex/visualizations/2026/10/15/01a13d3b-e072-7013-9513-a2cfcccecf0f/activity-terminal/f6004ab-physical-acceptance.md) records the exact launch, runtime, observations, and screenshots. This run verifies cmux in chat-first order only. Ghostty access was denied by CUA; no workaround accessed that surface. Physical clipboard selection/copy, native retry, compaction, alternate light theme, chat-last order, and the wider companion matrix were not repeated. Their automated coverage is distinct; earlier unperformed physical criteria remain open in the historical section below.
+
+[Core ticket 07](../../core-tools/issues/07-verify-contract-and-matched-trials.md) records static checks, review closure, and the full repository run: 1,361 passes, two unrelated failures reproduced on the starting commit, and nine skips. The provider's primitive-string attribution limit remains explicit in [Core 01](../../core-tools/issues/01-execute-command-through-model-loop.md); complete primitive forwarding attribution is not claimed.
 
 ## Earlier revision
 

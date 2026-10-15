@@ -4,15 +4,19 @@
 
 **Blocked by:** None — earlier navigation prerequisites are complete.
 
-**Status:** in-progress — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Keep named built-in, core-tool, and fallback adapters and their explicit registry inside pi-chat. Use reliable provenance and effective arguments; unknown extensions retain a useful tool-name summary.
-- [ ] Collapsed groups and activity items show only `>` and their group or item summary. Open groups expose initially collapsed items; opened bodies use native built-in or generic default expanded rendering, bypassing custom extension renderers.
-- [ ] Derive the group summary from all included operation types. Share conservative command classification; preserve distinct-target counting and honest status wording.
-- [ ] Preserve independent mouse, keyboard, native body-click, and global disclosure controls, bounded layout, settings, and existing state lifetimes.
-- [ ] Update existing real-host cases and temporary checks; add no test cases or files.
+- [x] Keep named built-in, core-tool, and fallback adapters and their explicit registry inside pi-chat. Use reliable provenance and effective arguments; unknown extensions retain a useful tool-name summary.
+- [x] Collapsed groups and activity items show only `>` and their group or item summary. Open groups expose initially collapsed items; opened bodies use native built-in or generic default expanded rendering, bypassing custom extension renderers.
+- [x] Derive the group summary from all included operation types. Share conservative command classification; preserve distinct-target counting and honest status wording.
+- [x] Preserve independent mouse, keyboard, native body-click, and global disclosure controls, bounded layout, settings, and existing state lifetimes.
+- [x] Update existing real-host cases and temporary checks; add no test cases or files.
+
+**Revision evidence (2026-10-15, `f6004ab`):** The named built-in, core-tool, and fallback adapters and their explicit registry live in pi-chat. Effective arguments and verified provider provenance feed one activity-item path; the chat specification's operator catalog describes each mapping and its fallback. Group summaries aggregate item types, while collapsed items contain only their disclosure and specific summary. Opened items instantiate Pi's native built-in renderer or generic default component with only the applicable input and result. Custom extension renderers do not supply these bodies.
+
+Existing native-chat, bounded-group, mixed-session, and activity cases cover independent controls, initially closed items, body-click closure, global expansion, streaming state, native settings, and source preservation. Primary Pi 1.1.0 passes all 116 chat cases at this revision; secondary 1.0.2 also passes 116/116. No test cases, test files, dependencies, or additional host seam were added. Combined verification and physical limits are recorded in [ticket 12](12-mixed-session-acceptance.md).
 
 ## Earlier revision
 

@@ -6,13 +6,17 @@
 
 **Blocked by:** Core 02–05; Chat 10–11.
 
-**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+**Status:** resolved — approved activity-item delta; earlier evidence retained below
 
 ## Activity-item delta — approved 2026-10-15
 
-- [ ] Reuse both normal extension load orders and existing mixed-host cases to verify independent items and their origin across later prompts, settings, and reload.
-- [ ] Preserve unrelated notices, final responses, effective hooks, retained source, actual file/process effects, and image single ownership.
-- [ ] Record combined evidence independently of the prior aggregate-renderer revision.
+- [x] Reuse both normal extension load orders and existing mixed-host cases to verify independent items and their origin across later prompts, settings, and reload.
+- [x] Preserve unrelated notices, final responses, effective hooks, retained source, actual file/process effects, and image single ownership.
+- [x] Record combined evidence independently of the prior aggregate-renderer revision.
+
+**Revision evidence (2026-10-15, `f6004ab`):** Existing real `InteractiveMode`/`AgentSessionRuntime` workflows load pi-chat and the core toolset normally in both orders. The updated cases verify separate command/file/execution items, default bodies, initially closed rows, independent details, late outcomes at their origin, and stable behavior through later prompts, settings changes, and reload. Actual process/file effects, authoritative hooks, source preservation, final responses, unrelated notices, and single-owner images remain covered.
+
+These results apply to the activity-item implementation, independently of the earlier aggregate renderer. Pi 1.1.0 passes the complete 116-case chat and 207-case core suites at `f6004ab`. Secondary-version checks, full-repository baseline failures, review repairs, and physical limits are recorded in [ticket 07](07-verify-contract-and-matched-trials.md) and [chat ticket 12](../../pi-chat/issues/12-mixed-session-acceptance.md).
 
 ## Earlier revision
 
