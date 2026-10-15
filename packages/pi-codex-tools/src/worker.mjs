@@ -44,6 +44,7 @@ const createBridge = runInContext(
     let nextTimer = 0;
     let ended = false;
     const pending = new Map();
+    const childResults = new WeakMap();
     const callbacks = new Map();
     const values = new Map(JSON.parse(stored));
     const writes = new Map();
@@ -80,7 +81,7 @@ const createBridge = runInContext(
       if (error === finish || ended) return;
       settle("error", error instanceof Error ? error.name + ": " + error.message : String(error));
     };
-    globalThis.text = value => post({ type: "text", text: stringify(value) });
+    globalThis.text = value => post({ type: "text", text: stringify(value), owner: value !== null && typeof value === "object" ? childResults.get(value) : undefined });
     globalThis.notify = value => post({ type: "notify", text: stringify(value) });
     globalThis.exit = () => {
       settle("done");
@@ -130,7 +131,7 @@ const createBridge = runInContext(
         if (!["auto", "low", "high", "original"].includes(selected))
           throw "image detail must be one of: auto, low, high, original";
       }
-      post({ type: "image", url, detail: selected });
+      post({ type: "image", url, detail: selected, owner: value !== null && typeof value === "object" ? childResults.get(value) : undefined });
     };
     globalThis.ALL_TOOLS = JSON.parse(definitions);
     globalThis.tools = Object.fromEntries(ALL_TOOLS.map(({ name }) => [name,
@@ -150,7 +151,10 @@ const createBridge = runInContext(
         pending.delete(message.id);
         post({ type: "received", id: message.id });
         if (message.error !== undefined) request.reject(message.error);
-        else request.resolve(message.result);
+        else {
+          if (message.result !== null && typeof message.result === "object") childResults.set(message.result, message.id);
+          request.resolve(message.result);
+        }
       },
       fire(id) {
         const callback = callbacks.get(id);

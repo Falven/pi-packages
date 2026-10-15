@@ -17,11 +17,22 @@ import {
 } from "./fixtures/model-loop.ts"
 
 test("completed execution cards expand readable commands while retaining orchestration", async (t) => {
+  const activity: {
+    events: {
+      type: string
+      presentation?: { command?: string; order?: number }
+    }[]
+  }[] = []
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
     rows: 100,
     columns: 100,
+    extension(pi) {
+      pi.events.on("core-tools.activity", (event) => {
+        activity.push(event as (typeof activity)[number])
+      })
+    },
   })
   const source =
     'await tools.exec_command({cmd: "printf readable-command", login: false});'
@@ -42,6 +53,16 @@ test("completed execution cards expand readable commands while retaining orchest
   assert.match(expanded, /readable-command/)
   assert.doesNotMatch(expanded, /await tools|Execution cell|Wall time|chunk_id/)
   assert.doesNotMatch(output(host), /readable-command/)
+  assert(
+    activity.some((batch) =>
+      batch.events.some(
+        (event) =>
+          event.type === "presentation" &&
+          event.presentation?.command === "printf readable-command" &&
+          event.presentation.order === 0,
+      ),
+    ),
+  )
   await host.reload()
   await setTimeout(60)
   assert.match(
@@ -91,6 +112,24 @@ test("command cards use effective arguments and hook-processed returned output",
   assert.doesNotMatch(expanded, /original-command|Exit status/)
   assert.doesNotMatch(output(host), /secret-payload/)
   assert.match(output(host), /redacted-result/)
+  const result = host.session.sessionManager
+    .getBranch()
+    .findLast(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        entry.message.toolName === "exec",
+    )
+  assert(result?.type === "message" && result.message.role === "toolResult")
+  const operation = (
+    result.message.details as {
+      execution: {
+        operations: { effectiveArgs?: { cmd?: string }; resultText?: string }[]
+      }
+    }
+  ).execution.operations[0]
+  assert.equal(operation?.effectiveArgs?.cmd, "printf secret-payload")
+  assert.equal(operation?.resultText, "redacted-result")
 })
 
 test("expanded execution keeps emitted results readable and reports script and command failures", async (t) => {
@@ -102,7 +141,7 @@ test("expanded execution keeps emitted results readable and reports script and c
   })
   host.queueResponse(
     ...call(
-      'text(await tools.exec_command({cmd:"printf command-failed; exit 7",login:false})); text("script-note"); throw new Error("script-failed");',
+      'text(await tools.exec_command({cmd:"printf command-failed; exit 7",login:false})); text("command-failed"); text("script-note"); throw new Error("script-failed");',
     ),
   )
   host.queueResponse(completed)
@@ -114,6 +153,18 @@ test("expanded execution keeps emitted results readable and reports script and c
   assert.match(expanded, /Command · failed/)
   assert.match(expanded, /script-failed/)
   assert.match(expanded, /script-note/)
+  const result = host.session.sessionManager
+    .getBranch()
+    .findLast(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        entry.message.toolName === "exec",
+    )
+  assert(result?.type === "message" && result.message.role === "toolResult")
+  const script = (result.message.details as { execution: { output?: string } })
+    .execution.output
+  assert.equal(script, "command-failed\nscript-note")
   assert.doesNotMatch(
     expanded,
     /chunk_id|wall_time_seconds|original_token_count|await tools/,

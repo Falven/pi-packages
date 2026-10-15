@@ -267,6 +267,26 @@ test("an image emitted after yielding keeps its operation in the origin and appe
     { tool: "exec", images: 0 },
     { tool: "wait", images: 1 },
   ])
+  const waitResult = host.session.sessionManager
+    .getBranch()
+    .findLast(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        entry.message.toolName === "wait",
+    )
+  assert(
+    waitResult?.type === "message" && waitResult.message.role === "toolResult",
+  )
+  const details = waitResult.message.details as {
+    imageOrigins: (string | null)[]
+    execution: { operations: { id: string; name: string }[] }
+  }
+  assert.deepEqual(details.imageOrigins, [
+    details.execution.operations.find(
+      (operation) => operation.name === "view_image",
+    )?.id,
+  ])
   assert.equal(
     JSON.stringify(host.requests.at(-1)).match(/"type":"input_image"/g)?.length,
     1,

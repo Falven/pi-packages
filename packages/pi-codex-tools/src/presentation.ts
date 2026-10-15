@@ -7,9 +7,15 @@ import type {
 } from "@earendil-works/pi-coding-agent"
 
 export type PatchChange = {
+  id: string
   action: "Added" | "Updated" | "Moved" | "Deleted"
   path: string
   destination?: string
+  status: "completed" | "failed" | "unattempted"
+  added?: number
+  removed?: number
+  output?: string
+  outputOmitted?: boolean
 }
 export type PatchDetails = {
   contentHash: string
@@ -19,14 +25,22 @@ export type PatchDetails = {
 
 export type OperationPresentation = {
   id: string
+  order: number
+  revision?: number
   name: string
   status: "running" | "completed" | "failed" | "interrupted or unknown"
+  toolSource?: string
+  toolPath?: string
+  effectiveArgs?: Record<string, unknown>
   command?: string
   cwd?: string
   path?: string
   patchChanges?: PatchChange[]
   patchOmitted?: boolean
   output?: string
+  outputOmitted?: boolean
+  resultText?: string
+  sessionId?: number
   input?: boolean
   live?: boolean
   exitCode?: number
@@ -34,6 +48,7 @@ export type OperationPresentation = {
 export type ExecutionDetails = {
   contentHash: string
   executionHash?: string
+  imageOrigins?: (string | null)[]
   execution: {
     cellId: string
     parentCallId: string
@@ -280,10 +295,10 @@ export function createExecutionRenderers(
             lines.push(`Path: ${operation.path}`)
           for (const change of operation.patchChanges ?? [])
             lines.push(
-              `${change.action}: ${change.path}${change.destination ? ` → ${change.destination}` : ""}`,
+              `${change.action}${change.status === "completed" ? "" : ` (${change.status})`}: ${change.path}${change.destination ? ` → ${change.destination}` : ""}`,
             )
           if (operation.patchOmitted)
-            lines.push("… [earlier file changes omitted]")
+            lines.push("… [earlier file change bodies omitted]")
           if (operation.output && !operation.input)
             lines.push(
               operation.output.replace(
@@ -296,14 +311,10 @@ export function createExecutionRenderers(
         }
         if (execution?.omitted)
           lines.push("… [earlier activity bodies omitted]")
-        const output = readable(
+        const output =
           execution?.output !== undefined
             ? execution.output
-                .split("\n")
-                .map((text) => ({ type: "text" as const, text }))
-            : result.content,
-          operations,
-        )
+            : readable(result.content, operations)
         if (output) lines.push(boundedPreview(output))
         if (execution?.error) lines.push(execution.error)
       }

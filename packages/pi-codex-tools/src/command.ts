@@ -6,7 +6,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent"
 import { Type } from "typebox"
-import { contentHash } from "./presentation.ts"
+import { boundedPreview, contentHash } from "./presentation.ts"
 import type { ProcessPresentation, ProcessSessions } from "./process.ts"
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
@@ -42,6 +42,7 @@ export function createCommand(
   {
     command: string
     cwd: string
+    effectiveArgs: Record<string, unknown>
     process?: ProcessPresentation
     outputHash?: string
   }
@@ -92,7 +93,21 @@ export function createCommand(
       if (ctx.thinkingLevel) env["PI_REASONING_LEVEL"] = ctx.thinkingLevel
       const cwd =
         args.workdir === undefined ? ctx.cwd : resolve(ctx.cwd, args.workdir)
-      onUpdate?.({ content: [], details: { command, cwd } })
+      const yieldTime = Math.min(
+        30000,
+        Math.max(250, args.yield_time_ms ?? 10000),
+      )
+      const maxTokens = args.max_output_tokens ?? 10000
+      const effectiveArgs = {
+        cmd: boundedPreview(command),
+        workdir: boundedPreview(cwd),
+        shell: boundedPreview(shell),
+        login: args.login !== false,
+        tty: args.tty ?? false,
+        yield_time_ms: yieldTime,
+        max_output_tokens: maxTokens,
+      }
+      onUpdate?.({ content: [], details: { command, cwd, effectiveArgs } })
       const result = await processes.start(
         {
           shell,
@@ -102,13 +117,13 @@ export function createCommand(
           env,
           tty: args.tty ?? false,
         },
-        Math.min(30000, Math.max(250, args.yield_time_ms ?? 10000)),
-        args.max_output_tokens ?? 10000,
+        yieldTime,
+        maxTokens,
         signal,
         (snapshot) =>
           onUpdate?.({
             content: [],
-            details: { command, cwd, process: snapshot },
+            details: { command, cwd, effectiveArgs, process: snapshot },
           }),
       )
       return {
@@ -117,6 +132,7 @@ export function createCommand(
         details: {
           command,
           cwd,
+          effectiveArgs,
           outputHash: contentHash([{ type: "text", text: result.output }]),
         },
       }
@@ -142,7 +158,10 @@ export function createStdin(
   available: () => boolean,
   lifetime: AbortSignal,
   processes: ProcessSessions,
-): ToolDefinition<typeof inputParameters, undefined> {
+): ToolDefinition<
+  typeof inputParameters,
+  { effectiveArgs: Record<string, unknown> }
+> {
   return {
     name: "write_stdin",
     label: "Input",
@@ -150,7 +169,7 @@ export function createStdin(
       "Writes characters to an existing unified exec session and returns recent output.",
     parameters: inputParameters,
     exposure: "codemode",
-    async execute(_id, args, signal) {
+    async execute(_id, args, signal, onUpdate) {
       signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime
       signal.throwIfAborted()
       if (!available())
@@ -159,20 +178,29 @@ export function createStdin(
         )
       const chars = args.chars ?? ""
       const minimum = chars ? 250 : 5000
+      const yieldTime = Math.min(
+        chars ? 30000 : 300000,
+        Math.max(minimum, args.yield_time_ms ?? minimum),
+      )
+      const maxTokens = args.max_output_tokens ?? 10000
+      const effectiveArgs = {
+        session_id: args.session_id,
+        chars: boundedPreview(chars),
+        yield_time_ms: yieldTime,
+        max_output_tokens: maxTokens,
+      }
+      onUpdate?.({ content: [], details: { effectiveArgs } })
       const result = await processes.write(
         args.session_id,
         chars,
-        Math.min(
-          chars ? 30000 : 300000,
-          Math.max(minimum, args.yield_time_ms ?? minimum),
-        ),
-        args.max_output_tokens ?? 10000,
+        yieldTime,
+        maxTokens,
         signal,
       )
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
-        details: undefined,
+        details: { effectiveArgs },
       }
     },
   }

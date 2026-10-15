@@ -5,7 +5,6 @@ import { stripVTControlCharacters } from "node:util"
 import { truncateToWidth } from "@earendil-works/pi-tui"
 import {
   boundedPreview,
-  readable,
   createExecutionRenderers,
   type LivePresentation,
   contentHash,
@@ -39,6 +38,7 @@ type Part = {
   through: OutputCursor
   sealed: boolean
   mimeType?: string
+  owner?: number
 }
 type Activity = {
   type: string
@@ -101,6 +101,7 @@ type Cell = {
   scriptOutput: string
   scriptOutputReset: boolean
   eventCount: number
+  revision: number
   notificationBytes: number
   presentation: ExecutionDetails["execution"]
   activeOperations: Set<OperationPresentation>
@@ -235,6 +236,7 @@ export class ExecutionCells {
       scriptOutput: "",
       scriptOutputReset: false,
       eventCount: 0,
+      revision: 0,
       notificationBytes: 0,
       presentation: {
         cellId: "",
@@ -333,8 +335,10 @@ export class ExecutionCells {
       args: unknown
       url: string
       writes: [string, string][]
+      owner?: number
     }
-    if (message.type === "text") await this.appendText(cell, message.text)
+    if (message.type === "text")
+      await this.appendText(cell, message.text, message.owner !== undefined)
     else if (message.type === "image") {
       if (this.pi.getSettings().images?.blockImages)
         await this.appendText(cell, "Image reading is disabled.")
@@ -350,6 +354,7 @@ export class ExecutionCells {
           through: cell.images.snapshot(),
           sealed: true,
           mimeType: message.url.slice(5, comma).split(";")[0]!,
+          ...(message.owner === undefined ? {} : { owner: message.owner }),
         })
       }
     } else if (message.type === "notify") {
@@ -416,12 +421,20 @@ export class ExecutionCells {
     const child = `${cell.id}/${message.id}`
     const operation: OperationPresentation = {
       id: child,
+      order: cell.presentation.operations.length,
       name: message.name,
       status: "running",
     }
+    const source = this.pi
+      .getAllTools()
+      .find((tool) => tool.name === message.name)?.sourceInfo
+    if (source) {
+      operation.toolSource = source.source
+      operation.toolPath = source.path
+    }
     cell.activeOperations.add(operation)
     cell.presentation.operations.push(operation)
-    this.update(cell)
+    this.update(cell, operation)
     let processId: number | undefined
     let observing = false
     const observe = (process: ProcessPresentation) => {
@@ -431,7 +444,7 @@ export class ExecutionCells {
       if (process.exitCode !== undefined) operation.exitCode = process.exitCode
       if (returned && process.status !== "running")
         this.settleOperation(cell, operation)
-      this.update(cell)
+      this.update(cell, operation)
       if (returned && process.status !== "running") {
         this.record(cell, {
           type: "process-completed",
@@ -469,6 +482,7 @@ export class ExecutionCells {
                   command?: string
                   cwd?: string
                   path?: string
+                  effectiveArgs?: Record<string, unknown>
                   process?: ProcessPresentation
                 }
               | undefined
@@ -483,7 +497,11 @@ export class ExecutionCells {
             }
             if (typeof context?.path === "string")
               operation.path = boundedPreview(context.path)
-            this.update(cell)
+            if (context?.effectiveArgs)
+              operation.effectiveArgs = context.effectiveArgs
+            else if (typeof context?.path === "string")
+              operation.effectiveArgs = { path: context.path }
+            this.update(cell, operation)
           },
         },
       )
@@ -498,7 +516,13 @@ export class ExecutionCells {
             .map((part) => part.text)
             .join("\n")
       const context = outcome.result.details as
-        | { command?: string; cwd?: string; outputHash?: string; path?: string }
+        | {
+            command?: string
+            cwd?: string
+            outputHash?: string
+            path?: string
+            effectiveArgs?: Record<string, unknown>
+          }
         | undefined
       if (typeof context?.command === "string")
         operation.command = boundedPreview(context.command)
@@ -506,6 +530,10 @@ export class ExecutionCells {
         operation.cwd = boundedPreview(context.cwd)
       if (typeof context?.path === "string")
         operation.path = boundedPreview(context.path)
+      if (context?.effectiveArgs)
+        operation.effectiveArgs = context.effectiveArgs
+      else if (typeof context?.path === "string")
+        operation.effectiveArgs = { path: context.path }
       const structured = outcome.result.structuredContent as
         | {
             output?: unknown
@@ -514,6 +542,20 @@ export class ExecutionCells {
             image_url?: unknown
           }
         | undefined
+      const processedMatches = text === JSON.stringify(structured)
+      if (
+        !blocked &&
+        !(
+          message.name === "view_image" && /"image_url"\s*:\s*"data:/.test(text)
+        )
+      )
+        operation.resultText = boundedPreview(text)
+      if (typeof structured?.session_id === "number")
+        operation.sessionId = structured.session_id
+      if (message.name === "write_stdin") {
+        const id = operation.effectiveArgs?.["session_id"]
+        if (typeof id === "number") operation.sessionId = id
+      }
       operation.input = message.name === "write_stdin" && !outcome.isError
       liveRedacted =
         operation.live === true &&
@@ -527,7 +569,7 @@ export class ExecutionCells {
               (message.name === "view_image" &&
                 /"image_url"\s*:\s*"data:/.test(text)))
             ? ""
-            : typeof structured?.output === "string"
+            : processedMatches && typeof structured?.output === "string"
               ? structured.output
               : text,
         )
@@ -554,7 +596,7 @@ export class ExecutionCells {
         this.processes.replacePresentation(processId, operation.output ?? "")
       if (!operation.live || operation.status !== "running")
         this.settleOperation(cell, operation)
-      this.update(cell)
+      this.update(cell, operation)
       this.record(cell, {
         presentation: { ...operation },
         type: outcome.isError || blocked ? "failed" : "completed",
@@ -576,7 +618,7 @@ export class ExecutionCells {
       operation.status = "failed"
       operation.output = boundedPreview(text)
       this.settleOperation(cell, operation)
-      this.update(cell)
+      this.update(cell, operation)
       this.record(cell, {
         presentation: { ...operation },
         type: "failed",
@@ -629,24 +671,48 @@ export class ExecutionCells {
     }
   }
 
-  private appendText(cell: Cell, text: string): Promise<void> {
-    const previous = cell.presentation.output ?? ""
-    const shown = readable(
-      [{ type: "text", text }],
-      cell.presentation.operations,
-    )
-    const output = shown
-      ? boundedPreview(previous + (previous ? "\n" : "") + shown)
-      : previous
-    if (output !== previous) {
-      cell.presentation.output = output
-      if (output.startsWith(previous))
-        cell.scriptOutput += output.slice(previous.length)
-      else {
-        cell.scriptOutput = output
-        cell.scriptOutputReset = true
+  private appendText(
+    cell: Cell,
+    text: string,
+    childOwned = false,
+  ): Promise<void> {
+    if (!childOwned) {
+      let shown = text
+      try {
+        const value = JSON.parse(text) as { image_url?: unknown }
+        if (
+          typeof value.image_url === "string" &&
+          value.image_url.startsWith("data:")
+        )
+          shown = "[Image result]"
+      } catch {
+        // Ordinary script text is displayed as written.
       }
-      this.update(cell)
+      const previous = cell.presentation.output ?? ""
+      const output = boundedPreview(previous + (previous ? "\n" : "") + shown)
+      if (output !== previous) {
+        cell.presentation.output = output
+        const reset = !output.startsWith(previous)
+        const delta = reset ? output : output.slice(previous.length)
+        if (reset) {
+          cell.scriptOutput = output
+          cell.scriptOutputReset = true
+        } else cell.scriptOutput += delta
+        this.pi.events.emit(journalType, {
+          cell_id: cell.id,
+          parent_call_id: cell.parentId,
+          session_id: cell.sessionId,
+          status: cell.status,
+          events: [
+            {
+              type: "script-output",
+              output: delta,
+              ...(reset ? { replace_output: true } : {}),
+            },
+          ],
+        } satisfies Journal)
+        this.update(cell)
+      }
     }
     cell.writing = cell.writing.then(async () => {
       this.checkParts(cell)
@@ -830,7 +896,7 @@ export class ExecutionCells {
           ]
           return {
             content: failed,
-            details: this.details(cell, failed),
+            details: this.details(cell, failed, cutoff.parts),
             isError: true,
           }
         }
@@ -847,7 +913,7 @@ export class ExecutionCells {
         ]
         return {
           content: resultContent,
-          details: this.details(cell, resultContent),
+          details: this.details(cell, resultContent, cutoff.parts),
         }
       })
       .catch((error: unknown) =>
@@ -941,20 +1007,37 @@ export class ExecutionCells {
   private details(
     cell: Cell,
     content: Result["content"] = [],
+    parts: Part[] = [],
   ): ExecutionDetails {
     cell.presentation.status = cell.status
     return {
       contentHash: contentHash(content),
       executionHash: executionHash(cell.presentation),
+      imageOrigins: parts
+        .filter((part) => part.type === "image")
+        .map((part) =>
+          part.owner === undefined ? null : `${cell.id}/${part.owner}`,
+        ),
       execution: structuredClone(cell.presentation),
     }
   }
 
-  private update(cell: Cell): void {
+  private update(cell: Cell, operation?: OperationPresentation): void {
     cell.presentation.status = cell.status
-    this.trimOperations(cell.presentation, (operation) =>
-      cell.activeOperations.has(operation),
+    if (operation) operation.revision = ++cell.revision
+    this.trimOperations(cell.presentation, (candidate) =>
+      cell.activeOperations.has(candidate),
     )
+    if (operation)
+      this.pi.events.emit(journalType, {
+        cell_id: cell.id,
+        parent_call_id: cell.parentId,
+        session_id: cell.sessionId,
+        status: cell.status,
+        events: [
+          { type: "presentation", presentation: structuredClone(operation) },
+        ],
+      } satisfies Journal)
     const invalidates = [
       ...(this.presentations.get(cell.id)?.invalidates ?? []),
     ]
@@ -976,26 +1059,26 @@ export class ExecutionCells {
 
   private settleOperation(cell: Cell, operation: OperationPresentation): void {
     if (!cell.activeOperations.delete(operation)) return
-    const index = cell.presentation.operations.indexOf(operation)
-    if (index >= 0) cell.presentation.operations.splice(index, 1)
-    cell.presentation.operations.push(operation)
   }
 
   private trimOperations(
     execution: ExecutionDetails["execution"],
     active: (operation: OperationPresentation) => boolean,
   ): void {
-    let settled = execution.operations.filter(
+    const settled = execution.operations.filter(
       (operation) => !active(operation),
-    ).length
-    if (settled <= 8) return
-    execution.operations = execution.operations.filter((operation) => {
-      if (settled <= 8 || active(operation)) return true
-      settled--
+    )
+    if (settled.length <= 8) return
+    for (const operation of settled
+      .toSorted((a, b) => (a.revision ?? 0) - (b.revision ?? 0))
+      .slice(0, -8)) {
       execution.omitted = true
       if (operation.status === "failed") execution.omittedFailure = true
-      return false
-    })
+      if (operation.output || operation.resultText)
+        operation.outputOmitted = true
+      delete operation.output
+      delete operation.resultText
+    }
   }
 
   private restore(
@@ -1037,12 +1120,8 @@ export class ExecutionCells {
             (operation) => operation.id === presentation.id,
           )
           if (index < 0) execution.operations.push(presentation)
-          else if (presentation.status === "running")
-            execution.operations[index] = presentation
-          else {
-            execution.operations.splice(index, 1)
-            execution.operations.push(presentation)
-          }
+          else execution.operations[index] = presentation
+          execution.operations.sort((a, b) => a.order - b.order)
           this.trimOperations(
             execution,
             (operation) => operation.status === "running" && !operation.input,
@@ -1073,6 +1152,13 @@ export class ExecutionCells {
     )
       throw new Error("Execution activity exceeds 4096 records")
     cell.eventCount++
+    this.pi.events.emit(journalType, {
+      cell_id: cell.id,
+      parent_call_id: cell.parentId,
+      session_id: cell.sessionId,
+      status: cell.status,
+      events: [structuredClone(event)],
+    } satisfies Journal)
     cell.events.push(event)
     cell.eventBytes += Buffer.byteLength(JSON.stringify(event))
     if (cell.events.length >= 16 || cell.eventBytes >= 8192) this.flush(cell)
