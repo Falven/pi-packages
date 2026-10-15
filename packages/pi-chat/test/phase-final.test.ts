@@ -190,7 +190,7 @@ test("a failed stream keeps an established partial final and Pi's native error n
   assert.doesNotMatch(replay, /Prior work/)
 })
 
-test("an explicit phase correction disqualifies the selected final", async (t) => {
+test("a phase correction revokes the final while preserving explicit activity closure", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -209,17 +209,30 @@ test("an explicit phase correction disqualifies the selected final", async (t) =
   await submit(host)
   await t.waitFor(() => assert.equal(host.requests.length, 1))
   assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+  await host.key("\r")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   host.resumeResponse()
   await host.settled()
   const frame = await host.frame()
-  assert.doesNotMatch(frame, /Worked/)
-  assert.match(frame, /Prior work/)
-  assert.match(frame, /Provisional answer/)
+  assert.match(frame, /Worked for \d+m \d+s ▶/)
+  assert.doesNotMatch(frame, /Prior work|Provisional answer/)
+  await host.key("\r")
+  const reopened = await host.frame()
+  assert.match(reopened, /Worked for \d+m \d+s ▼/)
+  assert.match(reopened, /Prior work/)
+  assert.match(reopened, /Provisional answer/)
+  assert.match(reopened, /Error:/)
   await host.reload()
-  assert.doesNotMatch(await host.frame(), /Worked/)
+  const reloaded = await host.frame()
+  assert.doesNotMatch(reloaded, /Worked/)
+  assert.match(reloaded, /Prior work/)
+  assert.match(reloaded, /Provisional answer/)
 })
 
-test("cancellation opens agent activity despite an explicit streaming final", async (t) => {
+test("cancellation opens unchosen activity and preserves explicit disclosure choices", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -242,6 +255,17 @@ test("cancellation opens agent activity despite an explicit streaming final", as
   assert.match(frame, /Prior work/)
   assert.match(frame, /Partial answer/)
   assert.match(frame, /Operation aborted/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  const explicitlyCollapsed = await host.frame()
+  assert.match(explicitlyCollapsed, /Worked for \d+m \d+s ▶/)
+  assert.doesNotMatch(explicitlyCollapsed, /Prior work/)
+  assert.match(explicitlyCollapsed, /Partial answer/)
+  assert.match(explicitlyCollapsed, /Operation aborted/)
+  host.terminal.resize(65, 36)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.reload()
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
 })
 
 test("a Responses message without phase does not collapse early", async (t) => {
@@ -380,11 +404,12 @@ test("an explicit final remains selected when the response is incomplete", async
   assert.doesNotMatch(frame, /Prior work/)
 })
 
-test("opening agent activity during a final stream stays open after settlement", async (t) => {
+test("individual and configured global choices persist during a final stream and settlement", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
+    keybindings: { "app.tools.expand": "ctrl+e" },
   })
   host.queueResponse(
     added(0, "progress", "commentary"),
@@ -393,7 +418,8 @@ test("opening agent activity during a final stream stays open after settlement",
     added(1, "answer", "final_answer"),
     delta(1, "Visible answer"),
     { pause: true },
-    ended(1, "answer", "final_answer", "Visible answer"),
+    delta(1, " grows"),
+    ended(1, "answer", "final_answer", "Visible answer grows"),
     completed,
   )
   await submit(host)
@@ -413,6 +439,14 @@ test("opening agent activity during a final stream stays open after settlement",
       host.ui.theme.underline(stripTerminalSequences(workRow()).trim()),
     ),
   )
+  await host.key("\x05")
+  await host.key("\x05")
+  const globallyClosed = await host.frame()
+  assert.match(globallyClosed, /Worked for \d+m \d+s ▶/)
+  assert.match(globallyClosed, /Visible answer/)
+  assert.doesNotMatch(globallyClosed, /Prior work/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
   host.resumeResponse()
   await host.settled()
   const settled = await host.frame()
@@ -424,7 +458,7 @@ test("opening agent activity during a final stream stays open after settlement",
     ),
   )
   assert.match(settled, /Prior work/)
-  assert.match(settled, /Visible answer/)
+  assert.match(settled, /Visible answer grows/)
 })
 
 test("a blank replacement revokes a provisional final", async (t) => {

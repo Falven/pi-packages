@@ -1364,9 +1364,14 @@ export class NativeChatHost {
       const chatRow = chatRows[index]!
       const agentActivity =
         chatRow.agentActivity ?? this.agentActivity.find(chatRow.occurrence)
+      const explicitDisclosure = Boolean(
+        agentActivity?.header &&
+        agentActivity.manualExpanded !== undefined &&
+        !agentActivity.final,
+      )
       if (
         !agentActivity ||
-        !agentActivity.final ||
+        (!agentActivity.final && !explicitDisclosure) ||
         this.agentActivity.isRequest(chatRow.occurrence, agentActivity)
       ) {
         result.push(chatRow)
@@ -1404,7 +1409,7 @@ export class NativeChatHost {
         body.some(
           (item) => !retained(item) && !(item.component instanceof Spacer),
         ) &&
-        final.length
+        (final.length || explicitDisclosure)
       ) {
         agentActivity.header ??= new AgentActivityHeader(this, agentActivity)
         result.push({ component: agentActivity.header, tool: false })
@@ -1415,7 +1420,7 @@ export class NativeChatHost {
           // Split final parts omit the native assistant's leading spacer.
           if (
             visible.at(-1)?.occurrence?.message?.role === "user" &&
-            final[0]!.occurrence?.contentIndex !== undefined
+            final[0]?.occurrence?.contentIndex !== undefined
           )
             result.push({
               component: agentActivity.header.spacing,
@@ -3020,6 +3025,9 @@ export class NativeChatHost {
         for (const disclosure of items.values())
           disclosure.setExpanded(expanded)
       for (const group of this.renderGroups.values()) group.expanded = expanded
+      for (const disclosure of this.visibleDisclosures)
+        if (disclosure instanceof AgentActivityHeader)
+          disclosure.agentActivity.manualExpanded = expanded
       this.clearSelection(host.renderer as unknown as TuiAltScreen)
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
       return result

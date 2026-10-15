@@ -160,6 +160,7 @@ test("identical delivered steering and follow-up retain separate request relatio
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 52,
+    keybindings: { "app.tools.expand": "ctrl+e" },
     settings: { hideThinkingBlock: true },
     extensionFactories: [
       (pi) => {
@@ -296,6 +297,18 @@ test("identical delivered steering and follow-up retain separate request relatio
   assert.equal((replayed.match(/Notice before steering/g) ?? []).length, 1)
   assert.match(replayed, /First answer|Second answer/)
   assertNoticeGap()
+  host.terminal.resize(60, 80)
+  await host.key("\x05")
+  const allExpanded = await host.frame()
+  assert.equal((allExpanded.match(/Worked for \d+m \d+s ▼/g) ?? []).length, 2)
+  assert.match(allExpanded, /one native result[\s\S]*three native result/)
+  assert.doesNotMatch(allExpanded, /Final reasoning/)
+  await host.key("\x05")
+  const allCollapsed = await host.frame()
+  assert.equal((allCollapsed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
+  assert.equal((allCollapsed.match(/Same queued text/g) ?? []).length, 2)
+  assert.match(allCollapsed, /First answer[\s\S]*Second answer/)
+  assert.doesNotMatch(allCollapsed, /Before steering|Followup progress/)
 })
 
 test("without provider phase evidence agent activity stays visible until the final stream settles", async (t) => {
@@ -494,8 +507,12 @@ test("all terminal text parts share one answer when a native extension interleav
   ])
 })
 
-test("native tool inspection keeps agent activity open and agent activity toggles preserve activity bodies", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 34 })
+test("individual activity toggles preserve bodies and configured global expansion sets every disclosure", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 34,
+    keybindings: { "app.tools.expand": "ctrl+e" },
+  })
   await writeFile(join(host.directory, "one.txt"), "INSPECTED BODY")
   host.queueResponse(
     delta("Inspected commentary", "one.txt"),
@@ -536,13 +553,23 @@ test("native tool inspection keeps agent activity open and agent activity toggle
   assert.doesNotMatch(await host.frame(), /INSPECTED BODY/)
   await host.key("\r")
   assert.match(await host.frame(), /INSPECTED BODY/)
-  await host.key("\x0f")
-  await host.key("\x0f")
-  assert.match(await host.frame(), /Worked/)
+  await host.key("\x05")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+  assert.match(await host.frame(), /INSPECTED BODY/)
+  await host.key("\x05")
+  const globallyCollapsed = await host.frame()
+  assert.match(globallyCollapsed, /Worked for \d+m \d+s ▶/)
+  assert.match(globallyCollapsed, /Final text/)
+  assert.doesNotMatch(globallyCollapsed, /INSPECTED BODY|Inspected commentary/)
   await host.key("\r")
-  assert.doesNotMatch(await host.frame(), /INSPECTED BODY|Inspected commentary/)
-  await host.key("\x0f")
-  assert.doesNotMatch(await host.frame(), /INSPECTED BODY|Inspected commentary/)
+  const parentOnly = await host.frame()
+  assert.match(parentOnly, /Worked for \d+m \d+s ▼/)
+  assert.match(parentOnly, /> Read files/)
+  assert.doesNotMatch(parentOnly, /INSPECTED BODY/)
+  await host.key("\x1b")
+  await host.key("\x05")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+  assert.match(await host.frame(), /INSPECTED BODY/)
 })
 
 test("cancelling a partial final leaves agent activity expanded", async (t) => {

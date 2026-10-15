@@ -285,9 +285,10 @@ export class AgentActivityIndex {
 
   expanded(agentActivity: AgentActivity) {
     return (
-      !agentActivity.final ||
-      agentActivity.cancelled ||
-      (agentActivity.manualExpanded ?? agentActivity.keepOpen)
+      agentActivity.manualExpanded ??
+      (!agentActivity.final ||
+        agentActivity.cancelled ||
+        agentActivity.keepOpen)
     )
   }
 
