@@ -177,7 +177,7 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /exec_command/)
-      assert.match(screen, /"cmd": "cat changed\.txt"/)
+      assert.match(screen, /cmd="cat changed\.txt"/)
       assert.match(screen, /validated-result/)
       assert.doesNotMatch(screen, /validated-line-39/)
       assert.match(screen, /more lines/)
@@ -207,6 +207,14 @@ for (const order of ["first", "last"] as const) {
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /validated-line-39/)
       assert.match(screen, /> Ran printf inspect-project/)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}m`)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /▼ Edited files/)
+      assert.match(screen, /▼ Read changed\.txt/)
+      assert.match(screen, /more lines/)
+      assert.doesNotMatch(screen, /validated-line-39/)
       const activityRow = host
         .screenLines()
         .findIndex((line) => stripVTControlCharacters(line).includes("Worked"))
@@ -237,7 +245,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /LATE-MIXED-FAILURE/)
       assert.match(screen, /Unrelated workflow notice/)
       assert.match(screen, /Received\./)
-      assert.match(screen, /"input": "await tools\.exec_command/)
+      assert.match(screen, /input: await tools\.exec_command/)
       assert.doesNotMatch(
         screen,
         /Command ·|Patch ·|Image ·|chunk_id|cell_id|iVBOR|core-tools\.activity/,
