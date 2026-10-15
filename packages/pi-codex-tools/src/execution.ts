@@ -43,7 +43,6 @@ type Part = {
 type Activity = {
   type: string
   child_id?: string
-  error_owner?: string
   name?: string
   arguments?: string
   error?: string
@@ -380,19 +379,13 @@ export class ExecutionCells {
       cell.status = message.type === "done" ? "completed" : "failed"
       cell.error = message.type === "error" ? message.message : undefined
       cell.accepting = false
-      if (cell.error && message.owner === undefined)
-        cell.presentation.error = boundedPreview(cell.error)
+      if (cell.error) cell.presentation.error = boundedPreview(cell.error)
       else delete cell.presentation.error
       this.update(cell)
       this.release(cell)
       this.record(cell, {
         type: cell.status,
-        ...(cell.error && message.owner === undefined
-          ? { error: brief(cell.error) }
-          : {}),
-        ...(message.owner === undefined
-          ? {}
-          : { error_owner: `${cell.id}/${message.owner}` }),
+        ...(cell.error ? { error: brief(cell.error) } : {}),
       })
       this.flush(cell)
       cell.wake?.()
