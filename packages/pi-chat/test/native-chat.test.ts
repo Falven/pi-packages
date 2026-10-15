@@ -433,8 +433,8 @@ test("consecutive native calls start as one closed group and open from the compo
   assert.doesNotMatch(screen(), /FIRST TOOL BODY|SECOND TOOL BODY/)
   await host.key("\x1b[B")
   await host.key("\r")
-  assert.match(await host.frame(), /FIRST TOOL BODY/)
-  assert.doesNotMatch(screen(), /SECOND TOOL BODY/)
+  assert.match(await host.frame(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /FIRST TOOL BODY|SECOND TOOL BODY/)
   await host.key("\r")
   assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY|SECOND TOOL BODY/)
   await host.key("\x1b[A")
@@ -598,7 +598,8 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   await host.key("\x1b[B")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /only/)
+  assert.match(screen(), /read one\.txt/)
+  assert.doesNotMatch(screen(), /only/)
 })
 
 test("commentary between model iterations separates render groups in source order", async (t) => {
@@ -956,7 +957,12 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
     },
   })
   assert(renderer)
-  await writeFile(join(host.directory, "one.txt"), "FIRST TOOL BODY")
+  await writeFile(
+    join(host.directory, "one.txt"),
+    Array.from({ length: 12 }, (_, index) => `FIRST TOOL BODY ${index}`).join(
+      "\n",
+    ),
+  )
   await writeFile(join(host.directory, "two.txt"), "SECOND TOOL BODY")
   host.queueResponse(readPairDelta("pointer"), toolFinish, done, end)
   await host.type("Pointer group")
@@ -993,14 +999,35 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   assert(call >= 0)
   await click(call)
   await host.frame()
-  assert.match(lines().join("\n"), /FIRST TOOL BODY/)
+  assert.match(lines()[call] ?? "", /^▼ Read one\.txt/)
+  assert.doesNotMatch(lines().join("\n"), /FIRST TOOL BODY/)
   const nativeCall = lines().findIndex((line) => line.includes("read one.txt"))
   assert(nativeCall >= 0)
   await click(nativeCall)
+  assert.match(await host.frame(), /FIRST TOOL BODY 11/)
+  assert.match(lines()[header] ?? "", /^▼ Read files/)
+  assert.match(lines()[call] ?? "", /^▼ Read one\.txt/)
+  await click(lines().findIndex((line) => line.includes("FIRST TOOL BODY 0")))
   assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY/)
-  await click(lines().findIndex((line) => line.includes("> Read one.txt")))
-  assert.match(await host.frame(), /FIRST TOOL BODY/)
+  assert.match(lines()[header] ?? "", /^▼ Read files/)
+  assert.match(lines()[call] ?? "", /^▼ Read one\.txt/)
+  assert.match(lines()[nativeCall] ?? "", /read one\.txt/)
+  await click(call)
+  await host.key("\r")
+  assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY/)
+  await click(nativeCall)
+  assert.match(await host.frame(), /FIRST TOOL BODY 11/)
+  await click(call)
+  await host.key("\r")
+  assert.match(await host.frame(), /FIRST TOOL BODY 11/)
+  const workRow = lines().findIndex((line) => line.includes("Worked for"))
+  assert(workRow >= 0)
+  await click(workRow)
+  assert.doesNotMatch(await host.frame(), /FIRST TOOL BODY/)
+  await host.key("\r")
+  assert.match(await host.frame(), /FIRST TOOL BODY 11/)
 
+  await host.key("\x1b")
   await host.key("\x1bg")
   /* eslint-disable no-await-in-loop -- Native focus follows each rendered key event. */
   for (let move = 0; move < 3; move++) {
@@ -1051,7 +1078,7 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await click(bodyRow, 1)
   await click(bodyRow, host.terminal.columns)
   assert.match(lines()[itemRow] ?? "", /^ ▼ Read one\.txt/)
-  assert.match(lines().join("\n"), /FIRST TOOL BODY/)
+  assert.match(lines().join("\n"), /FIRST TOOL BODY 11/)
   await host.key("\x1b")
   await host.key("\u000f")
   await host.key("\u000f")
@@ -1069,6 +1096,9 @@ test("group pointer toggles retain native tool clicks and overlay focus", async 
   await click(lines().findIndex((line) => line.includes("> Read files")))
   await host.frame()
   assert.match(lines().join("\n"), /> Read one\.txt/)
+  assert.doesNotMatch(lines().join("\n"), /FIRST TOOL BODY/)
+  await click(lines().findIndex((line) => line.includes("> Read one.txt")))
+  assert.match(await host.frame(), /read one\.txt/)
   assert.doesNotMatch(lines().join("\n"), /FIRST TOOL BODY/)
 })
 

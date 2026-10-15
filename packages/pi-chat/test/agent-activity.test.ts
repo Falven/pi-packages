@@ -534,6 +534,13 @@ test("individual activity toggles preserve bodies and configured global expansio
   assert(call >= 0)
   await host.key(`\x1b[<0;3;${call + 1}M`)
   await host.key(`\x1b[<0;3;${call + 1}m`)
+  assert.doesNotMatch(await host.frame(), /INSPECTED BODY/)
+  const nativeCall = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
+  assert(nativeCall >= 0)
+  await host.key(`\x1b[<0;3;${nativeCall + 1}M`)
+  await host.key(`\x1b[<0;3;${nativeCall + 1}m`)
   assert.match(await host.frame(), /INSPECTED BODY/)
   host.resumeResponse()
   await host.settled()

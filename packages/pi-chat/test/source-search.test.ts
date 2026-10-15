@@ -122,6 +122,8 @@ test("Find opens a closed render group and keeps the native result presenter", a
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(screen, /Worked for \d+m \d+s ▼/)
   assert.match(screen, /▼ Read files/)
+  assert.match(screen, /> Read one\.txt/)
+  assert.doesNotMatch(screen, /ordinary output/)
   assert.match(screen, /rare telescope output/)
   assert.match(screen, /1\/1/)
   const result = host

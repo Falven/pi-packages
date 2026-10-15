@@ -372,6 +372,13 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   assert(nativeRow >= 0)
   await host.key(`\x1b[<0;2;${nativeRow + 1}M`)
   await host.key(`\x1b[<0;2;${nativeRow + 1}m`)
+  assert.doesNotMatch(await host.frame(), /native result/)
+  const nativeCall = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
+  assert(nativeCall >= 0)
+  await host.key(`\x1b[<0;2;${nativeCall + 1}M`)
+  await host.key(`\x1b[<0;2;${nativeCall + 1}m`)
   assert.match(await host.frame(), /native result/)
   assert.doesNotMatch(
     await host.frame(),

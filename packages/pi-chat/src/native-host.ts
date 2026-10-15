@@ -352,6 +352,7 @@ class ActivityItemDisclosure extends Container {
   focused = false
   expanded = false
   private body: ToolExecutionComponent | undefined
+  private initialBodyExpanded = false
   private header = new Text("", 0, 0)
 
   private result() {
@@ -380,8 +381,10 @@ class ActivityItemDisclosure extends Container {
     if (
       item.body.name !== this.item.body.name ||
       Boolean(item.body.renderers) !== Boolean(this.item.body.renderers)
-    )
+    ) {
+      this.initialBodyExpanded = this.bodyExpanded
       this.body = undefined
+    }
     this.item = item
     if (this.body) {
       this.body.updateArgs(item.body.args)
@@ -392,6 +395,17 @@ class ActivityItemDisclosure extends Container {
 
   setExpanded(expanded: boolean) {
     this.expanded = expanded
+  }
+
+  get bodyExpanded() {
+    return (
+      (this.body as unknown as NativeToolPresenter | undefined)?.expanded ??
+      this.initialBodyExpanded
+    )
+  }
+
+  setBodyExpanded(expanded: boolean) {
+    this.initialBodyExpanded = expanded
     this.body?.setExpanded(expanded)
   }
 
@@ -399,7 +413,7 @@ class ActivityItemDisclosure extends Container {
     const pad = this.adapter.host.outputPad
     this.header = new Text(
       truncateToWidth(
-        `${this.expanded ? "▼" : ">"} ${itemSummary(this.item, this.expanded)}`,
+        `${this.expanded ? "▼" : ">"} ${itemSummary(this.item, this.expanded && this.bodyExpanded)}`,
         Math.max(1, width - pad * 2),
       ),
       pad,
@@ -429,7 +443,7 @@ class ActivityItemDisclosure extends Container {
         const result = this.result()
         if (result)
           this.body.updateResult(result, this.item.status === "running")
-        this.body.setExpanded(true)
+        this.body.setExpanded(this.initialBodyExpanded)
       }
       this.children.push(this.body)
     }
@@ -486,15 +500,9 @@ class ActivityItemDisclosure extends Container {
         },
       }
     }
+    const expanded = this.bodyExpanded
     const result = super.handleMouse(event)
-    if (
-      this.expanded &&
-      this.body &&
-      !(this.body as unknown as NativeToolPresenter).expanded
-    ) {
-      this.setExpanded(false)
-      this.adapter.clearChatSelection()
-    }
+    if (this.bodyExpanded !== expanded) this.adapter.clearChatSelection()
     return result
   }
 }
@@ -577,7 +585,13 @@ export class NativeChatHost {
   >()
   private disclosureChoices = new WeakMap<
     Entry,
-    Map<number, { group: boolean | undefined; items: Map<string, boolean> }>
+    Map<
+      number,
+      {
+        group: boolean | undefined
+        items: Map<string, { expanded: boolean; bodyExpanded: boolean }>
+      }
+    >
   >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
@@ -1069,9 +1083,10 @@ export class NativeChatHost {
           occurrence.contentIndex = source.contentIndex
         occurrence.sourceCall = source
         disclosure = new ActivityItemDisclosure(this, occurrence, item)
-        disclosure.setExpanded(
-          this.retainedDisclosures(source)?.items.get(item.id) ??
-            this.host.toolOutputExpanded,
+        const choice = this.retainedDisclosures(source)?.items.get(item.id)
+        disclosure.setExpanded(choice?.expanded ?? this.host.toolOutputExpanded)
+        disclosure.setBodyExpanded(
+          choice?.bodyExpanded ?? this.host.toolOutputExpanded,
         )
         occurrence.component = disclosure
         disclosures.set(item.id, disclosure)
@@ -1106,7 +1121,12 @@ export class NativeChatHost {
         group:
           this.renderGroups.get(source)?.expanded ??
           choices.get(source.contentIndex)?.group,
-        items: new Map([...items].map(([id, item]) => [id, item.expanded])),
+        items: new Map(
+          [...items].map(([id, item]) => [
+            id,
+            { expanded: item.expanded, bodyExpanded: item.bodyExpanded },
+          ]),
+        ),
       })
       this.disclosureChoices.set(source.entry, choices)
     }
@@ -1852,8 +1872,9 @@ export class NativeChatHost {
     }
     if (changed) this.layoutChat()
     const disclosure = hit.field.tool ? this.searchDisclosure(hit) : undefined
-    if (disclosure && !disclosure.expanded) {
+    if (disclosure && (!disclosure.expanded || !disclosure.bodyExpanded)) {
       disclosure.setExpanded(true)
+      disclosure.setBodyExpanded(true)
       changed = true
     }
     for (const group of this.renderGroups.values()) {
@@ -3024,8 +3045,10 @@ export class NativeChatHost {
           if (component instanceof ToolExecutionComponent)
             component.setExpanded(expanded)
       for (const items of this.activityDisclosures.values())
-        for (const disclosure of items.values())
+        for (const disclosure of items.values()) {
           disclosure.setExpanded(expanded)
+          disclosure.setBodyExpanded(expanded)
+        }
       for (const group of this.renderGroups.values()) group.expanded = expanded
       for (const disclosure of this.visibleDisclosures)
         if (disclosure instanceof AgentActivityHeader)

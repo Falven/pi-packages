@@ -111,6 +111,13 @@ test("expanded groups expose all native output in conversation flow without inva
   assert(secondItemRow >= 0)
   await host.key(`\x1b[<0;2;${secondItemRow + 1}M`)
   await host.key(`\x1b[<0;2;${secondItemRow + 1}m`)
+  assert.doesNotMatch(await host.frame(), /second-row-19/)
+  const nativeCall = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("read two.txt"))
+  assert(nativeCall >= 0)
+  await host.key(`\x1b[<0;2;${nativeCall + 1}M`)
+  await host.key(`\x1b[<0;2;${nativeCall + 1}m`)
   assert.match(await host.frame(), /second-row-19/)
   assert.doesNotMatch(await host.frame(), /first-row-0/)
   await host.key("\u000f")
@@ -291,6 +298,30 @@ test("group summaries combine native categories and distinct paths while executi
   await host.frame()
   host.terminal.resize(100, 24)
   assert.match(await host.frame(), /> Edited a file, read files, ran commands/)
+  host.terminal.resize(100, 44)
+  await host.frame()
+  await host.key("\x1bg")
+  await host.key("\r")
+  const lines = () => host.screenLines().map(stripTerminalSequences)
+  const click = async (row: number) => {
+    assert(row >= 0)
+    await host.key(`\x1b[<0;3;${row + 1}M`)
+    await host.key(`\x1b[<0;3;${row + 1}m`)
+    await host.frame()
+  }
+  await host.frame()
+  const itemRow = lines().findIndex((line) =>
+    line.includes("> Ran printf first-command"),
+  )
+  await click(itemRow)
+  assert.match(lines()[itemRow] ?? "", /▼ Ran printf first-command/)
+  await click(
+    lines().findIndex((line) => line.includes("$ printf first-command")),
+  )
+  assert.match(lines()[itemRow] ?? "", /▼ Ran command\s*$/)
+  await click(lines().findIndex((line) => line.trim() === "first-command"))
+  assert.match(lines()[itemRow] ?? "", /▼ Ran printf first-command/)
+  assert.match(lines().join("\n"), /▼ Edited a file, read files, ran commands/)
 })
 
 test("default activity bodies and surrounding entries scroll together in the conversation", async (t) => {
