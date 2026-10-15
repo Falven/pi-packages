@@ -306,12 +306,14 @@ for (const order of ["first", "last"] as const) {
       assert(executionRow >= 0)
       await host.key(`\x1b[<0;2;${executionRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionRow + 1}m`)
+      await host.frame()
       const executionOutputRow = host
         .screenLines()
         .findIndex((line) => /^\s*exec\s/.test(stripVTControlCharacters(line)))
       assert(executionOutputRow > executionRow)
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}m`)
+      await host.frame()
       const collectionRow = host
         .screenLines()
         .findIndex((line) =>
