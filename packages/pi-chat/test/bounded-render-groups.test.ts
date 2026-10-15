@@ -439,8 +439,8 @@ test("growing output and resizing preserve a body anchor and follow only an alre
   } finally {
     gates.prefix.resolve()
     gates.target.resolve()
+    await host.settled()
   }
-  await host.settled()
 })
 
 function pngChunk(name: string, data: Buffer) {
