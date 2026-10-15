@@ -4,15 +4,19 @@
 
 **Blocked by:** 04: Group and toggle consecutive activity items.
 
-**Status:** in-progress
+**Status:** resolved — enclosing disclosure behavior implemented in `9f57ab9`
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 
-- [ ] An explicit configured native app.tools.expand action expands or collapses all available disclosure levels, including the enclosing Worked for… agent activity block, render groups, activity items, and native output bodies. Ctrl+O remains only Pi’s default binding.
-- [ ] Explicit individual and global disclosure choices take precedence over automatic collapse eligibility. Cancellation, an unfinished request, or no qualifying final response must not undo a user’s explicit collapse of an available disclosure; without an explicit choice, preserve the existing automatic behavior.
-- [ ] Individual agent activity closure/reopening preserves descendant disclosure choices; a global action explicitly sets all available levels. Preserve choices across redraw, growth, settlement, settings reconstruction, and resize with the existing in-memory/reload lifetime.
-- [ ] Keep final responses, retained user messages, unrelated notices, source order, Hide thinking, delivery/phase boundaries, history, elapsed summaries, cancellation outcomes, and image ownership intact. Do not invent disclosures for activity with no available representation or add persisted policy for future turns.
-- [ ] Update existing real-Pi host cases for the configured/remapped action, all-level expansion/closure, explicit precedence during streaming/cancellation/missing-final scenarios, and unchanged no-choice automatic behavior. Reuse existing cases and fixture only; add no test cases, files, or provider contracts.
+- [x] An explicit configured native app.tools.expand action expands or collapses all available disclosure levels, including the enclosing Worked for… agent activity block, render groups, activity items, and native output bodies. Ctrl+O remains only Pi’s default binding.
+- [x] Explicit individual and global disclosure choices take precedence over automatic collapse eligibility. Cancellation, an unfinished request, or no qualifying final response must not undo a user’s explicit collapse of an available disclosure; without an explicit choice, preserve the existing automatic behavior.
+- [x] Individual agent activity closure/reopening preserves descendant disclosure choices; a global action explicitly sets all available levels. Preserve choices across redraw, growth, settlement, settings reconstruction, and resize with the existing in-memory/reload lifetime.
+- [x] Keep final responses, retained user messages, unrelated notices, source order, Hide thinking, delivery/phase boundaries, history, elapsed summaries, cancellation outcomes, and image ownership intact. Do not invent disclosures for activity with no available representation or add persisted policy for future turns.
+- [x] Update existing real-Pi host cases for the configured/remapped action, all-level expansion/closure, explicit precedence during streaming/cancellation/missing-final scenarios, and unchanged no-choice automatic behavior. Reuse existing cases and fixture only; add no test cases, files, or provider contracts.
+
+**Revision evidence (2026-10-15, `9f57ab9`):** The existing native expansion action applies to every available enclosing header as well as groups, items, and native output. Explicit choices precede automatic eligibility, and an explicitly chosen existing header remains available after its selected final is revoked. No new shortcut, enumeration API, setting, or policy for future turns was introduced.
+
+The existing real Pi 1.0.2 host cases demonstrated the failures before the changes, then passed configured/remapped expansion, manual ancestor choices, retained steering/follow-up headers, streaming and cancellation, final revocation, settings reconstruction, resize, and reload. Unchosen missing-final/error/cancellation cases retain their automatic behavior. The final three affected files pass 71/71; typecheck, scoped lint/format, and whitespace checks pass. No test cases, files, fixtures, or provider contracts were added. Combined primary-runtime and physical-terminal acceptance remain in Chat 12/Core 06.
 
 These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
 

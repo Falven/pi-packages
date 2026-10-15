@@ -4,7 +4,7 @@
 
 **Blocked by:** Chat 03: Navigate, select, and copy chat content; Chat 05: Expand render groups and native activity bodies in conversation flow; Chat 07: Collapse settled agent activity while keeping the final response visible. Existing core operation-facts prerequisites are complete.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 
