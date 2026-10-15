@@ -41,6 +41,20 @@ function result(
   }
 }
 
+function processFailure(operation: CoreOperation): string | undefined {
+  if (operation.status !== "failed") return
+  const text =
+    operation.resultText ?? (!operation.live ? operation.output : undefined)
+  if (!text) return
+  try {
+    const value: unknown = JSON.parse(text)
+    if (object(value) && typeof value["output"] === "string") return
+  } catch {
+    // A plain native error is already suitable for the default body.
+  }
+  return text
+}
+
 function mergeExecution(
   base: CoreExecution,
   newer: CoreExecution,
@@ -306,7 +320,9 @@ export class CoreToolAdapter {
         ? {}
         : { exit_code: operation.exitCode }),
     }
-    const text = operation.output ?? operation.resultText
+    const text = operation.live
+      ? (operation.output ?? operation.resultText)
+      : (operation.resultText ?? operation.output)
     const item: ActivityItem = {
       id: operation.id,
       kind: providerChild && operation.name === "view_image" ? "image" : "tool",
@@ -332,17 +348,8 @@ export class CoreToolAdapter {
         typeof chars === "string" && chars.length ? "input" : "collection"
       if (operation.sessionId !== undefined)
         item.target = String(operation.sessionId)
-      item.body.result =
-        ownStatus === "failed"
-          ? result(
-              operation.exitCode === undefined
-                ? "Process input failed"
-                : `Process exited with code ${operation.exitCode}`,
-              true,
-            )
-          : operation.exitCode === undefined
-            ? undefined
-            : result(`Process exited with code ${operation.exitCode}`, false)
+      const error = processFailure(operation)
+      item.body.result = error ? result(error, true) : undefined
       delete item.body.availability
     }
     return [item]
