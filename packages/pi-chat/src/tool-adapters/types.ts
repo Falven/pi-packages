@@ -4,7 +4,12 @@ import type {
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent"
 
-export type ActivityStatus = "running" | "completed" | "failed" | "unknown"
+export type ActivityStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "unknown"
+  | "unattempted"
 export type ActivityResult = Pick<AgentToolResult<unknown>, "content"> & {
   details?: unknown
   isError: boolean
@@ -21,7 +26,16 @@ export type CallFacts = {
 }
 export type ActivityItem = {
   id: string
-  kind: "loaded" | "tool" | "edit" | "read" | "command" | "image" | "execution"
+  kind:
+    | "loaded"
+    | "tool"
+    | "edit"
+    | "read"
+    | "command"
+    | "image"
+    | "execution"
+    | "input"
+    | "collection"
   action?: "read" | "search" | "list"
   target?: string | undefined
   targetKey?: string

@@ -15,6 +15,13 @@ const relationshipRenderer = () => undefined
 export default function piChat(pi: ExtensionAPI) {
   pi.registerEntryRenderer("pi-chat.relationship", relationshipRenderer)
   let adapter: NativeChatHost | undefined
+  let unlistenActivity: (() => void) | undefined
+  const listenActivity = () => {
+    unlistenActivity ??= pi.events.on("core-tools.activity", (data) =>
+      adapter?.observeActivity("core-tools.activity", data),
+    )
+  }
+  listenActivity()
   let workingHeading: string | undefined
   const setHeading = (
     heading: string | undefined,
@@ -64,6 +71,7 @@ export default function piChat(pi: ExtensionAPI) {
 
   pi.on("session_start", (_event, context: ExtensionContext) => {
     disarm()
+    listenActivity()
     clearHeading(_event, context)
     try {
       const host = captureHost(context)
@@ -79,6 +87,8 @@ export default function piChat(pi: ExtensionAPI) {
   })
   pi.on("session_shutdown", (event, context) => {
     disarm()
+    unlistenActivity?.()
+    unlistenActivity = undefined
     clearHeading(event, context)
     adapter?.dispose()
     adapter = undefined

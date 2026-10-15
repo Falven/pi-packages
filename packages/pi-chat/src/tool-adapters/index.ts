@@ -1,14 +1,23 @@
 import { builtInItems } from "./built-in.ts"
+import { CoreToolAdapter } from "./core-tools.ts"
 import { fallbackItems } from "./fallback.ts"
 import type { CallFacts } from "./types.ts"
 
 // Selection and required provenance are documented in the specification's operator catalog.
-const adapters = [builtInItems, fallbackItems]
+export class ActivityAdapters {
+  private readonly core = new CoreToolAdapter()
 
-export function describeActivity(facts: CallFacts) {
-  for (const adapt of adapters) {
-    const items = adapt(facts)
-    if (items) return items
+  describe(facts: CallFacts) {
+    return (
+      this.core.describe(facts) ?? builtInItems(facts) ?? fallbackItems(facts)
+    )
   }
-  throw new Error("pi-chat has no fallback tool adapter")
+
+  observe(type: string, data: unknown, live: boolean) {
+    return this.core.observe(type, data, live)
+  }
+
+  clear() {
+    this.core.clear()
+  }
 }

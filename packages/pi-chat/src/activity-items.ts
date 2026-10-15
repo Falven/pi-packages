@@ -4,7 +4,7 @@ import type {
   ToolExecutionStartEvent,
   ToolExecutionUpdateEvent,
 } from "@earendil-works/pi-coding-agent"
-import { describeActivity } from "./tool-adapters/index.ts"
+import { ActivityAdapters } from "./tool-adapters/index.ts"
 import type {
   ActivityItem,
   ActivityResult,
@@ -22,6 +22,8 @@ export class ActivityItems {
   private readonly calls = new WeakMap<object, State>()
   private readonly entries = new WeakMap<object, Map<number, State>>()
   private readonly live = new Map<string, State>()
+  private readonly byId = new Map<string, Set<State>>()
+  private readonly adapters = new ActivityAdapters()
 
   constructor(
     private readonly pi: Pick<ExtensionAPI, "getAllTools" | "getCommands">,
@@ -50,6 +52,9 @@ export class ActivityItems {
         },
       }
     this.calls.set(owner, state)
+    const states = this.byId.get(call.id) ?? new Set<State>()
+    states.add(state)
+    this.byId.set(call.id, states)
     if (live) this.live.set(call.id, state)
     if (entry && index !== undefined) {
       const retained = parts ?? new Map<number, State>()
@@ -109,7 +114,22 @@ export class ActivityItems {
         state.facts.status = result.isError ? "failed" : "completed"
       delete state.items
     }
-    return (state.items ??= describeActivity(state.facts))
+    return (state.items ??= this.adapters.describe(state.facts))
+  }
+
+  observe(type: string, data: unknown, live: boolean) {
+    const changed = this.adapters.observe(type, data, live)
+    for (const id of changed)
+      for (const state of this.byId.get(id) ?? []) delete state.items
+    return changed.length > 0
+  }
+
+  rebase() {
+    this.adapters.clear()
+    for (const states of this.byId.values())
+      for (const state of states) delete state.items
+    this.byId.clear()
+    this.live.clear()
   }
 
   stop() {

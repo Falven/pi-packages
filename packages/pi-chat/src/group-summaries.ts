@@ -17,6 +17,13 @@ const summaries = {
     "viewing an image",
     "viewing images",
   ],
+  input: ["sent input", "sent input", "sending input", "sending input"],
+  collection: [
+    "collected output",
+    "collected output",
+    "collecting output",
+    "collecting output",
+  ],
   execution: [
     "executed a script",
     "executed scripts",

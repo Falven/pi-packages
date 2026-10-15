@@ -359,6 +359,19 @@ class ActivityItemDisclosure extends Container {
   private body: ToolExecutionComponent | undefined
   private header = new Text("", 0, 0)
 
+  private result() {
+    const { result, availability } = this.item.body
+    if (availability !== "omitted") return result
+    return {
+      ...result,
+      content: [
+        ...(result?.content ?? []),
+        { type: "text" as const, text: "[Earlier activity body omitted]" },
+      ],
+      isError: result?.isError ?? this.item.status === "failed",
+    }
+  }
+
   constructor(
     private readonly adapter: NativeChatHost,
     readonly occurrence: Occurrence,
@@ -377,8 +390,8 @@ class ActivityItemDisclosure extends Container {
     this.item = item
     if (this.body) {
       this.body.updateArgs(item.body.args)
-      if (item.body.result)
-        this.body.updateResult(item.body.result, item.status === "running")
+      const result = this.result()
+      if (result) this.body.updateResult(result, item.status === "running")
     }
   }
 
@@ -418,11 +431,9 @@ class ActivityItemDisclosure extends Container {
           this.adapter.host.ui,
           this.item.body.cwd,
         )
-        if (this.item.body.result)
-          this.body.updateResult(
-            this.item.body.result,
-            this.item.status === "running",
-          )
+        const result = this.result()
+        if (result)
+          this.body.updateResult(result, this.item.status === "running")
         this.body.setExpanded(true)
       }
       this.children.push(this.body)
@@ -484,6 +495,9 @@ export class NativeChatHost {
   readonly agentActivity = new AgentActivityIndex()
   readonly groupSummaries = new GroupSummaries()
   private readonly providerPhases = new ProviderPhaseIndex()
+  private activityLeaf: string | undefined
+  private activitySession: string | undefined
+  private activityEntries = new WeakSet<Entry>()
   readonly relationships: RelationshipJournal
   private readonly deliveryCleanup: (() => void)[] = []
   private forkCleanup?: () => void
@@ -1061,6 +1075,12 @@ export class NativeChatHost {
         ? source.resultMessage
         : nativeResult
     const items = this.activityItems.items(source, result)
+    const present = new Set(items.map((item) => item.id))
+    for (const [id, disclosure] of disclosures)
+      if (!present.has(id)) {
+        this.byComponent.delete(disclosure)
+        disclosures.delete(id)
+      }
     return items.map((item) => {
       let disclosure = disclosures.get(item.id)
       if (!disclosure) {
@@ -1466,6 +1486,7 @@ export class NativeChatHost {
   private searchFields(): SearchField<Occurrence>[] {
     const fields: SearchField<Occurrence>[] = []
     const pending = new Map<string, Occurrence[]>()
+    const toolCalls = new Map<Occurrence, string>()
     const add = (
       owner: Occurrence | undefined,
       key: string,
@@ -1536,6 +1557,15 @@ export class NativeChatHost {
           )
         else if (part.type === "toolCall") {
           if (occurrence) {
+            this.activityItems.bind(
+              occurrence,
+              part,
+              owner === this.streaming,
+              this.host.sessionManager.getCwd(),
+              owner?.entry,
+              index,
+            )
+            toolCalls.set(occurrence, part.id)
             const calls = pending.get(part.id) ?? []
             calls.push(occurrence)
             pending.set(part.id, calls)
@@ -1626,7 +1656,58 @@ export class NativeChatHost {
     }
     if (this.streaming?.message?.role === "assistant")
       addAssistant(this.streaming, this.streaming.message)
-    return fields
+    const projected = new Map<Occurrence, ChatRow[]>()
+    for (const [call, id] of toolCalls) {
+      const rows = this.projectActivityItems(call)
+      projected.set(call, rows)
+      if (rows.length === 1 && rows[0]?.activityItem?.id === id) continue
+      for (const row of rows) {
+        const body = row.activityItem!.body
+        const addValue = (value: unknown, path: (string | number)[]) => {
+          if (Array.isArray(value))
+            value.forEach((item, index) => addValue(item, [...path, index]))
+          else if (value && typeof value === "object")
+            Object.entries(value).forEach(([key, item]) =>
+              addValue(item, [...path, key]),
+            )
+          else if (value !== undefined)
+            add(
+              row.occurrence,
+              `activity-argument:${JSON.stringify(path)}`,
+              String(value),
+              false,
+              true,
+              call.entry,
+              call.contentIndex,
+            )
+        }
+        addValue(body.args, [])
+        for (const [index, part] of (body.result?.content ?? []).entries())
+          if (part.type === "text")
+            add(
+              row.occurrence,
+              `activity-result:${index}`,
+              part.text,
+              false,
+              true,
+              call.resultEntry,
+              call.contentIndex,
+            )
+      }
+    }
+    return fields.flatMap((field) => {
+      const rows = projected.get(field.owner)
+      if (!rows) return [field]
+      const row = rows[0]
+      if (
+        rows.length === 1 &&
+        row?.occurrence &&
+        row.activityItem?.id === toolCalls.get(field.owner)
+      )
+        return [{ ...field, owner: row.occurrence }]
+      // Split bodies carry their own source owner; the orchestration input stays call-owned.
+      return field.key.startsWith("result:") ? [] : [field]
+    })
   }
 
   private searchLeaf(hit: SourceHit<Occurrence>): Leaf | undefined {
@@ -1648,21 +1729,7 @@ export class NativeChatHost {
     const owner = hit.field.owner
     if (owner.component instanceof ActivityItemDisclosure)
       return owner.component
-    const items = [...(this.activityDisclosures.get(owner)?.values() ?? [])]
-    if (items.length < 2) return items[0]
-    const fields = items.map((item) => ({
-      owner: item.occurrence,
-      key: "activity-payload",
-      sourceRef: {},
-      source: JSON.stringify({
-        args: item.item.body.args,
-        content: item.item.body.result?.content,
-      }),
-      markdown: false,
-      tool: true,
-    }))
-    const matched = this.sourceSearch.find(fields, hit.query)[0]?.field.owner
-    return items.find((item) => item.occurrence === matched) ?? items[0]
+    return this.activityDisclosures.get(owner)?.values().next().value
   }
 
   private searchSegments(hit: SourceHit<Occurrence>, leaf: Leaf) {
@@ -1689,7 +1756,7 @@ export class NativeChatHost {
   }
 
   private materializeSearchHit(hit: SourceHit<Occurrence>) {
-    const selected = hit.field.owner
+    const selected = hit.field.owner.sourceCall ?? hit.field.owner
     const owner = selected.parent ?? selected
     const entry = owner.entry
     if (!entry?.id || !owner.message) return false
@@ -2337,6 +2404,12 @@ export class NativeChatHost {
     this.clearChatSelection()
   }
 
+  observeActivity(type: string, data: unknown) {
+    if (!this.active || !this.activityItems.observe(type, data, true)) return
+    this.sourceRevision++
+    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+  }
+
   beginProviderRequest() {
     this.providerPhases.beginRequest()
   }
@@ -2404,6 +2477,17 @@ export class NativeChatHost {
 
   private indexBranch() {
     const branch = this.host.sessionManager.getBranch()
+    const session = this.host.sessionManager.getSessionId()
+    if (
+      session !== this.activitySession ||
+      (this.activityLeaf &&
+        !branch.some((entry) => entry.id === this.activityLeaf))
+    ) {
+      this.activityItems.rebase()
+      this.activityEntries = new WeakSet()
+      this.activityLeaf = undefined
+    }
+    this.activitySession = session
     const previous = this.indexedIds.join("\0")
     const common = Math.min(this.indexedIds.length, branch.length)
     if (
@@ -2430,6 +2514,12 @@ export class NativeChatHost {
   }
 
   private indexEntry(entry: Entry) {
+    if (!this.activityEntries.has(entry)) {
+      if (entry.type === "custom")
+        this.activityItems.observe(entry.customType, entry.data, false)
+      this.activityEntries.add(entry)
+    }
+    this.activityLeaf = entry.id
     const zones: SourceZone[] = []
     if (entry.type === "message" && entry.message.role === "assistant") {
       for (const [index, part] of entry.message.content.entries()) {
