@@ -32,7 +32,10 @@ import {
 } from "./agent-activity.ts"
 import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
 import { InlineViewport } from "./inline-viewport.ts"
-import type { GroupSummaries } from "./group-summaries.ts"
+import { GroupSummaries } from "./group-summaries.ts"
+import { ActivityItems } from "./activity-items.ts"
+import { itemSummary } from "./item-summary.ts"
+import type { ActivityItem, ActivityResult } from "./tool-adapters/types.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
@@ -147,6 +150,7 @@ export type Occurrence = {
   component?: Component
   resultEntry?: Entry
   resultMessage?: Message
+  sourceCall?: Occurrence
   parts: Map<number, Occurrence>
 }
 
@@ -291,6 +295,8 @@ type ChatRow = {
   occurrence?: Occurrence
   owner?: Occurrence
   tool: boolean
+  activityItem?: ActivityItem
+  sourceCall?: Occurrence
   agentActivity?: AgentActivity | undefined
   zoneStart?: boolean
   zoneEnd?: boolean
@@ -323,7 +329,7 @@ class RenderGroupHeader implements Component {
   render(width: number) {
     return new Text(
       truncateToWidth(
-        `${this.group.expanded ? "▼" : "▶"} ${this.adapter.groupSummaries.summary(this.group)}`,
+        `${this.group.expanded ? "▼" : ">"} ${this.adapter.groupSummaries.summary(this.group)}`,
         Math.max(1, width - this.adapter.host.outputPad * 2),
       ),
       this.adapter.host.outputPad,
@@ -347,41 +353,126 @@ class RenderGroupHeader implements Component {
   }
 }
 
-class NativeToolDisclosure extends Container {
+class ActivityItemDisclosure extends Container {
   focused = false
+  expanded = false
+  private body: ToolExecutionComponent | undefined
+  private header = new Text("", 0, 0)
 
   constructor(
     private readonly adapter: NativeChatHost,
-    readonly tool: NativeToolPresenter,
+    readonly occurrence: Occurrence,
+    public item: ActivityItem,
   ) {
     super()
-    this.addChild(tool)
+  }
+
+  update(item: ActivityItem) {
+    if (item === this.item) return
+    if (
+      item.body.name !== this.item.body.name ||
+      Boolean(item.body.renderers) !== Boolean(this.item.body.renderers)
+    )
+      this.body = undefined
+    this.item = item
+    if (this.body) {
+      this.body.updateArgs(item.body.args)
+      if (item.body.result)
+        this.body.updateResult(item.body.result, item.status === "running")
+    }
+  }
+
+  setExpanded(expanded: boolean) {
+    this.expanded = expanded
+    this.body?.setExpanded(expanded)
   }
 
   override render(width: number) {
-    const rows = super.render(width)
-    if (!this.focused || !rows[0] || stripTerminalSequences(rows[0]).trim())
-      return rows
-    return [
-      "→" + sliceByColumn(rows[0], 1, Math.max(0, width - 1), true),
-      ...rows.slice(1),
-    ]
+    const pad = this.adapter.host.outputPad
+    this.header = new Text(
+      truncateToWidth(
+        `${this.expanded ? "▼" : ">"} ${itemSummary(this.item, this.expanded)}`,
+        Math.max(1, width - pad * 2),
+      ),
+      pad,
+      0,
+      this.focused
+        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
+        : undefined,
+    )
+    this.children = [this.header]
+    if (this.expanded) {
+      if (!this.body) {
+        const options = {
+          showImages: this.adapter.host.settingsManager.getShowImages(),
+          imageWidthCells:
+            this.adapter.host.settingsManager.getImageWidthCells(),
+          outputPad: pad,
+        }
+        this.body = new ToolExecutionComponent(
+          this.item.body.name,
+          this.item.id,
+          this.item.body.args,
+          options,
+          this.item.body.renderers?.(),
+          this.adapter.host.ui,
+          this.item.body.cwd,
+        )
+        if (this.item.body.result)
+          this.body.updateResult(
+            this.item.body.result,
+            this.item.status === "running",
+          )
+        this.body.setExpanded(true)
+      }
+      this.children.push(this.body)
+    }
+    return super.render(width)
+  }
+
+  syncSettings() {
+    if (!this.body) return
+    this.body.setShowImages(this.adapter.host.settingsManager.getShowImages())
+    this.body.setImageWidthCells(
+      this.adapter.host.settingsManager.getImageWidthCells(),
+    )
+    const body = this.body as ToolExecutionComponent & {
+      setOutputPad?: (pad: number) => void
+    }
+    body.setOutputPad?.(this.adapter.host.outputPad)
   }
 
   handleInput(data: string) {
     this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleToolDisclosure(this.tool),
+      this.adapter.toggleToolDisclosure(this),
     )
   }
 
   override handleMouse(
     event: Parameters<NonNullable<Component["handleMouse"]>>[0],
-  ) {
-    const expanded = this.tool.expanded
+  ): ReturnType<Container["handleMouse"]> {
+    if (event.type === "click" && event.button === "left" && event.y === 0) {
+      this.adapter.toggleToolDisclosure(this)
+      return {
+        handled: true,
+        focus: true,
+        target: {
+          component: this,
+          originX: event.screenX - event.x,
+          originY: event.screenY - event.y,
+          width: event.width,
+          height: event.height,
+        },
+      }
+    }
     const result = super.handleMouse(event)
-    if (expanded !== this.tool.expanded) {
+    if (
+      this.expanded &&
+      this.body &&
+      !(this.body as unknown as NativeToolPresenter).expanded
+    ) {
+      this.setExpanded(false)
       this.adapter.clearChatSelection()
-      if (this.tool.expanded) this.adapter.inspectTool(this.tool)
     }
     return result
   }
@@ -391,6 +482,7 @@ export class NativeChatHost {
   readonly host: NativeMode
   readonly extensionUI: ExtensionContext["ui"]
   readonly agentActivity = new AgentActivityIndex()
+  readonly groupSummaries = new GroupSummaries()
   private readonly providerPhases = new ProviderPhaseIndex()
   readonly relationships: RelationshipJournal
   private readonly deliveryCleanup: (() => void)[] = []
@@ -455,12 +547,15 @@ export class NativeChatHost {
   private readonly bashMessages = new WeakMap<object, Component>()
   private readonly toolResults = new WeakMap<object, Component>()
   private readonly renderGroups = new Map<Occurrence, RenderGroup>()
-  private readonly toolDisclosures = new Map<Component, NativeToolDisclosure>()
+  private readonly activityDisclosures = new Map<
+    Occurrence,
+    Map<string, ActivityItemDisclosure>
+  >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
   private visibleDisclosures: (
     | RenderGroupHeader
-    | NativeToolDisclosure
+    | ActivityItemDisclosure
     | AgentActivityHeader
   )[] = []
   private unsubscribe?: () => void
@@ -490,7 +585,7 @@ export class NativeChatHost {
 
   private constructor(
     host: NativeMode,
-    readonly groupSummaries: GroupSummaries,
+    readonly activityItems: ActivityItems,
   ) {
     this.host = host
     this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
@@ -519,6 +614,8 @@ export class NativeChatHost {
       { ...layout, entries },
       () => {
         this.oldRoot.invalidate()
+        for (const items of this.activityDisclosures.values())
+          for (const disclosure of items.values()) disclosure.invalidate()
         for (const components of this.historical.values())
           for (const component of components) component.invalidate()
       },
@@ -528,7 +625,7 @@ export class NativeChatHost {
 
   static install(
     host: InteractiveMode,
-    groupSummaries: GroupSummaries,
+    activityItems: ActivityItems,
   ): NativeChatHost {
     const mode = host as unknown as NativeMode
     if (
@@ -538,7 +635,7 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(mode, groupSummaries)
+    const adapter = new NativeChatHost(mode, activityItems)
     try {
       adapter.wrapNativeConstruction()
       adapter.forkCleanup = carryObservedFork(
@@ -573,6 +670,8 @@ export class NativeChatHost {
             typeof component.setOutputPad === "function"
           )
             component.setOutputPad(this.host.outputPad)
+      for (const items of this.activityDisclosures.values())
+        for (const disclosure of items.values()) disclosure.syncSettings()
       this.outputPad = this.host.outputPad
     }
     const show = this.host.settingsManager.getShowImages()
@@ -588,6 +687,8 @@ export class NativeChatHost {
             if (widthCells !== this.imageSettings.width)
               component.setImageWidthCells(widthCells)
           }
+      for (const items of this.activityDisclosures.values())
+        for (const disclosure of items.values()) disclosure.syncSettings()
       this.imageSettings = { show, width: widthCells }
     }
     const renderer = this.host.renderer as unknown as TuiAltScreen
@@ -673,7 +774,7 @@ export class NativeChatHost {
           chatRows[index]?.sourceZone === items.at(-1)?.sourceZone)
       )
         items.push(chatRows[index++]!)
-      const first = items[0]!.occurrence
+      const first = items[0]!.sourceCall ?? items[0]!.occurrence
       if (!first) {
         composed.push(...items)
         continue
@@ -692,9 +793,7 @@ export class NativeChatHost {
       })
       if (group.expanded) {
         for (const item of items) {
-          const focused = this.withToolDisclosure(item)
-          focused.body = group.viewport
-          composed.push(focused)
+          composed.push({ ...item, body: group.viewport })
         }
       }
     }
@@ -721,7 +820,7 @@ export class NativeChatHost {
     this.visibleDisclosures = composed.flatMap(({ component }) =>
       component instanceof AgentActivityHeader ||
       component instanceof RenderGroupHeader ||
-      component instanceof NativeToolDisclosure
+      component instanceof ActivityItemDisclosure
         ? [component]
         : [],
     )
@@ -809,12 +908,12 @@ export class NativeChatHost {
     this.leaves = leaves
     if (
       (renderer.getFocusedComponent() instanceof RenderGroupHeader ||
-        renderer.getFocusedComponent() instanceof NativeToolDisclosure ||
+        renderer.getFocusedComponent() instanceof ActivityItemDisclosure ||
         renderer.getFocusedComponent() instanceof AgentActivityHeader) &&
       !this.visibleDisclosures.includes(
         renderer.getFocusedComponent() as
           | RenderGroupHeader
-          | NativeToolDisclosure
+          | ActivityItemDisclosure
           | AgentActivityHeader,
       )
     )
@@ -940,16 +1039,47 @@ export class NativeChatHost {
       this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 })
   }
 
-  private withToolDisclosure(chatRow: ChatRow): ChatRow {
-    let focus = this.toolDisclosures.get(chatRow.component)
-    if (!focus) {
-      focus = new NativeToolDisclosure(
-        this,
-        chatRow.component as NativeToolPresenter,
-      )
-      this.toolDisclosures.set(chatRow.component, focus)
+  private projectActivityItems(source: Occurrence): ChatRow[] {
+    let disclosures = this.activityDisclosures.get(source)
+    if (!disclosures) {
+      disclosures = new Map()
+      this.activityDisclosures.set(source, disclosures)
     }
-    return { ...chatRow, component: focus }
+    const nativeResult = (
+      source.component as (Component & { result?: ActivityResult }) | undefined
+    )?.result
+    const result =
+      source.resultMessage?.role === "toolResult"
+        ? source.resultMessage
+        : nativeResult
+    const items = this.activityItems.items(source, result)
+    return items.map((item) => {
+      let disclosure = disclosures.get(item.id)
+      if (!disclosure) {
+        const occurrence = this.newOccurrence(source.entry)
+        if (source.parent) occurrence.parent = source.parent
+        occurrence.message = source.message
+        if (source.contentIndex !== undefined)
+          occurrence.contentIndex = source.contentIndex
+        occurrence.sourceCall = source
+        disclosure = new ActivityItemDisclosure(this, occurrence, item)
+        occurrence.component = disclosure
+        disclosures.set(item.id, disclosure)
+        this.byComponent.set(disclosure, occurrence)
+      } else disclosure.update(item)
+      disclosure.occurrence.entry = source.entry
+      if (source.resultEntry)
+        disclosure.occurrence.resultEntry = source.resultEntry
+      if (source.resultMessage)
+        disclosure.occurrence.resultMessage = source.resultMessage
+      return {
+        component: disclosure,
+        occurrence: disclosure.occurrence,
+        sourceCall: source,
+        activityItem: item,
+        tool: true,
+      }
+    })
   }
 
   private orderedChatRows(components: Component[]): ChatRow[] {
@@ -1016,16 +1146,15 @@ export class NativeChatHost {
         if (part.type === "toolCall") {
           flush()
           if (occurrence?.component)
-            chatRows.push({
-              component: occurrence.component,
-              occurrence,
-              tool: true,
-              sourceZone: owner.entry?.id
-                ? this.sourceZones.get(owner.entry.id)?.[index]?.[
-                    hideThinking ? "withoutThinking" : "withThinking"
-                  ]
-                : undefined,
-            })
+            for (const row of this.projectActivityItems(occurrence))
+              chatRows.push({
+                ...row,
+                sourceZone: owner.entry?.id
+                  ? this.sourceZones.get(owner.entry.id)?.[index]?.[
+                      hideThinking ? "withoutThinking" : "withThinking"
+                    ]
+                  : undefined,
+              })
         } else if (occurrence?.contentIndex === index && occurrence.component) {
           flush()
           if (children[position] === occurrence.component) position++
@@ -1155,7 +1284,7 @@ export class NativeChatHost {
   }
 
   private revealDisclosure(
-    component: RenderGroupHeader | NativeToolDisclosure | AgentActivityHeader,
+    component: RenderGroupHeader | ActivityItemDisclosure | AgentActivityHeader,
   ) {
     const leaf = this.leaves.find((item) => item.component === component)
     if (!leaf) return
@@ -2217,7 +2346,7 @@ export class NativeChatHost {
         if (this.assistantMethods.has(component as NativeAssistant))
           this.releaseAssistant(component as NativeAssistant)
         this.byComponent.delete(component)
-        this.toolDisclosures.delete(component)
+        this.activityDisclosures.delete(this.byComponent.get(component)!)
       }
     }
     this.historical.clear()
@@ -2392,10 +2521,11 @@ export class NativeChatHost {
         ? owner.message.content[index]
         : undefined
     if (content?.type === "toolCall")
-      this.groupSummaries.bind(
+      this.activityItems.bind(
         part,
         content,
         this.streaming === owner,
+        this.host.sessionManager.getCwd(),
         part.entry,
         index,
       )
@@ -2661,7 +2791,7 @@ export class NativeChatHost {
             this.byComponent.clear()
             this.thoughts.clear()
             this.renderGroups.clear()
-            this.toolDisclosures.clear()
+            this.activityDisclosures.clear()
             this.visibleDisclosures = []
             this.streaming = undefined
           } else {
@@ -2715,6 +2845,9 @@ export class NativeChatHost {
         for (const component of components)
           if (component instanceof ToolExecutionComponent)
             component.setExpanded(expanded)
+      for (const items of this.activityDisclosures.values())
+        for (const disclosure of items.values())
+          disclosure.setExpanded(expanded)
       for (const group of this.renderGroups.values()) group.expanded = expanded
       this.clearSelection(host.renderer as unknown as TuiAltScreen)
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
@@ -3045,10 +3178,11 @@ export class NativeChatHost {
             ? message.content[part.contentIndex]
             : undefined
         if (content?.type === "toolCall")
-          this.groupSummaries.bind(
+          this.activityItems.bind(
             part,
             content,
             false,
+            this.host.sessionManager.getCwd(),
             entry,
             part.contentIndex,
           )
@@ -3091,7 +3225,7 @@ export class NativeChatHost {
     if (this.host.fullscreenLayoutRoot === this.root)
       this.transcript.setScrollbar("hidden")
     this.active = false
-    this.groupSummaries.stop()
+    this.activityItems.stop()
     this.unsubscribe?.()
     this.forkCleanup?.()
     for (const cleanup of this.deliveryCleanup) cleanup()
@@ -3151,7 +3285,7 @@ export class NativeChatHost {
     this.byComponent.clear()
     this.thoughts.clear()
     this.renderGroups.clear()
-    this.toolDisclosures.clear()
+    this.activityDisclosures.clear()
     this.visibleDisclosures = []
     this.projections.clear()
     this.indexedIds = []
