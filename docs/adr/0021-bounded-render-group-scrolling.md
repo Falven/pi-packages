@@ -10,4 +10,4 @@ Long expanded output can occupy many conversation rows; the primary chat viewpor
 
 Keep native content renderers, image ownership, source occurrence geometry, selection, and scroll anchoring through the owned chat-view adapter. Native painting windows clip visible content; they do not impose another user-scrollable group or body. Scrolling requests a redraw without invalidating unchanged content or scanning history; additional caches require reliable invalidation and measured need.
 
-This revision records the accepted design. The earlier bounded-group implementation and its checks do not validate the revised padding, sizing, or global disclosure behavior. Implementation and terminal verification remain pending.
+This revision is implemented on `codex/chat-scroll-integration`. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records passing real-host checks on Pi 1.1.0 and 1.0.2, review results, physical cmux observations, and the physical checks still unperformed. The earlier bounded-group implementation and its checks retain their original scope.

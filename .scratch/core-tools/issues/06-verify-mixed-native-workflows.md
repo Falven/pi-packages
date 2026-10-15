@@ -4,16 +4,22 @@
 
 **Blocked by:** Chat 03: Navigate, select, and copy chat content; Chat 05: Expand render groups and native activity bodies in conversation flow; Chat 07: Collapse settled agent activity while keeping the final response visible. Existing core operation-facts prerequisites are complete.
 
-**Status:** in-progress
+**Status:** resolved — approved native-flow and disclosure delta
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 
-- [ ] Reuse the established real-Pi mixed-workflow fixture in both normal extension load orders and update existing cases only. Verify commands, process continuation, patches, images, effective hooks, retained records, and actual file/process effects without new test cases, files, or seams.
-- [ ] Verify all activity items are exposed in an open group in conversation flow, with independent standard native expanded bodies, summary-only closed rows, and no added group/body scroll viewport or height cap.
-- [ ] Verify configured native app.tools.expand, including a remapped binding, reaches enclosing agent activity, groups, items, and native output; Ctrl+O is only the default. New groups/items inherit the global flag, individual ancestor toggles retain descendants, and explicit choices override automatic collapse.
-- [ ] Verify existing outputPad is counted once, zero creates no gutter, gutter/header wheel movement reaches the conversation directly, and native scrollbar priority and supported child edge handoff remain intact. Preserve source/Find/copy, images, resize, settings, unrelated notices, and final-response visibility.
-- [ ] Verify late outcomes and later collection through cancellation, subsequent prompts, reload, and session/branch lifecycle without changing public tool contracts, result details, execution cells/process sessions, collection cursors, provider facts, or unresolved raw execution-output policy.
-- [ ] Record exact checks and runtime revisions independently of historical evidence; coordinate combined acceptance with Chat 12. Separate automated native-frame checks from physical-terminal acceptance and retain unperformed checks as pending.
+- [x] Reuse the established real-Pi mixed-workflow fixture in both normal extension load orders and update existing cases only. Verify commands, process continuation, patches, images, effective hooks, retained records, and actual file/process effects without new test cases, files, or seams.
+- [x] Verify all activity items are exposed in an open group in conversation flow, with independent standard native expanded bodies, summary-only closed rows, and no added group/body scroll viewport or height cap.
+- [x] Verify configured native app.tools.expand, including a remapped binding, reaches enclosing agent activity, groups, items, and native output; Ctrl+O is only the default. New groups/items inherit the global flag, individual ancestor toggles retain descendants, and explicit choices override automatic collapse.
+- [x] Verify existing outputPad is counted once, zero creates no gutter, gutter/header wheel movement reaches the conversation directly, and native scrollbar priority and supported child edge handoff remain intact. Preserve source/Find/copy, images, resize, settings, unrelated notices, and final-response visibility.
+- [x] Verify late outcomes and later collection through cancellation, subsequent prompts, reload, and session/branch lifecycle without changing public tool contracts, result details, execution cells/process sessions, collection cursors, provider facts, or unresolved raw execution-output policy.
+- [x] Record exact checks and runtime revisions independently of historical evidence; coordinate combined acceptance with Chat 12. Separate automated native-frame checks from physical-terminal acceptance and retain unperformed checks as pending.
+
+**Revision evidence (2026-10-15):** Acceptance commit `720003a`, integrated at `025a241`, extends the two existing normal-load-order mixed workflow cases. They verify all eight independent activity items, a complete 40-line native generic body, native padding zero/one, default/remapped app.tools.expand, all available enclosing disclosures, preserved individual choices, and expanded-state inheritance for a later wait. Existing real file/process effects, three-file patch results, hook processing, two image collections, late failure, later collection, notices, final responses, and reload assertions remain intact. The companion-only and live-command/later-final cases also pass. No production core-tool files, contracts, result details, provider facts, collection cursors, or raw execution-output policy changed.
+
+**Checks:** The four workflow cases and static checks passed on Pi 1.0.2 for this slice. At integrated `025a241`, all 207 core-tool and 116 chat cases passed on primary Pi 1.1.0. After chat's settings-retention repair at `9337a56`, all four core workflow cases and 116 chat cases passed on each of Pi 1.1.0 and Pi 1.0.2; typechecking passed in both environments. Repository lint, formatting, and whitespace checks passed. Only existing cases changed; no cases, files, fixtures, or seams were added.
+
+[Chat 12](../../pi-chat/issues/12-mixed-session-acceptance.md) records combined gutter, scrollbar, Find/copy, image, settings, lifecycle, and review evidence, plus the full repository run's two reproduced baseline failures. It also records real cmux observations at `9f57ab9` and the physical checks still unperformed. Those gaps remain explicit; this ticket does not claim complete terminal parity or a resolution of raw output attribution.
 
 These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
 

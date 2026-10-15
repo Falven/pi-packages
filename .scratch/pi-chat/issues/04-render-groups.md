@@ -18,6 +18,8 @@ These approved criteria supersede conflicting presentation/default-state require
 
 **Revision evidence (2026-10-15, `b73feab`):** Existing native-host cases reproduce new groups and items staying closed after global expansion, then pass with defaults inherited from Pi’s `toolOutputExpanded` flag. A later global action clears older retained choices before applying current state. The remapped `app.tools.expand` case exercises focused disclosure and composer dispatch with Ctrl+E; the former Ctrl+O default has no independent effect. Settings reconstruction retains the newer global choice. All 33 native-chat cases, typechecking, scoped lint/format, and whitespace checks pass on Pi 1.0.2. No keyboard handler, setting, persisted state, test case, test file, or seam was added. Ticket 07 covers enclosing activity; ticket 12 covers combined Pi 1.1.0 and physical-terminal acceptance.
 
+**Review follow-up (`9337a56`):** Settings reconstruction no longer invents a collapsed group choice for a source call that has never owned a group. Genuine previous group choices and item choices remain intact. The existing Hide thinking case verifies globally expanding, rebuilding through native settings, then revealing thinking: both resulting groups retain expanded bodies. The regression failed before the repair and passed after it. All 116 chat cases and four core workflow cases pass on Pi 1.1.0 and 1.0.2; both reviews are clear. [Chat 12](12-mixed-session-acceptance.md) records combined results and physical limits.
+
 ## Prior accepted revision and evidence
 
 **What to build:** Use one adapter path for built-ins and extensions, with type-derived group summaries and independently disclosed default activity bodies.
