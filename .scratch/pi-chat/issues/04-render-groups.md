@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately); earlier adapter and grouping prerequisites are complete.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 

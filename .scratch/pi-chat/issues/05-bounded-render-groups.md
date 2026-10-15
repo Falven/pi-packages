@@ -4,18 +4,20 @@
 
 **Blocked by:** None (can start immediately); existing common activity-item rendering is complete.
 
-**Status:** in-progress
+**Status:** resolved — native-flow delta; combined acceptance remains in ticket 12
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 
-- [ ] Remove the shared render-group scrolling area and height cap. An expanded group exposes all of its activity-item rows; its header and children participate in the primary conversation flow.
-- [ ] Use Pi’s standard expanded output sizes for each opened native built-in or generic default activity body. Add no replacement preview, body cap, percentage limit, row limit, or independently bounded body viewport. Short bodies use only their native required height.
-- [ ] Preserve summary-only collapsed items, independent item disclosures, stable source identities and order, native default content, images, meaningful indentation, and native output expansion. Global-state inheritance and all-level toggling are coordinated by tickets 04 and 07, not prerequisites for this slice.
-- [ ] Keep the primary scrollbar and native full-width painting windows required for image clipping; those painting windows are not user scroll controls. Preserve one native image crop/placement owner, reservation rows, resize behavior, and image-tail recovery.
-- [ ] Preserve source Find/reveal, copying of expanded offscreen rows, collapsed exclusions, selection validity, reading anchors, end following, and unchanged-content caches without history rescans on ordinary scrolling.
-- [ ] Update the existing bounded-group, source-search, and related real-Pi host cases for full native flow and long bodies while retaining meaningful image, selection, cache, anchor, and source checks. Reuse the established fixture and existing cases; add no test cases or files. Keep physical-terminal acceptance distinct from recorded-frame assertions.
+- [x] Remove the shared render-group scrolling area and height cap. An expanded group exposes all of its activity-item rows; its header and children participate in the primary conversation flow.
+- [x] Use Pi’s standard expanded output sizes for each opened native built-in or generic default activity body. Add no replacement preview, body cap, percentage limit, row limit, or independently bounded body viewport. Short bodies use only their native required height.
+- [x] Preserve summary-only collapsed items, independent item disclosures, stable source identities and order, native default content, images, meaningful indentation, and native output expansion. Global-state inheritance and all-level toggling are coordinated by tickets 04 and 07, not prerequisites for this slice.
+- [x] Keep the primary scrollbar and native full-width painting windows required for image clipping; those painting windows are not user scroll controls. Preserve one native image crop/placement owner, reservation rows, resize behavior, and image-tail recovery.
+- [x] Preserve source Find/reveal, copying of expanded offscreen rows, collapsed exclusions, selection validity, reading anchors, end following, and unchanged-content caches without history rescans on ordinary scrolling.
+- [x] Update the existing bounded-group, source-search, and related real-Pi host cases for full native flow and long bodies while retaining meaningful image, selection, cache, anchor, and source checks. Reuse the established fixture and existing cases; add no test cases or files. Keep physical-terminal acceptance distinct from recorded-frame assertions.
 
 These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+**Revision evidence (2026-10-15, `cc74939`):** Removed the shared group viewport and its height cap while preserving native painting windows. The revised existing host case failed before the change because the first long body was hidden, then passed with all native output in conversation flow. Pi 1.0.2 passes all 33 affected flow/Find cases and three focused navigation/native-child/reflow cases. Existing cases cover offscreen output selection/copy, unchanged Markdown caches, primary scrolling, growth/resize anchors, and single-owner image crops/reservation rows. Typechecking, scoped lint/format, and whitespace checks pass. No test cases, test files, provider changes, or installed Pi modifications were added. Full combined, primary Pi 1.1.0, and physical-terminal acceptance belong to ticket 12.
 
 ## Prior accepted revision and evidence
 
