@@ -178,9 +178,15 @@ export class CoreToolAdapter {
 
   private owned(facts: CallFacts): boolean {
     const source = facts.provenance
-    if (source)
-      return source.source === "extension" && this.providerPath(source.path)
+    if (source) return this.providerSource(source.source, source.path)
     return this.receipts.get(facts.id) === facts.name
+  }
+
+  private providerSource(
+    source: string | undefined,
+    path: string | undefined,
+  ): boolean {
+    return !!source && source !== "builtin" && this.providerPath(path)
   }
 
   private providerPath(raw: string | undefined): boolean {
@@ -249,9 +255,10 @@ export class CoreToolAdapter {
   ): ActivityItem[] {
     const ownStatus = status(operation.status, live)
     const cwd = operation.cwd ?? facts.cwd
-    const providerChild =
-      operation.toolSource === "extension" &&
-      this.providerPath(operation.toolPath)
+    const providerChild = this.providerSource(
+      operation.toolSource,
+      operation.toolPath,
+    )
     if (
       providerChild &&
       operation.name === "apply_patch" &&
