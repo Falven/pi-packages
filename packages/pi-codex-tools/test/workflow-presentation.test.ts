@@ -25,7 +25,7 @@ const companions = [
 const tiny =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGNQqLgERAAIiQLVbsGVSQAAAABJRU5ErkJggg=="
 
-async function expand(host: Awaited<ReturnType<typeof openNativeHost>>) {
+async function openWork(host: Awaited<ReturnType<typeof openNativeHost>>) {
   await host.frame()
   let row = host
     .screenLines()
@@ -41,12 +41,13 @@ async function expand(host: Awaited<ReturnType<typeof openNativeHost>>) {
         /Worked for .*▶/.test(stripVTControlCharacters(line)),
       )
   }
+  return stripVTControlCharacters(host.screenLines().join("\n"))
+}
+
+async function expand(host: Awaited<ReturnType<typeof openNativeHost>>) {
+  await openWork(host)
   await host.key("\x0f")
   await setTimeout(60)
-  if (!host.screenLines().some((line) => line.includes("$ "))) {
-    await host.key("\x0f")
-    await setTimeout(60)
-  }
   return stripVTControlCharacters(host.screenLines().join("\n"))
 }
 
@@ -109,8 +110,12 @@ for (const order of ["first", "last"] as const) {
         join(host.directory, "local.png"),
         Buffer.from(tiny, "base64"),
       )
+      await writeFile(
+        join(host.directory, "late.png"),
+        Buffer.from(tiny, "base64"),
+      )
       const source =
-        'await tools.exec_command({cmd:"printf inspect-project",login:false}); await tools.apply_patch("*** Begin Patch\\n*** Add File: changed.txt\\n+CHANGED\\n*** End Patch"); text(await tools.exec_command({cmd:"cat changed.txt",login:false})); image((await tools.view_image({path:"local.png"})).image_url); await yield_control(); await new Promise(resolve=>setTimeout(resolve,120)); text("LATE-MIXED-RESULT"); throw new Error("LATE-MIXED-FAILURE");'
+        'await tools.exec_command({cmd:"printf inspect-project",login:false}); await tools.apply_patch("*** Begin Patch\\n*** Add File: changed.txt\\n+CHANGED\\n*** Add File: extra-one.txt\\n+ONE\\n*** Add File: extra-two.txt\\n+TWO\\n*** End Patch"); text(await tools.exec_command({cmd:"cat changed.txt",login:false})); image((await tools.view_image({path:"local.png"})).image_url); await yield_control(); await new Promise(resolve=>setTimeout(resolve,120)); image((await tools.view_image({path:"late.png"})).image_url); text("LATE-MIXED-RESULT"); throw new Error("LATE-MIXED-FAILURE");'
       host.queueResponse(...call(source, "mixed"))
       await host.session.prompt(
         "Inspect, change, validate, and inspect the image",
@@ -120,19 +125,59 @@ for (const order of ["first", "last"] as const) {
       const requests = host.requests.length
       await setTimeout(220)
       assert.equal(host.requests.length, requests)
-      let screen = await expand(host)
-      assert.match(screen, /Called a tool/)
-      assert.match(screen, /inspect-project/)
-      assert.match(screen, /Added: .*changed\.txt/)
+      let screen = await openWork(host)
+      assert.match(
+        screen,
+        /> Edited files, read files, ran a command, viewed images, executed a script/,
+      )
+      assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
+      const groupRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Edited files"),
+        )
+      assert(groupRow >= 0)
+      await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+      await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+      host.terminal.resize(160, 180)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /> Edited .*\/changed\.txt \+1 -0/)
+      assert.match(screen, /> Edited .*\/extra-one\.txt \+1 -0/)
+      assert.match(screen, /> Edited .*\/extra-two\.txt \+1 -0/)
+      assert.match(screen, /> Ran printf inspect-project/)
+      assert.match(screen, /> Read changed\.txt/)
+      assert.match(screen, /> Viewed image .*local\.png/)
+      assert.match(screen, /> Viewed image .*late\.png/)
+      assert.match(screen, /> Execution failed/)
+      assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
+      const commandRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Read changed.txt"),
+        )
+      assert(commandRow >= 0)
+      await host.key(`\x1b[<0;2;${commandRow + 1}M`)
+      await host.key(`\x1b[<0;2;${commandRow + 1}m`)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /exec_command/)
+      assert.match(screen, /"cmd": "cat changed\.txt"/)
       assert.match(screen, /validated-result/)
-      assert.match(screen, /Path: .*local\.png/)
+      assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
+      screen = await expand(host)
+      assert.match(screen, /inspect-project/)
+      assert.match(screen, /validated-result/)
+      assert.match(screen, /local\.png/)
+      assert.match(screen, /late\.png/)
       assert.match(screen, /LATE-MIXED-RESULT/)
       assert.match(screen, /LATE-MIXED-FAILURE/)
       assert.match(screen, /Unrelated workflow notice/)
       assert.match(screen, /Received\./)
+      assert.match(screen, /"input": "await tools\.exec_command/)
       assert.doesNotMatch(
         screen,
-        /await tools|chunk_id|cell_id|iVBOR|core-tools\.activity/,
+        /Command ·|Patch ·|Image ·|chunk_id|cell_id|iVBOR|core-tools\.activity/,
       )
       assert.match(output(host, "mixed"), /validated-result/)
       assert.doesNotMatch(output(host, "mixed"), /CHANGED/)
@@ -144,10 +189,66 @@ for (const order of ["first", "last"] as const) {
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-RESULT/)
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-FAILURE/)
       await host.reload()
-      screen = await expand(host)
+      screen = await openWork(host)
+      assert.match(screen, /> Collected output/)
+      const retainedGroup = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Edited files"),
+        )
+      assert(retainedGroup >= 0)
+      await host.key(`\x1b[<0;2;${retainedGroup + 1}M`)
+      await host.key(`\x1b[<0;2;${retainedGroup + 1}m`)
+      host.terminal.resize(160, 180)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.equal((screen.match(/> Read changed\.txt/g) ?? []).length, 1)
+      assert.equal(
+        (screen.match(/> Edited .*\/.*\.txt \+1 -0/g) ?? []).length,
+        3,
+      )
+      const executionRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Execution failed"),
+        )
+      assert(executionRow >= 0)
+      await host.key(`\x1b[<0;2;${executionRow + 1}M`)
+      await host.key(`\x1b[<0;2;${executionRow + 1}m`)
+      const collectionRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Collected output"),
+        )
+      assert(collectionRow >= 0)
+      await host.key(`\x1b[<0;2;${collectionRow + 1}M`)
+      await host.key(`\x1b[<0;2;${collectionRow + 1}m`)
+      await host.frame()
+      const collectionItem = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Collected output from"),
+        )
+      assert(collectionItem >= 0)
+      await host.key(`\x1b[<0;2;${collectionItem + 1}M`)
+      await host.key(`\x1b[<0;2;${collectionItem + 1}m`)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /LATE-MIXED-FAILURE/)
+      assert.equal((screen.match(/validated-result/g) ?? []).length, 1)
+      assert.equal(
+        screen.split("\n").filter((line) => line.trim() === "LATE-MIXED-RESULT")
+          .length,
+        1,
+      )
+      assert.equal(
+        (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
+        2,
+      )
       assert.doesNotMatch(screen, /interrupted or unknown/)
       assert.match(screen, /Unrelated workflow notice/)
+      host.terminal.resize(100, 180)
+      await host.frame()
       assert(host.screenLines().every((line) => visibleWidth(line) <= 100))
       const history = host.session.sessionManager.getBranch()
       assert(
@@ -159,6 +260,24 @@ for (const order of ["first", "last"] as const) {
       )
       assert(
         JSON.stringify(history).includes(JSON.stringify(source).slice(1, -1)),
+      )
+      assert.deepEqual(
+        history.flatMap((entry) =>
+          entry.type === "message" && entry.message.role === "toolResult"
+            ? [
+                {
+                  tool: entry.message.toolName,
+                  images: entry.message.content.filter(
+                    (part) => part.type === "image",
+                  ).length,
+                },
+              ]
+            : [],
+        ),
+        [
+          { tool: "exec", images: 1 },
+          { tool: "wait", images: 1 },
+        ],
       )
     },
   )
@@ -184,89 +303,142 @@ test(
     await host.session.prompt("Start the originating command")
     const id = output(host, "stream-origin").match(/cell ID ([^\n]+)/)?.[1]
     assert(id)
-    await expand(host)
-    await t.waitFor(
-      () =>
-        assert(
-          host
-            .screenLines()
-            .some(
-              (line) =>
-                stripVTControlCharacters(line).trim() === "STREAM-EARLY",
-            ),
-        ),
-      { timeout: 5000 },
-    )
-    const answer = {
-      type: "message",
-      id: "later-final",
-      role: "assistant",
-      content: [{ type: "output_text", text: "Later streaming final" }],
+    const release = join(host.directory, "release")
+    try {
+      await openWork(host)
+      await t.waitFor(
+        () =>
+          assert(
+            host
+              .screenLines()
+              .some((line) =>
+                stripVTControlCharacters(line).includes("Running a command"),
+              ),
+          ),
+        { timeout: 5000 },
+      )
+      const groupRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("Running a command"),
+        )
+      assert(groupRow >= 0)
+      await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+      await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+      await t.waitFor(
+        () =>
+          assert(
+            host
+              .screenLines()
+              .some((line) =>
+                /Running printf STREAM-EARLY/.test(
+                  stripVTControlCharacters(line),
+                ),
+              ),
+          ),
+        { timeout: 5000 },
+      )
+      const commandRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes(
+            "Running printf STREAM-EARLY",
+          ),
+        )
+      assert(commandRow >= 0)
+      await host.key(`\x1b[<0;2;${commandRow + 1}M`)
+      await host.key(`\x1b[<0;2;${commandRow + 1}m`)
+      await t.waitFor(
+        () =>
+          assert(
+            host
+              .screenLines()
+              .some(
+                (line) =>
+                  stripVTControlCharacters(line).trim() === "STREAM-EARLY",
+              ),
+          ),
+        { timeout: 5000 },
+      )
+      const answer = {
+        type: "message",
+        id: "later-final",
+        role: "assistant",
+        content: [{ type: "output_text", text: "Later streaming final" }],
+      }
+      host.queueResponse(
+        {
+          event: {
+            type: "response.output_item.added",
+            output_index: 0,
+            item: { ...answer, content: [] },
+          },
+        },
+        {
+          event: {
+            type: "response.output_text.delta",
+            output_index: 0,
+            content_index: 0,
+            delta: "Later streaming final",
+          },
+        },
+        { pause: true },
+        {
+          event: {
+            type: "response.output_item.done",
+            output_index: 0,
+            item: answer,
+          },
+        },
+        {
+          event: {
+            type: "response.completed",
+            response: { id: "later-response", status: "completed" },
+          },
+        },
+      )
+      const later = host.session.prompt("An independent later request")
+      await t.waitFor(
+        () =>
+          assert.match(
+            stripVTControlCharacters(host.screenLines().join("\n")),
+            /Later streaming final/,
+          ),
+        { timeout: 5000 },
+      )
+      const requests = host.requests.length
+      await writeFile(release, "go")
+      await t.waitFor(
+        () =>
+          assert.match(
+            stripVTControlCharacters(host.screenLines().join("\n")),
+            /"exit_code": 9/,
+          ),
+        { timeout: 5000 },
+      )
+      const screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /STREAM-EARLYSTREAM-LATE/)
+      assert(
+        screen.indexOf("STREAM-EARLYSTREAM-LATE") <
+          screen.indexOf("An independent later request"),
+      )
+      assert.equal(host.requests.length, requests)
+      host.resumeResponse()
+      await later
+      host.queueResponse(
+        ...functionCall("wait", { cell_id: id }, "stream-collect", "functions"),
+      )
+      await host.session.prompt("Collect the originating command")
+      assert.match(output(host, "stream-collect"), /STREAM-EARLYSTREAM-LATE/)
+      assert.match(output(host, "stream-collect"), /"exit_code":9/)
+      const collected = await openWork(host)
+      assert.match(collected, /> Collected output/)
+      assert.equal(
+        (collected.match(/STREAM-EARLYSTREAM-LATE/g) ?? []).length,
+        1,
+      )
+    } finally {
+      await writeFile(release, "go")
     }
-    host.queueResponse(
-      {
-        event: {
-          type: "response.output_item.added",
-          output_index: 0,
-          item: { ...answer, content: [] },
-        },
-      },
-      {
-        event: {
-          type: "response.output_text.delta",
-          output_index: 0,
-          content_index: 0,
-          delta: "Later streaming final",
-        },
-      },
-      { pause: true },
-      {
-        event: {
-          type: "response.output_item.done",
-          output_index: 0,
-          item: answer,
-        },
-      },
-      {
-        event: {
-          type: "response.completed",
-          response: { id: "later-response", status: "completed" },
-        },
-      },
-    )
-    const later = host.session.prompt("An independent later request")
-    await t.waitFor(
-      () =>
-        assert.match(
-          stripVTControlCharacters(host.screenLines().join("\n")),
-          /Later streaming final/,
-        ),
-      { timeout: 5000 },
-    )
-    const requests = host.requests.length
-    await writeFile(join(host.directory, "release"), "go")
-    await t.waitFor(
-      () =>
-        assert.match(
-          stripVTControlCharacters(host.screenLines().join("\n")),
-          /Exit status: 9/,
-        ),
-      { timeout: 5000 },
-    )
-    const screen = stripVTControlCharacters(host.screenLines().join("\n"))
-    assert.match(screen, /STREAM-EARLYSTREAM-LATE/)
-    assert(
-      screen.indexOf("STREAM-EARLYSTREAM-LATE") <
-        screen.indexOf("An independent later request"),
-    )
-    assert.equal(host.requests.length, requests)
-    host.resumeResponse()
-    await later
-    host.queueResponse(
-      ...functionCall("wait", { cell_id: id }, "stream-collect", "functions"),
-    )
-    await host.session.prompt("Collect the originating command")
-    assert.match(output(host, "stream-collect"), /STREAM-EARLYSTREAM-LATE/)
-    assert.match(output(host, "stream-collect"), /"exit_code":9/)
   },
 )
