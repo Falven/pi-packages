@@ -5,7 +5,6 @@ import test from "node:test"
 import { crc32, deflateSync } from "node:zlib"
 import {
   getNativeClipboard,
-  MouseRegion,
   Text,
   getCapabilities,
   getCellDimensions,
@@ -90,6 +89,27 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   await host.key("\r")
   await host.settled()
   await openWork(host)
+  const collapsed = await host.frame()
+  assert.match(collapsed, /> Read files/)
+  assert.doesNotMatch(collapsed, /first-row-0|second-row-19/)
+  const groupRow = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("Read files"))
+  assert(groupRow >= 0)
+  await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+  await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+  const items = await host.frame()
+  assert.match(items, /> Read one\.txt/)
+  assert.match(items, /> Read two\.txt/)
+  assert.doesNotMatch(items, /first-row-0|second-row-19/)
+  const secondItemRow = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("Read two.txt"))
+  assert(secondItemRow >= 0)
+  await host.key(`\x1b[<0;2;${secondItemRow + 1}M`)
+  await host.key(`\x1b[<0;2;${secondItemRow + 1}m`)
+  assert.match(await host.frame(), /second-row-19/)
+  assert.doesNotMatch(await host.frame(), /first-row-0/)
   await host.key("\u000f")
   await host.frame()
   const lines = host.screenLines().map(stripTerminalSequences)
@@ -114,12 +134,7 @@ test("long expanded groups retain their header, answer, and cached Markdown whil
   )
   assert(scrolled.some((line) => line.includes("Received.")))
   await host.key("\x1bg")
-  await host.key("\x1b[B")
-  await host.frame()
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /read one\.txt/,
-  )
+  assert.match(await host.frame(), /▼ Read files/)
 })
 
 test("selection copies every expanded body row between visible endpoints", async (t) => {
@@ -237,11 +252,14 @@ test("group summaries combine native categories and distinct paths while executi
   try {
     await host.key("\r")
     await t.waitFor(() => assert(waiting))
-    assert.match(await host.frame(), /▶ Running printf second-command/)
+    assert.match(
+      await host.frame(),
+      /> Edited a file, read files, running commands/,
+    )
   } finally {
     gate.resolve()
+    await host.settled()
   }
-  await host.settled()
   await openWork(host)
   await host.frame()
   const header = host
@@ -249,17 +267,15 @@ test("group summaries combine native categories and distinct paths while executi
     .map(stripTerminalSequences)
     .find((line) => line.includes("Edited a file"))
   assert(header)
-  assert.match(header.trimEnd(), /▶ Edited a file, read files, ran commands$/)
+  assert.match(header.trimEnd(), /> Edited a file, read files, ran commands$/)
   host.terminal.resize(50, 24)
   await host.frame()
   host.terminal.resize(100, 24)
-  assert.match(await host.frame(), /▶ Edited a file, read files, ran commands/)
+  assert.match(await host.frame(), /> Edited a file, read files, ran commands/)
 })
 
-test("native children receive source coordinates before inner wheel movement bubbles outward", async (t) => {
+test("default activity bodies scroll inside their group before wheel movement bubbles outward", async (t) => {
   let appendPrefix: (() => void) | undefined
-  let clicked = ""
-  let consumeWheel = true
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 28,
@@ -278,19 +294,7 @@ test("native children receive source coordinates before inner wheel movement bub
         pi.registerTool({
           ...createReadToolDefinition("."),
           renderCall: () => new Text("CUSTOM CALL", 0, 0),
-          renderResult: (result) => {
-            const text = result.content
-              .filter((part) => part.type === "text")
-              .map((part) => part.text)
-              .join("\n")
-            return new MouseRegion(new Text(text, 0, 0), (event) => {
-              if (event.type === "wheel" && consumeWheel)
-                return { handled: true }
-              if (event.type !== "click") return undefined
-              clicked = text.split("\n")[event.y] ?? ""
-              return { handled: true }
-            })
-          },
+          renderResult: () => new Text("CUSTOM RESULT", 0, 0),
         })
       },
     ],
@@ -317,14 +321,11 @@ test("native children receive source coordinates before inner wheel movement bub
   const screen = () => host.screenLines().map(stripTerminalSequences)
   const row = screen().findIndex((line) => line.includes("second-row-10"))
   assert(row >= 0)
-  await host.key(`\x1b[<0;3;${row + 1}M`)
-  await host.key(`\x1b[<0;3;${row + 1}m`)
-  assert.equal(clicked, "second-row-10")
+  assert.doesNotMatch(screen().join("\n"), /CUSTOM CALL|CUSTOM RESULT/)
   const before = screen()
   await host.key(`\x1b[<64;3;${row + 1}M`)
   await host.frame()
-  assert.deepEqual(screen(), before)
-  consumeWheel = false
+  assert.notDeepEqual(screen(), before)
   await host.key("\x1bg")
   await host.key("\x1b[B")
   await host.frame()
@@ -343,7 +344,11 @@ test("native children receive source coordinates before inner wheel movement bub
 
 test("growing output and resizing preserve a body anchor and follow only an already followed end", async (t) => {
   const lengths: Record<string, number> = { prefix: 20, target: 40 }
-  const invalidate = new Map<string, () => void>()
+  const updates = new Map<string, (length: number) => void>()
+  const gates = {
+    prefix: Promise.withResolvers<void>(),
+    target: Promise.withResolvers<void>(),
+  }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     columns: 82,
@@ -352,80 +357,90 @@ test("growing output and resizing preserve a body anchor and follow only an alre
       (pi) => {
         pi.registerTool({
           ...createReadToolDefinition("."),
-          execute: async () => ({
-            content: [{ type: "text", text: "output" }],
-            details: {},
-          }),
-          renderCall: (args) => new Text(`CALL ${args.path}`, 0, 0),
-          renderResult: (_result, _options, _theme, context) => {
-            const name = context.args.path
-            invalidate.set(name, context.invalidate)
-            return new Text(
-              Array.from(
-                { length: lengths[name]! },
-                (_, row) => `${name}-${row}`,
-              ).join("\n"),
-              0,
-              0,
-            )
+          execute: async (_id, args, _signal, onUpdate) => {
+            const name = args.path as "prefix" | "target"
+            assert(onUpdate)
+            const result = (length: number) => ({
+              content: [
+                {
+                  type: "text" as const,
+                  text: Array.from(
+                    { length },
+                    (_, row) => `${name}-${row}`,
+                  ).join("\n"),
+                },
+              ],
+              details: {},
+            })
+            updates.set(name, (length) => onUpdate(result(length)))
+            onUpdate(result(lengths[name]!))
+            await gates[name].promise
+            return result(lengths[name]!)
           },
+          renderCall: (args) => new Text(`CALL ${args.path}`, 0, 0),
+          renderResult: () => new Text("CUSTOM RESULT", 0, 0),
         })
       },
     ],
   })
   host.queueResponse(reads(["prefix", "target"]), toolFinish, done, end)
   await host.type("Read growing outputs")
-  await host.key("\r")
+  try {
+    await host.key("\r")
+    await t.waitFor(() => assert.equal(updates.size, 2))
+    await host.key("\u000f")
+    await host.frame()
+    const screen = () => host.screenLines().map(stripTerminalSequences)
+    assert.doesNotMatch(screen().join("\n"), /CUSTOM RESULT|CALL prefix/)
+    const last = screen().findIndex((line) => line.includes("target-39"))
+    assert(last >= 0)
+    await host.key(`\x1b[<64;3;${last + 1}M`)
+    await host.output()
+    const anchor = screen()
+      .find((line) => /target-\d/.test(line))
+      ?.trim()
+    assert(anchor)
+    lengths["prefix"] = 40
+    updates.get("prefix")!(40)
+    await host.output()
+    assert.equal(
+      screen()
+        .find((line) => /target-\d/.test(line))
+        ?.trim(),
+      anchor,
+    )
+    host.terminal.resize(60, 36)
+    await host.output()
+    assert.equal(
+      screen()
+        .find((line) => /target-\d/.test(line))
+        ?.trim(),
+      anchor,
+    )
+    lengths["target"] = 41
+    updates.get("target")!(41)
+    await host.output()
+    assert.equal(
+      screen()
+        .find((line) => /target-\d/.test(line))
+        ?.trim(),
+      anchor,
+    )
+    assert(!screen().some((line) => line.includes("target-40")))
+    const body = screen().findIndex((line) => /target-\d/.test(line))
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Terminal input must be delivered in order.
+    for (let i = 0; i < 16; i++) await host.key(`\x1b[<65;3;${body + 1}M`)
+    await host.output()
+    assert(screen().some((line) => line.includes("target-40")))
+    lengths["target"] = 42
+    updates.get("target")!(42)
+    await host.output()
+    assert(screen().some((line) => line.includes("target-41")))
+  } finally {
+    gates.prefix.resolve()
+    gates.target.resolve()
+  }
   await host.settled()
-  await openWork(host)
-  await host.key("\u000f")
-  await host.frame()
-  const screen = () => host.screenLines().map(stripTerminalSequences)
-  const last = screen().findIndex((line) => line.includes("target-39"))
-  assert(last >= 0)
-  await host.key(`\x1b[<64;3;${last + 1}M`)
-  await host.output()
-  const anchor = screen()
-    .find((line) => /target-\d/.test(line))
-    ?.trim()
-  assert(anchor)
-  lengths["prefix"] = 40
-  assert(invalidate.get("prefix"))
-  invalidate.get("prefix")!()
-  await host.output()
-  assert.equal(
-    screen()
-      .find((line) => /target-\d/.test(line))
-      ?.trim(),
-    anchor,
-  )
-  host.terminal.resize(60, 36)
-  await host.output()
-  assert.equal(
-    screen()
-      .find((line) => /target-\d/.test(line))
-      ?.trim(),
-    anchor,
-  )
-  lengths["target"] = 41
-  invalidate.get("target")!()
-  await host.output()
-  assert.equal(
-    screen()
-      .find((line) => /target-\d/.test(line))
-      ?.trim(),
-    anchor,
-  )
-  assert(!screen().some((line) => line.includes("target-40")))
-  const body = screen().findIndex((line) => /target-\d/.test(line))
-  // oxlint-disable-next-line eslint/no-await-in-loop -- Terminal input must be delivered in order.
-  for (let i = 0; i < 16; i++) await host.key(`\x1b[<65;3;${body + 1}M`)
-  await host.output()
-  assert(screen().some((line) => line.includes("target-40")))
-  lengths["target"] = 42
-  invalidate.get("target")!()
-  await host.output()
-  assert(screen().some((line) => line.includes("target-41")))
 })
 
 function pngChunk(name: string, data: Buffer) {

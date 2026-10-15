@@ -142,7 +142,7 @@ test("settled agent activity hides the earlier identical text and retains the fi
     /Done[\s\S]*Read files[\s\S]*Native intervening notice[\s\S]*Done/,
   )
   assert.equal((expanded.match(/Native intervening notice/g) ?? []).length, 1)
-  assert.match(expanded, /▶ Read files/)
+  assert.match(expanded, /> Read files/)
   assert.doesNotMatch(expanded, /read one\.txt/)
 
   await host.reload()
@@ -508,10 +508,12 @@ test("native tool inspection keeps agent activity open and agent activity toggle
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   await host.key("\x1bg")
   await host.key("\r")
-  await host.frame()
+  const items = await host.frame()
+  assert.match(items, /> Read one\.txt/)
+  assert.doesNotMatch(items, /INSPECTED BODY/)
   const call = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
+    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"))
   assert(call >= 0)
   await host.key(`\x1b[<0;3;${call + 1}M`)
   await host.key(`\x1b[<0;3;${call + 1}m`)
@@ -739,7 +741,7 @@ test("a terminal response without answer text leaves agent activity expanded", a
   await host.settled()
   const frame = await host.frame()
   assert.match(frame, /Visible work without answer/)
-  assert.match(frame, /▶ Read files/)
+  assert.match(frame, /> Read files/)
   assert.doesNotMatch(frame, /read one\.txt/)
   assert.doesNotMatch(frame, /Worked/)
 })

@@ -245,6 +245,10 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
           ...createReadToolDefinition("."),
           name: "mystery",
           label: "Mystery",
+          execute: async () => ({
+            content: [{ type: "text", text: "hidden telescope" }],
+            details: {},
+          }),
           renderCall: () => new Text("CUSTOM CALL", 0, 0),
           renderResult: () => new Text("CUSTOM RESULT", 0, 0),
         })
@@ -333,24 +337,33 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   await host.key(`\x1b[<0;2;${groupRow + 1}m`)
   await host.key("\x1bg")
   const expanded = await host.frame()
-  assert.match(expanded, /CUSTOM CALL/)
-  assert.match(expanded, /CUSTOM RESULT/)
-  assert.match(expanded, /read one\.txt/)
+  assert.match(expanded, /▼ Loaded a tool, called a tool, read files/)
+  assert.match(expanded, /> Read one\.txt/)
+  assert.match(expanded, /> Called mystery/)
+  assert.doesNotMatch(
+    expanded,
+    /CUSTOM CALL|CUSTOM RESULT|native result|hidden telescope/,
+  )
   const nativeRow = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
+    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"))
   assert(nativeRow >= 0)
   await host.key(`\x1b[<0;2;${nativeRow + 1}M`)
   await host.key(`\x1b[<0;2;${nativeRow + 1}m`)
   assert.match(await host.frame(), /native result/)
+  assert.doesNotMatch(
+    await host.frame(),
+    /hidden telescope|CUSTOM CALL|CUSTOM RESULT/,
+  )
 
   await host.key("\x06")
   await host.type("hidden telescope")
   assert.match(await host.frame(), /1\/1/)
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
-    /CUSTOM CALL/,
+    /hidden telescope/,
   )
+  assert.doesNotMatch(await host.frame(), /CUSTOM CALL|CUSTOM RESULT/)
   await host.key("\x1b")
   await host.frame()
   const answerRow = host
