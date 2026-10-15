@@ -1,10 +1,22 @@
 # 11: Find and reveal retained pre-compaction content
 
-**What to build:** Find original retained content that Pi omitted from its current compaction-aware display and inspect it in source order.
+**What to build:** Reveal retained and pre-compaction activity items through the same adapter path without execution side effects.
 
-**Blocked by:** 10: Find and reveal content inside collapsed disclosures.
+**Blocked by:** Chat 10: split-item source reveal.
 
-**Status:** done
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Materialize reliable per-operation history with default expanded bodies and honest generic fallbacks where facts are missing.
+- [ ] Preserve omission markers, source order, native settings, and image ownership without rerunning tools, speculative previews, or resurrected live handles.
+- [ ] Reload and branch changes release stale subscriptions and reset only the documented manual presentation state.
+
+## Earlier revision
+
+**Recorded status:** done
+
+**Original delivery:** Find original retained content that Pi omitted from its current compaction-aware display and inspect it in source order.
 
 - [x] Extend source search to retained pre-compaction entries in the active branch and ancestry, without loading sibling branches or discarded content.
 - [x] Materialize absent rows through native historical presenters at their source-ordered positions without changing Pi session projection or model context.

@@ -1,12 +1,25 @@
 # 03: Yield and resume execution cells
 
-**What to build:** Keep execution progress, accumulated readable output, and late failures in the originating card across yields and waits, and recover the latest recorded outcome after reload or branch changes.
+**What to build:** Inspect yielded executions and late outcomes at their origin, then recover the same reliable operations after reload or branch changes.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisites 01 and 02 are resolved.
+**Blocked by:** Core 02: live command ownership.
 
-**Status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Preserve independent operation and execution entries through yields, waits, termination, and late failures; successful children retain their outcomes.
+- [ ] Reconcile latest active-branch facts without restoring workers or processes, rerunning tools, or assigning work to a later request.
+- [ ] Retain compact operation descriptions and known outcomes beyond existing body windows; unavailable bodies have an explicit notice only when opened.
+- [ ] Honor authoritative processed results and context edits during replay, while preserving exact continuation collection behavior.
+
+## Earlier revision
+
+**Recorded status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
+
+**Original delivery:** Keep execution progress, accumulated readable output, and late failures in the originating card across yields and waits, and recover the latest recorded outcome after reload or branch changes.
 
 ## Presentation delta
 

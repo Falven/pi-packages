@@ -1,10 +1,23 @@
 # 12: Complete a mixed session with existing extensions
 
-**What to build:** Use the complete pi-chat workflow with native Pi and the existing composition extensions through a full session and lifecycle changes.
+**What to build:** Verify the combined activity-item revision with all surrounding chat behavior and both extension load orders.
 
-**Blocked by:** 09: Collapse agent activity as a qualifying final response streams; 11: Find and reveal retained pre-compaction content; the correction delta in 07: Collapse settled agent activity while keeping the final response visible.
+**Blocked by:** Chat 11: retained-item reveal; Core 02–05: commands, continuation, patches, and images.
 
-**Status:** in-progress — correction delta complete; earlier physical-terminal acceptance pending
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Run affected existing real-host cases on primary Pi 1.1.0 and secondary 1.0.2 with both extension load orders, built-ins, unknown/replacement extensions, hooks, and live/retained activity.
+- [ ] Verify three disclosure states, independent controls, native default bodies, copying/Find, notices/final responses, settings, cancellation, and session lifecycles.
+- [ ] Run configured-terminal acceptance where available and distinguish emitted bytes from verified physical pixels and input.
+- [ ] Record exact checks and remaining limits; retain earlier physical-terminal acceptance as pending until verified.
+
+## Earlier revision
+
+**Recorded status:** in-progress — correction delta complete; earlier physical-terminal acceptance pending
+
+**Original delivery:** Use the complete pi-chat workflow with native Pi and the existing composition extensions through a full session and lifecycle changes.
 
 - [ ] Exercise always-retained group disclosures, both native Hide thinking modes, omitted-reasoning grouping, native working-indicator activity headings, steering/follow-ups, final collapsing, selection/copy, collapsed search, selected-only temporary thinking reveal and its cleanup, and pre-compaction reveal together.
 - [x] Preserve native and companion composer, attachments, skills, tool/Markdown overrides, widgets, themes, and overlay focus in supported load orders.

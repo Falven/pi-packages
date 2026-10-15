@@ -1,6 +1,6 @@
 # Preserve activity order and inline thought placement
 
-`pi-chat` groups consecutive top-level tool calls across assistant messages, stopping at visible non-tool items or explicit boundaries. Pi's native `hideThinkingBlock` removes reasoning rows completely when true; when false, full native thought prose appears inline without its own header, viewport, or disclosure. This preserves Pi's visibility choice and [native content ownership](0012-transcript-preserves-native-content.md) without a new setting or raw-versus-summary distinction.
+`pi-chat` groups consecutive activity items and execution activity items across assistant messages, stopping at visible non-tool items or explicit boundaries. [Tool calls and execution cells can produce several rows](0019-tool-renderers-own-tool-presentation.md) without imposing group boundaries. Pi's native `hideThinkingBlock` removes reasoning rows completely when true; when false, full native thought prose appears inline without its own header, viewport, or disclosure. This preserves Pi's visibility choice and [native content ownership](0012-transcript-preserves-native-content.md) without a new setting or raw-versus-summary distinction.
 
 ## Consequences
 

@@ -1,12 +1,25 @@
 # 07: Verify the complete contract and matched model trials
 
-**What to build:** Verify the completed presentation delta, its bounded live behavior and preserved model contract, and record the exact checks and remaining limits without relabeling earlier evidence.
+**What to build:** Verify unchanged execution/tool contracts and review the completed activity-item delta, with evidence scoped to its tested runtime.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisite 06 is resolved.
+**Blocked by:** Core 06 and Chat 12: combined acceptance.
 
-**Status:** resolved — presentation verification and both independent reviews complete within the recorded limits
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Run existing deterministic contract, hooks, collection, lifecycle, and resource-bound checks plus typechecking, lint, formatting, and whitespace validation.
+- [ ] Review standards and spec conformance against the integration starting commit; resolve findings and record any review-tool limitation.
+- [ ] Repeat live-model comparisons only if agent-interface or execution behavior changed; record configured-terminal limits without claiming physical acceptance.
+- [ ] Close only verified deltas and preserve earlier measurements and pending acceptance evidence.
+
+## Earlier revision
+
+**Recorded status:** resolved — presentation verification and both independent reviews complete within the recorded limits
+
+**Original delivery:** Verify the completed presentation delta, its bounded live behavior and preserved model contract, and record the exact checks and remaining limits without relabeling earlier evidence.
 
 ## Presentation delta
 

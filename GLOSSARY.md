@@ -45,19 +45,23 @@ The ordered commentary, thoughts, and tool activity within a turn, presented sep
 _Avoid_: Turn, when referring only to the agent's activity
 
 **Render group**:
-Consecutive tool activity displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message boundary alone does not.
+Consecutive activity items and execution activity items displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
 
 **Activity item**:
 A unit of displayed agent activity associated with an action or result. A conversation item or tool call can contribute several activity items; their boundaries need not match.
+
+**Execution activity item**:
+An activity item for an execution cell's own output or error when that content does not belong to a child operation.
+_Avoid_: Child operation, when referring to the execution's own outcome
 
 **Summary**:
 A concise description shown at a disclosure. Qualify it as a group summary or item summary when identifying what it describes.
 
 **Group summary**:
-A short description of observed tool activity in a render group's header, including while a call is running. It does not replace the tool's own presentation.
+A short description in a render group's header that summarizes the types of operations it contains without replacing their item summaries.
 
 **Item summary**:
-A short description identifying the action and target of one activity item.
+A short description identifying the action and target of one activity item. Its wording can become less specific when the expanded activity body already shows the command or target.
 
 **Activity body**:
 The content inspected when an activity item's disclosure is expanded.
@@ -155,6 +159,10 @@ An invocation of a tool with its inputs and eventual outcome. One tool call can 
 
 **Execution cell**:
 One execution whose new output and eventual result can be collected across tool calls.
+
+**Operation**:
+An underlying action, such as running a command or changing a file. A tool call can perform several operations, and an execution cell can coordinate several tool calls.
+_Avoid_: Activity item, when referring to execution rather than its presentation
 
 **Process session**:
 A command that remains available for input or output collection until its final result is collected.

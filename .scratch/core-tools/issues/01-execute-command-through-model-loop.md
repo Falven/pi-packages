@@ -1,12 +1,25 @@
 # 01: Execute a command through the complete model loop
 
-**What to build:** Add a compact native execution card for a completed command, with readable command, effective directory, output, and exit status while preserving the original model interaction and retained source.
+**What to build:** Inspect each completed command independently in the chat, with a separate entry for genuinely script-owned output or errors and an unchanged model contract.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None.
+**Blocked by:** Chat 04: common activity-item path.
 
-**Status:** resolved — completed command presentation delta; completed baseline retained below
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Publish factual operation updates independently of custom renderer subscription and document their schema through Pi’s event bus and retained results/activity records.
+- [ ] Project several commands in one execution cell into stable ordered activity items with applicable effective inputs and processed results, using generic default expanded bodies.
+- [ ] Preserve output ownership before serialization: omit attributed child duplicates and empty execution entries, retain genuine script text even when equal to child output, and expose pre-child script failures.
+- [ ] Keep successful children successful after a script failure and respect authoritative result hooks and model-facing output.
+
+## Earlier revision
+
+**Recorded status:** resolved — completed command presentation delta; completed baseline retained below
+
+**Original delivery:** Add a compact native execution card for a completed command, with readable command, effective directory, output, and exit status while preserving the original model interaction and retained source.
 
 ## Presentation delta
 

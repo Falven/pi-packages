@@ -1,10 +1,22 @@
 # 10: Find and reveal content inside collapsed disclosures
 
-**What to build:** Use native search input to find readable source text independently of disclosures and reveal the matching conversation occurrence.
+**What to build:** Find retained source and reveal the correct independently disclosed activity item without opening its siblings.
 
-**Blocked by:** 06: Show thoughts inline; 07: Collapse settled agent activity while keeping the final response visible.
+**Blocked by:** Core 03: continuation/replay; Core 04: per-file patches; Core 05: images.
 
-**Status:** done
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Bind split items to original call/result source references and route reliable command, file, and output hits to the matching item.
+- [ ] When source cannot identify one split operation, reveal and highlight its owning call without fabricating a match or reviving the aggregate custom renderer.
+- [ ] Preserve source text, active-branch restriction, native Find controls, and copying of expanded content only.
+
+## Earlier revision
+
+**Recorded status:** done
+
+**Original delivery:** Use native search input to find readable source text independently of disclosures and reveal the matching conversation occurrence.
 
 - [x] Search retained readable fields already represented in the chat, including messages, thoughts, commands, and tool results on the active branch and ancestry only.
 - [x] Match readable Markdown labels and code bodies, excluding structural markup and hidden destinations; use source references, revisions, and match ranges rather than a joined corpus.

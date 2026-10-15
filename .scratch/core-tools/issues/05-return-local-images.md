@@ -1,12 +1,24 @@
 # 05: Return local images through Pi's image pipeline
 
-**What to build:** Show readable image operations in their originating execution card and actual images once in their collecting native result, preserving blocking, normalization, result hooks, terminal visibility, and the existing model image contract.
+**What to build:** Keep each image’s origin and status while displaying its bytes once inside the appropriate collecting-result activity body.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisite 01 is resolved.
+**Blocked by:** Core 03: continuation and replay.
 
-**Status:** resolved — approved image presentation delta; completed baseline retained below
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Use the same adapter and disclosure path for image operations and collecting wait results; collapsed items expose no image or preview.
+- [ ] Keep path/status at the originating operation and the image in its collecting native result, including a later wait, without duplicate visible owners.
+- [ ] Preserve image blocking, normalization, terminal preferences, processed-result hooks, model content, and native default expanded rendering.
+
+## Earlier revision
+
+**Recorded status:** resolved — approved image presentation delta; completed baseline retained below
+
+**Original delivery:** Show readable image operations in their originating execution card and actual images once in their collecting native result, preserving blocking, normalization, result hooks, terminal visibility, and the existing model image contract.
 
 ## Presentation delta
 

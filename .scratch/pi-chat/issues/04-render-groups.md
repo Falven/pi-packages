@@ -1,10 +1,24 @@
-# 04: Group and toggle consecutive tool calls
+# 04: Group and toggle consecutive activity items
 
-**What to build:** Inspect consecutive tool calls together while each tool retains its native presentation and disclosures.
+**What to build:** Use one adapter path for built-ins and extensions, with type-derived group summaries and independently disclosed default activity bodies.
 
-**Blocked by:** 03: Navigate, select, and copy chat content.
+**Blocked by:** None — earlier navigation prerequisites are complete.
 
-**Status:** done
+**Status:** in-progress — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Keep named built-in, core-tool, and fallback adapters and their explicit registry inside pi-chat. Use reliable provenance and effective arguments; unknown extensions retain a useful tool-name summary.
+- [ ] Collapsed groups and activity items show only `>` and their group or item summary. Open groups expose initially collapsed items; opened bodies use native built-in or generic default expanded rendering, bypassing custom extension renderers.
+- [ ] Derive the group summary from all included operation types. Share conservative command classification; preserve distinct-target counting and honest status wording.
+- [ ] Preserve independent mouse, keyboard, native body-click, and global disclosure controls, bounded layout, settings, and existing state lifetimes.
+- [ ] Update existing real-host cases and temporary checks; add no test cases or files.
+
+## Earlier revision
+
+**Recorded status:** done
+
+**Original delivery:** Inspect consecutive tool calls together while each tool retains its native presentation and disclosures.
 
 - [x] Group every consecutive top-level call across assistant messages, stopping at visible commentary, visible thoughts, user items, other standalone activity, or explicit boundaries.
 - [x] Verify eligible calls group across reasoning omitted by native Hide thinking, while visible commentary and meaningful boundaries still split groups; with Hide thinking off, thoughts separate groups.

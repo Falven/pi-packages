@@ -1,12 +1,25 @@
 # 04: Apply file patches through native dispatch
 
-**What to build:** Show readable patch actions, affected files, and actual success or failure inside the originating execution card while preserving real file effects and the existing returned patch contract.
+**What to build:** Inspect each known file changed by a patch independently, with its actual outcome and verified change counts where available.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisite 01 is resolved.
+**Blocked by:** Core 01: common core-operation projection.
 
-**Status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Capture per-file facts at mutation time, including stable identity, actual action/target, applicable detail content, and verified additions/deletions when available.
+- [ ] One patch can produce several independently disclosed edit items through the pi-chat adapter. Never repeat the full patch body in every file row.
+- [ ] Preserve completed files before a later failure and distinguish failed or unattempted changes from successful edits.
+- [ ] Retain all compact file descriptions beyond the previous sixteen-file window, with bounded bodies and unchanged mutation/model contracts.
+
+## Earlier revision
+
+**Recorded status:** resolved — approved presentation delta verified through the native host; completed baseline retained below
+
+**Original delivery:** Show readable patch actions, affected files, and actual success or failure inside the originating execution card while preserving real file effects and the existing returned patch contract.
 
 ## Presentation delta
 

@@ -1,12 +1,25 @@
 # 02: Continue interactive commands across prompts
 
-**What to build:** Stream a command’s output into its originating execution card before command or input calls return, and keep that command’s status and accumulated output there across later input and collection calls.
+**What to build:** Keep live command progress, input, and late process outcomes in their originating independently disclosed activity item.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisite 01 is resolved.
+**Blocked by:** Core 01: completed commands and execution-owned content.
 
-**Status:** resolved — live command presentation belongs to its originating execution
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Publish live pipe/PTY output and process status before calls return, including when the custom execution renderer has never subscribed.
+- [ ] Input or collection from another execution updates the original command and retains its own meaningful outcome without replaying command output.
+- [ ] Preserve command, cell, and process-session distinctions, initial order, and manual disclosure choices through later prompts and failures.
+- [ ] Display observation does not consume collection cursors, dispatch calls, poll, change result hooks, or create notifications or model turns.
+
+## Earlier revision
+
+**Recorded status:** resolved — live command presentation belongs to its originating execution
+
+**Original delivery:** Stream a command’s output into its originating execution card before command or input calls return, and keep that command’s status and accumulated output there across later input and collection calls.
 
 ## Presentation delta
 

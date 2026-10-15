@@ -1,12 +1,24 @@
 # 06: Preserve complete workflows in mixed Pi sessions
 
-**What to build:** Verify command, continuation, patch, and image presentation together with normal Pi lifecycle and configured companions, keeping unrelated content and the agent interface intact.
+**What to build:** Verify complete command, continuation, patch, and image workflows through the combined default activity-body path.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** None — presentation prerequisites 02, 03, 04, and 05 are resolved.
+**Blocked by:** Core 02–05; Chat 10–11.
 
-**Status:** resolved — presentation workflow and main integration checks complete; historical evidence retained below
+**Status:** ready-for-agent — approved activity-item delta; earlier evidence retained below
+
+## Activity-item delta — approved 2026-10-15
+
+- [ ] Reuse both normal extension load orders and existing mixed-host cases to verify independent items and their origin across later prompts, settings, and reload.
+- [ ] Preserve unrelated notices, final responses, effective hooks, retained source, actual file/process effects, and image single ownership.
+- [ ] Record combined evidence independently of the prior aggregate-renderer revision.
+
+## Earlier revision
+
+**Recorded status:** resolved — presentation workflow and main integration checks complete; historical evidence retained below
+
+**Original delivery:** Verify command, continuation, patch, and image presentation together with normal Pi lifecycle and configured companions, keeping unrelated content and the agent interface intact.
 
 ## Presentation delta
 
