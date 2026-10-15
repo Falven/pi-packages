@@ -103,7 +103,8 @@ export class CoreToolAdapter {
     const verified = facts.result ? readExecution(facts.result) : undefined
     // A processed result without valid metadata must never regain discarded bodies from the journal.
     if (facts.result && !verified) return
-    if (facts.name === "wait") return [this.waitItem(facts)]
+    if (facts.name === "wait")
+      return [this.waitItem(facts, verified?.execution)]
     const cellId = verified?.execution.cellId ?? this.cells.get(facts.id)
     const snapshot = cellId
       ? this.activity.get(cellId, facts.id, verified?.execution.sessionId)
@@ -163,37 +164,41 @@ export class CoreToolAdapter {
 
   private owned(facts: CallFacts): boolean {
     const source = facts.provenance
-    if (source) {
-      if (source.source !== "extension" || !source.path) return false
-      const path = source.path.startsWith("file:")
-        ? fileURLToPath(source.path)
-        : source.path
-      const cached = this.provenance.get(path)
-      if (cached !== undefined) return cached
-      let directory = dirname(path)
-      while (true) {
-        try {
-          const manifest = JSON.parse(
-            readFileSync(join(directory, "package.json"), "utf8"),
-          ) as { name?: string }
-          const owned = manifest.name === "pi-codex-tools"
-          this.provenance.set(path, owned)
-          return owned
-        } catch (error) {
-          if (error instanceof SyntaxError) break
-          if (object(error) && error["code"] !== "ENOENT") break
-        }
-        const parent = dirname(directory)
-        if (parent === directory) break
-        directory = parent
-      }
-      this.provenance.set(path, false)
-      return false
-    }
+    if (source)
+      return source.source === "extension" && this.providerPath(source.path)
     return this.receipts.get(facts.id) === facts.name
   }
 
-  private waitItem(facts: CallFacts): ActivityItem {
+  private providerPath(raw: string | undefined): boolean {
+    if (!raw) return false
+    const path = raw.startsWith("file:") ? fileURLToPath(raw) : raw
+    const cached = this.provenance.get(path)
+    if (cached !== undefined) return cached
+    let directory = dirname(path)
+    while (true) {
+      try {
+        const manifest = JSON.parse(
+          readFileSync(join(directory, "package.json"), "utf8"),
+        ) as { name?: string }
+        const owned = manifest.name === "pi-codex-tools"
+        this.provenance.set(path, owned)
+        return owned
+      } catch (error) {
+        if (error instanceof SyntaxError) break
+        if (object(error) && error["code"] !== "ENOENT") break
+      }
+      const parent = dirname(directory)
+      if (parent === directory) break
+      directory = parent
+    }
+    this.provenance.set(path, false)
+    return false
+  }
+
+  private waitItem(
+    facts: CallFacts,
+    execution: CoreExecution | undefined,
+  ): ActivityItem {
     const args = argumentsOf(facts.args)
     const cellId =
       typeof args["cell_id"] === "string" ? args["cell_id"] : undefined
@@ -204,9 +209,20 @@ export class CoreToolAdapter {
       status: facts.status,
       body: {
         name: "wait",
-        args: facts.args,
+        args: {
+          ...args,
+          ...(execution ? { cell_status: execution.status } : {}),
+        },
         cwd: facts.cwd,
-        result: facts.result,
+        result: facts.result
+          ? result(
+              undefined,
+              facts.result.isError,
+              facts.result.content.filter(
+                (part): part is ImagePart => part.type === "image",
+              ),
+            )
+          : undefined,
       },
     }
   }
@@ -219,7 +235,14 @@ export class CoreToolAdapter {
   ): ActivityItem[] {
     const ownStatus = status(operation.status, live)
     const cwd = operation.cwd ?? facts.cwd
-    if (operation.name === "apply_patch" && operation.patchChanges?.length) {
+    const providerChild =
+      operation.toolSource === "extension" &&
+      this.providerPath(operation.toolPath)
+    if (
+      providerChild &&
+      operation.name === "apply_patch" &&
+      operation.patchChanges?.length
+    ) {
       return operation.patchChanges.map((change) => ({
         id: `${operation.id}:${change.id}`,
         kind: "edit",
@@ -240,11 +263,13 @@ export class CoreToolAdapter {
           },
           cwd,
           result: result(change.output, change.status === "failed"),
-          ...(change.outputOmitted ? { availability: "omitted" as const } : {}),
+          ...(change.outputOmitted || operation.patchOmitted
+            ? { availability: "omitted" as const }
+            : {}),
         },
       }))
     }
-    if (operation.name === "apply_patch") {
+    if (providerChild && operation.name === "apply_patch") {
       return [
         {
           id: operation.id,
@@ -272,19 +297,29 @@ export class CoreToolAdapter {
       ]
     }
     const args = operation.effectiveArgs ?? {}
+    const contextArgs = {
+      ...args,
+      ...(operation.sessionId === undefined
+        ? {}
+        : { session_id: operation.sessionId }),
+      ...(operation.exitCode === undefined
+        ? {}
+        : { exit_code: operation.exitCode }),
+    }
     const text = operation.output ?? operation.resultText
     const item: ActivityItem = {
       id: operation.id,
-      kind: operation.name === "view_image" ? "image" : "tool",
+      kind: providerChild && operation.name === "view_image" ? "image" : "tool",
       status: ownStatus,
       body: {
         name: operation.name,
-        args,
+        args: contextArgs,
         cwd,
         result: result(text, ownStatus === "failed", images),
         ...(operation.outputOmitted ? { availability: "omitted" } : {}),
       },
     }
+    if (!providerChild) return [item]
     if (operation.name === "exec_command") {
       const command = operation.command ?? args["cmd"]
       if (typeof command === "string")
@@ -297,6 +332,18 @@ export class CoreToolAdapter {
         typeof chars === "string" && chars.length ? "input" : "collection"
       if (operation.sessionId !== undefined)
         item.target = String(operation.sessionId)
+      item.body.result =
+        ownStatus === "failed"
+          ? result(
+              operation.exitCode === undefined
+                ? "Process input failed"
+                : `Process exited with code ${operation.exitCode}`,
+              true,
+            )
+          : operation.exitCode === undefined
+            ? undefined
+            : result(`Process exited with code ${operation.exitCode}`, false)
+      delete item.body.availability
     }
     return [item]
   }
