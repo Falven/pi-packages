@@ -179,6 +179,18 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /exec_command/)
       assert.match(screen, /"cmd": "cat changed\.txt"/)
       assert.match(screen, /validated-result/)
+      assert.doesNotMatch(screen, /validated-line-39/)
+      assert.match(screen, /more lines/)
+      const nativeOutputRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("exec_command"),
+        )
+      assert(nativeOutputRow > commandRow)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}m`)
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.equal(
         (screen.match(/^\s*validated-line-\d+\s*$/gm) ?? []).length,
         40,

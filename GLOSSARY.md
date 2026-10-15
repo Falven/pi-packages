@@ -65,18 +65,18 @@ A concise description shown at a disclosure. Qualify it as a group summary or it
 A short description in a render group's header that summarizes the types of operations it contains without replacing their item summaries.
 
 **Item summary**:
-A short description identifying the action and target of one activity item. Its wording can become less specific when the expanded activity body already shows the command or target.
+A short description identifying the action and target of one activity item. Its wording can become less specific when the full output already shows the command or target.
 
 **Activity body**:
-The content inspected when an activity item's disclosure is expanded.
+The content inspected when an activity item's disclosure is expanded. Its output control can show a preview or the full output.
 _Avoid_: Details, when naming the displayed region rather than tool-result metadata
 
 **Disclosure**:
-A control that switches its content between collapsed and expanded states without changing the underlying content.
+A control that switches its content between collapsed and expanded states without changing the underlying content. Nested disclosures have independent states.
 _Avoid_: Expansion control or fold, when naming the control
 
 **Collapsed**:
-The display state that hides content behind its summary or disclosure header.
+The display state that hides content or reduces it to a preview, depending on the disclosure.
 _Avoid_: Compaction, when only presentation changes
 
 **Expanded**:

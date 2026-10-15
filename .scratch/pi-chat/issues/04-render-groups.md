@@ -1,4 +1,22 @@
-# 04: Group and toggle consecutive activity items
+# 04: Separate item disclosure from native output expansion
+
+**What to build:** Separate item disclosure from native output expansion.
+
+**Blocked by:** None (can start immediately).
+
+**Status:** in-progress
+
+## Native output preview correction — approved 2026-10-15
+
+- [ ] Keep a closed item summary-only. Opening it reveals the native output control in its own current state, showing the native collapsed preview by default. Native output clicks expand/collapse output without closing the item.
+- [ ] Use native built-in renderers and generic default extension rendering for both output states. Keep specific command summaries for previews; permit the generic command summary only when native output is expanded.
+- [ ] Preserve item and native-output states independently across updates, item/group/Worked-for closure and reopening, and settings reconstruction. New controls inherit the native global state; configured app.tools.expand still sets all available levels without a new shortcut or persisted policy.
+- [ ] Find expands only the selected native output enough to reveal its matching source. Preserve source, contracts, selection validity, gutters, image ownership, and existing reload lifetime.
+- [ ] Reproduce and verify using existing real-Pi cases only, including long output, native clicks, remapped global expansion, settings reconstruction, and source Find.
+
+This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+## Prior native-flow revision and evidence
 
 **What to build:** Use Pi’s configured native tool-expansion action for render-group, activity-item, and native-output disclosure state, including newly arriving items.
 

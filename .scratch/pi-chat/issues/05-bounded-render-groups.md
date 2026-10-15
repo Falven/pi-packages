@@ -1,4 +1,20 @@
-# 05: Expand render groups and native activity bodies in conversation flow
+# 05: Preserve native preview and full-output sizes in conversation flow
+
+**What to build:** Preserve native preview and full-output sizes in conversation flow.
+
+**Blocked by:** 04: Separate item disclosure from native output expansion.
+
+**Status:** in-progress
+
+## Native output preview correction — approved 2026-10-15
+
+- [ ] Retain full render-group expansion in ordinary conversation flow. Each open item uses Pi’s native preview or full-output size according to its independent output state.
+- [ ] Keep existing padding gutters, primary scrolling, native scrollbar priority, supported child edge handoff, image painting, copy bounds, and source anchors. Add no output viewport, cap, custom preview, or setting.
+- [ ] Update relevant existing flow/selection/image cases to explicitly expand native output when full-output inspection is required; keep summary-only closed-item assertions.
+
+This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+## Prior native-flow revision and evidence
 
 **What to build:** Open a render group to expose every activity item in ordinary conversation flow, with independent native-sized activity bodies.
 

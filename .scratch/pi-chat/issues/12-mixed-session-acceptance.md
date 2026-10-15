@@ -1,4 +1,20 @@
-# 12: Complete a mixed session with existing extensions
+# 12: Verify independent native output previews in mixed sessions
+
+**What to build:** Verify independent native output previews in mixed sessions.
+
+**Blocked by:** Chat 04 and Chat 05 native preview correction.
+
+**Status:** in-progress
+
+## Native output preview correction — approved 2026-10-15
+
+- [ ] Use the existing real-Pi seam and existing cases to verify built-ins and extensions: summary-only item, open item with native preview, then independent full native output, with native collapse leaving the item open.
+- [ ] Verify configured/remapped global expansion, ancestor choice preservation, settings rebuild, Find beyond preview limits, meaningful copy, images, and existing lifecycle in both supported runtimes.
+- [ ] Run relevant checks and standards/spec review. Record revision-specific evidence and preserve earlier evidence; distinguish native recorded-frame/input checks from physical-terminal observations.
+
+This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+## Prior native-flow revision and evidence
 
 **What to build:** Verify the combined native-flow, padding-gutter, and configured global-disclosure revision through existing mixed real-Pi workflows.
 

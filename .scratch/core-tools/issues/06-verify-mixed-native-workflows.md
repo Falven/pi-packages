@@ -1,4 +1,20 @@
-# 06: Preserve complete workflows in mixed Pi sessions
+# 06: Verify generic native previews for core operations
+
+**What to build:** Verify generic native previews for core operations.
+
+**Blocked by:** Chat 04 and Chat 05 native preview correction.
+
+**Status:** in-progress
+
+## Native output preview correction — approved 2026-10-15
+
+- [ ] Extend the existing two load-order workflow cases to verify a core command starts with Pi’s generic native preview when its item opens, then native click exposes its full output independently of siblings.
+- [ ] Preserve global expansion, ancestor choices, commands, continuation, per-file changes, errors, images, hooks, late outcomes, collection, and replay assertions. No core runtime, contract, provider-fact, or raw-output policy changes.
+- [ ] Coordinate both-runtime acceptance with Chat 12. Update existing cases only; record exact checks and retain earlier physical limits.
+
+This correction supersedes forced native-output expansion when an item opens. Earlier scope, status, and evidence below remain historical.
+
+## Prior native-flow revision and evidence
 
 **What to build:** Verify existing command, continuation, patch, and image workflows through the revised native-flow chat with padding gutters and configured global disclosures.
 
