@@ -246,9 +246,6 @@ function update(
   return result.map((line) => line.text + (line.ending || ending)).join("")
 }
 
-const diffLine = (prefix: string, text: string) =>
-  `${prefix}${text}${text.endsWith("\n") ? "" : "\n\\ No newline at end of file\n"}`
-
 function fileDiff(
   before: string,
   after: string,
@@ -256,6 +253,7 @@ function fileDiff(
   added?: number
   removed?: number
   output?: string
+  outputOmitted?: boolean
 } {
   const oldLines = before.match(/[^\n]*\n|[^\n]+$/g) ?? []
   const newLines = after.match(/[^\n]*\n|[^\n]+$/g) ?? []
@@ -273,14 +271,27 @@ function fileDiff(
   }
   const old = oldLines.slice(start, oldEnd)
   const next = newLines.slice(start, newEnd)
-  if (!old.length || !next.length)
+  let output = ""
+  let outputOmitted = false
+  const append = (prefix: string, line: string) => {
+    if (outputOmitted) return
+    const ending = line.endsWith("\n") ? "" : "\n\\ No newline at end of file\n"
+    const remaining = 16_384 - output.length
+    if (prefix.length + line.length + ending.length > remaining) {
+      output += (prefix + line).slice(0, remaining)
+      outputOmitted = true
+    } else output += prefix + line + ending
+  }
+  if (!old.length || !next.length) {
+    for (const line of old) append("-", line)
+    for (const line of next) append("+", line)
     return {
       added: next.length,
       removed: old.length,
-      output:
-        old.map((line) => diffLine("-", line)).join("") +
-        next.map((line) => diffLine("+", line)).join(""),
+      output,
+      ...(outputOmitted ? { outputOmitted } : {}),
     }
+  }
   if (old.length * next.length > 100_000 || old.length + next.length > 10_000)
     return {}
   const common = Array.from(
@@ -297,7 +308,6 @@ function fileDiff(
   let j = 0
   let added = 0
   let removed = 0
-  const output: string[] = []
   while (i < old.length || j < next.length) {
     if (i < old.length && j < next.length && old[i] === next[j]) {
       i++
@@ -306,14 +316,14 @@ function fileDiff(
       i < old.length &&
       (j === next.length || common[i + 1]![j]! >= common[i]![j + 1]!)
     ) {
-      output.push(diffLine("-", old[i++]!))
+      append("-", old[i++]!)
       removed++
     } else {
-      output.push(diffLine("+", next[j++]!))
+      append("+", next[j++]!)
       added++
     }
   }
-  return { added, removed, output: output.join("") }
+  return { added, removed, output, ...(outputOmitted ? { outputOmitted } : {}) }
 }
 
 async function priorContent(path: string): Promise<string | null | undefined> {
@@ -382,7 +392,10 @@ export function createPatch(
           patchOmitted = true
         }
         change.output = boundedPreview(text)
-        if (change.output !== text) change.outputOmitted = true
+        if (change.output !== text) {
+          change.outputOmitted = true
+          patchOmitted = true
+        }
         bodies.push(change)
       }
       const changed = (
@@ -406,6 +419,10 @@ export function createPatch(
         if (diff.removed !== undefined) change.removed = diff.removed
         if (diff.output !== undefined) body(change, diff.output)
         else {
+          change.outputOmitted = true
+          patchOmitted = true
+        }
+        if (diff.outputOmitted) {
           change.outputOmitted = true
           patchOmitted = true
         }
