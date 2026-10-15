@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Group and toggle consecutive activity items.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 

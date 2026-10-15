@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Expand render groups and native activity bodies in conversation flow.
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 

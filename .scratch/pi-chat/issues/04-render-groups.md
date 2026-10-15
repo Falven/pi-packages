@@ -4,17 +4,19 @@
 
 **Blocked by:** None (can start immediately); earlier adapter and grouping prerequisites are complete.
 
-**Status:** in-progress
+**Status:** resolved — native expansion delta; enclosing activity remains in ticket 07
 
 ## Native-flow and disclosure delta — approved 2026-10-15
 
-- [ ] Reuse the configured native app.tools.expand action and Pi’s global output-expansion state. Ctrl+O is only the default binding; introduce no hard-coded shortcut or separate expansion setting.
-- [ ] On an explicit global action, expand or collapse every available render group, activity item, and native output body consistently. Collapsed items remain summary-only; opened items retain the agreed native built-in or generic default expanded rendering.
-- [ ] New render groups and activity items inherit the current native global expansion state rather than unconditionally starting collapsed. Preserve remembered individual choices through redraw, growth, settlement, settings reconstruction, and resize until an explicit individual/global change; retain the existing in-memory lifetime.
-- [ ] Individual ancestor closure and reopening preserve descendant choices; a later explicit global action sets every applicable descendant. Group summaries, item summaries, adapter ownership, source data, and grouping boundaries remain unchanged.
-- [ ] Update existing real-Pi host cases to verify a remapped app.tools.expand binding, default-state inheritance, future arrivals after both global states, native bodies, independent toggles, and retained choices. Reuse the established fixture and existing cases only. Ticket 07 adds the enclosing agent activity disclosure.
+- [x] Reuse the configured native app.tools.expand action and Pi’s global output-expansion state. Ctrl+O is only the default binding; introduce no hard-coded shortcut or separate expansion setting.
+- [x] On an explicit global action, expand or collapse every available render group, activity item, and native output body consistently. Collapsed items remain summary-only; opened items retain the agreed native built-in or generic default expanded rendering.
+- [x] New render groups and activity items inherit the current native global expansion state rather than unconditionally starting collapsed. Preserve remembered individual choices through redraw, growth, settlement, settings reconstruction, and resize until an explicit individual/global change; retain the existing in-memory lifetime.
+- [x] Individual ancestor closure and reopening preserve descendant choices; a later explicit global action sets every applicable descendant. Group summaries, item summaries, adapter ownership, source data, and grouping boundaries remain unchanged.
+- [x] Update existing real-Pi host cases to verify a remapped app.tools.expand binding, default-state inheritance, future arrivals after both global states, native bodies, independent toggles, and retained choices. Reuse the established fixture and existing cases only. Ticket 07 adds the enclosing agent activity disclosure.
 
 These approved criteria supersede conflicting presentation/default-state requirements in earlier revisions. Earlier status, completed checklists, and evidence below remain historical; they do not validate this delta. Accepted decisions: ADRs 0014, 0015, and 0019–0022.
+
+**Revision evidence (2026-10-15, `b73feab`):** Existing native-host cases reproduce new groups and items staying closed after global expansion, then pass with defaults inherited from Pi’s `toolOutputExpanded` flag. A later global action clears older retained choices before applying current state. The remapped `app.tools.expand` case exercises focused disclosure and composer dispatch with Ctrl+E; the former Ctrl+O default has no independent effect. Settings reconstruction retains the newer global choice. All 33 native-chat cases, typechecking, scoped lint/format, and whitespace checks pass on Pi 1.0.2. No keyboard handler, setting, persisted state, test case, test file, or seam was added. Ticket 07 covers enclosing activity; ticket 12 covers combined Pi 1.1.0 and physical-terminal acceptance.
 
 ## Prior accepted revision and evidence
 
