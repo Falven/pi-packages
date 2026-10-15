@@ -111,12 +111,27 @@ function validOperation(value: unknown): value is CoreOperation {
     (value["revision"] === undefined ||
       (Number.isSafeInteger(value["revision"]) &&
         (value["revision"] as number) >= 0)) &&
+    (value["toolSource"] === undefined ||
+      typeof value["toolSource"] === "string") &&
+    (value["toolPath"] === undefined ||
+      typeof value["toolPath"] === "string") &&
+    (value["effectiveArgs"] === undefined || object(value["effectiveArgs"])) &&
     (value["command"] === undefined || typeof value["command"] === "string") &&
     (value["cwd"] === undefined || typeof value["cwd"] === "string") &&
     (value["path"] === undefined || typeof value["path"] === "string") &&
     (value["output"] === undefined || typeof value["output"] === "string") &&
     (value["resultText"] === undefined ||
       typeof value["resultText"] === "string") &&
+    (value["patchOmitted"] === undefined ||
+      typeof value["patchOmitted"] === "boolean") &&
+    (value["outputOmitted"] === undefined ||
+      typeof value["outputOmitted"] === "boolean") &&
+    (value["sessionId"] === undefined ||
+      Number.isSafeInteger(value["sessionId"])) &&
+    (value["input"] === undefined || typeof value["input"] === "boolean") &&
+    (value["live"] === undefined || typeof value["live"] === "boolean") &&
+    (value["exitCode"] === undefined ||
+      Number.isSafeInteger(value["exitCode"])) &&
     (value["patchChanges"] === undefined ||
       (Array.isArray(value["patchChanges"]) &&
         value["patchChanges"].every(
@@ -124,6 +139,8 @@ function validOperation(value: unknown): value is CoreOperation {
             object(change) &&
             nonempty(change["id"]) &&
             nonempty(change["path"]) &&
+            (change["destination"] === undefined ||
+              typeof change["destination"] === "string") &&
             ["Added", "Updated", "Moved", "Deleted"].includes(
               change["action"] as string,
             ) &&
@@ -131,7 +148,15 @@ function validOperation(value: unknown): value is CoreOperation {
               change["status"] as string,
             ) &&
             (change["output"] === undefined ||
-              typeof change["output"] === "string"),
+              typeof change["output"] === "string") &&
+            (change["outputOmitted"] === undefined ||
+              typeof change["outputOmitted"] === "boolean") &&
+            (change["added"] === undefined ||
+              (Number.isSafeInteger(change["added"]) &&
+                (change["added"] as number) >= 0)) &&
+            (change["removed"] === undefined ||
+              (Number.isSafeInteger(change["removed"]) &&
+                (change["removed"] as number) >= 0)),
         )))
   )
 }
@@ -145,6 +170,9 @@ function validExecution(value: unknown): value is CoreExecution {
     statuses.has(value["status"] as CellStatus) &&
     (value["output"] === undefined || typeof value["output"] === "string") &&
     (value["error"] === undefined || typeof value["error"] === "string") &&
+    (value["omitted"] === undefined || typeof value["omitted"] === "boolean") &&
+    (value["omittedFailure"] === undefined ||
+      typeof value["omittedFailure"] === "boolean") &&
     Array.isArray(value["operations"]) &&
     value["operations"].every(validOperation)
   )
@@ -184,12 +212,20 @@ export function readExecution(
   )
     return
   const imageOrigins = details["imageOrigins"]
+  const imageCount = result.content.filter(
+    (part) => part.type === "image",
+  ).length
+  const operationIds = new Set(
+    details["execution"].operations.map((op) => op.id),
+  )
   if (
-    imageOrigins !== undefined &&
-    (!Array.isArray(imageOrigins) ||
-      !imageOrigins.every(
-        (value) => value === null || typeof value === "string",
-      ))
+    (imageOrigins === undefined && imageCount > 0) ||
+    (imageOrigins !== undefined &&
+      (!Array.isArray(imageOrigins) ||
+        imageOrigins.length !== imageCount ||
+        !imageOrigins.every(
+          (value) => value === null || operationIds.has(value),
+        )))
   )
     return
   return {
@@ -208,7 +244,21 @@ function validJournal(value: unknown): value is Journal {
     Array.isArray(value["events"]) &&
     value["events"].length > 0 &&
     value["events"].every(
-      (event: unknown) => object(event) && nonempty(event["type"]),
+      (event: unknown) =>
+        object(event) &&
+        nonempty(event["type"]) &&
+        (event["presentation"] === undefined ||
+          validOperation(event["presentation"])) &&
+        (event["type"] !== "presentation" ||
+          event["presentation"] !== undefined) &&
+        (event["child_id"] === undefined ||
+          typeof event["child_id"] === "string") &&
+        (event["name"] === undefined || typeof event["name"] === "string") &&
+        (event["output"] === undefined ||
+          typeof event["output"] === "string") &&
+        (event["replace_output"] === undefined ||
+          typeof event["replace_output"] === "boolean") &&
+        (event["error"] === undefined || typeof event["error"] === "string"),
     )
   )
 }

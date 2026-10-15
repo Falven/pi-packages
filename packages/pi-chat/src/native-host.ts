@@ -1691,7 +1691,7 @@ export class NativeChatHost {
               false,
               true,
               call.resultEntry,
-              call.contentIndex,
+              undefined,
             )
       }
     }
@@ -1711,6 +1711,8 @@ export class NativeChatHost {
   }
 
   private searchLeaf(hit: SourceHit<Occurrence>): Leaf | undefined {
+    const region = this.callRegionLeaves(hit)
+    if (region?.length) return region[0]
     for (
       let owner: Occurrence | undefined =
         this.searchDisclosure(hit)?.occurrence ?? hit.field.owner;
@@ -1729,10 +1731,36 @@ export class NativeChatHost {
     const owner = hit.field.owner
     if (owner.component instanceof ActivityItemDisclosure)
       return owner.component
-    return this.activityDisclosures.get(owner)?.values().next().value
+    const items = this.activityDisclosures.get(owner)
+    return items?.size === 1 ? items.values().next().value : undefined
+  }
+
+  private callRegionLeaves(hit: SourceHit<Occurrence>): Leaf[] | undefined {
+    if (
+      !hit.field.tool ||
+      hit.field.owner.component instanceof ActivityItemDisclosure
+    )
+      return
+    const items = this.activityDisclosures.get(hit.field.owner)
+    if (!items || items.size < 2) return
+    const leaves = [...items.values()].flatMap((disclosure) => {
+      const leaf = this.leaves.find(
+        (candidate) => candidate.component === disclosure,
+      )
+      return leaf ? [leaf] : []
+    })
+    if (leaves.length) return leaves
+    const group = [...this.renderGroups.values()].find((candidate) =>
+      candidate.items.some((item) => item.sourceCall === hit.field.owner),
+    )
+    const header =
+      group?.header &&
+      this.leaves.find((leaf) => leaf.component === group.header)
+    return header ? [header] : []
   }
 
   private searchSegments(hit: SourceHit<Occurrence>, leaf: Leaf) {
+    if (this.callRegionLeaves(hit)) return undefined
     let index = this.renderedSearch.get(leaf.component)
     if (!index) {
       index = new AltScreenSearchIndex()
@@ -1970,34 +1998,40 @@ export class NativeChatHost {
       { start: number; end: number; current: boolean }[]
     >()
     for (const [index, hit] of state.hits.entries()) {
-      const leaf = this.searchLeaf(hit)
-      const interval = leaf && this.intervals.find((item) => item.leaf === leaf)
-      if (!leaf || !interval) continue
-      const box = getScrollViewBox(layout, interval.window)
-      if (!box) continue
-      for (const segment of this.searchSegments(hit, leaf) ?? []) {
-        if (segment.row < interval.start || segment.row >= interval.end)
-          continue
-        const row = box.rect.y + segment.row - interval.window.scrollTop
-        const start = Math.max(
-          box.rect.x,
-          box.clip.x,
-          box.rect.x + segment.startCol,
-        )
-        const end = Math.min(
-          box.rect.x + box.rect.width,
-          box.clip.x + box.clip.width,
-          box.rect.x + segment.endCol,
-        )
-        if (
-          row < box.clip.y ||
-          row >= box.clip.y + box.clip.height ||
-          end <= start
-        )
-          continue
-        const rowRanges = ranges.get(row) ?? []
-        rowRanges.push({ start, end, current: index === state.selected })
-        ranges.set(row, rowRanges)
+      const region = this.callRegionLeaves(hit)
+      for (const leaf of region ?? [this.searchLeaf(hit)]) {
+        if (!leaf) continue
+        const interval = this.intervals.find((item) => item.leaf === leaf)
+        if (!interval) continue
+        const box = getScrollViewBox(layout, interval.window)
+        if (!box) continue
+        const segments = region
+          ? [{ row: 0, startCol: 0, endCol: visibleWidth(leaf.rows[0] ?? "") }]
+          : (this.searchSegments(hit, leaf) ?? [])
+        for (const segment of segments) {
+          if (segment.row < interval.start || segment.row >= interval.end)
+            continue
+          const row = box.rect.y + segment.row - interval.window.scrollTop
+          const start = Math.max(
+            box.rect.x,
+            box.clip.x,
+            box.rect.x + segment.startCol,
+          )
+          const end = Math.min(
+            box.rect.x + box.rect.width,
+            box.clip.x + box.clip.width,
+            box.rect.x + segment.endCol,
+          )
+          if (
+            row < box.clip.y ||
+            row >= box.clip.y + box.clip.height ||
+            end <= start
+          )
+            continue
+          const rowRanges = ranges.get(row) ?? []
+          rowRanges.push({ start, end, current: index === state.selected })
+          ranges.set(row, rowRanges)
+        }
       }
     }
     const painted = [...screen]
@@ -2468,7 +2502,13 @@ export class NativeChatHost {
       for (const component of components) {
         if (this.assistantMethods.has(component as NativeAssistant))
           this.releaseAssistant(component as NativeAssistant)
-        this.activityDisclosures.delete(this.byComponent.get(component)!)
+        const source = this.byComponent.get(component)
+        const disclosures = source && this.activityDisclosures.get(source)
+        if (disclosures) {
+          for (const disclosure of disclosures.values())
+            this.byComponent.delete(disclosure)
+          this.activityDisclosures.delete(source)
+        }
         this.byComponent.delete(component)
       }
     }

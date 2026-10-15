@@ -592,7 +592,8 @@ export class ExecutionCells {
       operation.status =
         outcome.isError || blocked || (exitCode !== undefined && exitCode !== 0)
           ? "failed"
-          : typeof structured?.session_id === "number"
+          : message.name === "exec_command" &&
+              typeof structured?.session_id === "number"
             ? "running"
             : "completed"
       if (liveRedacted && processId !== undefined)

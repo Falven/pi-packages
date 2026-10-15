@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs"
-import { dirname, join, resolve } from "node:path"
+import { dirname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import {
   CoreActivity,
@@ -190,8 +190,14 @@ export class CoreToolAdapter {
   }
 
   private providerPath(raw: string | undefined): boolean {
-    if (!raw) return false
-    const path = raw.startsWith("file:") ? fileURLToPath(raw) : raw
+    if (typeof raw !== "string" || !raw) return false
+    let path: string
+    try {
+      path = raw.startsWith("file:") ? fileURLToPath(raw) : raw
+    } catch {
+      return false
+    }
+    if (!isAbsolute(path)) return false
     const cached = this.provenance.get(path)
     if (cached !== undefined) return cached
     let directory = dirname(path)
@@ -284,9 +290,7 @@ export class CoreToolAdapter {
           },
           cwd,
           result: result(change.output, change.status === "failed"),
-          ...(change.outputOmitted || operation.patchOmitted
-            ? { availability: "omitted" as const }
-            : {}),
+          ...(change.outputOmitted ? { availability: "omitted" as const } : {}),
         },
       }))
     }
