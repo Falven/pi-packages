@@ -45,6 +45,7 @@ const createBridge = runInContext(
     let ended = false;
     const pending = new Map();
     const childResults = new WeakMap();
+    const childErrors = new WeakMap();
     const callbacks = new Map();
     const values = new Map(JSON.parse(stored));
     const writes = new Map();
@@ -65,23 +66,25 @@ const createBridge = runInContext(
       if (error) throw new Error(error);
     };
     const stringify = value => {
+      if (value !== null && typeof value === "object" && childErrors.has(value)) return value.message;
       if (typeof value === "string") return value;
       let result;
       try { result = JSON.stringify(value); } catch { return String(value); }
       return result === undefined ? "undefined" : result;
     };
-    const settle = (type, message) => {
+    const settle = (type, message, owner) => {
       if (ended) return;
-      post({ type, message, writes: Array.from(writes) });
+      post({ type, message, owner, writes: Array.from(writes) });
       ended = true;
       for (const id of callbacks.keys()) cancel(id);
       callbacks.clear();
     };
     const failed = error => {
       if (error === finish || ended) return;
-      settle("error", error instanceof Error ? error.name + ": " + error.message : String(error));
+      const owner = error !== null && typeof error === "object" ? childErrors.get(error) : undefined;
+      settle("error", owner === undefined && error instanceof Error ? error.name + ": " + error.message : owner === undefined ? String(error) : error.message, owner);
     };
-    globalThis.text = value => post({ type: "text", text: stringify(value), owner: value !== null && typeof value === "object" ? childResults.get(value) : undefined });
+    globalThis.text = value => post({ type: "text", text: stringify(value), owner: value !== null && typeof value === "object" ? childResults.get(value) ?? childErrors.get(value) : undefined });
     globalThis.notify = value => post({ type: "notify", text: stringify(value) });
     globalThis.exit = () => {
       settle("done");
@@ -150,7 +153,11 @@ const createBridge = runInContext(
         if (!request || ended) return;
         pending.delete(message.id);
         post({ type: "received", id: message.id });
-        if (message.error !== undefined) request.reject(message.error);
+        if (message.error !== undefined) {
+          const error = new Error(message.error);
+          childErrors.set(error, message.id);
+          request.reject(error);
+        }
         else {
           if (message.result !== null && typeof message.result === "object") childResults.set(message.result, message.id);
           request.resolve(message.result);

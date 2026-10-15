@@ -519,11 +519,26 @@ test("late command completion stays in its original card without consuming model
 })
 
 test("bounded operation history keeps active commands and their late failure in the originating card", async (t) => {
+  const activity: {
+    events: {
+      type: string
+      presentation?: {
+        id: string
+        order: number
+        outputOmitted?: boolean
+      }
+    }[]
+  }[] = []
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
     rows: 180,
     columns: 100,
+    extension(pi) {
+      pi.events.on("core-tools.activity", (event) => {
+        activity.push(event as (typeof activity)[number])
+      })
+    },
   })
   const producer = join(host.directory, "origin-producer.cjs")
   const release = join(host.directory, "release")
@@ -556,6 +571,16 @@ test("bounded operation history keeps active commands and their late failure in 
   }
   assertOrigin()
   assert.equal(host.requests.length, requests)
+  assert(
+    activity.some((batch) =>
+      batch.events.some(
+        (event) =>
+          event.type === "presentation" &&
+          event.presentation?.outputOmitted === true &&
+          event.presentation.order > 0,
+      ),
+    ),
+  )
   host.queueResponse(
     ...call(
       'text(await tools.write_stdin({session_id:load("process")}));',
@@ -681,6 +706,22 @@ test("returned redaction replaces earlier visible command output", async (t) => 
   assert.match(frame, /REMOVED-BY-HOOK/)
   assert.match(output(host), /REMOVED-BY-HOOK/)
   assert.doesNotMatch(output(host), /VISIBLE-BEFORE-HOOK/)
+  const result = host.session.sessionManager
+    .getBranch()
+    .findLast(
+      (entry) =>
+        entry.type === "message" &&
+        entry.message.role === "toolResult" &&
+        entry.message.toolName === "exec",
+    )
+  assert(result?.type === "message" && result.message.role === "toolResult")
+  const operation = (
+    result.message.details as {
+      execution: { operations: { output?: string; exitCode?: number }[] }
+    }
+  ).execution.operations[0]
+  assert.equal(operation?.output, "REMOVED-BY-HOOK")
+  assert.equal(operation?.exitCode, undefined)
 })
 
 test("cancelled command presentation preserves live output and its terminal failure", async (t) => {

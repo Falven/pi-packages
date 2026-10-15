@@ -43,6 +43,7 @@ type Part = {
 type Activity = {
   type: string
   child_id?: string
+  error_owner?: string
   name?: string
   arguments?: string
   error?: string
@@ -379,13 +380,19 @@ export class ExecutionCells {
       cell.status = message.type === "done" ? "completed" : "failed"
       cell.error = message.type === "error" ? message.message : undefined
       cell.accepting = false
-      if (cell.error) cell.presentation.error = boundedPreview(cell.error)
+      if (cell.error && message.owner === undefined)
+        cell.presentation.error = boundedPreview(cell.error)
       else delete cell.presentation.error
       this.update(cell)
       this.release(cell)
       this.record(cell, {
         type: cell.status,
-        ...(cell.error ? { error: brief(cell.error) } : {}),
+        ...(cell.error && message.owner === undefined
+          ? { error: brief(cell.error) }
+          : {}),
+        ...(message.owner === undefined
+          ? {}
+          : { error_owner: `${cell.id}/${message.owner}` }),
       })
       this.flush(cell)
       cell.wake?.()
@@ -559,7 +566,8 @@ export class ExecutionCells {
       operation.input = message.name === "write_stdin" && !outcome.isError
       liveRedacted =
         operation.live === true &&
-        (typeof structured?.output !== "string" ||
+        (!processedMatches ||
+          typeof structured?.output !== "string" ||
           context?.outputHash !==
             contentHash([{ type: "text", text: structured.output }]))
       if (!operation.live || liveRedacted)
@@ -574,7 +582,7 @@ export class ExecutionCells {
               : text,
         )
       if (liveRedacted) delete operation.exitCode
-      if (typeof structured?.exit_code === "number")
+      if (!liveRedacted && typeof structured?.exit_code === "number")
         operation.exitCode = structured.exit_code
       if (message.name === "apply_patch") {
         const details = outcome.result.details as PatchDetails | undefined
@@ -584,10 +592,12 @@ export class ExecutionCells {
           if (text === "{}") operation.output = ""
         }
       }
+      const exitCode =
+        typeof structured?.exit_code === "number"
+          ? structured.exit_code
+          : operation.exitCode
       operation.status =
-        outcome.isError ||
-        blocked ||
-        (operation.exitCode !== undefined && operation.exitCode !== 0)
+        outcome.isError || blocked || (exitCode !== undefined && exitCode !== 0)
           ? "failed"
           : typeof structured?.session_id === "number"
             ? "running"
@@ -676,6 +686,7 @@ export class ExecutionCells {
     text: string,
     childOwned = false,
   ): Promise<void> {
+    if (childOwned) cell.presentation.output ??= ""
     if (!childOwned) {
       let shown = text
       try {
@@ -1025,18 +1036,21 @@ export class ExecutionCells {
   private update(cell: Cell, operation?: OperationPresentation): void {
     cell.presentation.status = cell.status
     if (operation) operation.revision = ++cell.revision
-    this.trimOperations(cell.presentation, (candidate) =>
+    const omitted = this.trimOperations(cell.presentation, (candidate) =>
       cell.activeOperations.has(candidate),
     )
-    if (operation)
+    for (const trimmed of omitted) trimmed.revision = ++cell.revision
+    const changed = operation ? [operation, ...omitted] : omitted
+    if (changed.length)
       this.pi.events.emit(journalType, {
         cell_id: cell.id,
         parent_call_id: cell.parentId,
         session_id: cell.sessionId,
         status: cell.status,
-        events: [
-          { type: "presentation", presentation: structuredClone(operation) },
-        ],
+        events: changed.map((item) => ({
+          type: "presentation",
+          presentation: structuredClone(item),
+        })),
       } satisfies Journal)
     const invalidates = [
       ...(this.presentations.get(cell.id)?.invalidates ?? []),
@@ -1064,21 +1078,23 @@ export class ExecutionCells {
   private trimOperations(
     execution: ExecutionDetails["execution"],
     active: (operation: OperationPresentation) => boolean,
-  ): void {
+  ): OperationPresentation[] {
     const settled = execution.operations.filter(
-      (operation) => !active(operation),
+      (operation) =>
+        !active(operation) && (operation.output || operation.resultText),
     )
-    if (settled.length <= 8) return
-    for (const operation of settled
+    if (settled.length <= 8) return []
+    const omitted = settled
       .toSorted((a, b) => (a.revision ?? 0) - (b.revision ?? 0))
-      .slice(0, -8)) {
+      .slice(0, -8)
+    for (const operation of omitted) {
       execution.omitted = true
       if (operation.status === "failed") execution.omittedFailure = true
-      if (operation.output || operation.resultText)
-        operation.outputOmitted = true
+      operation.outputOmitted = true
       delete operation.output
       delete operation.resultText
     }
+    return omitted
   }
 
   private restore(
