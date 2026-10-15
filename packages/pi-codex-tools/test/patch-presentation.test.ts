@@ -86,10 +86,10 @@ test("failed patch cards retain completed changes without claiming unexecuted ch
   assert.match(screen, /Added \(failed\): .*child\.txt/)
   assert.match(screen, /Added \(unattempted\): .*never\.txt/)
   assert.match(screen, /Failed to write file .*parent-file\/child\.txt/)
-  assert.doesNotMatch(
-    screen,
-    /Added: .*child|Added: .*never|Wall time|Exit code:/,
-  )
+  assert.doesNotMatch(screen, /Added: .*child|Added: .*never/)
+  // The caught primitive rejection is script-authored text when passed to text().
+  assert.match(screen, /Exit code: 1/)
+  assert.match(screen, /Wall time: 0 seconds/)
   assert.equal(
     await readFile(join(host.directory, "parent-file"), "utf8"),
     "first\n",
