@@ -266,7 +266,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /> Edited files/)
       assert.match(screen, /▼ Collected output/)
       assert.match(screen, /▼ Collected output from/)
-      assert.match(screen, /"cell_status": "failed"/)
+      assert.match(screen, /cell_status: failed/)
       assert.equal(
         (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
         1,
@@ -306,6 +306,12 @@ for (const order of ["first", "last"] as const) {
       assert(executionRow >= 0)
       await host.key(`\x1b[<0;2;${executionRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionRow + 1}m`)
+      const executionOutputRow = host
+        .screenLines()
+        .findIndex((line) => /^\s*exec\s/.test(stripVTControlCharacters(line)))
+      assert(executionOutputRow > executionRow)
+      await host.key(`\x1b[<0;2;${executionOutputRow + 1}M`)
+      await host.key(`\x1b[<0;2;${executionOutputRow + 1}m`)
       const collectionRow = host
         .screenLines()
         .findIndex((line) =>
@@ -451,6 +457,14 @@ test(
           ),
         { timeout: 5000 },
       )
+      const nativeOutputRow = host
+        .screenLines()
+        .findIndex((line) =>
+          stripVTControlCharacters(line).includes("exec_command"),
+        )
+      assert(nativeOutputRow > commandRow)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
+      await host.key(`\x1b[<0;2;${nativeOutputRow + 1}m`)
       const answer = {
         type: "message",
         id: "later-final",
@@ -503,7 +517,7 @@ test(
         () =>
           assert.match(
             stripVTControlCharacters(host.screenLines().join("\n")),
-            /"exit_code": 9/,
+            /exit_code: 9/,
           ),
         { timeout: 5000 },
       )
