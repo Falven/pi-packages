@@ -351,6 +351,7 @@ class RenderGroupHeader implements Component {
 class ActivityItemDisclosure extends Container {
   focused = false
   expanded = false
+  readonly spacing = new Spacer(1)
   private body: ToolExecutionComponent | undefined
   private initialBodyExpanded = false
   private header = new Text("", 0, 0)
@@ -843,7 +844,10 @@ export class NativeChatHost {
           component instanceof RenderGroupHeader ||
           component instanceof AgentActivityHeader
             ? component.spacing
-            : previous instanceof AgentActivityHeader
+            : previous instanceof AgentActivityHeader ||
+                (component instanceof ActivityItemDisclosure &&
+                  previous instanceof ActivityItemDisclosure &&
+                  previous.expanded)
               ? previous.spacing
               : chatRow.occurrence &&
                 this.thoughts.get(chatRow.occurrence)?.spacing
