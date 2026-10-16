@@ -1,8 +1,6 @@
-import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import { stripVTControlCharacters } from "node:util"
 import {
-  getAgentDir,
   type ExtensionAPI,
   type ExtensionContext,
   type MessageEndEvent,
@@ -224,9 +222,8 @@ export default function piGoal(pi: ExtensionAPI): void {
         `Goal tool name collision: ${collision.name}. Remove the duplicate goal extension.`,
       )
   }
-  let store: GoalStore | undefined
-  const storage = () =>
-    (store ??= new GoalStore(join(getAgentDir(), "pi-goal.sqlite")))
+  const storage = (ctx: ExtensionContext) =>
+    new GoalStore(pi, ctx.sessionManager)
   const present = (ctx: ExtensionContext, goal: StoredGoal | null) => {
     ctx.ui.setStatus(
       "pi-goal",
@@ -236,7 +233,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     )
     if (goal?.status === "complete" && ctx.mode === "tui") {
       try {
-        storage().clear(goal)
+        storage(ctx).clear(goal)
       } catch (error) {
         ctx.ui.notify(
           `Could not clear the completed goal: ${error instanceof Error ? error.message : String(error)}. Use /goal clear to retry.`,
@@ -251,7 +248,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       throw new Error("Goal tools require a persistent thread.")
     }
     try {
-      return storage().read(ctx.sessionManager.getSessionId())
+      return storage(ctx).read(ctx.sessionManager.getSessionId())
     } catch (error) {
       throw new Error(
         `failed to read goal: ${error instanceof Error ? error.message : String(error)}`,
@@ -328,7 +325,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     try {
       const previous = accounting.activeGoal
       const goal = accounting.checkpoint(
-        storage(),
+        storage(ctx),
         ctx.sessionManager.getSessionId(),
         mode,
         keepBudgetLimited,
@@ -351,7 +348,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     if (goal?.status === "active") {
       guards.reset()
       checkpoint(ctx)
-      const updated = storage().update(goal, "paused")
+      const updated = storage(ctx).update(goal, "paused")
       accounting.applyExternal(updated)
       changed(ctx, updated)
     }
@@ -401,7 +398,7 @@ export default function piGoal(pi: ExtensionAPI): void {
         )
       let goal: StoredGoal
       try {
-        goal = storage().create(
+        goal = storage(ctx).create(
           ctx.sessionManager.getSessionId(),
           objective,
           budget,
@@ -430,7 +427,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       const goal = read(ctx)
       if (!goal) throw new Error("no goal exists for this thread")
       checkpoint(ctx, args.status === "complete" ? "complete" : "stopped")
-      const updated = storage().update(goal, args.status)
+      const updated = storage(ctx).update(goal, args.status)
       accounting.clear()
       guards.reset()
       changed(ctx, updated)
@@ -574,7 +571,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       } else if (action === "create") {
         guards.reset()
         checkpoint(ctx)
-        const created = storage().create(
+        const created = storage(ctx).create(
           threadId,
           validateObjective(objective ?? ""),
         )
@@ -583,7 +580,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       } else if (action === "clear") {
         guards.reset()
         checkpoint(ctx)
-        if (goal) storage().clear(goal)
+        if (goal) storage(ctx).clear(goal)
         accounting.clear()
         changed(ctx, null)
       } else if (
@@ -603,7 +600,7 @@ export default function piGoal(pi: ExtensionAPI): void {
           )
         guards.reset()
         checkpoint(ctx)
-        const updated = storage().update(
+        const updated = storage(ctx).update(
           goal,
           action === "pause" ? "paused" : "active",
           action === "edit" ? validateObjective(objective ?? "") : undefined,
@@ -674,13 +671,8 @@ export default function piGoal(pi: ExtensionAPI): void {
       running = false
       runSignal = undefined
       calls.clear()
-      try {
-        store?.close()
-      } finally {
-        store = undefined
-        stop.dispose()
-        ctx.ui.setStatus("pi-goal", undefined)
-      }
+      stop.dispose()
+      ctx.ui.setStatus("pi-goal", undefined)
     }
   })
 
@@ -819,7 +811,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       const reason = aborted ? undefined : guards.finish()
       checkpoint(ctx)
       if (reason && owner?.threadId === ctx.sessionManager.getSessionId()) {
-        const stopped = storage().stop(owner, reason)
+        const stopped = storage(ctx).stop(owner, reason)
         accounting.clear()
         guards.reset()
         if (stopped) changed(ctx, stopped)

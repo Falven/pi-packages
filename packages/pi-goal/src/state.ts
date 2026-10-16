@@ -1,5 +1,8 @@
-import { DatabaseSync } from "node:sqlite"
 import { randomUUID } from "node:crypto"
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent"
 import type { AccountingMode, GoalIdentity } from "./accounting.ts"
 
 export type Goal = {
@@ -21,61 +24,128 @@ export type Goal = {
 
 export type StoredGoal = Goal & { generation: string }
 
-type GoalRow = Omit<StoredGoal, "objective" | "tokenBudget"> & {
-  objective: Uint8Array
-  tokenBudget: bigint | null
+const entryType = "pi-goal.state"
+const maximum = 9223372036854775807n
+const statuses = new Set<Goal["status"]>([
+  "active",
+  "paused",
+  "blocked",
+  "usageLimited",
+  "budgetLimited",
+  "complete",
+])
+
+function integerField(value: unknown, name: string, positive = false): bigint {
+  if (typeof value !== "string" || !/^(0|[1-9][0-9]*)$/.test(value))
+    throw new Error(`invalid goal snapshot: ${name}`)
+  const parsed = BigInt(value)
+  if (parsed > maximum || (positive && parsed === 0n))
+    throw new Error(`invalid goal snapshot: ${name}`)
+  return parsed
 }
 
-function decode(row: GoalRow): StoredGoal {
+function decode(data: unknown, threadId: string): StoredGoal | null {
+  if (!data || typeof data !== "object" || Array.isArray(data))
+    throw new Error("invalid goal snapshot")
+  const record = data as Record<string, unknown>
+  if (record["threadId"] !== threadId)
+    throw new Error("invalid goal snapshot: owner")
+  if (record["clear"] === true) {
+    if (Object.keys(record).length !== 2)
+      throw new Error("invalid goal snapshot: clear")
+    return null
+  }
+  if (
+    typeof record["generation"] !== "string" ||
+    !record["generation"] ||
+    typeof record["objective"] !== "string" ||
+    !record["objective"] ||
+    !record["objective"].isWellFormed() ||
+    record["objective"].replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "") !==
+      record["objective"] ||
+    [...record["objective"]].length > 4000 ||
+    typeof record["status"] !== "string" ||
+    !statuses.has(record["status"] as Goal["status"]) ||
+    Object.keys(record).some(
+      (key) =>
+        ![
+          "threadId",
+          "generation",
+          "objective",
+          "status",
+          "tokenBudget",
+          "tokensUsed",
+          "timeUsedSeconds",
+          "createdAt",
+          "updatedAt",
+        ].includes(key),
+    )
+  )
+    throw new Error("invalid goal snapshot")
+  const tokenBudget =
+    record["tokenBudget"] === undefined
+      ? undefined
+      : integerField(record["tokenBudget"], "tokenBudget", true)
   return {
-    threadId: row.threadId,
-    generation: row.generation,
-    objective: Buffer.from(row.objective).toString("utf8"),
-    status: row.status,
-    ...(row.tokenBudget === null ? {} : { tokenBudget: row.tokenBudget }),
-    tokensUsed: row.tokensUsed,
-    timeUsedSeconds: row.timeUsedSeconds,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    threadId,
+    generation: record["generation"],
+    objective: record["objective"],
+    status: record["status"] as Goal["status"],
+    ...(tokenBudget === undefined ? {} : { tokenBudget }),
+    tokensUsed: integerField(record["tokensUsed"], "tokensUsed"),
+    timeUsedSeconds: integerField(record["timeUsedSeconds"], "timeUsedSeconds"),
+    createdAt: integerField(record["createdAt"], "createdAt"),
+    updatedAt: integerField(record["updatedAt"], "updatedAt"),
   }
 }
 
 export class GoalStore {
-  private readonly database: DatabaseSync
-
-  constructor(path: string) {
-    this.database = new DatabaseSync(path)
-    try {
-      this.database.exec(`
-      CREATE TABLE IF NOT EXISTS goals (
-        threadId TEXT PRIMARY KEY,
-        generation TEXT NOT NULL,
-        objective TEXT NOT NULL,
-        status TEXT NOT NULL,
-        tokenBudget INTEGER,
-        tokensUsed INTEGER NOT NULL,
-        timeUsedSeconds INTEGER NOT NULL,
-        createdAt INTEGER NOT NULL,
-        updatedAt INTEGER NOT NULL
-      );
-      `)
-    } catch (error) {
-      this.database.close()
-      throw error
-    }
-  }
+  constructor(
+    private readonly pi: ExtensionAPI,
+    private readonly sessionManager: ExtensionContext["sessionManager"],
+  ) {}
 
   read(threadId: string): StoredGoal | null {
-    // Byte reads preserve embedded NULs on runtimes that truncate text reads.
-    const statement = this.database.prepare(`
-      SELECT threadId, generation, CAST(objective AS BLOB) AS objective, status, tokenBudget,
-             tokensUsed, timeUsedSeconds, createdAt, updatedAt
-      FROM goals WHERE threadId = ?
-    `)
-    statement.setReadBigInts(true)
-    const row = statement.get(threadId) as GoalRow | undefined
-    if (!row) return null
-    return decode(row)
+    if (threadId !== this.sessionManager.getSessionId())
+      throw new Error("goal session changed")
+    let latest: unknown
+    let found = false
+    for (const entry of this.sessionManager.getEntries()) {
+      if (entry.type !== "custom" || entry.customType !== entryType) continue
+      const data = entry.data
+      if (
+        data &&
+        typeof data === "object" &&
+        !Array.isArray(data) &&
+        typeof (data as { threadId?: unknown }).threadId === "string" &&
+        (data as { threadId: string }).threadId !== threadId
+      )
+        continue
+      latest = data
+      found = true
+    }
+    return found ? decode(latest, threadId) : null
+  }
+
+  private append(goal: StoredGoal): StoredGoal {
+    if (goal.threadId !== this.sessionManager.getSessionId())
+      throw new Error("goal session changed")
+    const data = {
+      threadId: goal.threadId,
+      generation: goal.generation,
+      objective: goal.objective,
+      status: goal.status,
+      ...(goal.tokenBudget === undefined
+        ? {}
+        : { tokenBudget: goal.tokenBudget.toString() }),
+      tokensUsed: goal.tokensUsed.toString(),
+      timeUsedSeconds: goal.timeUsedSeconds.toString(),
+      createdAt: goal.createdAt.toString(),
+      updatedAt: goal.updatedAt.toString(),
+    }
+    decode(data, goal.threadId)
+    this.pi.appendEntry(entryType, data)
+    return goal
   }
 
   create(
@@ -83,37 +153,15 @@ export class GoalStore {
     objective: string,
     tokenBudget?: bigint,
   ): StoredGoal {
-    const now = BigInt(Math.floor(Date.now() / 1000))
-    const generation = randomUUID()
-    const statement = this.database.prepare(`
-      INSERT INTO goals VALUES (?, ?, ?, 'active', ?, 0, 0, ?, ?)
-      ON CONFLICT(threadId) DO UPDATE SET
-        generation = excluded.generation,
-        objective = excluded.objective,
-        status = excluded.status,
-        tokenBudget = excluded.tokenBudget,
-        tokensUsed = 0,
-        timeUsedSeconds = 0,
-        createdAt = excluded.createdAt,
-        updatedAt = excluded.updatedAt
-      WHERE goals.status = 'complete'
-    `)
-    const changed = statement.run(
-      threadId,
-      generation,
-      objective,
-      tokenBudget ?? null,
-      now,
-      now,
-    ).changes
-    if (!changed) {
+    const current = this.read(threadId)
+    if (current && current.status !== "complete")
       throw new Error(
         "cannot create a new goal because this thread has an unfinished goal; complete the existing goal first",
       )
-    }
-    return {
+    const now = BigInt(Math.floor(Date.now() / 1000))
+    return this.append({
       threadId,
-      generation,
+      generation: randomUUID(),
       objective,
       status: "active",
       ...(tokenBudget === undefined ? {} : { tokenBudget }),
@@ -121,7 +169,7 @@ export class GoalStore {
       timeUsedSeconds: 0n,
       createdAt: now,
       updatedAt: now,
-    }
+    })
   }
 
   update(
@@ -129,30 +177,26 @@ export class GoalStore {
     status: "active" | "paused" | "blocked" | "complete",
     objective?: string,
   ): StoredGoal {
-    const statement = this.database.prepare(`
-      UPDATE goals SET status = CASE
-        WHEN ? = 'complete' THEN 'complete'
-        WHEN tokenBudget IS NOT NULL AND tokensUsed >= tokenBudget THEN 'budgetLimited'
-        ELSE ? END,
-        objective = COALESCE(?, objective), updatedAt = ?
-      WHERE threadId = ? AND generation = ?
-      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
-                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
-    `)
-    statement.setReadBigInts(true)
-    const row = statement.get(
-      status,
-      status,
-      objective ?? null,
-      BigInt(Math.floor(Date.now() / 1000)),
-      goal.threadId,
-      goal.generation,
-    ) as GoalRow | undefined
-    if (!row)
+    if (goal.threadId !== this.sessionManager.getSessionId())
       throw new Error(
         "the goal changed while this action was pending; inspect the current goal and try again",
       )
-    return decode(row)
+    const current = this.read(goal.threadId)
+    if (!current || current.generation !== goal.generation)
+      throw new Error(
+        "the goal changed while this action was pending; inspect the current goal and try again",
+      )
+    return this.append({
+      ...current,
+      status:
+        status !== "complete" &&
+        current.tokenBudget !== undefined &&
+        current.tokensUsed >= current.tokenBudget
+          ? "budgetLimited"
+          : status,
+      objective: objective ?? current.objective,
+      updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+    })
   }
 
   account(
@@ -161,80 +205,66 @@ export class GoalStore {
     seconds: bigint,
     mode: AccountingMode,
   ): StoredGoal | null {
-    const maximum = 9223372036854775807n
     if (tokens < 0n || seconds < 0n || tokens > maximum || seconds > maximum)
       throw new Error("Goal accounting exceeds the nonnegative integer range")
-    const statuses =
-      mode === "complete"
-        ? "'active', 'budgetLimited', 'complete'"
-        : mode === "stopped"
-          ? "'active', 'budgetLimited', 'paused', 'blocked', 'usageLimited'"
-          : "'active', 'budgetLimited'"
-    const statement = this.database.prepare(`
-      UPDATE goals SET
-        tokensUsed = tokensUsed + ?, timeUsedSeconds = timeUsedSeconds + ?,
-        status = CASE
-          WHEN ${mode === "stopped" ? "status != 'complete'" : "status = 'active'"}
-            AND tokenBudget IS NOT NULL AND tokensUsed + ? >= tokenBudget
-          THEN 'budgetLimited' ELSE status END,
-        updatedAt = ?
-      WHERE threadId = ? AND generation = ? AND status IN (${statuses})
-        AND tokensUsed <= ? AND timeUsedSeconds <= ?
-      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
-                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
-    `)
-    statement.setReadBigInts(true)
-    const row = statement.get(
-      tokens,
-      seconds,
-      tokens,
-      BigInt(Math.floor(Date.now() / 1000)),
-      goal.threadId,
-      goal.generation,
-      maximum - tokens,
-      maximum - seconds,
-    ) as GoalRow | undefined
-    if (row) return decode(row)
+    if (goal.threadId !== this.sessionManager.getSessionId()) return null
     const current = this.read(goal.threadId)
+    if (!current || current.generation !== goal.generation) return null
     if (
-      current?.generation === goal.generation &&
-      (current.tokensUsed > maximum - tokens ||
-        current.timeUsedSeconds > maximum - seconds)
+      current.tokensUsed > maximum - tokens ||
+      current.timeUsedSeconds > maximum - seconds
     )
       throw new Error("Goal accounting exceeds the nonnegative integer range")
-    return null
+    const allowed =
+      mode === "complete"
+        ? ["active", "budgetLimited", "complete"]
+        : mode === "stopped"
+          ? ["active", "budgetLimited", "paused", "blocked", "usageLimited"]
+          : ["active", "budgetLimited"]
+    if (!allowed.includes(current.status)) return null
+    const tokensUsed = current.tokensUsed + tokens
+    return this.append({
+      ...current,
+      tokensUsed,
+      timeUsedSeconds: current.timeUsedSeconds + seconds,
+      status:
+        (mode === "stopped"
+          ? current.status !== "complete"
+          : current.status === "active") &&
+        current.tokenBudget !== undefined &&
+        tokensUsed >= current.tokenBudget
+          ? "budgetLimited"
+          : current.status,
+      updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+    })
   }
 
   stop(
     goal: GoalIdentity,
     status: "blocked" | "usageLimited",
   ): StoredGoal | null {
-    const statuses =
-      status === "usageLimited" ? "'active', 'budgetLimited'" : "'active'"
-    const statement = this.database.prepare(`
-      UPDATE goals SET status = ?, updatedAt = ?
-      WHERE threadId = ? AND generation = ? AND status IN (${statuses})
-      RETURNING threadId, generation, CAST(objective AS BLOB) AS objective,
-                status, tokenBudget, tokensUsed, timeUsedSeconds, createdAt, updatedAt
-    `)
-    statement.setReadBigInts(true)
-    const row = statement.get(
+    if (goal.threadId !== this.sessionManager.getSessionId()) return null
+    const current = this.read(goal.threadId)
+    if (
+      !current ||
+      current.generation !== goal.generation ||
+      (status === "blocked"
+        ? current.status !== "active"
+        : !["active", "budgetLimited"].includes(current.status))
+    )
+      return null
+    return this.append({
+      ...current,
       status,
-      BigInt(Math.floor(Date.now() / 1000)),
-      goal.threadId,
-      goal.generation,
-    ) as GoalRow | undefined
-    return row ? decode(row) : null
+      updatedAt: BigInt(Math.floor(Date.now() / 1000)),
+    })
   }
 
   clear(goal: StoredGoal): void {
-    this.database
-      .prepare("DELETE FROM goals WHERE threadId = ? AND generation = ?")
-      .run(goal.threadId, goal.generation)
-  }
-
-  close(): void {
-    this.database.close()
+    if (goal.threadId !== this.sessionManager.getSessionId()) return
+    const current = this.read(goal.threadId)
+    if (current?.generation !== goal.generation) return
+    this.pi.appendEntry(entryType, { threadId: goal.threadId, clear: true })
   }
 }
 

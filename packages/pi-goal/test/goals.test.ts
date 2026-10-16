@@ -1,8 +1,7 @@
 /* eslint-disable no-await-in-loop -- Each native session operation must settle before the next case. */
 import assert from "node:assert/strict"
 import test from "node:test"
-import { DatabaseSync } from "node:sqlite"
-import { join } from "node:path"
+import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs"
 import { createCodemodeExtension } from "@earendil-works/pi-coding-agent"
 import piGoal from "../src/index.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
@@ -72,6 +71,112 @@ test("a persisted session without a goal returns explicit empty state", async (t
   assert.doesNotMatch(await host.frame(), /Goal: active/)
 })
 
+test("a goal follows the first native session save", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  assert.equal(existsSync(sessionFile), false)
+  await host.session.prompt("/goal create First saved work")
+  await host.session.prompt("/goal pause")
+  assert.equal(existsSync(sessionFile), false)
+  const snapshot = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-goal.state",
+    )
+  assert(snapshot?.type === "custom")
+  const generation = (snapshot.data as { generation?: unknown }).generation
+  assert(typeof generation === "string")
+  await host.session.prompt("Save the session")
+  assert.equal(existsSync(sessionFile), true)
+  assert.equal(
+    host.requestBodies.some((body) => body.includes(generation)),
+    false,
+  )
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+  })
+  reopened.queueResponse(response("get_goal"), finish, done, end)
+  await reopened.session.prompt("Inspect the saved goal")
+  assert.equal(
+    JSON.parse(lastResult(reopened).text).goal.objective,
+    "First saved work",
+  )
+})
+
+test("closing before the first native message does not save a goal", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  await host.session.prompt("/goal create Unsaved work")
+  await host.session.prompt("/goal pause")
+  await host.close()
+  assert.equal(existsSync(sessionFile), false)
+})
+
+test("a malformed current-session record fails inspection instead of reviving older state", async (t) => {
+  let append: ((data: unknown) => void) | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    extension: (pi) => {
+      append = (data) => pi.appendEntry("pi-goal.state", data)
+    },
+  })
+  await host.session.prompt("/goal create Retained work")
+  await host.session.prompt("/goal pause")
+  assert(append)
+  append({ threadId: "another-session", clear: true })
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /paused: Retained work/)
+  append({
+    threadId: host.session.sessionManager.getSessionId(),
+    status: "paused",
+  })
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /invalid goal snapshot/)
+})
+
+test("separate native sessions keep their own current goal", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  await host.session.prompt("/goal create First session work")
+  await host.session.prompt("/goal pause")
+  await host.session.prompt("Save the first session")
+  const firstFile = host.session.sessionManager.getSessionFile()
+  assert(firstFile)
+  await host.runtime.newSession()
+  host.queueResponse(response("get_goal"), finish, done, end)
+  await host.session.prompt("Inspect this session")
+  assert.equal(JSON.parse(lastResult(host).text).goal, null)
+  await host.session.prompt("/goal create Second session work")
+  await host.session.prompt("/goal pause")
+  await host.runtime.switchSession(firstFile)
+  host.queueResponse(response("get_goal"), finish, done, end)
+  await host.session.prompt("Inspect the first session again")
+  assert.equal(
+    JSON.parse(lastResult(host).text).goal.objective,
+    "First session work",
+  )
+})
+
 test("explicit creation and pause persist the trimmed objective across reopening", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -115,6 +220,24 @@ test("explicit creation and pause persist the trimmed objective across reopening
   })
   assert(stored.goal.createdAt >= before)
   assert(stored.goal.createdAt <= Math.floor(Date.now() / 1000))
+  const snapshot = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-goal.state",
+    )
+  assert(snapshot?.type === "custom")
+  const generation = (snapshot.data as { generation?: unknown }).generation
+  assert(typeof generation === "string")
+  assert.deepEqual(snapshot.data, {
+    ...stored.goal,
+    generation,
+    tokenBudget: "1000",
+    tokensUsed: "0",
+    timeUsedSeconds: "0",
+    createdAt: String(stored.goal.createdAt),
+    updatedAt: String(stored.goal.updatedAt),
+  })
   await host.session.prompt("/goal pause")
   assert.match(await host.frame(), /Goal: paused/)
   const sessionFile = host.session.sessionManager.getSessionFile()
@@ -173,6 +296,17 @@ test("the full integer budget survives direct and native programmatic calls with
   assert(content?.type === "text")
   assert.match(content.text, /"tokenBudget":"9223372036854775807"/)
   assert.match(content.text, /"remainingTokens":"9223372036854775807"/)
+  const snapshot = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-goal.state",
+    )
+  assert(snapshot?.type === "custom")
+  assert.equal(
+    (snapshot.data as { tokenBudget?: unknown }).tokenBudget,
+    "9223372036854775807",
+  )
   assert(JSON.stringify(host.requests[1]).includes(JSON.stringify(raw)))
   host.queueResponse(
     response(
@@ -533,46 +667,25 @@ test("ephemeral sessions cannot create a goal or report successful missing state
   }
 })
 
-test("storage failures remain failures and a failed creation is not remembered as success", async (t) => {
+test("native storage failures surface during goal creation", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
   })
-  const lock = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  t.after(() => lock.close())
-  lock.exec("BEGIN EXCLUSIVE")
-  host.queueResponse(
-    response("get_goal", "{}", "locked-read"),
-    finish,
-    done,
-    end,
-  )
-  await host.session.prompt("Inspect the current goal")
-  assert.equal(lastResult(host).isError, true)
-  assert.match(lastResult(host).text, /^failed to read goal: .*locked/)
-  host.queueResponse(
-    response("create_goal", '{"objective":"Pending work"}', "locked-create"),
-    finish,
-    done,
-    end,
-  )
-  await host.session.prompt("Create a goal for the pending work")
-  assert.equal(lastResult(host).isError, true)
-  assert.match(lastResult(host).text, /^failed to create goal: .*locked/)
-  assert.doesNotMatch(await host.frame(), /Goal: active/)
-  lock.exec("ROLLBACK")
-  host.queueResponse(
-    response("get_goal", "{}", "recovered-read"),
-    finish,
-    done,
-    end,
-  )
-  await host.session.prompt("Inspect the recovered storage")
-  assert.deepEqual(lastResult(host), {
-    isError: false,
-    text: '{"goal":null,"remainingTokens":null,"completionBudgetReport":null}',
-  })
+  await host.session.prompt("Start the session")
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  const savedFile = `${sessionFile}.saved`
+  renameSync(sessionFile, savedFile)
+  mkdirSync(sessionFile)
+  try {
+    await host.session.prompt("/goal create Pending work")
+    assert.match(await host.frame(), /EISDIR|directory/)
+  } finally {
+    rmSync(sessionFile, { recursive: true })
+    renameSync(savedFile, sessionFile)
+  }
 })
 
 test("native programmatic calls return JSON values, serialize mutations, and reject ordinary errors", async (t) => {

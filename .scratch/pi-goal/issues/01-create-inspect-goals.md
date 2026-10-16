@@ -12,12 +12,26 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Replace the internal goal store with public native custom entries for the owning session. Remove active database imports, initialization, paths, queries, and closing logic without adding a dependency, second store, or host modification.
-- [ ] Write full snapshots with session ownership, generation, objective, status, exact decimal-string integer fields, and optional budget. Restore the latest current-session record across all retained entries in append order; exclude clearly foreign owners and report malformed authoritative data rather than returning null or an older snapshot.
-- [ ] Preserve all three native tool contracts, successful result values, validation ownership, and lossless conversions. Re-read current state before serialized mutations so older captures cannot overwrite counters or replacement generations.
-- [ ] Demonstrate native first-save timing: a goal can exist before a conversation message or session file; the first native message saves it, and an early exit has no independent durability promise. Ephemeral sessions remain unsupported and no synthetic message forces persistence.
-- [ ] Keep different sessions independent and document the accepted single-process-per-session limit. Storage errors remain native errors; the retaining failure stop is completed in ticket 03.
-- [ ] Adapt creation and inspection checks through the approved real-session seam, including exact large values, Unicode and embedded NUL text, damaged recognized records, first save, reopen, and exclusion of raw state from provider context.
+- [x] Replace the internal goal store with public native custom entries for the owning session. Remove active database imports, initialization, paths, queries, and closing logic without adding a dependency, second store, or host modification.
+- [x] Write full snapshots with session ownership, generation, objective, status, exact decimal-string integer fields, and optional budget. Restore the latest current-session record across all retained entries in append order; exclude clearly foreign owners and report malformed authoritative data rather than returning null or an older snapshot.
+- [x] Preserve all three native tool contracts, successful result values, validation ownership, and lossless conversions. Re-read current state before serialized mutations so older captures cannot overwrite counters or replacement generations.
+- [x] Demonstrate native first-save timing: a goal can exist before a conversation message or session file; the first native message saves it, and an early exit has no independent durability promise. Ephemeral sessions remain unsupported and no synthetic message forces persistence.
+- [x] Keep different sessions independent and document the accepted single-process-per-session limit. Storage errors remain native errors; the retaining failure stop is completed in ticket 03.
+- [x] Adapt creation and inspection checks through the approved real-session seam, including exact large values, Unicode and embedded NUL text, damaged recognized records, first save, reopen, and exclusion of raw state from provider context.
+
+## Native storage implementation evidence
+
+Goal snapshots and explicit clears now use the public `pi.appendEntry()` API. The store reads the latest entry owned by the current session from all retained entries, rejects malformed current-session records, and ignores records owned by other sessions. A snapshot records the private generation and every goal value; integer fields are decimal strings in storage while native tool results retain their previous safe-number or exact-string shape. Mutations re-read current state and retain session and generation fences. This design accepts one live writer per session.
+
+Released Pi 1.1.0 real-session checks show that a command-created goal and pause exist in memory before the session file, the first ordinary message writes the file, and closing before that message leaves no file. Reopening restores the saved goal. The native record's private generation is absent from provider request bodies. Separate sessions retain distinct goals. A malformed current-session record produces an inspection error even when an older valid snapshot exists. Replacing the session file temporarily with a directory produces a visible native write error during creation; no database lock or store mock is involved. The retaining failure stop, pending continuation cancellation, and fresh-reopen recovery belong to ticket 03.
+
+Creation, inspection, native programmatic results, both provider protocols, exact maximum budget, Unicode including embedded NUL, native validation, and persistent-session rejection continue to pass through the existing fixture. Earlier database durability claims and captures below remain historical evidence only.
+
+The released Pi 1.1.0 command below passed all 52 checks. Scoped TypeScript checking for the goal source, these tests, and the native fixture passed; full workspace type checking still requires ticket 04's direct-store test migration. Scoped lint, format, and whitespace checks passed.
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test packages/pi-goal/test/goals.test.ts packages/pi-goal/test/protocols.test.ts test/native-host.test.ts
+```
 
 ## Historical acceptance
 
