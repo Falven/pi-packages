@@ -57,6 +57,136 @@ const response = (
   { event: "[DONE]" },
 ]
 
+test("pending calls stay out of activity until dispatch and retain generic outcomes", async (t) => {
+  let received = false
+  let started = false
+  const gate = Promise.withResolvers<void>()
+  t.after(() => gate.resolve())
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 80,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_update", ({ assistantMessageEvent }) => {
+          if ("partial" in assistantMessageEvent)
+            received ||= assistantMessageEvent.partial.content.some(
+              (part) => part.type === "toolCall",
+            )
+        })
+        pi.registerTool({
+          name: "inspect_workspace",
+          label: "Inspect workspace",
+          description: "An unrelated tool without activity metadata",
+          parameters: createReadToolDefinition(".").parameters,
+          async execute() {
+            started = true
+            await gate.promise
+            return {
+              content: [{ type: "text", text: "Inspection result" }],
+              details: undefined,
+            }
+          },
+        })
+      },
+    ],
+  })
+  const steps = response("", "inspect_workspace")
+  host.queueResponse(steps[0]!, { pause: true }, ...steps.slice(1))
+  host.queueResponse(...response("Finished"))
+  const work = host.session.prompt("Inspect the workspace")
+  await t.waitFor(() => assert(received))
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.equal(started, false)
+  assert.doesNotMatch(
+    screen(),
+    /Called|Calling|status unknown|inspect_workspace/,
+  )
+  host.resumeResponse()
+  await t.waitFor(() => assert(started))
+  await host.frame()
+  assert.match(screen(), /Calling inspect_workspace/)
+  gate.resolve()
+  await work
+  await host.frame()
+  assert.match(screen(), /Called inspect_workspace/)
+  assert.doesNotMatch(screen(), /status unknown/)
+})
+
+test("cancellation and unknown historical outcomes remain visible after reload", async (t) => {
+  let received = false
+  let executions = 0
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 80,
+    persistSession: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_update", ({ assistantMessageEvent }) => {
+          if ("partial" in assistantMessageEvent)
+            received ||= assistantMessageEvent.partial.content.some(
+              (part) => part.type === "toolCall",
+            )
+        })
+        pi.registerTool({
+          name: "inspect_workspace",
+          label: "Inspect workspace",
+          description: "Unrelated tool",
+          parameters: createReadToolDefinition(".").parameters,
+          async execute() {
+            executions++
+            return {
+              content: [{ type: "text", text: "Result" }],
+              details: undefined,
+            }
+          },
+        })
+      },
+    ],
+  })
+  const steps = response("", "inspect_workspace")
+  host.queueResponse(steps[0]!, { pause: true }, ...steps.slice(1))
+  const work = host.session.prompt("Inspect the workspace")
+  await t.waitFor(() => assert(received))
+  await host.session.abort()
+  await work
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.equal(executions, 0)
+  assert.match(screen(), /Called inspect_workspace \(failed\)/)
+  assert.match(screen(), /Operation aborted/)
+  await host.reload()
+  await host.key("\x0f")
+  await host.key("\x0f")
+  await host.frame()
+  assert.match(screen(), /Called inspect_workspace \(failed\)/)
+  assert.equal(executions, 0)
+  const source = host.session.messages.find(
+    (message) => message.role === "assistant",
+  )
+  assert(source?.role === "assistant")
+  const historical: typeof source = {
+    ...source,
+    stopReason: "toolUse",
+    content: [
+      {
+        type: "toolCall",
+        id: "unobserved",
+        name: "unobserved_job",
+        arguments: {},
+      },
+    ],
+  }
+  delete historical.errorMessage
+  host.session.sessionManager.appendMessage(historical)
+  await host.reload()
+  await host.frame()
+  assert.match(screen(), /Called unobserved_job \(status unknown\)/)
+  assert.equal(executions, 0)
+})
+
 test("native reads and an unrelated command provider share skill labels and retain source Find", async (t) => {
   const catalog = await mkdtemp(join(tmpdir(), "pi-chat-skills-"))
   t.after(() => rm(catalog, { recursive: true, force: true }))
@@ -467,29 +597,34 @@ test("processed output invalidates metadata and cannot regain an earlier live bo
   assert.doesNotMatch(screen, /discarded-body|original transport/)
 })
 
-test("declared commands preserve literal read paths and keep uncertain shell execution intact", async (t) => {
+test("declared command actions use the app parser and retain full command bodies", async (t) => {
   const uncertain = [
-    "true && cat SKILL.md",
     "false || cat SKILL.md",
-    "cat SKILL.md | head",
     "cat SKILL.md > result.txt",
     'cat "$HOME/SKILL.md"',
     "cat $(pwd)/SKILL.md",
     "cat *.md",
     "cat ~/SKILL.md",
-    "printf -v HOME elsewhere; cat SKILL.md",
     "cat 'incomplete",
-    'cat pre"fix"',
     "cat one\\ file.md",
     "cat SKILL.md # comment",
-    "cd subdirectory; cat SKILL.md",
     "unknown_command; cat SKILL.md",
     "cat one.md;; cat two.md",
+    'for file in *.md; do cat "$file"; done',
   ]
   const commands = [
-    "printf '\\n--- files ---\\n'; cat 'one file.md' \"two.md\"; git status --short",
+    "printf '\\n--- files ---\\n'; cat 'one file.md'; cat \"two.md\"",
     "cat 'literal$[];file.md'\ncat '~/SKILL.md'",
     "printf useful-output; cat notes.txt",
+    "true && head -n 3 src/head.md",
+    "tail -n+10 src/tail.md",
+    "nl -ba src/numbered.ts | sed -n '1,20p'",
+    "cd subdirectory; cat SKILL.md",
+    'cat pre"fix"',
+    "ls project/src",
+    "rg -n Needle src/app",
+    "git status --short",
+    "node --test test.ts",
     ...uncertain,
   ]
   const host = await openNativeHost(t, {
@@ -522,6 +657,15 @@ test("declared commands preserve literal read paths and keep uncertain shell exe
                 status: "completed",
               })),
             }
+            update.operations.push({
+              id: "powershell-read",
+              order: commands.length,
+              revision: 1,
+              kind: "command",
+              commands: ["gc -LiteralPath 'docs/guide.md'"],
+              shell: ["pwsh", "-c"],
+              status: "completed",
+            })
             return { content, details: activityDetails(update, content) }
           },
         }),
@@ -536,17 +680,28 @@ test("declared commands preserve literal read paths and keep uncertain shell exe
   await host.key("\x0f")
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.equal((screen.match(/▼ Read (?!files\b)/g) ?? []).length, 5)
-  assert.equal((screen.match(/▼ Ran command\s/g) ?? []).length, 18)
+  assert.match(screen, /▼ Read guide\.md/)
+  assert.equal((screen.match(/▼ Read (?!files\b)/g) ?? []).length, 11)
+  assert.equal(
+    (screen.match(/▼ Ran command\s/g) ?? []).length,
+    uncertain.length + 2,
+  )
   for (const target of [
     "one file.md",
     "two.md",
     "literal$[];file.md",
-    "~/SKILL.md",
+    "SKILL.md",
     "notes.txt",
+    "head.md",
+    "tail.md",
+    "numbered.ts",
+    "prefix",
   ])
     assert(screen.includes(`▼ Read ${target}`), target)
   for (const command of uncertain) assert(screen.includes(command), command)
   assert.match(screen, /git status --short/)
   assert.match(screen, /printf useful-output/)
+  assert.match(screen, /Listed files in project/)
+  assert.match(screen, /Searched for Needle in app/)
+  assert.match(screen, /nl -ba src\/numbered\.ts \| sed -n '1,20p'/)
 })

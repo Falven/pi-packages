@@ -209,6 +209,12 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: ^1.0.2
         version: 1.0.2(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)
+      tree-sitter:
+        specifier: 0.25.1
+        version: 0.25.1
+      tree-sitter-bash:
+        specifier: 0.25.1
+        version: 0.25.1(tree-sitter@0.25.1)
     devDependencies:
       '@earendil-works/pi-tui':
         specifier: 1.0.2
@@ -1276,6 +1282,10 @@ packages:
   node-addon-api@7.1.1:
     resolution: {integrity: sha1-Grpmk7DyVSWKBJ1iEykykyKq1Vg=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/node-addon-api/-/node-addon-api-7.1.1.tgz}
 
+  node-addon-api@8.9.2:
+    resolution: {integrity: sha1-23rJShP/2bVebLBFhL1e+OHXSxg=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/node-addon-api/-/node-addon-api-8.9.2.tgz}
+    engines: {node: ^18 || ^20 || >= 21}
+
   node-domexception@1.0.0:
     resolution: {integrity: sha1-aIjbRqH3HAt2s/dVUBa2P+ZHZuU=}
     engines: {node: '>=10.5.0'}
@@ -1284,6 +1294,10 @@ packages:
   node-fetch@3.3.2:
     resolution: {integrity: sha1-0eiJus33M7T/OyskPrehKGagt4s=}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha1-inDuhUZK5SMndyqQ1mxgd6kAz8g=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/node-gyp-build/-/node-gyp-build-4.8.4.tgz}
+    hasBin: true
 
   node-pty@1.2.0-beta.15:
     resolution: {integrity: sha1-zWLg4ytpziJsZQk1o1YT+kG/d9Q=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/node-pty/-/node-pty-1.2.0-beta.15.tgz}
@@ -1426,6 +1440,17 @@ packages:
   tinypool@2.2.0:
     resolution: {integrity: sha512-jBrmx4lYmaC9k/mgPbylxs7kBUxHtD8256up+HjLaDFfXScKJQyil+SWXSvhAtT7XHo+yTVlpB81PGmHP8oLSQ==}
     engines: {node: ^20.0.0 || >=22.0.0}
+
+  tree-sitter-bash@0.25.1:
+    resolution: {integrity: sha1-eEmez4kw21e/5GWB+Ug4fteKBHA=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tree-sitter-bash/-/tree-sitter-bash-0.25.1.tgz}
+    peerDependencies:
+      tree-sitter: ^0.25.0
+    peerDependenciesMeta:
+      tree-sitter:
+        optional: true
+
+  tree-sitter@0.25.1:
+    resolution: {integrity: sha1-8OzyeXylQqROODhGgt0SUGR/JfU=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/tree-sitter/-/tree-sitter-0.25.1.tgz}
 
   ts-algebra@2.0.0:
     resolution: {integrity: sha1-Tj4JU4ePJlGPzn9rsRUGSmU4i3o=}
@@ -2448,6 +2473,8 @@ snapshots:
 
   node-addon-api@7.1.1: {}
 
+  node-addon-api@8.9.2: {}
+
   node-domexception@1.0.0: {}
 
   node-fetch@3.3.2:
@@ -2455,6 +2482,8 @@ snapshots:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
+
+  node-gyp-build@4.8.4: {}
 
   node-pty@1.2.0-beta.15:
     dependencies:
@@ -2585,6 +2614,18 @@ snapshots:
       picomatch: 4.0.7
 
   tinypool@2.2.0: {}
+
+  tree-sitter-bash@0.25.1(tree-sitter@0.25.1):
+    dependencies:
+      node-addon-api: 8.9.2
+      node-gyp-build: 4.8.4
+    optionalDependencies:
+      tree-sitter: 0.25.1
+
+  tree-sitter@0.25.1:
+    dependencies:
+      node-addon-api: 8.9.2
+      node-gyp-build: 4.8.4
 
   ts-algebra@2.0.0: {}
 

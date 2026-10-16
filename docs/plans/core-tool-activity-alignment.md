@@ -2,7 +2,7 @@
 
 The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction are implemented and verified at `789b142`, from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved correction ticket](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) record the delivered format and verification. Earlier tickets retain their original evidence.
 
-The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the default behavior reference. The newly approved delta adds one operator-facing activity configuration module in the existing chat package, complete recognition parity with the annotated Codex parser, pending-call handling, and verbatim scoped core tool guidance. It excludes system prompts and additional model advice. [Tickets 06–09](../specs/tool-activity.md) describe this delta from `a6280f9`; the earlier completion evidence does not cover it.
+The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the default behavior reference. The newly approved delta adds one operator-facing activity configuration module in the existing chat package, complete recognition parity with the installed app's Codex parser, pending-call handling, and verbatim scoped core tool guidance. It excludes system prompts and additional model advice. [Tickets 06–09](../specs/tool-activity.md) describe this delta from `a6280f9`; the earlier completion evidence does not cover it.
 
 ## Setting and terms
 
@@ -28,6 +28,8 @@ The chat also read the tool package's private execution format in `packages/pi-c
 The baseline execution activity item was conditional on script output, an error, or an image; it was not an automatic receipt for every completed script. The expanded raw arguments came from Pi's generic tool rendering.
 
 ## ChatGPT.app reference
+
+The command-parser delta targets the bundled Codex version recorded in `codex-cli/codex-package.json`: `0.162.0-alpha.17.2`, upstream commit `740e5af33c71225640e0c1c1555c514c2c93ab74`. Its parser lives in `codex-rs/shell-command`; the initial local checkout was older. The complete reference corpus and source hashes belong with the chat package's recognition checks. This parser reference does not change the separately frozen tool-guidance capture.
 
 Inspected the installed `/Applications/ChatGPT.app/Contents/Resources/app.asar`, package version `26.1007.71326`.
 

@@ -33,6 +33,7 @@ const sourceKey = (source: Pick<NativeTool, "entryId" | "contentIndex">) =>
 type Call = { id: string; name: string; arguments: unknown }
 type State = {
   facts: CallFacts
+  pending: boolean
   items?: ActivityItem[]
   retained?: ActivityResult
   source?: Pick<NativeTool, "entryId" | "contentIndex">
@@ -65,6 +66,7 @@ export class ActivityItems {
     const parts = entry && this.entries.get(entry)
     const state: State = this.calls.get(owner) ??
       (index !== undefined ? parts?.get(index) : undefined) ?? {
+        pending: live,
         facts: {
           id: call.id,
           sessionId,
@@ -94,6 +96,7 @@ export class ActivityItems {
     if (event.parentToolCallId) return
     const state = this.live.get(event.toolCallId)
     if (!state) return
+    state.pending = false
     state.facts = {
       ...state.facts,
       args: event.args,
@@ -110,6 +113,7 @@ export class ActivityItems {
     if (event.parentToolCallId) return
     const state = this.live.get(event.toolCallId)
     if (!state) return
+    state.pending = false
     state.facts.result = { ...event.partialResult, isError: false }
     delete state.items
   }
@@ -118,6 +122,7 @@ export class ActivityItems {
     if (event.parentToolCallId) return
     const state = this.live.get(event.toolCallId)
     if (!state) return
+    state.pending = false
     state.facts.result = { ...event.result, isError: event.isError }
     state.facts.status = event.isError ? "failed" : "completed"
     if (state.source && state.facts.builtin)
@@ -137,12 +142,14 @@ export class ActivityItems {
     const state = this.calls.get(owner)
     if (!state) return []
     if (result && result !== state.retained) {
+      state.pending = false
       state.retained = result
       state.facts.result = result
       if (state.facts.status !== "running")
         state.facts.status = result.isError ? "failed" : "completed"
       delete state.items
     }
+    if (state.pending) return []
     if (!state.items) {
       const native =
         state.source && this.nativeTools.get(sourceKey(state.source))
@@ -185,7 +192,10 @@ export class ActivityItems {
       changed = [native.callId]
     } else changed = this.adapters.observe(type, data, live)
     for (const id of changed)
-      for (const state of this.byId.get(id) ?? []) delete state.items
+      for (const state of this.byId.get(id) ?? []) {
+        if (live) state.pending = false
+        delete state.items
+      }
     return changed.length > 0
   }
 
@@ -213,6 +223,7 @@ export class ActivityItems {
     this.nativeTools.clear()
     for (const states of this.byId.values())
       for (const state of states) {
+        state.pending = false
         state.facts.builtin = false
         delete state.items
       }
@@ -222,6 +233,7 @@ export class ActivityItems {
 
   stop() {
     for (const state of this.live.values()) {
+      state.pending = false
       state.facts.status = "unknown"
       delete state.items
     }

@@ -1,0 +1,5701 @@
+{
+  "version": "0.162.0-alpha.17.2",
+  "revision": "740e5af33c71225640e0c1c1555c514c2c93ab74",
+  "source": "https://github.com/openai/codex/tree/740e5af33c71225640e0c1c1555c514c2c93ab74/codex-rs/shell-command/src",
+  "sha256": {
+    "parse_command.rs": "731b5599673f0ae24412082343e7c40937dfac1f02133bf1e9dc11c13c98132a",
+    "bash.rs": "47ef45c594e56bc16ba54989c02eeefd569897a88283ec3bb933b333cd4612c0",
+    "shell_detect.rs": "7bbe3d0c0f83dc2e0a7cadc7ed22ee0cd9ddcfdc725a6b18b9bdda7295c1d94a",
+    "powershell.rs": "ccdc7a179962dd6943ad02fce42003f3d5bd42b72ca96dd3bb35b803c63e4f1f"
+  },
+  "grammar": "tree-sitter-bash 0.25.1",
+  "referenceTestsPassed": 106,
+  "cases": [
+    {
+      "input": ["bash", "-lc", "rg -n \"foo\" -g\"*.py\""],
+      "sources": ["bash::tests::accepts_concatenated_flag_and_value"],
+      "expected": [
+        {
+          "cmd": "rg -n foo '-g*.py'",
+          "path": null,
+          "query": "foo",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "grep -n 'pattern' -g'*.txt'"],
+      "sources": ["bash::tests::accepts_concatenated_flag_with_single_quotes"],
+      "expected": [
+        {
+          "cmd": "grep -n pattern '-g*.txt'",
+          "path": null,
+          "query": "pattern",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "git commit -m \"line1\nline2\""],
+      "sources": ["bash::tests::accepts_double_quoted_strings_with_newlines"],
+      "expected": [
+        {
+          "cmd": "git commit -m \"line1\nline2\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"/usr\"'/'\"local\"/bin"],
+      "sources": ["bash::tests::accepts_mixed_quote_concatenation"],
+      "expected": [
+        {
+          "cmd": "echo \"/usr\"'/'\"local\"/bin",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo '/usr'\"/\"'local'/bin"],
+      "sources": ["bash::tests::accepts_mixed_quote_concatenation"],
+      "expected": [
+        {
+          "cmd": "echo '/usr'\"/\"'local'/bin",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls && pwd; echo 'hi there' | wc -l"],
+      "sources": [
+        "bash::tests::accepts_multiple_commands_with_allowed_operators"
+      ],
+      "expected": [
+        {
+          "cmd": "ls && pwd; echo 'hi there' | wc -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo 123 456"],
+      "sources": ["bash::tests::accepts_numbers_as_words"],
+      "expected": [
+        {
+          "cmd": "echo 123 456",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls -1"],
+      "sources": ["bash::tests::accepts_single_simple_command"],
+      "expected": [
+        {
+          "cmd": "ls -1",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"hello world\""],
+      "sources": ["bash::tests::extracts_double_and_single_quoted_strings"],
+      "expected": [
+        {
+          "cmd": "echo \"hello world\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo 'hi there'"],
+      "sources": ["bash::tests::extracts_double_and_single_quoted_strings"],
+      "expected": [
+        {
+          "cmd": "echo 'hi there'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls"],
+      "sources": ["bash::tests::parse_zsh_lc_plain_commands"],
+      "expected": [
+        {
+          "cmd": "ls",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g\"*.py\" pattern"],
+      "sources": ["bash::tests::preserves_quoted_literals"],
+      "expected": [
+        {
+          "cmd": "rg '-g*.py' pattern",
+          "path": null,
+          "query": "pattern",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"\\n\""],
+      "sources": ["bash::tests::preserves_quoted_literals"],
+      "expected": [
+        {
+          "cmd": "echo \"\\n\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "echo \"~HOME\" 'HEAD~1' \"HEAD^\" 'foo#bar' \"=sh\" 'file~'"
+      ],
+      "sources": ["bash::tests::preserves_quoted_literals"],
+      "expected": [
+        {
+          "cmd": "echo \"~HOME\" 'HEAD~1' \"HEAD^\" 'foo#bar' \"=sh\" 'file~'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo -\"{a,b}\" '*?[]~^#=\\\\'"],
+      "sources": ["bash::tests::preserves_quoted_literals"],
+      "expected": [
+        {
+          "cmd": "echo -\"{a,b}\" '*?[]~^#=\\\\'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo $(pwd)"],
+      "sources": [
+        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
+      ],
+      "expected": [
+        {
+          "cmd": "echo $(pwd)",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo `pwd`"],
+      "sources": [
+        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
+      ],
+      "expected": [
+        {
+          "cmd": "echo `pwd`",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo $HOME"],
+      "sources": [
+        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
+      ],
+      "expected": [
+        {
+          "cmd": "echo $HOME",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"hi $USER\""],
+      "sources": [
+        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
+      ],
+      "expected": [
+        {
+          "cmd": "echo \"hi $USER\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g\"$(pwd)\" pattern"],
+      "sources": [
+        "bash::tests::rejects_concatenation_with_command_substitution"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -g\"$(pwd)\" pattern",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g\"$(echo '*.py')\" pattern"],
+      "sources": [
+        "bash::tests::rejects_concatenation_with_command_substitution"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -g\"$(echo '*.py')\" pattern",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g\"$VAR\" pattern"],
+      "sources": [
+        "bash::tests::rejects_concatenation_with_variable_substitution"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -g\"$VAR\" pattern",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g\"${VAR}\" pattern"],
+      "sources": [
+        "bash::tests::rejects_concatenation_with_variable_substitution"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -g\"${VAR}\" pattern",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"\\$HOME\\`\\\"\\\\\\n\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "echo \"\\$HOME\\`\\\"\\\\\\n\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . \"-de\\\nlete\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "find . \"-de\\\nlete\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"\\\\\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "echo \"\\\\\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"hi ${USER}\""],
+      "sources": ["bash::tests::rejects_double_quoted_strings_with_expansions"],
+      "expected": [
+        {
+          "cmd": "echo \"hi ${USER}\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo \"$HOME\""],
+      "sources": ["bash::tests::rejects_double_quoted_strings_with_expansions"],
+      "expected": [
+        {
+          "cmd": "echo \"$HOME\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls ;; pwd"],
+      "sources": [
+        "bash::tests::rejects_empty_command_position_with_double_separator"
+      ],
+      "expected": [
+        {
+          "cmd": "ls ;; pwd",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls | | wc"],
+      "sources": [
+        "bash::tests::rejects_empty_command_position_with_empty_pipeline_segment"
+      ],
+      "expected": [
+        {
+          "cmd": "ls | | wc",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "&& ls"],
+      "sources": [
+        "bash::tests::rejects_empty_command_position_with_leading_operator"
+      ],
+      "expected": [
+        {
+          "cmd": "&& ls",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "(ls)"],
+      "sources": ["bash::tests::rejects_parentheses_and_subshells"],
+      "expected": [
+        {
+          "cmd": "(ls)",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls || (pwd && echo hi)"],
+      "sources": ["bash::tests::rejects_parentheses_and_subshells"],
+      "expected": [
+        {
+          "cmd": "ls || (pwd && echo hi)",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls > out.txt"],
+      "sources": [
+        "bash::tests::rejects_redirections_and_unsupported_operators"
+      ],
+      "expected": [
+        {
+          "cmd": "ls > out.txt",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo hi & echo bye"],
+      "sources": [
+        "bash::tests::rejects_redirections_and_unsupported_operators"
+      ],
+      "expected": [
+        {
+          "cmd": "echo hi & echo bye",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -{delete,print}"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -{delete,print}",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --pre{=,=sh} pattern payload.sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "rg --pre{=,=sh} pattern payload.sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -del*"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -del*",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -delet?"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet?",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -delet[e]"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet[e]",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -de\\lete"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -de\\lete",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo ~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo ~HOME"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~HOME",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo HEAD~1"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD~1",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo HEAD^"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD^",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo file~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo file~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo =sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo =sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo foo^bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo^bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo foo#bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo#bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "l* -l"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "l* -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls &&"],
+      "sources": ["bash::tests::rejects_trailing_operator_parse_error"],
+      "expected": [
+        {
+          "cmd": "ls &&",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "FOO=bar ls"],
+      "sources": ["bash::tests::rejects_variable_assignment_prefix"],
+      "expected": [
+        {
+          "cmd": "FOO=bar ls",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["ag", "-l", "TODO", "src"],
+      "sources": [
+        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
+      ],
+      "expected": [
+        {
+          "cmd": "ag -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["ack", "-l", "TODO", "src"],
+      "sources": [
+        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
+      ],
+      "expected": [
+        {
+          "cmd": "ack -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["pt", "-l", "TODO", "src"],
+      "sources": [
+        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
+      ],
+      "expected": [
+        {
+          "cmd": "pt -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "awk '{print $1}'; cat reference-sentinel.md"],
+      "sources": ["reference::tests::awk_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "awk '{print $1}' Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::awk_behavior (formatting)",
+        "reference::tests::supports_awk_with_file (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "awk '{print $1}' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "awk -f script.awk Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::awk_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "awk -f script.awk Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd foo && bar"],
+      "sources": ["reference::tests::bash_cd_then_bar_is_same_as_bar"],
+      "expected": [
+        {
+          "cmd": "cd foo && bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd foo; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::bash_cd_then_bar_is_same_as_bar (formatting)",
+        "reference::tests::bash_cd_then_cat_is_read (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "foo/reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "bar; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::bash_cd_then_bar_is_same_as_bar (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "bar; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd foo && cat foo.txt"],
+      "sources": ["reference::tests::bash_cd_then_cat_is_read"],
+      "expected": [
+        {
+          "cmd": "cat foo.txt",
+          "name": "foo.txt",
+          "path": "foo/foo.txt",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat foo.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::bash_cd_then_cat_is_read (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat foo.txt",
+          "name": "foo.txt",
+          "path": "foo.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files | head -n 1"],
+      "sources": ["reference::tests::bash_dash_c_pipeline_parsing"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::bash_dash_c_pipeline_parsing (formatting)",
+        "reference::tests::drops_yes_in_pipelines (formatting)",
+        "reference::tests::handles_complex_bash_command_head (formatting)",
+        "reference::tests::strips_true_inside_bash_lc (formatting)",
+        "reference::tests::supports_rg_files_then_head (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 1; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::bash_dash_c_pipeline_parsing (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "rg --files | head -n 1"],
+      "sources": ["reference::tests::bash_dash_c_pipeline_parsing"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "echo foo > bar"],
+      "sources": ["reference::tests::bash_lc_redirect_not_quoted"],
+      "expected": [
+        {
+          "cmd": "echo foo > bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,10p Cargo.toml"],
+      "sources": [
+        "reference::tests::bin_bash_lc_sed",
+        "reference::tests::bin_zsh_lc_sed"
+      ],
+      "expected": [
+        {
+          "cmd": "sed -n '1,10p' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n 1,10p Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::bin_bash_lc_sed (formatting)",
+        "reference::tests::bin_zsh_lc_sed (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "sed -n '1,10p' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["/bin/bash", "-lc", "sed -n 1,10p Cargo.toml"],
+      "sources": ["reference::tests::bin_bash_lc_sed"],
+      "expected": [
+        {
+          "cmd": "sed -n '1,10p' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["/bin/zsh", "-lc", "sed -n 1,10p Cargo.toml"],
+      "sources": ["reference::tests::bin_zsh_lc_sed"],
+      "expected": [
+        {
+          "cmd": "sed -n '1,10p' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "--", "./-strange-file-name"],
+      "sources": ["reference::tests::cat_with_double_dash_and_sed_ranges"],
+      "expected": [
+        {
+          "cmd": "cat -- ./-strange-file-name",
+          "name": "-strange-file-name",
+          "path": "./-strange-file-name",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["sed", "-n", "12,20p", "Cargo.toml"],
+      "sources": ["reference::tests::cat_with_double_dash_and_sed_ranges"],
+      "expected": [
+        {
+          "cmd": "sed -n '12,20p' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cd", "foo", "&&", "cat", "foo.txt"],
+      "sources": ["reference::tests::cd_then_cat_is_single_read"],
+      "expected": [
+        {
+          "cmd": "cat foo.txt",
+          "name": "foo.txt",
+          "path": "foo/foo.txt",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cd", "--", "-weird", "&&", "cat", "foo.txt"],
+      "sources": ["reference::tests::cd_with_double_dash_then_cat_is_read"],
+      "expected": [
+        {
+          "cmd": "cat foo.txt",
+          "name": "foo.txt",
+          "path": "-weird/foo.txt",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cd", "dir1", "dir2", "&&", "cat", "foo.txt"],
+      "sources": ["reference::tests::cd_with_multiple_operands_uses_last"],
+      "expected": [
+        {
+          "cmd": "cat foo.txt",
+          "name": "foo.txt",
+          "path": "dir2/foo.txt",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--files", "|", "nl", "-ba", "|", "foo"],
+      "sources": [
+        "reference::tests::collapses_pipeline_with_helper_when_later_stage_is_unknown"
+      ],
+      "expected": [
+        {
+          "cmd": "rg --files '|' nl -ba '|' foo",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "rg",
+        "-l",
+        "QkBindingController",
+        "presentation/src/main/java",
+        "|",
+        "xargs",
+        "perl",
+        "-pi",
+        "-e",
+        "s/QkBindingController/QkController/g"
+      ],
+      "sources": [
+        "reference::tests::collapses_plain_pipeline_when_any_stage_is_unknown"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -l QkBindingController presentation/src/main/java '|' xargs perl -pi -e s/QkBindingController/QkController/g",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\""
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content -ReadCount:([IO.File]::Delete('C:/important')) C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -ReadCount:([IO.File]::Delete('C:/important')) C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content C:/skills/demo/SKILL.md C:/important"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["powershell", "-Command", "Get-Content C:/skills/*/SKILL.md"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/*/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-Command",
+        "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["powershell", "-Command", "Get-Content -Raw"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--files", "|", "nl", "-ba"],
+      "sources": ["reference::tests::drop_trailing_nl_in_pipeline"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "yes | rg --files"],
+      "sources": ["reference::tests::drops_yes_in_pipelines"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "yes; cat reference-sentinel.md"],
+      "sources": ["reference::tests::drops_yes_in_pipelines (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "; cat reference-sentinel.md"],
+      "sources": ["reference::tests::empty_tokens_is_not_small (formatting)"],
+      "expected": [
+        {
+          "cmd": "; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["fd", "-t", "f", "src/"],
+      "sources": ["reference::tests::fd_file_finder_variants"],
+      "expected": [
+        {
+          "cmd": "fd -t f src/",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["fd", "main", "src"],
+      "sources": ["reference::tests::fd_file_finder_variants"],
+      "expected": [
+        {
+          "cmd": "fd main src",
+          "path": "src",
+          "query": "main",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "printf \"\\n===== ansi-escape/Cargo.toml =====\\n\"; cat -- ansi-escape/Cargo.toml"
+      ],
+      "sources": ["reference::tests::filters_out_printf"],
+      "expected": [
+        {
+          "cmd": "cat -- ansi-escape/Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "ansi-escape/Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "printf '\\n===== ansi-escape/Cargo.toml =====\\n'; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::filters_out_printf (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "cat -- ansi-escape/Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::filters_out_printf (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat -- ansi-escape/Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "ansi-escape/Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["find", ".", "-name", "*.rs"],
+      "sources": ["reference::tests::find_basic_name_filter"],
+      "expected": [
+        {
+          "cmd": "find . -name '*.rs'",
+          "path": ".",
+          "query": "*.rs",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["find", "src", "-type", "f"],
+      "sources": ["reference::tests::find_type_only_path"],
+      "expected": [
+        {
+          "cmd": "find src -type f",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["git", "status"],
+      "sources": ["reference::tests::git_status_is_unknown"],
+      "expected": [
+        {
+          "cmd": "git status",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-l", "TODO", "src"],
+      "sources": ["reference::tests::grep_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "grep -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "--files-with-matches", "TODO", "src"],
+      "sources": ["reference::tests::grep_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "grep --files-with-matches TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-L", "TODO", "src"],
+      "sources": ["reference::tests::grep_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "grep -L TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "--files-without-match", "TODO", "src"],
+      "sources": ["reference::tests::grep_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "grep --files-without-match TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-R", "TODO", "src"],
+      "sources": ["reference::tests::grep_with_query_and_path"],
+      "expected": [
+        {
+          "cmd": "grep -R TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -n \"BUG|FIXME|TODO|XXX|HACK\" -S | head -n 200"
+      ],
+      "sources": ["reference::tests::handles_complex_bash_command"],
+      "expected": [
+        {
+          "cmd": "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S",
+          "path": null,
+          "query": "BUG|FIXME|TODO|XXX|HACK",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::handles_complex_bash_command (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S",
+          "path": null,
+          "query": "BUG|FIXME|TODO|XXX|HACK",
+          "type": "search"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 200; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg --version && node -v && pnpm -v && rg --files | wc -l && rg --files | head -n 40"
+      ],
+      "sources": ["reference::tests::handles_complex_bash_command_head"],
+      "expected": [
+        {
+          "cmd": "rg --version && node -v && pnpm -v && rg --files | wc -l && rg --files | head -n 40",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --version; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command_head (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg --version",
+          "path": null,
+          "query": null,
+          "type": "search"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "node -v; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command_head (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "node -v; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "pnpm -v; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command_head (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "pnpm -v; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "wc -l; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command_head (formatting)",
+        "reference::tests::handles_git_pipe_wc (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 40; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::handles_complex_bash_command_head (formatting)",
+        "reference::tests::head_behavior (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "git status | wc -l"],
+      "sources": ["reference::tests::handles_git_pipe_wc"],
+      "expected": [
+        {
+          "cmd": "git status | wc -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "git status; cat reference-sentinel.md"],
+      "sources": ["reference::tests::handles_git_pipe_wc (formatting)"],
+      "expected": [
+        {
+          "cmd": "git status; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head; cat reference-sentinel.md"],
+      "sources": ["reference::tests::head_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "head -n 40 file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::head_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "head -n 40 file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head file.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::head_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "head file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n50 Cargo.toml"],
+      "sources": ["reference::tests::head_with_no_space"],
+      "expected": [
+        {
+          "cmd": "head -n50 Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "head -n50 Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::head_with_no_space (formatting)"],
+      "expected": [
+        {
+          "cmd": "head -n50 Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md && sed 's/a/x/' -- -input.txt"],
+      "sources": [
+        "reference::tests::ignores_sed_operands_after_double_dash_when_checking_mutation"
+      ],
+      "expected": [
+        {
+          "cmd": "cat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::ignores_sed_operands_after_double_dash_when_checking_mutation (formatting)",
+        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)",
+        "reference::tests::zsh_lc_supports_cat (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed s/a/x/ -- -input.txt; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::ignores_sed_operands_after_double_dash_when_checking_mutation (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md && sed -n -i.bak 1p secret.txt"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command"],
+      "expected": [
+        {
+          "cmd": "cat README.md && sed -n -i.bak 1p secret.txt",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n -i.bak 1p secret.txt; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "sed -n -i.bak 1p secret.txt; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md && sed -ni.bak 1p secret.txt"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command"],
+      "expected": [
+        {
+          "cmd": "cat README.md && sed -ni.bak 1p secret.txt",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -ni.bak 1p secret.txt; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "sed -ni.bak 1p secret.txt; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md && sed -Eni.bak 1p secret.txt"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command"],
+      "expected": [
+        {
+          "cmd": "cat README.md && sed -Eni.bak 1p secret.txt",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -Eni.bak 1p secret.txt; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "sed -Eni.bak 1p secret.txt; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -l QkBindingController presentation/src/main/java | xargs perl -pi -e 's/QkBindingController/QkController/g'"
+      ],
+      "sources": ["reference::tests::keeps_mutating_xargs_pipeline"],
+      "expected": [
+        {
+          "cmd": "rg -l QkBindingController presentation/src/main/java | xargs perl -pi -e 's/QkBindingController/QkController/g'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -l QkBindingController presentation/src/main/java; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::keeps_mutating_xargs_pipeline (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -l QkBindingController presentation/src/main/java",
+          "path": "java",
+          "query": "QkBindingController",
+          "type": "search"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "xargs perl -pi -e s/QkBindingController/QkController/g; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::keeps_mutating_xargs_pipeline (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "xargs perl -pi -e s/QkBindingController/QkController/g; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["ls", "-I", "*.test.js"],
+      "sources": ["reference::tests::ls_with_glob"],
+      "expected": [
+        {
+          "cmd": "ls -I '*.test.js'",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["ls", "--time-style=long-iso", "./dist"],
+      "sources": ["reference::tests::ls_with_time_style_and_path"],
+      "expected": [
+        {
+          "cmd": "ls '--time-style=long-iso' ./dist",
+          "path": ".",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["powershell", "-Command", "Get-ChildItem"],
+      "sources": ["reference::tests::powershell_command_is_stripped"],
+      "expected": [
+        {
+          "cmd": "Get-ChildItem",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "get-content -Raw \"C:\\skills and plugins\\SKILL.md\""
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "get-content -Raw \"C:\\skills and plugins\\SKILL.md\"",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content 'C:\\skills and plugins\\SKILL.md'"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:\\skills and plugins\\SKILL.md'",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content -Path C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Path C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content C:\\skills\\demo\\SKILL.md -Raw"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\skills\\demo\\SKILL.md -Raw",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "Get-Content C:\\workspace\\README.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\workspace\\README.md",
+          "name": "README.md",
+          "path": "C:/workspace/README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "gc C:/skills/demo/SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "gc C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        "type C:/skills/demo/SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "type C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+        "-NoProfile",
+        "-Command",
+        "Get-Content C:/skills/demo/SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "/usr/local/bin/powershell.exe",
+        "-NoProfile",
+        "-c",
+        "Write-Host hi"
+      ],
+      "sources": ["reference::tests::powershell_with_path_is_stripped"],
+      "expected": [
+        {
+          "cmd": "Write-Host hi",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["yes", "|", "rg", "-n", "foo bar", "-S"],
+      "sources": ["reference::tests::preserves_rg_with_spaces"],
+      "expected": [
+        {
+          "cmd": "rg -n 'foo bar' -S",
+          "path": null,
+          "query": "foo bar",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-NoProfile", "-c", "Write-Host hi"],
+      "sources": [
+        "reference::tests::pwsh_with_noprofile_and_c_alias_is_stripped"
+      ],
+      "expected": [
+        {
+          "cmd": "Write-Host hi",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "python -c \"print('hello')\""],
+      "sources": ["reference::tests::python_without_file_walk_is_unknown"],
+      "expected": [
+        {
+          "cmd": "python -c \"print('hello')\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "python -c 'print('\"'\"'hello'\"'\"')'; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::python_without_file_walk_is_unknown (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "python -c 'print('\"'\"'hello'\"'\"')'; cat reference-sentinel.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "-l", "TODO", "src"],
+      "sources": ["reference::tests::rg_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "rg -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--files-with-matches", "TODO", "src"],
+      "sources": ["reference::tests::rg_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "rg --files-with-matches TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "-L", "TODO", "src"],
+      "sources": ["reference::tests::rg_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "rg -L TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--files-without-match", "TODO", "src"],
+      "sources": ["reference::tests::rg_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "rg --files-without-match TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rga", "-l", "TODO", "src"],
+      "sources": ["reference::tests::rg_files_with_matches_flags_are_search"],
+      "expected": [
+        {
+          "cmd": "rga -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--colors=never", "-n", "foo", "src"],
+      "sources": ["reference::tests::rg_with_equals_style_flags"],
+      "expected": [
+        {
+          "cmd": "rg '--colors=never' -n foo src",
+          "path": "src",
+          "query": "foo",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed; cat reference-sentinel.md"],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 10p; cat reference-sentinel.md"],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n 10p file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "sed -n 10p file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n -e 10p file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "sed -n -e 10p file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n 10p -- file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "sed -n 10p -- file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n 1,200p file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "sed -n '1,200p' file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n p file.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n +10p file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::sed_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "pkg\\src\\main.rs"],
+      "sources": ["reference::tests::shorten_path_on_windows"],
+      "expected": [
+        {
+          "cmd": "cat \"pkg\\\\src\\\\main.rs\"",
+          "name": "main.rs",
+          "path": "pkg\\src\\main.rs",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "wc; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "wc -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tr; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tr -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cut; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cut -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sort; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sort -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "uniq; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "uniq -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "xargs; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "xargs -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tee; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tee -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "column; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "column -x; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::small_formatting_always_true_commands (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["true", "&&", "rg", "--files"],
+      "sources": ["reference::tests::strips_true_in_sequence"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["rg", "--files", "&&", "true"],
+      "sources": ["reference::tests::strips_true_in_sequence"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "true && rg --files"],
+      "sources": ["reference::tests::strips_true_inside_bash_lc"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "true; cat reference-sentinel.md"],
+      "sources": ["reference::tests::strips_true_inside_bash_lc (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files || true"],
+      "sources": ["reference::tests::strips_true_inside_bash_lc"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["ag", "TODO", "src"],
+      "sources": ["reference::tests::supports_ag_ack_pt_rga"],
+      "expected": [
+        {
+          "cmd": "ag TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["ack", "TODO", "src"],
+      "sources": ["reference::tests::supports_ag_ack_pt_rga"],
+      "expected": [
+        {
+          "cmd": "ack TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["pt", "TODO", "src"],
+      "sources": ["reference::tests::supports_ag_ack_pt_rga"],
+      "expected": [
+        {
+          "cmd": "pt TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["rga", "TODO", "src"],
+      "sources": ["reference::tests::supports_ag_ack_pt_rga"],
+      "expected": [
+        {
+          "cmd": "rga TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "awk '{print $1}' Cargo.toml"],
+      "sources": ["reference::tests::supports_awk_with_file"],
+      "expected": [
+        {
+          "cmd": "awk '{print $1}' Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "bat --theme TwoDark README.md"],
+      "sources": ["reference::tests::supports_bat"],
+      "expected": [
+        {
+          "cmd": "bat --theme TwoDark README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "bat --theme TwoDark README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_bat (formatting)"],
+      "expected": [
+        {
+          "cmd": "bat --theme TwoDark README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "batcat README.md"],
+      "sources": ["reference::tests::supports_batcat"],
+      "expected": [
+        {
+          "cmd": "batcat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "batcat README.md; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_batcat (formatting)"],
+      "expected": [
+        {
+          "cmd": "batcat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat webview/README.md"],
+      "sources": ["reference::tests::supports_cat"],
+      "expected": [
+        {
+          "cmd": "cat webview/README.md",
+          "name": "README.md",
+          "path": "webview/README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "cat webview/README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_cat (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat webview/README.md",
+          "name": "README.md",
+          "path": "webview/README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat tui/Cargo.toml | sed -n '1,200p'"],
+      "sources": ["reference::tests::supports_cat_sed_n"],
+      "expected": [
+        {
+          "cmd": "cat tui/Cargo.toml | sed -n '1,200p'",
+          "name": "Cargo.toml",
+          "path": "tui/Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat tui/Cargo.toml; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_cat_sed_n (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat tui/Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "tui/Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,200p; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_cat_sed_n (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cd", "codex-rs", "&&", "rg", "--files"],
+      "sources": ["reference::tests::supports_cd_and_rg_files"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["egrep", "-R", "TODO", "src"],
+      "sources": ["reference::tests::supports_egrep_and_fgrep"],
+      "expected": [
+        {
+          "cmd": "egrep -R TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["fgrep", "-l", "TODO", "src"],
+      "sources": ["reference::tests::supports_egrep_and_fgrep"],
+      "expected": [
+        {
+          "cmd": "fgrep -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["eza", "--color=always", "src"],
+      "sources": ["reference::tests::supports_eza_exa_tree_du"],
+      "expected": [
+        {
+          "cmd": "eza '--color=always' src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["exa", "-I", "target", "."],
+      "sources": ["reference::tests::supports_eza_exa_tree_du"],
+      "expected": [
+        {
+          "cmd": "exa -I target .",
+          "path": ".",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["tree", "-L", "2", "src"],
+      "sources": ["reference::tests::supports_eza_exa_tree_du"],
+      "expected": [
+        {
+          "cmd": "tree -L 2 src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["du", "-d", "2", "."],
+      "sources": ["reference::tests::supports_eza_exa_tree_du"],
+      "expected": [
+        {
+          "cmd": "du -d 2 .",
+          "path": ".",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["git", "grep", "TODO", "src"],
+      "sources": ["reference::tests::supports_git_grep_and_ls_files"],
+      "expected": [
+        {
+          "cmd": "git grep TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["git", "grep", "-l", "TODO", "src"],
+      "sources": ["reference::tests::supports_git_grep_and_ls_files"],
+      "expected": [
+        {
+          "cmd": "git grep -l TODO src",
+          "path": "src",
+          "query": "TODO",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["git", "ls-files"],
+      "sources": ["reference::tests::supports_git_grep_and_ls_files"],
+      "expected": [
+        {
+          "cmd": "git ls-files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["git", "ls-files", "src"],
+      "sources": ["reference::tests::supports_git_grep_and_ls_files"],
+      "expected": [
+        {
+          "cmd": "git ls-files src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["git", "ls-files", "--exclude", "target", "src"],
+      "sources": ["reference::tests::supports_git_grep_and_ls_files"],
+      "expected": [
+        {
+          "cmd": "git ls-files --exclude target src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-R", "src/main.rs", "-n", "."],
+      "sources": [
+        "reference::tests::supports_grep_query_with_slashes_not_shortened"
+      ],
+      "expected": [
+        {
+          "cmd": "grep -R src/main.rs -n .",
+          "path": ".",
+          "query": "src/main.rs",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-R", "CODEX_SANDBOX_ENV_VAR", "-n", "."],
+      "sources": ["reference::tests::supports_grep_recursive_current_dir"],
+      "expected": [
+        {
+          "cmd": "grep -R CODEX_SANDBOX_ENV_VAR -n .",
+          "path": ".",
+          "query": "CODEX_SANDBOX_ENV_VAR",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "grep",
+        "-R",
+        "CODEX_SANDBOX_ENV_VAR",
+        "-n",
+        "core/src/spawn.rs"
+      ],
+      "sources": ["reference::tests::supports_grep_recursive_specific_file"],
+      "expected": [
+        {
+          "cmd": "grep -R CODEX_SANDBOX_ENV_VAR -n core/src/spawn.rs",
+          "path": "spawn.rs",
+          "query": "CODEX_SANDBOX_ENV_VAR",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["grep", "-R", "COD`EX_SANDBOX", "-n"],
+      "sources": ["reference::tests::supports_grep_weird_backtick_in_query"],
+      "expected": [
+        {
+          "cmd": "grep -R 'COD`EX_SANDBOX' -n",
+          "path": null,
+          "query": "COD`EX_SANDBOX",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head Cargo.toml"],
+      "sources": ["reference::tests::supports_head_file_only"],
+      "expected": [
+        {
+          "cmd": "head Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head Cargo.toml; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_head_file_only (formatting)"],
+      "expected": [
+        {
+          "cmd": "head Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 50 Cargo.toml"],
+      "sources": ["reference::tests::supports_head_n"],
+      "expected": [
+        {
+          "cmd": "head -n 50 Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "head -n 50 Cargo.toml; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_head_n (formatting)"],
+      "expected": [
+        {
+          "cmd": "head -n 50 Cargo.toml",
+          "name": "Cargo.toml",
+          "path": "Cargo.toml",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "less -p TODO README.md"],
+      "sources": ["reference::tests::supports_less"],
+      "expected": [
+        {
+          "cmd": "less -p TODO README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "less -p TODO README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_less (formatting)"],
+      "expected": [
+        {
+          "cmd": "less -p TODO README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls -la | sed -n '1,120p'"],
+      "sources": ["reference::tests::supports_ls_with_pipe"],
+      "expected": [
+        {
+          "cmd": "ls -la",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls -la; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_ls_with_pipe (formatting)"],
+      "expected": [
+        {
+          "cmd": "ls -la",
+          "path": null,
+          "type": "list_files"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,120p; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_ls_with_pipe (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "more README.md"],
+      "sources": ["reference::tests::supports_more"],
+      "expected": [
+        {
+          "cmd": "more README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "more README.md; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_more (formatting)"],
+      "expected": [
+        {
+          "cmd": "more README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "nl -ba core/src/parse_command.rs | sed -n '1200,1720p'"
+      ],
+      "sources": ["reference::tests::supports_nl_then_sed_reading"],
+      "expected": [
+        {
+          "cmd": "nl -ba core/src/parse_command.rs | sed -n '1200,1720p'",
+          "name": "parse_command.rs",
+          "path": "core/src/parse_command.rs",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "nl -ba core/src/parse_command.rs; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_nl_then_sed_reading (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "nl -ba core/src/parse_command.rs",
+          "name": "parse_command.rs",
+          "path": "core/src/parse_command.rs",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1200,1720p; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::supports_nl_then_sed_reading (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["npm", "run", "build"],
+      "sources": ["reference::tests::supports_npm_run_build_is_unknown"],
+      "expected": [
+        {
+          "cmd": "npm run build",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "python3 -c \"import glob; print(glob.glob('*.rs'))\""
+      ],
+      "sources": ["reference::tests::supports_python3_walks_files"],
+      "expected": [
+        {
+          "cmd": "python3 -c \"import glob; print(glob.glob('*.rs'))\"",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "python3 -c 'import glob; print(glob.glob('\"'\"'*.rs'\"'\"'))'; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_python3_walks_files (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "python3 -c \"import glob; print(glob.glob('*.rs'))\"",
+          "path": null,
+          "type": "list_files"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "python -c \"import os; print(os.listdir('.'))\""
+      ],
+      "sources": ["reference::tests::supports_python_walks_files"],
+      "expected": [
+        {
+          "cmd": "python -c \"import os; print(os.listdir('.'))\"",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "python -c 'import os; print(os.listdir('\"'\"'.'\"'\"'))'; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_python_walks_files (formatting)"],
+      "expected": [
+        {
+          "cmd": "python -c \"import os; print(os.listdir('.'))\"",
+          "path": null,
+          "type": "list_files"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files | head -n 50"],
+      "sources": ["reference::tests::supports_rg_files_then_head"],
+      "expected": [
+        {
+          "cmd": "rg --files",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 50; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::supports_rg_files_then_head (formatting)",
+        "reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files webview/src | sed -n"],
+      "sources": ["reference::tests::supports_rg_files_with_path_and_pipe"],
+      "expected": [
+        {
+          "cmd": "rg --files webview/src",
+          "path": "webview",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg --files webview/src; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_rg_files_with_path_and_pipe (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg --files webview/src",
+          "path": "webview",
+          "type": "list_files"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n; cat reference-sentinel.md"],
+      "sources": [
+        "reference::tests::supports_rg_files_with_path_and_pipe (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -n \"navigate-to-route\" -S"],
+      "sources": ["reference::tests::supports_searching_for_navigate_to_route"],
+      "expected": [
+        {
+          "cmd": "rg -n navigate-to-route -S",
+          "path": null,
+          "query": "navigate-to-route",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -n navigate-to-route -S; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_searching_for_navigate_to_route (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -n navigate-to-route -S",
+          "path": null,
+          "query": "navigate-to-route",
+          "type": "search"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n '2000,2200p' tui/src/history_cell.rs"],
+      "sources": ["reference::tests::supports_sed_n"],
+      "expected": [
+        {
+          "cmd": "sed -n '2000,2200p' tui/src/history_cell.rs",
+          "name": "history_cell.rs",
+          "path": "tui/src/history_cell.rs",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "sed -n 2000,2200p tui/src/history_cell.rs; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_sed_n (formatting)"],
+      "expected": [
+        {
+          "cmd": "sed -n '2000,2200p' tui/src/history_cell.rs",
+          "name": "history_cell.rs",
+          "path": "tui/src/history_cell.rs",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "sed",
+        "-n",
+        "260,640p",
+        "exec/src/event_processor_with_human_output.rs",
+        "|",
+        "nl",
+        "-ba"
+      ],
+      "sources": ["reference::tests::supports_sed_n_then_nl_as_search"],
+      "expected": [
+        {
+          "cmd": "sed -n '260,640p' exec/src/event_processor_with_human_output.rs",
+          "name": "event_processor_with_human_output.rs",
+          "path": "exec/src/event_processor_with_human_output.rs",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "cd /Users/pakrym/code/codex && rg -n \"codex_api\" codex-rs -S | head -n 50"
+      ],
+      "sources": [
+        "reference::tests::supports_single_string_script_with_cd_and_pipe"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -n codex_api codex-rs -S",
+          "path": "codex-rs",
+          "query": "codex_api",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "cd /Users/pakrym/code/codex; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "/Users/pakrym/code/codex/reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "rg -n codex_api codex-rs -S; cat reference-sentinel.md"
+      ],
+      "sources": [
+        "reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"
+      ],
+      "expected": [
+        {
+          "cmd": "rg -n codex_api codex-rs -S",
+          "path": "codex-rs",
+          "query": "codex_api",
+          "type": "search"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail README.md"],
+      "sources": ["reference::tests::supports_tail_file_only"],
+      "expected": [
+        {
+          "cmd": "tail README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail README.md; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_tail_file_only (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n 30 README.md"],
+      "sources": ["reference::tests::supports_tail_n_last_lines"],
+      "expected": [
+        {
+          "cmd": "tail -n 30 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "tail -n 30 README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_tail_n_last_lines (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail -n 30 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n +522 README.md"],
+      "sources": ["reference::tests::supports_tail_n_plus"],
+      "expected": [
+        {
+          "cmd": "tail -n +522 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "tail -n +522 README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::supports_tail_n_plus (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail -n +522 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n +10; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "tail -n +10 file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail -n +10 file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n 30; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "tail -n 30 file.txt; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail -n 30 file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -c 30; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -c +10; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail file.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::tail_behavior (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail file.txt",
+          "name": "file.txt",
+          "path": "file.txt",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n+10 README.md"],
+      "sources": ["reference::tests::tail_with_no_space"],
+      "expected": [
+        {
+          "cmd": "tail -n+10 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "bash",
+        "-lc",
+        "tail -n+10 README.md; cat reference-sentinel.md"
+      ],
+      "sources": ["reference::tests::tail_with_no_space (formatting)"],
+      "expected": [
+        {
+          "cmd": "tail -n+10 README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        },
+        {
+          "cmd": "cat reference-sentinel.md",
+          "name": "reference-sentinel.md",
+          "path": "reference-sentinel.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat README.md"],
+      "sources": ["reference::tests::zsh_lc_supports_cat"],
+      "expected": [
+        {
+          "cmd": "cat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "cat README.md"],
+      "sources": ["reference::tests::zsh_lc_supports_cat"],
+      "expected": [
+        {
+          "cmd": "cat README.md",
+          "name": "README.md",
+          "path": "README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", ""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", " "],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": " ",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "# comment"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "# comment",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a b",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat -- -file"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat -- -file",
+          "name": "-file",
+          "path": "-file",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat \"\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ''",
+          "name": "",
+          "path": "",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat ''"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ''",
+          "name": "",
+          "path": "",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat \"a b\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a b'",
+          "name": "a b",
+          "path": "a b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat \"src/é.ts\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'src/é.ts'",
+          "name": "é.ts",
+          "path": "src/é.ts",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a\\ b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a\\ b",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a\"b\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ab",
+          "name": "ab",
+          "path": "ab",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a # comment"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a # comment",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat $HOME/a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat $HOME/a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a > b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a > b",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a && cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a; echo done"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a; echo done",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "printf header; cat src/a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat src/a",
+          "name": "a",
+          "path": "src/a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd src && cd ../docs && cat guide.md"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat guide.md",
+          "name": "guide.md",
+          "path": "src/../docs/guide.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd ."],
+      "sources": ["boundary"],
+      "expected": []
+    },
+    {
+      "input": ["bash", "-lc", "cd / && cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "/a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd foo// && cat ./bar"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ./bar",
+          "name": "bar",
+          "path": "foo//./bar",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cd foo && cat ../bar"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ../bar",
+          "name": "bar",
+          "path": "foo/../bar",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n 0 a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "head -n 0 a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "head -n a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -n '' a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "head -n '' a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "head -c 10 a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "head -c 10 a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n+10 a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "tail -n+10 a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n+ a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "tail -n+ a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "tail -n -10 a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "tail -n -10 a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "nl -s \"  \" -w 4 -v 0 a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "nl -s '  ' -w 4 -v 0 a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "nl -- -a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "nl -- -a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1p a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n 1p a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,3p a b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n '1,3p' a b",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 0p a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n 0p a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,3p"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n 1,3p",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 3,1p a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n '3,1p' a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "sed -n 1,2,3p a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "sed -n 1,2,3p a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg --files src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "rg --files src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "rg -g \"*.ts\" needle src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "rg -g '*.ts' needle src",
+          "path": "src",
+          "query": "needle",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "grep \"foo/bar\" src/app"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "grep foo/bar src/app",
+          "path": "app",
+          "query": "foo/bar",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "fd --type f --extension ts needle src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "fd --type f --extension ts needle src",
+          "path": "src",
+          "query": "needle",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "fd ../src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "fd ../src",
+          "path": "..",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "fd --search-path src needle"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "fd --search-path src needle",
+          "path": null,
+          "query": "needle",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find src -iname \"*.ts\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "find src -iname '*.ts'",
+          "path": "src",
+          "query": "*.ts",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . -type f -name \"*.ts\""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "find . -type f -name '*.ts'",
+          "path": ".",
+          "query": "*.ts",
+          "type": "search"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "find . \\( -name a \\)"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "find . \\( -name a \\)",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls --color always src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "ls --color always src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls --format=long src"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "ls '--format=long' src",
+          "path": "src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls -- -file"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "ls -- -file",
+          "path": "-file",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "nl -ba src/a.ts|sed -n 1,20p"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "nl -ba src/a.ts",
+          "name": "a.ts",
+          "path": "src/a.ts",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "printf '\\n--- label ---\\n'; cat src/a.ts"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat src/a.ts",
+          "name": "a.ts",
+          "path": "src/a.ts",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cargo test && cat failures.log"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cargo test && cat failures.log",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "false || cat fallback"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "false || cat fallback",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "true || true"],
+      "sources": ["boundary"],
+      "expected": []
+    },
+    {
+      "input": ["bash", "-lc", "echo first; echo second; cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a\ncat b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        },
+        {
+          "cmd": "cat b",
+          "name": "b",
+          "path": "b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a; printf done"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls /"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "ls /",
+          "path": "",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "ls build/src/"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "ls build/src/",
+          "path": "build/src",
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat ./src/dist/node_modules/"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ./src/dist/node_modules/",
+          "name": ".",
+          "path": "./src/dist/node_modules/",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a\r"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a\r'",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "cat a & cat b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a & cat b",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "for p in a b; do cat \"$p\"; done"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "for p in a b; do cat \"$p\"; done",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-lc", "A=1 cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "A=1 cat a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a\u0000b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "<command included NUL byte>",
+          "name": "a\u0000b",
+          "path": "a\u0000b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", ""],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat ''",
+          "name": "",
+          "path": "",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a\nb"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a\nb'",
+          "name": "a\nb",
+          "path": "a\nb",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a'b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat \"a'b\"",
+          "name": "a'b",
+          "path": "a'b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a\"b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a\"b'",
+          "name": "a\"b",
+          "path": "a\"b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a\\b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat \"a\\\\b\"",
+          "name": "b",
+          "path": "a\\b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "^abc"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat '^abc'",
+          "name": "^abc",
+          "path": "^abc",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "abc^def"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat abc'^def'",
+          "name": "abc^def",
+          "path": "abc^def",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a!b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a!b'",
+          "name": "a!b",
+          "path": "a!b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a$b"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat 'a$b'",
+          "name": "a$b",
+          "path": "a$b",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "日本語"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat '日本語'",
+          "name": "日本語",
+          "path": "日本語",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["/bin/sh", "-c", "cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["/bin/zsh", "-lc", "cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["/bin/bash.exe", "-c", "cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-NoLogo", "-Command", "Get-Content a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "Get-Content a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["powershell.exe", "-noprofile", "-c", "cat a", "extra"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-bad", "-c", "cat a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "pwsh -bad -c 'cat a'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["yes", "|", "cat", "a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["no", "|", "cat", "a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a", "&&", "cat", "a"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a",
+          "name": "a",
+          "path": "a",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cd", "a", "&&", "cd", "b", "&&", "cat", "c"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat c",
+          "name": "c",
+          "path": "a/b/c",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["cat", "a", "|", "wc", "-l"],
+      "sources": ["boundary"],
+      "expected": [
+        {
+          "cmd": "cat a '|' wc -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "ls"],
+      "sources": ["bash::tests::parse_zsh_lc_plain_commands"],
+      "expected": [
+        {
+          "cmd": "ls",
+          "path": null,
+          "type": "list_files"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo \"\\$HOME\\`\\\"\\\\\\n\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "echo \"\\$HOME\\`\\\"\\\\\\n\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . \"-de\\\nlete\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "find . \"-de\\\nlete\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo \"\\\\\""],
+      "sources": ["bash::tests::rejects_double_quoted_escapes"],
+      "expected": [
+        {
+          "cmd": "echo \"\\\\\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "find . -{delete,print}"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -{delete,print}",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "find . -{delete,print}"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -{delete,print}",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . -{delete,print}"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -{delete,print}",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "rg --pre{=,=sh} pattern payload.sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "rg --pre{=,=sh} pattern payload.sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "rg --pre{=,=sh} pattern payload.sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "rg --pre{=,=sh} pattern payload.sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "rg --pre{=,=sh} pattern payload.sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "rg --pre{=,=sh} pattern payload.sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "find . -del*"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -del*",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "find . -del*"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -del*",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . -del*"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -del*",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "find . -delet?"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet?",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "find . -delet?"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet?",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . -delet?"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet?",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "find . -delet[e]"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet[e]",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "find . -delet[e]"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet[e]",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . -delet[e]"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -delet[e]",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "find . -de\\lete"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -de\\lete",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "find . -de\\lete"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -de\\lete",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "find . -de\\lete"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "find . -de\\lete",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo ~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo ~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo ~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo ~HOME"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~HOME",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo ~HOME"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~HOME",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo ~HOME"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo ~HOME",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo HEAD~1"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD~1",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo HEAD~1"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD~1",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo HEAD~1"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD~1",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo HEAD^"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD^",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo HEAD^"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD^",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo HEAD^"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo HEAD^",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo file~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo file~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo file~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo file~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo file~"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo file~",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo =sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo =sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo =sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo =sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo =sh"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo =sh",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo foo^bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo^bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo foo^bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo^bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo foo^bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo^bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "echo foo#bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo#bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "echo foo#bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo#bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "echo foo#bar"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "echo foo#bar",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["bash", "-c", "l* -l"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "l* -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-c", "l* -l"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "l* -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["zsh", "-lc", "l* -l"],
+      "sources": ["bash::tests::rejects_runtime_expansion_in_plain_words"],
+      "expected": [
+        {
+          "cmd": "l* -l",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\""
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\"",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "Get-Content",
+        "$(Remove-Item C:/important)/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content '$(Remove-Item C:/important)/skills/demo/SKILL.md'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content -ReadCount:([IO.File]::Delete('C:/important')) C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -ReadCount:([IO.File]::Delete('C:/important')) C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "Get-Content",
+        "C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "Get-Content",
+        "C:/skills/demo/SKILL.md",
+        "-Raw;",
+        "Remove-Item",
+        "C:/important"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md '-Raw;' Remove-Item C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content C:/skills/demo/SKILL.md C:/important"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/skills/demo/SKILL.md", "C:/important"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md C:/important",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content C:/skills/*/SKILL.md"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/*/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/skills/*/SKILL.md"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:/skills/*/SKILL.md'",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"
+      ],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "-Encoding", "UTF8", "C:/skills/demo/SKILL.md"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content -Raw"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "-Raw"],
+      "sources": [
+        "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
+      ],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-ChildItem"],
+      "sources": ["reference::tests::powershell_command_is_stripped"],
+      "expected": [
+        {
+          "cmd": "Get-ChildItem",
+          "type": "unknown"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content C:\\skills\\demo\\SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "get-content -Raw \"C:\\skills and plugins\\SKILL.md\""
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "get-content -Raw \"C:\\skills and plugins\\SKILL.md\"",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "-Raw", "C:/skills and plugins/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw 'C:/skills and plugins/SKILL.md'",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content 'C:\\skills and plugins\\SKILL.md'"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:\\skills and plugins\\SKILL.md'",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/skills and plugins/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content 'C:/skills and plugins/SKILL.md'",
+          "name": "SKILL.md",
+          "path": "C:/skills and plugins/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content -Path C:\\skills\\demo\\SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Path C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "-Path", "C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Path C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "-LiteralPath", "C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -LiteralPath C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content C:\\skills\\demo\\SKILL.md -Raw"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\skills\\demo\\SKILL.md -Raw",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/skills/demo/SKILL.md", "-Raw"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md -Raw",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "pwsh",
+        "-c",
+        "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": [
+        "Get-Content",
+        "-Raw",
+        "-LiteralPath",
+        "C:/skills/demo/SKILL.md"
+      ],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content -Raw -LiteralPath C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content C:\\workspace\\README.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:\\workspace\\README.md",
+          "name": "README.md",
+          "path": "C:/workspace/README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["Get-Content", "C:/workspace/README.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/workspace/README.md",
+          "name": "README.md",
+          "path": "C:/workspace/README.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "gc C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "gc C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "type C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "type C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Get-Content C:/skills/demo/SKILL.md"],
+      "sources": ["reference::tests::powershell_file_reads_are_classified"],
+      "expected": [
+        {
+          "cmd": "Get-Content C:/skills/demo/SKILL.md",
+          "name": "SKILL.md",
+          "path": "C:/skills/demo/SKILL.md",
+          "type": "read"
+        }
+      ]
+    },
+    {
+      "input": ["pwsh", "-c", "Write-Host hi"],
+      "sources": [
+        "reference::tests::powershell_with_path_is_stripped",
+        "reference::tests::pwsh_with_noprofile_and_c_alias_is_stripped"
+      ],
+      "expected": [
+        {
+          "cmd": "Write-Host hi",
+          "type": "unknown"
+        }
+      ]
+    }
+  ]
+}

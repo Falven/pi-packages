@@ -3,12 +3,18 @@
   "version": "0.1.0",
   "description": "Native fullscreen chat presentation for Pi",
   "files": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "NOTICE",
+    "LICENSE-APACHE-2.0"
   ],
   "type": "module",
   "publishConfig": {
     "access": "public",
     "provenance": true
+  },
+  "dependencies": {
+    "tree-sitter": "0.25.1",
+    "tree-sitter-bash": "0.25.1"
   },
   "devDependencies": {
     "@earendil-works/pi-tui": "1.0.2"

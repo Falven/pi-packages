@@ -1,5 +1,6 @@
 import { resolve } from "node:path"
 import { Text } from "@earendil-works/pi-tui"
+import { activityConfig } from "../config.ts"
 import {
   activityType,
   readActivity,
@@ -136,13 +137,13 @@ export class ActivityAdapter {
           isError: true,
           content: [
             ...(failed.body.result?.content ?? []),
-            { type: "text", text: "Call error:" },
+            { type: "text", text: activityConfig.body.callError },
             ...(item.body.result?.content ?? []),
             ...(item.body.availability === "omitted"
               ? [
                   {
                     type: "text" as const,
-                    text: "[Output omitted from history]",
+                    text: activityConfig.body.omitted,
                   },
                 ]
               : []),
@@ -162,7 +163,7 @@ export class ActivityAdapter {
           args: {},
           cwd: facts.cwd,
           result: result(undefined, false, unowned),
-          renderers: heading("Image"),
+          renderers: heading(activityConfig.body.image),
         },
       })
     return items
@@ -192,7 +193,7 @@ export class ActivityAdapter {
     }
     if (operation.kind === "command")
       return operation.commands.flatMap((command, index) =>
-        describeCommands(command).map((action, actionIndex) =>
+        describeCommands(command, operation.shell).map((action, actionIndex) =>
           Object.assign(action, {
             id:
               index || actionIndex
@@ -257,7 +258,11 @@ export class ActivityAdapter {
               status === "failed",
               images,
             ),
-            renderers: heading(status === "failed" ? "Error" : "Image"),
+            renderers: heading(
+              status === "failed"
+                ? activityConfig.body.error
+                : activityConfig.body.image,
+            ),
           },
         },
       ]
@@ -272,7 +277,10 @@ export class ActivityAdapter {
         body: {
           ...body,
           renderers: heading(
-            operation.path ?? (operation.kind === "image" ? "Image" : "Edit"),
+            operation.path ??
+              (operation.kind === "image"
+                ? activityConfig.body.image
+                : activityConfig.body.edit),
           ),
         },
       },

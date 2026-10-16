@@ -1,44 +1,47 @@
 import { stripTerminalSequences } from "@earendil-works/pi-tui"
+import { activityConfig } from "./config.ts"
 import type { ActivityItem } from "./tool-adapters/types.ts"
 
 const clean = (text: string) =>
   stripTerminalSequences(text).replace(/\s+/g, " ").trim()
 
 export function itemSummary(item: ActivityItem, expanded: boolean) {
+  const words = activityConfig.labels
   const running = item.status === "running"
+  const tense = running ? "running" : "completed"
   const target = item.target ? ` ${clean(item.target)}` : ""
   const outcome =
     item.status === "failed"
-      ? " (failed)"
+      ? words.failed
       : item.status === "unknown"
-        ? " (status unknown)"
+        ? words.unknown
         : ""
   if (item.kind === "command")
-    return `${running ? "Running" : "Ran"} ${expanded ? "command" : clean(item.command ?? "command")}${outcome}`
+    return `${words.command[tense]} ${expanded ? words.command.expanded : clean(item.command ?? words.command.expanded)}${outcome}`
   if (item.kind === "edit") {
     if (item.status === "unattempted")
-      return `Not edited${target} (not attempted)`
+      return `${words.edit.unattempted}${target}${words.unattempted}`
     const verb = running
-      ? "Editing"
+      ? words.edit.running
       : item.status === "failed"
-        ? "Edit failed:"
+        ? words.edit.failed
         : item.status === "unknown"
-          ? "Edit"
-          : "Edited"
+          ? words.edit.unknown
+          : words.edit.completed
     return `${verb}${target}${item.changes ? ` +${item.changes.added} -${item.changes.removed}` : ""}`
   }
   if (item.kind === "loaded")
-    return `${running ? "Reading" : "Read"}${target} skill${outcome}`
+    return `${words.read[tense]}${target} ${words.skill}${outcome}`
   if (item.kind === "read") {
     if (item.action === "list")
-      return `${running ? "Listing" : "Listed"} files${target ? ` in${target}` : ""}${outcome}`
+      return `${words.list[tense]} ${words.files}${target ? ` ${words.in}${target}` : ""}${outcome}`
     if (item.action === "search")
-      return `${running ? "Searching" : "Searched"}${target ? ` for${target}` : " files"}${outcome}`
-    return `${running ? "Reading" : "Read"}${target}${outcome}`
+      return `${words.search[tense]}${target ? ` ${words.for}${target}` : ` ${words.files}`}${item.searchPath ? ` ${words.in} ${clean(item.searchPath)}` : ""}${outcome}`
+    return `${words.read[tense]}${target}${outcome}`
   }
   if (item.kind === "image")
-    return `${running ? "Viewing" : "Viewed"} image${target}${outcome}`
+    return `${words.image[tense]} ${words.imageNoun}${target}${outcome}`
   if (item.kind === "output")
-    return item.status === "failed" ? "Error" : `Output${outcome}`
-  return `${running ? "Calling" : "Called"}${target}${outcome}`
+    return item.status === "failed" ? words.error : `${words.output}${outcome}`
+  return `${words.tool[tense]}${target}${outcome}`
 }

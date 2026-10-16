@@ -1,4 +1,8 @@
 packages:
   - packages/*
 
+allowBuilds:
+  tree-sitter: true
+  tree-sitter-bash: true
+
 saveExact: true

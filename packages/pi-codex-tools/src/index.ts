@@ -38,18 +38,7 @@ function description(names: ReadonlySet<string>): string {
       .filter(
         (line) => !line.startsWith("- `image(") || names.has("view_image"),
       )
-      .map((line) =>
-        line.startsWith("- `notify(")
-          ? "- `notify(value: string | number | boolean | undefined | null)`: sends a public session message without starting a turn. While the host is streaming, delivery waits for its safe turn boundary. Values are stringified like `text(...)`."
-          : line,
-      )
       .join("\n"),
-    "Cells survive ordinary prompts and are cleared by session replacement or reload. Cancelling a later wait preserves the cell; explicit termination cancels its pending tool operations. A returned command process handle remains independent. Continuing activity uses public session records; native hook identifiers and attribution after a yield remain host-defined.",
-    ...(names.has("view_image")
-      ? [
-          "Image emission uses Pi's native processing. Requested image detail is not preserved by this host's provider conversion.",
-        ]
-      : []),
     ...sections.filter((section) =>
       names.has(section.match(/^### `([^`]+)`/)![1]!),
     ),

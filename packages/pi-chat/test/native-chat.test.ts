@@ -642,14 +642,38 @@ test("commentary between model iterations separates render groups in source orde
     done,
     end,
   )
+  host.queueResponse(
+    { pause: true },
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", content: "Finished" },
+            finish_reason: "stop",
+          },
+        ],
+      },
+    },
+    done,
+    end,
+  )
   await host.type("Read with commentary")
   await host.key("\r")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /Read files[\s\S]*Between calls[\s\S]*Called a tool/)
+  assert.match(screen(), /Read files[\s\S]*Between calls/)
+  assert.equal(screen().match(/> /g)?.length, 1)
+  assert.doesNotMatch(
+    screen(),
+    /Called a tool|Reading |Read one\.txt|Read two\.txt/,
+  )
+  host.resumeResponse()
+  await t.waitFor(() => assert.equal(host.requests.length, 3))
+  await host.frame()
+  assert.match(screen(), /Read files[\s\S]*Between calls[\s\S]*Read files/)
   assert.equal(screen().match(/> /g)?.length, 2)
-  assert.doesNotMatch(screen(), /Reading |Read one\.txt|Read two\.txt/)
   host.resumeResponse()
   await host.settled()
 

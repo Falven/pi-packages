@@ -26,6 +26,7 @@ export type ActivityItem = {
   action?: "read" | "search" | "list"
   target?: string | undefined
   targetKey?: string
+  searchPath?: string | undefined
   command?: string
   changes?: { added: number; removed: number }
   status: ActivityStatus

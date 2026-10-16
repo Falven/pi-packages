@@ -82,6 +82,11 @@ test("explicit empty activity is valid while missing, unsupported and malformed 
       operations: [{ ...update.operations[0], commands: undefined }],
     },
     { ...update, operations: [{ ...update.operations[0], revision: 3 }] },
+    ...[[], [""], ["bash", 1]].map((shell) =>
+      Object.assign({}, update, {
+        operations: [{ ...update.operations[0], shell }],
+      }),
+    ),
   ])
     assert.equal(readActivityUpdate(invalid), undefined)
   assert.equal(readActivityUpdate(update), update)

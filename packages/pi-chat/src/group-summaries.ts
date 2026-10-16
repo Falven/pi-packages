@@ -1,24 +1,5 @@
 import type { ActivityItem } from "./tool-adapters/types.ts"
-
-const summaries = {
-  loaded: ["loaded a tool", "loaded tools", "loading a tool", "loading tools"],
-  tool: ["called a tool", "called tools", "calling a tool", "calling tools"],
-  edit: ["edited a file", "edited files", "editing a file", "editing files"],
-  read: ["read files", "read files", "reading files", "reading files"],
-  command: [
-    "ran a command",
-    "ran commands",
-    "running a command",
-    "running commands",
-  ],
-  image: [
-    "viewed an image",
-    "viewed images",
-    "viewing an image",
-    "viewing images",
-  ],
-  output: ["error", "errors", "error", "errors"],
-} as const
+import { activityConfig } from "./config.ts"
 
 type SummaryGroup = { items: readonly { activityItem?: ActivityItem }[] }
 
@@ -57,16 +38,22 @@ export class GroupSummaries {
       count.running ||= item.status === "running"
       counts.set(item.kind, count)
     }
-    const segments = Object.entries(summaries).flatMap(([kind, words]) => {
-      const count = counts.get(kind as ActivityItem["kind"])
-      return count
-        ? [words[(count.running ? 2 : 0) + (count.identities.size > 1 ? 1 : 0)]]
-        : []
-    })
+    const segments = Object.entries(activityConfig.groups).flatMap(
+      ([kind, words]) => {
+        const count = counts.get(kind as ActivityItem["kind"])
+        return count
+          ? [
+              words[count.running ? "running" : "completed"][
+                count.identities.size > 1 ? "plural" : "singular"
+              ],
+            ]
+          : []
+      },
+    )
     const summary = segments.join(", ")
     const text = summary
       ? summary[0]!.toUpperCase() + summary.slice(1)
-      : "Worked"
+      : activityConfig.emptyGroup
     this.cache.set(group, {
       items: group.items.map((row) => row.activityItem),
       text,

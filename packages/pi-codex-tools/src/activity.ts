@@ -31,7 +31,7 @@ export type ActivityOperation = {
   output?: string
   outputOmitted?: boolean
 } & (
-  | { kind: "command"; commands: string[] }
+  | { kind: "command"; commands: string[]; shell?: string[] }
   | { kind: "edit"; path?: string; files?: ActivityFile[] }
   | { kind: "image"; path?: string }
   | { kind: "tool"; name: string }
@@ -141,14 +141,20 @@ export function operationActivity(
   if (operation.toolSource === "builtin" || operation.toolPath !== sourcePath)
     return tool
   switch (operation.name) {
-    case "exec_command":
+    case "exec_command": {
       if (operation.command === undefined)
         return operation.status === "failed" ? tool : undefined
+      const shell = operation.effectiveArgs?.["shell"]
+      const login = operation.effectiveArgs?.["login"]
       return {
         ...common,
         kind: "command",
         commands: [operation.command, ...(operation.submitted ?? [])],
+        ...(typeof shell === "string" && typeof login === "boolean"
+          ? { shell: [shell, login ? "-lc" : "-c"] }
+          : {}),
       }
+    }
     case "write_stdin": {
       const output = collectionFailure(operation)
       return output ? { ...tool, output } : undefined

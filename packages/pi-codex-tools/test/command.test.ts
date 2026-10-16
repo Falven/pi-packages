@@ -67,43 +67,7 @@ test("the outgoing request declares the frozen raw execution contract", async (t
   assert(namespace)
   assert.equal(namespace.type, "namespace")
   assert.equal(namespace.tools?.length, 2)
-  const declared = namespace.tools[0]!
-  const { description: frozen, ...shape } = baseline.namespace.tools[0]
-  assert.deepEqual(
-    { ...declared, description: undefined },
-    { ...shape, description: undefined },
-  )
-  for (const name of ["exec_command", "apply_patch"])
-    assert(
-      declared.description.includes(
-        frozen.split(`### \`${name}\`\n`)[1].split("\n### `")[0],
-      ),
-    )
-  for (const helper of [
-    "store",
-    "load",
-    "notify",
-    "setTimeout",
-    "clearTimeout",
-    "yield_control",
-  ])
-    assert(declared.description.includes(`\`${helper}(`))
-  assert.deepEqual(namespace.tools[1], baseline.namespace.tools[1])
-  assert(
-    declared.description.includes(
-      frozen.split("### `view_image`\n")[1].split("\n### `")[0],
-    ),
-  )
-  assert.match(declared.description, /`image\(/)
-  assert(
-    declared.description.includes(
-      frozen.split("### `write_stdin`\n")[1].split("\n### `")[0],
-    ),
-  )
-  assert.match(
-    declared.description,
-    /Cancelling a later wait preserves the cell/,
-  )
+  assert.deepEqual(namespace.tools, baseline.namespace.tools)
   assert.equal(
     request.tools.some((tool) =>
       [

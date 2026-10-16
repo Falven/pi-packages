@@ -29,7 +29,7 @@ export type ActivityOperation = {
   output?: string
   outputOmitted?: boolean
 } & (
-  | { kind: "command"; commands: string[] }
+  | { kind: "command"; commands: string[]; shell?: string[] }
   | { kind: "edit"; path?: string; files?: ActivityFile[] }
   | { kind: "image"; path?: string }
   | { kind: "tool"; name: string }
@@ -138,7 +138,11 @@ function operation(value: unknown): value is ActivityOperation {
       return (
         Array.isArray(value["commands"]) &&
         value["commands"].length > 0 &&
-        value["commands"].every((command) => typeof command === "string")
+        value["commands"].every((command) => typeof command === "string") &&
+        (value["shell"] === undefined ||
+          (Array.isArray(value["shell"]) &&
+            id(value["shell"][0]) &&
+            value["shell"].every((word) => typeof word === "string")))
       )
     case "edit": {
       const files = value["files"]

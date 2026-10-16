@@ -16,7 +16,8 @@ export class ActivityAdapters {
     for (const item of items) {
       if (item.kind !== "read" || item.action !== "read" || !item.target)
         continue
-      const targetKey = item.targetKey ?? resolve(item.body.cwd, item.target)
+      const targetKey = resolve(item.body.cwd, item.targetKey ?? item.target)
+      item.targetKey = targetKey
       const skill = facts.skills.find(
         (candidate) => candidate.path === targetKey,
       )

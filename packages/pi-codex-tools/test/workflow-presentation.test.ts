@@ -60,6 +60,78 @@ test("the companion-only control loads without extension errors", async (t) => {
   assert.match(await host.frame(), /Received\./)
 })
 
+test("streaming exec arguments stay quiet until the command starts", async (t) => {
+  let received = false
+  let argumentsReceived = false
+  let commandStarted = false
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension, ...companions],
+    providerApi,
+    providerProtocol: "responses",
+    rows: 80,
+    extensionFactories: [
+      (pi) => {
+        pi.on("message_update", ({ assistantMessageEvent }) => {
+          if (!("partial" in assistantMessageEvent)) return
+          for (const part of assistantMessageEvent.partial.content) {
+            if (part.type !== "toolCall") continue
+            received = true
+            argumentsReceived ||= JSON.stringify(part.arguments).includes(
+              "setTimeout",
+            )
+          }
+        })
+        pi.on("tool_execution_start", (event) => {
+          commandStarted ||= event.toolName === "exec_command"
+        })
+      },
+    ],
+  })
+  const command = "node -e 'setTimeout(() => {}, 700)'"
+  const steps = call(
+    `text(await tools.exec_command({cmd:${JSON.stringify(command)},login:false}));`,
+    "pending",
+  )
+  host.queueResponse(
+    steps[0]!,
+    { pause: true },
+    steps[1]!,
+    { pause: true },
+    ...steps.slice(2),
+  )
+  const work = host.session.prompt("Run the command")
+  await t.waitFor(() => assert(received))
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.doesNotMatch(screen(), /Called|Calling|status unknown/)
+  host.resumeResponse()
+  await t.waitFor(() => assert(argumentsReceived))
+  await host.frame()
+  assert.equal(commandStarted, false)
+  assert.doesNotMatch(screen(), /Called|Calling|status unknown/)
+  host.resumeResponse()
+  await t.waitFor(() => assert(commandStarted))
+  await host.frame()
+  assert.match(screen(), /Running (?:node|command)/)
+  assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
+  await work
+  await openWork(host)
+  await host.frame()
+  assert.match(screen(), /Ran command/)
+  assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
+  const commandFacts = host.session.messages
+    .flatMap((message) =>
+      message.role === "toolResult"
+        ? (readActivity(message)?.update.operations ?? [])
+        : [],
+    )
+    .find((operation) => operation.kind === "command")
+  assert(commandFacts?.kind === "command")
+  assert.equal(typeof commandFacts.shell?.[0], "string")
+  assert.deepEqual(commandFacts.shell?.slice(1), ["-c"])
+})
+
 test("forwarded and combined results stay out of activity while mixed source remains searchable", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension, ...companions],
@@ -228,10 +300,10 @@ for (const order of ["first", "last"] as const) {
       join(host.directory, "unregistered", "SKILL.md"),
       "---\nname: domain-modeling\n---\nUnregistered skill-shaped text.\n",
     )
-    const command = `printf '\\n--- domain-modeling skill ---\\n'; cat '${skill}' notes.txt; printf separate-action`
+    const command = `printf '\\n--- domain-modeling skill ---\\n'; cat '${skill}'; cat notes.txt`
     host.queueResponse(
       ...call(
-        `text((await tools.exec_command({cmd:${JSON.stringify(command)},login:false})).output); await tools.exec_command({cmd:"cat unregistered/SKILL.md",login:false}); await tools.exec_command({cmd:${JSON.stringify(`true && cat '${skill}'`)},login:false});`,
+        `text((await tools.exec_command({cmd:${JSON.stringify(command)},login:false})).output); await tools.exec_command({cmd:"printf separate-action",login:false}); await tools.exec_command({cmd:"cat unregistered/SKILL.md",login:false}); await tools.exec_command({cmd:${JSON.stringify(`true && cat '${skill}'`)},login:false});`,
         "skill-read",
       ),
     )
@@ -245,7 +317,7 @@ for (const order of ["first", "last"] as const) {
       .screenLines()
       .findIndex((line) =>
         stripVTControlCharacters(line).includes(
-          "> Loaded a tool, read files, ran commands",
+          "> Loaded a tool, read files, ran a command",
         ),
       )
     assert(groupRow >= 0)
@@ -255,9 +327,9 @@ for (const order of ["first", "last"] as const) {
     const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
     assert.match(screen(), /> Read domain-modeling skill/)
     assert.match(screen(), /> Read notes\.txt/)
-    assert.match(screen(), /> Read unregistered\/SKILL\.md/)
+    assert.match(screen(), /> Read SKILL\.md/)
     assert.match(screen(), /> Ran printf separate-action/)
-    assert.match(screen(), /> Ran true && cat/)
+    assert.doesNotMatch(screen(), /> Ran true && cat/)
     assert.doesNotMatch(screen(), /(?:>|▼) Output|> Ran printf '\\n---/)
     await host.key("\x0f")
     await host.frame()
@@ -268,7 +340,7 @@ for (const order of ["first", "last"] as const) {
     await openWork(host)
     assert.equal(
       (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
-      1,
+      2,
     )
     const fork = await host.runtime.fork(
       host.session.sessionManager.getLeafId()!,
@@ -278,7 +350,7 @@ for (const order of ["first", "last"] as const) {
     await openWork(host)
     assert.equal(
       (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
-      1,
+      2,
     )
   })
 }
