@@ -4,17 +4,29 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** Core 04: patch-state correction.
+**Blocked by:** Independent standards and spec review.
 
-**Status:** ready-for-agent — patch-state correction, blocked by Core 04; earlier resolved evidence retained below
+**Status:** verified-awaiting-review — patch-state checks pass; independent review remains open. Earlier resolved evidence remains below.
 
 ## Patch-state correction — 2026-10-15
 
-- [ ] Verify same-patch alias updates, move-then-update, later read/match failure, actual before/after facts, and deletion when an earlier operation leaves a dangling alias through the existing real-host seam.
-- [ ] Run the affected patch/presentation checks, complete core-package checks, package typechecking, targeted lint and formatting, and whitespace validation. Record exact counts, revisions, runtime, and any failure.
-- [ ] Confirm initial invalid patches still mutate nothing and existing queue, cancellation, hook/redaction, bounded metadata, public result shapes, and frozen contract checks pass.
+- [x] Verify same-patch alias updates, move-then-update, later read/match failure, actual before/after facts, and deletion when an earlier operation leaves a dangling alias through the existing real-host seam.
+- [x] Run the affected patch/presentation checks, complete core-package checks, package typechecking, targeted lint and formatting, and whitespace validation. Record exact counts, revisions, runtime, and any failure.
+- [x] Confirm initial invalid patches still mutate nothing and existing queue, cancellation, hook/redaction, bounded metadata, public result shapes, and frozen contract checks pass.
 - [ ] Complete independent standards and spec reviews against integration base `188aa0c44ef311704af8e9ac92711d361cb1a50d`; resolve actionable findings before closing this delta.
-- [ ] Keep earlier evidence attached to its original revision. For this deterministic file-state repair, broader live-model, performance, physical-terminal, and cross-platform trials are not required and must remain explicitly unperformed; add no new harness or comparison report.
+- [x] Keep earlier evidence attached to its original revision. For this deterministic file-state repair, broader live-model, performance, physical-terminal, and cross-platform trials are not required and must remain explicitly unperformed; add no new harness or comparison report.
+
+**Verification evidence (2026-10-15, integration revision `672c4eef81a8870729b8dacee4a40e5d5af0cf26`, Node 26.8.1, installed Pi host 1.0.2):** `node --test packages/pi-codex-tools/test/*.test.ts` passed 213/213 tests, with zero failures, cancellations, skips, or todos, in 83.216 seconds. The complete package run includes the six new real-host patch regressions plus existing patch presentation, hook, frozen declaration, command, collection, lifecycle, and mixed-workflow checks. Its log is `/tmp/patch-file-state-07-package-tests.log`. [Core 04](04-apply-file-patches.md) retains the red/green and 68/68 focused-check evidence at `1c12b6a`; those earlier results are not relabeled as this revision.
+
+The new cases verify final bytes and model results for same-patch symlink aliases and move-then-update, completed/failed/unattempted records after later match or read failure, delete facts from current bytes, and best-effort unlink of a newly dangling alias without invented counts. Successful patches still return `{}`. Existing cases in the full run verify initial no-mutation validation, queued mutation and cancellation, public hooks and redaction, and bounded file facts. These checks passed:
+
+- `./node_modules/.bin/tsc --noEmit -p tsconfig.json` and `./node_modules/.bin/tsc --noEmit -p packages/pi-codex-tools/tsconfig.json`.
+- `./node_modules/.bin/oxlint packages/pi-codex-tools/src/patch.ts packages/pi-codex-tools/test/patch.test.ts`.
+- `./node_modules/.bin/oxfmt --check packages/pi-codex-tools/src/patch.ts packages/pi-codex-tools/test/patch.test.ts .scratch/core-tools/issues/07-verify-contract-and-matched-trials.md` and `git diff --check`.
+
+`git diff --exit-code 188aa0c44ef311704af8e9ac92711d361cb1a50d HEAD -- packages/pi-codex-tools/test/fixtures packages/pi-codex-tools/src/contract.json packages/pi-codex-tools/src/index.ts packages/pi-codex-tools/package.json pnpm-lock.yaml` passed. The observed fixtures, frozen contract, public entry point, manifest, and lockfile are unchanged; `src/patch.ts` is the only changed runtime source.
+
+No broader live-model, performance, physical-terminal, or cross-platform trial was performed for this delta. Earlier matched trials and measurements retain their recorded revisions and limits. The current reference runtime fails to delete a newly dangling alias; Pi's specified best-effort unlink behavior remains different. The reference runtime's exact source revision is unverified. Independent standards and spec reviews of the combined delta remain to be done before closure.
 
 **Verification boundary:** The implementation request authorizes focused regression cases in existing test files. It preserves the already approved real-host/model-loop seam and adds no new user-visible API or chat behavior. Application-time failures remain nontransactional: completed writes survive. Public queues coordinate participating operations in this process; they do not prevent external writers from changing a file between reads and writes.
 
