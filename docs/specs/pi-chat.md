@@ -2,7 +2,7 @@
 
 **Current revision:** Working labels from current operations and streamed reasoning, following the installed desktop app under the [activity specification](tool-activity.md).
 
-**Status:** working-label implementation complete; verification in progress from `bf30b7a`. Earlier command recognition, configuration, pending calls, and input/collection behavior are verified at `fbc8030`. Activity 09 retains that evidence and queued worktree cleanup. Earlier physical-terminal acceptance retains its recorded scope.
+**Status:** working-label delta implemented and verified at `4e27987`, from `bf30b7a`. Activity 12 records 141/141 chat/combined-workflow checks on each supported host, the final activity rechecks, source comparisons, and limits. Earlier command recognition, configuration, pending calls, and input/collection behavior are verified at `fbc8030`; Activity 09 retains that evidence and queued worktree cleanup. Earlier physical-terminal acceptance retains its recorded scope.
 
 **Tracker:** [Activity 11](../../.scratch/tool-activity/issues/11-working-labels.md) → [Activity 12](../../.scratch/tool-activity/issues/12-verify-working-labels.md). Earlier tickets retain their recorded scope and evidence.
 

@@ -1,5 +1,7 @@
 # Working label parity
 
+**Status:** implemented and verified at `4e27987` on `codex/generic-tool-activity`. Ticket 12 records 141/141 chat/combined-workflow checks on each supported Pi host, subsequent activity rechecks, direct reviews, and limits.
+
 The working label is the text in Pi's native progress indicator. The previous implementation updated it only for complete standalone bold thought headings and cleared it at thinking/message completion. It never consumed tool activities. Pi consequently displayed its default `Working` during most commands and between reasoning updates.
 
 The user authorized exact selection behavior from the installed Codex desktop app, the existing generic activity interface, and the established real-Pi verification seam. No new package, provider-name rules, or additional model guidance is permitted. This delta starts at `bf30b7a` on `codex/generic-tool-activity`.

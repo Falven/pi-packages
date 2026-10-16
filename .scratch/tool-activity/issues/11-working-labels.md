@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately). Existing command recognition, generic activity facts, and native-host integration are complete.
 
-**Status:** implemented; integration verification in progress under Ticket 12.
+**Status:** implemented and verified at `4e27987` on `codex/generic-tool-activity`. Ticket 12 records the checks and limits.
 
 - [x] Plain, partial, and formatted reasoning produce the reference's latest usable line and remain available across thinking/message completion.
 - [x] Native and independently declared operations update the same indicator with reference labels, including registered skills, source ordering, completion, and late updates after the parent call returns.
