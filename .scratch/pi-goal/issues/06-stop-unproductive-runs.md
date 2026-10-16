@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Account for usage and budgets.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** native session storage delta complete. Earlier unresolved feature gates remain open.
 
 **Baseline status:** partial — supported public paths and captures verified; unavailable activity, execution, and provider classifications remain open.
 
@@ -12,9 +12,25 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Adapt existing progress and failure-guard fixtures to native session storage, preserving supported empty-turn thresholds, resets, retry exhaustion, structured usage-limit precedence, ownership, and final accounting.
-- [ ] Native custom state entries must not become model messages, human activity, or automatic-turn identity. Existing guard counters remain runtime-only and storage failures cannot launch another goal turn.
-- [ ] Keep previously unavailable activity, execution, provider, and conditional-mode classifications visibly open. Do not broaden the migration into new runtime safeguards or private host integration.
+- [x] Adapt existing progress and failure-guard fixtures to native session storage, preserving supported empty-turn thresholds, resets, retry exhaustion, structured usage-limit precedence, ownership, and final accounting.
+- [x] Native custom state entries must not become model messages, human activity, or automatic-turn identity. Existing guard counters remain runtime-only and storage failures cannot launch another goal turn.
+- [x] Keep previously unavailable activity, execution, provider, and conditional-mode classifications visibly open. Do not broaden the migration into new runtime safeguards or private host integration.
+
+## Native storage verification
+
+The released Pi 1.1.0 runtime and Node 24.13.1 passed all 38 guard cases. The migration baseline passed 36 of 37; the remaining SQL fault fixture failed with `no such table: main.goals`. Replacing that fixture required no production changes.
+
+The native failure case holds the third empty response while an objective edit reaches the actual session-file append boundary, temporarily occupied by a directory. After the file is restored, the current attempt can settle, but the failed manager accepts no further goal append or automatic request, including after a resume attempt. A fresh saved-session reopen restores the original objective and 24 recorded tokens; the 17 tokens reported after the failed edit remain unsaved. Its new guard counters require three fresh automatic empty turns before blocking. The healthy-edit case retains its existing reset behavior.
+
+A separate real-session case appends complete state snapshots through `pi.appendEntry` during one ordinary user turn and three automatic empty turns. The fourth attempt blocks, so those entries neither create automatic identity nor reset the empty sequence. Only the three admitted continuations appear as hidden messages. Captured provider requests contain neither the state-entry type nor the private generation value.
+
+The existing cases retain retry recovery and exhaustion, completed-item activity, quota correlation and precedence, current accounting ownership, and budget accounting. Unavailable execution provenance, structured questions, opaque reasoning, provider error categories, and conditional host modes remain open below.
+
+Logs are `/tmp/pi-goal-native-06.9P1CfX/baseline.tap`, `edit-green.tap`, `state-entry-green.tap`, and `guards-green.tap` in that directory. Full workspace type checking, scoped lint and formatting, and `git diff --check` passed. The released-runtime command was:
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-concurrency=1 --test-timeout=10000 packages/pi-goal/test/guards.test.ts
+```
 
 ## Historical acceptance
 

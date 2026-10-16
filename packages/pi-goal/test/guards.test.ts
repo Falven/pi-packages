@@ -1,7 +1,6 @@
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
-import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
+import { mkdirSync, renameSync, rmSync } from "node:fs"
 import test from "node:test"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
@@ -121,6 +120,65 @@ test("the third admitted empty continuation blocks the goal", async (t) => {
     host.session.messages.filter((message) => message.role === "custom").length,
     3,
   )
+})
+
+test("native state entries neither reset empty turns nor make a user turn automatic", async (t) => {
+  let settled = 0
+  let appended = 0
+  let generation: string | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerProtocol: "responses",
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_before_settle", (_event, ctx) => {
+          if (settled >= 4) return
+          const stored = ctx.sessionManager
+            .getEntries()
+            .findLast(
+              (entry) =>
+                entry.type === "custom" && entry.customType === "pi-goal.state",
+            )
+          assert(stored?.type === "custom")
+          generation = (stored.data as { generation: string }).generation
+          pi.appendEntry("pi-goal.state", stored.data)
+          appended++
+        })
+        pi.on("agent_settled", () => {
+          settled++
+          if (settled === 4)
+            pi.sendUserMessage("Inspect after the empty attempts.")
+        })
+      },
+    ],
+  })
+  for (let i = 0; i < 4; i++) host.queueResponse(...response(text("")))
+  host.queueResponse(...response(call("get_goal", {}, "inspect")))
+  host.queueResponse(...response(text("Inspection complete.")))
+  await host.session.prompt("/goal create Finish the current objective")
+  await host.session.prompt("Work on the goal once.")
+  await t.waitFor(() => assert(settled >= 5))
+  assert.equal(result(host, "inspect").goal.status, "blocked")
+  assert.equal(appended, 4)
+  assert.equal(host.requests.length, 6)
+  const contexts = host.session.messages.filter(
+    (message) => message.role === "custom",
+  )
+  assert.equal(contexts.length, 3)
+  assert(
+    contexts.every((message) => message.customType === "goal.internal_context"),
+  )
+  const firstRequest = host.requestBodies[0]
+  assert(firstRequest)
+  assert.match(firstRequest, /Work on the goal once\./)
+  assert.doesNotMatch(firstRequest, /<goal_internal_context/)
+  assert(generation)
+  const payloads = host.requestBodies.join("\n")
+  assert.equal(payloads.includes(generation), false)
+  assert.doesNotMatch(payloads, /pi-goal\.state/)
 })
 
 test("a completed reasoning summary resets the empty continuation sequence", async (t) => {
@@ -269,56 +327,121 @@ test("a structured quota stops the goal when it matches the terminal response", 
   assert.equal(host.requests.length, 3)
 })
 
-for (const rejected of [false, true]) {
-  test(`an objective edit clears the automatic marker ${rejected ? "even when persistence fails" : "before the current turn finishes"}`, async (t) => {
-    let settled = 0
-    const host = await openNativeHost(t, {
-      extensionPaths: [extension],
-      providerProtocol: "responses",
-      noTools: "builtin",
-      persistSession: true,
-      holdResponses: true,
-      extensionFactories: [
-        (pi) => {
-          pi.on("agent_settled", () => {
-            settled++
-            if (settled === 6) pi.sendUserMessage("Inspect the edited goal.")
-          })
-        },
-      ],
-    })
-    host.queueResponse(...response(text("")))
-    host.queueResponse(...response(text("")))
-    host.queueResponse({ pause: true }, ...response(text("")))
-    host.queueResponse(...response(text("")))
-    host.queueResponse(...response(text("")))
-    host.queueResponse(...response(text("")))
-    host.queueResponse(...response(call("get_goal", {}, "inspect")))
-    host.queueResponse(...response(text("Inspection complete.")))
-    await host.session.prompt("/goal create Finish the initial objective")
-    await t.waitFor(() => assert.equal(host.requests.length, 3))
-    const database = rejected
-      ? new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-      : undefined
-    try {
-      database?.exec(
-        "CREATE TRIGGER reject_edit BEFORE UPDATE OF objective ON goals BEGIN SELECT RAISE(FAIL, 'Controlled persistence failure'); END",
-      )
-      await host.session.prompt("/goal edit Finish the edited objective")
-      database?.exec("DROP TRIGGER reject_edit")
-    } finally {
-      database?.close()
-    }
-    host.resumeResponse()
-    await t.waitFor(() => assert(settled >= 7))
-    assert.equal(result(host, "inspect").goal.status, "blocked")
-    assert.equal(
-      result(host, "inspect").goal.objective,
-      rejected ? "Finish the initial objective" : "Finish the edited objective",
-    )
-    assert.equal(host.requests.length, 8)
+test("an objective edit clears the automatic marker before the current turn finishes", async (t) => {
+  let settled = 0
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerProtocol: "responses",
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_settled", () => {
+          settled++
+          if (settled === 6) pi.sendUserMessage("Inspect the edited goal.")
+        })
+      },
+    ],
   })
-}
+  host.queueResponse(...response(text("")))
+  host.queueResponse(...response(text("")))
+  host.queueResponse({ pause: true }, ...response(text("")))
+  host.queueResponse(...response(text("")))
+  host.queueResponse(...response(text("")))
+  host.queueResponse(...response(text("")))
+  host.queueResponse(...response(call("get_goal", {}, "inspect")))
+  host.queueResponse(...response(text("Inspection complete.")))
+  await host.session.prompt("/goal create Finish the initial objective")
+  await t.waitFor(() => assert.equal(host.requests.length, 3))
+  await host.session.prompt("/goal edit Finish the edited objective")
+  host.resumeResponse()
+  await t.waitFor(() => assert(settled >= 7))
+  assert.equal(result(host, "inspect").goal.status, "blocked")
+  assert.equal(
+    result(host, "inspect").goal.objective,
+    "Finish the edited objective",
+  )
+  assert.equal(host.requests.length, 8)
+})
+
+test("a failed native edit stops automatic work until reopening with fresh guard counters", async (t) => {
+  let settled = 0
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerProtocol: "responses",
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_settled", () => {
+          settled++
+        })
+      },
+    ],
+  })
+  host.queueResponse(...chargedResponse(11, text("")))
+  host.queueResponse(...chargedResponse(13, text("")))
+  host.queueResponse({ pause: true }, ...chargedResponse(17, text("")))
+  await host.session.prompt("/goal create Finish the saved objective")
+  await t.waitFor(() => assert.equal(host.requests.length, 3))
+  const manager = host.session.sessionManager
+  const sessionFile = manager.getSessionFile()
+  assert(sessionFile)
+  renameSync(sessionFile, `${sessionFile}.saved`)
+  mkdirSync(sessionFile)
+  try {
+    await host.session.prompt("/goal edit Finish the unsaved objective")
+  } finally {
+    rmSync(sessionFile, { recursive: true })
+    renameSync(`${sessionFile}.saved`, sessionFile)
+  }
+  assert.match(await host.frame(), /Reopen the saved\s+session/)
+  const entriesAfterFailure = manager
+    .getEntries()
+    .filter((entry) => entry.type === "custom")
+  host.resumeResponse()
+  await t.waitFor(() => assert.equal(settled, 3))
+  await host.session.prompt("/goal resume")
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /Goal\s+storage is unavailable/)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(host.requests.length, 3)
+  assert.deepEqual(
+    manager.getEntries().filter((entry) => entry.type === "custom"),
+    entriesAfterFailure,
+  )
+  await host.close()
+
+  let recovered = 0
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    providerProtocol: "responses",
+    noTools: "builtin",
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_settled", () => {
+          recovered++
+          if (recovered === 3) pi.sendUserMessage("Inspect the recovered goal.")
+        })
+      },
+    ],
+  })
+  assert.notEqual(reopened.session.sessionManager, manager)
+  for (let i = 0; i < 3; i++) reopened.queueResponse(...response(text("")))
+  reopened.queueResponse(...response(call("get_goal", {}, "inspect")))
+  reopened.queueResponse(...response(text("Inspection complete.")))
+  await t.waitFor(() => assert(recovered >= 4))
+  const goal = result(reopened, "inspect").goal
+  assert.equal(goal.status, "blocked")
+  assert.equal(goal.objective, "Finish the saved objective")
+  assert.equal(goal.tokensUsed, 24)
+  assert.equal(reopened.requests.length, 5)
+})
 
 for (const scenario of [
   { name: "a missing final", items: [], resets: true },
