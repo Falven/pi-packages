@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
-  activityDetails,
   readActivity,
   readActivityUpdate,
   type ActivityUpdate,
-} from "../src/index.ts"
+} from "../src/tool-adapters/activity-contract.ts"
+import { activityDetails } from "../../../fixtures/activity.ts"
 
 const update: ActivityUpdate = {
   version: 1,

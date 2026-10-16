@@ -6,7 +6,7 @@ import {
   readActivityUpdate,
   type ActivityOperation,
   type ActivityUpdate,
-} from "pi-activity"
+} from "./activity-contract.ts"
 import { describeCommand } from "./command.ts"
 import {
   argumentsOf,
@@ -121,23 +121,48 @@ export class ActivityAdapter {
       parts.push(part)
       images.set(owner, parts)
     }
-    const items = [...operations.values()]
+    let items = [...operations.values()]
       .toSorted((a, b) => a.operation.order - b.operation.order)
       .flatMap(({ operation, live }) =>
         this.items(facts, operation, live, images.get(operation.id) ?? []),
       )
+    const failed = items.findLast(
+      (item) => item.status === "failed" && item.kind !== "output",
+    )
+    if (failed) {
+      for (const item of items) {
+        if (item.kind !== "output") continue
+        failed.body.result = {
+          isError: true,
+          content: [
+            ...(failed.body.result?.content ?? []),
+            { type: "text", text: "Call error:" },
+            ...(item.body.result?.content ?? []),
+            ...(item.body.availability === "omitted"
+              ? [
+                  {
+                    type: "text" as const,
+                    text: "[Output omitted from history]",
+                  },
+                ]
+              : []),
+          ],
+        }
+      }
+      items = items.filter((item) => item.kind !== "output")
+    }
     const unowned = images.get(null)
     if (unowned?.length)
       items.push({
         id: `${sourceId}:images`,
-        kind: "output",
+        kind: "image",
         status: "completed",
         body: {
-          name: "output",
+          name: "image",
           args: {},
           cwd: facts.cwd,
           result: result(undefined, false, unowned),
-          renderers: heading("Output"),
+          renderers: heading("Image"),
         },
       })
     return items
@@ -212,16 +237,22 @@ export class ActivityAdapter {
         },
       ]
     if (operation.kind === "output") {
+      if (status !== "failed" && !images.length) return []
       if (!operation.output && !images.length && !operation.outputOmitted)
         return []
       return [
         {
           id: operation.id,
-          kind: "output",
+          kind: status === "failed" ? "output" : "image",
           status,
           body: {
             ...body,
-            renderers: heading(status === "failed" ? "Error" : "Output"),
+            result: result(
+              status === "failed" ? operation.output : undefined,
+              status === "failed",
+              images,
+            ),
+            renderers: heading(status === "failed" ? "Error" : "Image"),
           },
         },
       ]

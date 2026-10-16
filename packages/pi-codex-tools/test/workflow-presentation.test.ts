@@ -11,7 +11,7 @@ import {
   readActivity,
   readActivityUpdate,
   type ActivityUpdate,
-} from "pi-activity"
+} from "../../pi-chat/src/tool-adapters/activity-contract.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
@@ -57,6 +57,111 @@ test("the companion-only control loads without extension errors", async (t) => {
   })
   await host.session.prompt("Companion control")
   assert.match(await host.frame(), /Received\./)
+})
+
+test("forwarded and combined results stay out of activity while mixed source remains searchable", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension, ...companions],
+    providerApi,
+    providerProtocol: "responses",
+    rows: 110,
+    columns: 120,
+    persistSession: true,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  host.queueResponse(
+    ...call(
+      'const a = await tools.exec_command({cmd:"printf first-value",login:false}); const b = await tools.exec_command({cmd:"printf second-value",login:false}); text(a); text(a.output); text([a,b]); text("raw-"+"source-needle");',
+      "forwarded",
+    ),
+  )
+  await host.session.prompt("Read both results")
+  assert.match(output(host, "forwarded"), /raw-source-needle/)
+  await openWork(host)
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.doesNotMatch(screen(), /(?:>|▼) Output|raw-source-needle/)
+  for (const value of ["first-value", "second-value"])
+    assert.equal(
+      screen()
+        .split("\n")
+        .filter((line) => line.trim() === value).length,
+      1,
+    )
+  const firstCommand = host
+    .screenLines()
+    .findIndex(
+      (line) => stripVTControlCharacters(line).trim() === "▼ Ran command",
+    )
+  assert(firstCommand >= 0)
+  await host.key(`\x1b[<0;2;${firstCommand + 1}M`)
+  await host.key(`\x1b[<0;2;${firstCommand + 1}m`)
+  await host.frame()
+  const messages = () =>
+    JSON.stringify(
+      host.session.sessionManager
+        .getBranch()
+        .filter((entry) => entry.type === "message"),
+    )
+  const before = messages()
+  const requests = host.requests.length
+  await host.key("\x06")
+  await host.type("raw-source-needle")
+  await host.frame()
+  assert.match(screen(), /1\/1/)
+  assert.match(screen(), /\bexec\b/)
+  assert.equal((screen().match(/raw-source-needle/g) ?? []).length, 2)
+  await host.key("\x1b")
+  await host.frame()
+  assert.doesNotMatch(screen(), /raw-source-needle|\bexec\b/)
+  assert.equal(
+    screen()
+      .split("\n")
+      .filter((line) => line.trim() === "first-value").length,
+    0,
+  )
+  assert.equal(
+    screen()
+      .split("\n")
+      .filter((line) => line.trim() === "second-value").length,
+    1,
+  )
+  assert.equal(messages(), before)
+  assert.equal(host.requests.length, requests)
+})
+
+test("a failed operation carries distinct call error context without a duplicate activity", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension, ...companions],
+    providerApi,
+    providerProtocol: "responses",
+    rows: 90,
+    columns: 120,
+    persistSession: true,
+  })
+  host.queueResponse(
+    ...call(
+      'await tools.exec_command({cmd:"printf successful-child",login:false}); try { await tools.write_stdin({session_id:2147483647,chars:""}); } catch { throw new Error("distinct-call-failure"); }',
+      "failed-child",
+    ),
+  )
+  await host.session.prompt("Run work with a failing collection")
+  assert.match(output(host, "failed-child"), /distinct-call-failure/)
+  await openWork(host)
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.doesNotMatch(screen(), /(?:>|▼) Error|Ran command \(failed\)/)
+  assert.match(screen(), /Called write_stdin \(failed\)/)
+  assert.match(screen(), /successful-child/)
+  assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
+  assert.equal((screen().match(/distinct-call-failure/g) ?? []).length, 1)
+  await host.reload()
+  await openWork(host)
+  await host.frame()
+  assert.doesNotMatch(screen(), /(?:>|▼) Error|Ran command \(failed\)/)
+  assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
 })
 
 test(
@@ -147,7 +252,10 @@ for (const order of ["first", "last"] as const) {
         providerProtocol: "responses",
         rows: 260,
         columns: 100,
-        keybindings: order === "last" ? { "app.tools.expand": "ctrl+e" } : {},
+        keybindings: {
+          "tui.altScreen.search": "ctrl+f",
+          ...(order === "last" ? { "app.tools.expand": "ctrl+e" } : {}),
+        },
         settings: {
           theme: order === "first" ? "dark" : "light",
           outputPad,
@@ -200,7 +308,7 @@ for (const order of ["first", "last"] as const) {
         Buffer.from(tiny, "base64"),
       )
       const source =
-        'await tools.exec_command({cmd:"printf inspect-project",login:false}); await tools.apply_patch("*** Begin Patch\\n*** Add File: changed.txt\\n+CHANGED\\n*** Add File: extra-one.txt\\n+ONE\\n*** Add File: extra-two.txt\\n+TWO\\n*** End Patch"); text(await tools.exec_command({cmd:"cat changed.txt",login:false})); image((await tools.view_image({path:"local.png"})).image_url); await yield_control(); await new Promise(resolve=>setTimeout(resolve,120)); image((await tools.view_image({path:"late.png"})).image_url); text("LATE-MIXED-RESULT"); throw new Error("LATE-MIXED-FAILURE");'
+        'await tools.exec_command({cmd:"printf inspect-project",login:false}); await tools.apply_patch("*** Begin Patch\\n*** Add File: changed.txt\\n+CHANGED\\n*** Add File: extra-one.txt\\n+ONE\\n*** Add File: extra-two.txt\\n+TWO\\n*** End Patch"); text(await tools.exec_command({cmd:"cat changed.txt",login:false})); image((await tools.view_image({path:"local.png"})).image_url); await yield_control(); await new Promise(resolve=>setTimeout(resolve,120)); image((await tools.view_image({path:"late.png"})).image_url); text("LATE-MIXED-"+"RESULT"); throw new Error("LATE-MIXED-FAILURE");'
       host.queueResponse(...call(source, "mixed"))
       await host.session.prompt(
         "Inspect, change, validate, and inspect the image",
@@ -213,7 +321,7 @@ for (const order of ["first", "last"] as const) {
       let screen = await openWork(host)
       assert.match(
         screen,
-        /> Edited files, read files, ran a command, viewed images, output/,
+        /> Edited files, read files, ran a command, viewed images, error/,
       )
       assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
       const groupRow = host
@@ -313,13 +421,13 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /▼ Edited files/)
       assert.match(screen, /▼ Ran command/)
       assert.match(screen, /▼ Error/)
-      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 9)
+      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 10)
       assert.match(screen, /inspect-project/)
       assert.match(screen, /validated-result/)
       assert.match(screen, /validated-line-39/)
       assert.match(screen, /local\.png/)
       assert.match(screen, /late\.png/)
-      assert.match(screen, /LATE-MIXED-RESULT/)
+      assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
       assert.match(screen, /LATE-MIXED-FAILURE/)
       assert.match(screen, /Unrelated workflow notice/)
       assert.match(screen, /Received\./)
@@ -342,7 +450,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-FAILURE/)
       screen = await openWork(host)
       assert.match(screen, /> Edited files/)
-      assert.match(screen, /▼ Output/)
+      assert.match(screen, /▼ Viewed image/)
       assert.doesNotMatch(
         screen,
         /Collected output|cell_status|Execution completed/,
@@ -361,7 +469,7 @@ for (const order of ["first", "last"] as const) {
       assert.equal((screen.match(/Received\./g) ?? []).length, 2)
       await host.reload()
       screen = await openWork(host)
-      assert.match(screen, /> Output/)
+      assert.match(screen, /> Viewed an image/)
       const retainedGroup = host
         .screenLines()
         .findIndex((line) =>
@@ -394,10 +502,19 @@ for (const order of ["first", "last"] as const) {
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}m`)
       await host.frame()
+      const originImageRow = host
+        .screenLines()
+        .findIndex(
+          (line) => stripVTControlCharacters(line).trim() === "> Viewed image",
+        )
+      assert(originImageRow >= 0)
+      await host.key(`\x1b[<0;2;${originImageRow + 1}M`)
+      await host.key(`\x1b[<0;2;${originImageRow + 1}m`)
+      await host.frame()
       const collectionRow = host
         .screenLines()
         .findIndex((line) =>
-          stripVTControlCharacters(line).includes("> Output"),
+          stripVTControlCharacters(line).includes("> Viewed an image"),
         )
       assert(collectionRow >= 0)
       await host.key(`\x1b[<0;2;${collectionRow + 1}M`)
@@ -405,8 +522,10 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       const collectionItem = host
         .screenLines()
-        .findIndex((line) =>
-          stripVTControlCharacters(line).includes("> Output"),
+        .findIndex(
+          (line, index) =>
+            index > collectionRow &&
+            stripVTControlCharacters(line).includes("> Viewed image"),
         )
       assert(collectionItem >= 0)
       await host.key(`\x1b[<0;2;${collectionItem + 1}M`)
@@ -414,11 +533,11 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /LATE-MIXED-FAILURE/)
-      assert.equal((screen.match(/validated-result/g) ?? []).length, 1)
+      assert.equal((screen.match(/validated-result/g) ?? []).length, 0)
       assert.equal(
         screen.split("\n").filter((line) => line.trim() === "LATE-MIXED-RESULT")
           .length,
-        1,
+        0,
       )
       assert.equal(
         (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
@@ -426,6 +545,22 @@ for (const order of ["first", "last"] as const) {
       )
       assert.doesNotMatch(screen, /interrupted or unknown/)
       assert.match(screen, /Unrelated workflow notice/)
+      const collectedRequests = host.requests.length
+      await host.key("\x06")
+      await host.type("LATE-MIXED-RESULT")
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /\bwait\b/)
+      assert.match(screen, /LATE-MIXED-RESULT/)
+      assert.equal(
+        (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
+        2,
+      )
+      await host.key("\x1b")
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.doesNotMatch(screen, /\bwait\b|LATE-MIXED-RESULT/)
+      assert.equal(host.requests.length, collectedRequests)
       host.terminal.resize(100, 260)
       await host.frame()
       assert(host.screenLines().every((line) => visibleWidth(line) <= 100))

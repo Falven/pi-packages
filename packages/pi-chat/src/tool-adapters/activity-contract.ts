@@ -199,25 +199,6 @@ function owners(
   )
 }
 
-export function activityDetails(
-  update: ActivityUpdate,
-  content: Content,
-  imageOwners: (string | null)[] = content
-    .filter((part) => part.type === "image")
-    .map(() => null),
-): ActivityDetails {
-  if (!readActivityUpdate(update) || !owners(update, content, imageOwners))
-    throw new Error("Invalid activity facts or image ownership")
-  return {
-    activity: {
-      update,
-      imageOwners,
-      contentHash: contentHash(content),
-      activityHash: hash({ update, imageOwners }),
-    },
-  }
-}
-
 export function readActivity(result: {
   content: Content
   details?: unknown

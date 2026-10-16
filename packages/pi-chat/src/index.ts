@@ -2,7 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent"
-import { activityType } from "pi-activity"
+import { activityType } from "./tool-adapters/activity-contract.ts"
 import {
   armHistoryBootstrap,
   captureHost,

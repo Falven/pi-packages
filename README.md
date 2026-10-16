@@ -12,7 +12,7 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 `pi-attachments` and `pi-skill-references` also work with Pi's native editor.
 
-[`pi-activity`](packages/pi-activity) is the optional data contract for operation progress and output. Tool providers and chat consumers use it independently; it is not installed as a Pi extension.
+Tool providers and chat consumers can independently implement the [generic activity format](docs/specs/tool-activity.md) using Pi events and result details.
 
 ## Install
 

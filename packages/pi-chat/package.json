@@ -10,9 +10,6 @@
     "access": "public",
     "provenance": true
   },
-  "dependencies": {
-    "pi-activity": "workspace:*"
-  },
   "devDependencies": {
     "@earendil-works/pi-tui": "1.0.2"
   },

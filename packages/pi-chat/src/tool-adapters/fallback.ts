@@ -8,6 +8,7 @@ export function fallbackItems(facts: CallFacts): ActivityItem[] {
       target: facts.name,
       status: facts.status,
       body: {
+        source: true,
         name: facts.name,
         args: facts.args,
         cwd: facts.cwd,

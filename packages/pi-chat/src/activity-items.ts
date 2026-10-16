@@ -129,7 +129,21 @@ export class ActivityItems {
 
   sourceItems(owner: object): readonly ActivityItem[] {
     const state = this.calls.get(owner)
-    return state ? fallbackItems(state.facts) : []
+    if (!state) return []
+    const items = fallbackItems(state.facts)
+    for (const item of items) {
+      while (state.items?.some((normal) => normal.id === item.id))
+        item.id = `source:${item.id}`
+      if (item.body.result)
+        item.body.result = {
+          ...item.body.result,
+          // Images keep their normal activity owner while Find reveals text.
+          content: item.body.result.content.filter(
+            (part) => part.type === "text",
+          ),
+        }
+    }
+    return items
   }
 
   rebase() {

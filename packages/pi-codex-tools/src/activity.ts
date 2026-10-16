@@ -1,6 +1,103 @@
+import { createHash } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import type { ActivityOperation, ActivityStatus } from "pi-activity"
 import type { ExecutionDetails, OperationPresentation } from "./presentation.ts"
+
+export const activityType = "pi.activity"
+
+export type ActivityStatus =
+  | "running"
+  | "completed"
+  | "failed"
+  | "unknown"
+  | "unattempted"
+
+export type ActivityFile = {
+  id: string
+  path: string
+  status: ActivityStatus
+  args?: Record<string, unknown>
+  changes?: { added: number; removed: number }
+  output?: string
+  outputOmitted?: boolean
+}
+
+export type ActivityOperation = {
+  id: string
+  order: number
+  revision: number
+  status: ActivityStatus
+  cwd?: string
+  args?: Record<string, unknown>
+  output?: string
+  outputOmitted?: boolean
+} & (
+  | { kind: "command"; commands: string[] }
+  | { kind: "edit"; path?: string; files?: ActivityFile[] }
+  | { kind: "image"; path?: string }
+  | { kind: "tool"; name: string }
+  | { kind: "output" }
+)
+
+export type ActivityUpdate = {
+  version: 1
+  id: string
+  callId: string
+  sessionId: string
+  revision: number
+  operations: ActivityOperation[]
+}
+
+type Content = readonly (
+  | { type: "text"; text: string }
+  | { type: "image"; data: string; mimeType: string }
+)[]
+
+export type ActivityDetails = {
+  activity: {
+    update: ActivityUpdate
+    imageOwners: (string | null)[]
+    contentHash: string
+    activityHash: string
+  }
+}
+
+const hash = (value: unknown) =>
+  createHash("sha256").update(JSON.stringify(value)).digest("hex")
+
+export function contentHash(content: Content, nativeHints = false): string {
+  return hash(
+    content.flatMap((part, index) => {
+      if (part.type === "image") return [{ type: "image" }]
+      // Pi may append conversion/resize hints immediately after a processed image.
+      if (
+        nativeHints &&
+        content[index - 1]?.type === "image" &&
+        /^(?:\[Image converted from [\w/+.-]+ to [\w/+.-]+\.\](?:\n|$))(?:\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\])?$|^\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\]$/.test(
+          part.text,
+        )
+      )
+        return []
+      return [part]
+    }),
+  )
+}
+
+export function activityDetails(
+  update: ActivityUpdate,
+  content: Content,
+  imageOwners: (string | null)[] = content
+    .filter((part) => part.type === "image")
+    .map(() => null),
+): ActivityDetails {
+  return {
+    activity: {
+      update,
+      imageOwners,
+      contentHash: contentHash(content),
+      activityHash: hash({ update, imageOwners }),
+    },
+  }
+}
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url))
 const status = (
@@ -100,18 +197,18 @@ export function operationActivity(
   }
 }
 
-export function outputActivity(
+export function errorActivity(
   execution: ExecutionDetails["execution"],
   revision: number,
 ): ActivityOperation | undefined {
-  const output = [execution.output, execution.error].filter(Boolean).join("\n")
+  const output = execution.error
   if (!output) return
   return {
     id: `${execution.cellId}:output`,
     order: Number.MAX_SAFE_INTEGER,
     revision,
     kind: "output",
-    status: status(execution.status),
+    status: "failed",
     output,
   }
 }

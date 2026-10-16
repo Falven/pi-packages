@@ -1075,17 +1075,12 @@ export class NativeChatHost {
         ? source.resultMessage
         : nativeResult
     let items = this.activityItems.items(source, result)
-    if (!items.length) {
-      if (!revealSource) return []
-      if (
-        this.searchState?.hits[this.searchState.selected]?.field.owner ===
-        source
-      )
-        items = this.activityItems.sourceItems(source)
-    }
+    const hit = this.searchState?.hits[this.searchState.selected]
+    if (revealSource && hit?.field.owner === source && this.sourceHit(hit))
+      items = [...items, ...this.activityItems.sourceItems(source)]
     const present = new Set(items.map((item) => item.id))
     for (const [id, disclosure] of disclosures)
-      if (!present.has(id)) {
+      if (revealSource && !present.has(id)) {
         this.byComponent.delete(disclosure)
         disclosures.delete(id)
       }
@@ -1496,7 +1491,7 @@ export class NativeChatHost {
   private searchFields(): SearchField<Occurrence>[] {
     const fields: SearchField<Occurrence>[] = []
     const pending = new Map<string, Occurrence[]>()
-    const toolCalls = new Map<Occurrence, string>()
+    const toolCalls = new Set<Occurrence>()
     const add = (
       owner: Occurrence | undefined,
       key: string,
@@ -1576,7 +1571,7 @@ export class NativeChatHost {
               owner?.entry,
               index,
             )
-            toolCalls.set(occurrence, part.id)
+            toolCalls.add(occurrence)
             const calls = pending.get(part.id) ?? []
             calls.push(occurrence)
             pending.set(part.id, calls)
@@ -1668,10 +1663,10 @@ export class NativeChatHost {
     if (this.streaming?.message?.role === "assistant")
       addAssistant(this.streaming, this.streaming.message)
     const projected = new Map<Occurrence, ChatRow[]>()
-    for (const [call, id] of toolCalls) {
+    for (const call of toolCalls) {
       const rows = this.projectActivityItems(call, false)
       projected.set(call, rows)
-      if (rows.length === 1 && rows[0]?.activityItem?.id === id) continue
+      if (rows.length === 1 && rows[0]?.activityItem?.body.source) continue
       for (const row of rows) {
         const body = row.activityItem!.body
         const addValue = (value: unknown, path: (string | number)[]) => {
@@ -1710,14 +1705,10 @@ export class NativeChatHost {
       const rows = projected.get(field.owner)
       if (!rows?.length) return [field]
       const row = rows[0]
-      if (
-        rows.length === 1 &&
-        row?.occurrence &&
-        row.activityItem?.id === toolCalls.get(field.owner)
-      )
+      if (rows.length === 1 && row?.occurrence && row.activityItem?.body.source)
         return [{ ...field, owner: row.occurrence }]
-      // Split bodies carry their own source owner; the orchestration input stays call-owned.
-      return field.key.startsWith("result:") ? [] : [field]
+      // Raw processed results remain searchable alongside their operation bodies.
+      return [field]
     })
   }
 
@@ -1743,13 +1734,27 @@ export class NativeChatHost {
     if (owner.component instanceof ActivityItemDisclosure)
       return owner.component
     const items = this.activityDisclosures.get(owner)
+    if (this.sourceHit(hit)) {
+      const source = this.activityItems.sourceItems(owner)[0]
+      return source ? items?.get(source.id) : undefined
+    }
     return items?.size === 1 ? items.values().next().value : undefined
+  }
+
+  private sourceHit(hit: SourceHit<Occurrence> | undefined) {
+    return Boolean(
+      hit?.field.tool &&
+      !hit.field.owner.sourceCall &&
+      (hit.field.key.startsWith("result:") ||
+        this.activityItems.items(hit.field.owner).length === 0),
+    )
   }
 
   private callRegionLeaves(hit: SourceHit<Occurrence>): Leaf[] | undefined {
     if (
       !hit.field.tool ||
-      hit.field.owner.component instanceof ActivityItemDisclosure
+      hit.field.owner.component instanceof ActivityItemDisclosure ||
+      this.sourceHit(hit)
     )
       return
     const items = this.activityDisclosures.get(hit.field.owner)
@@ -1979,18 +1984,16 @@ export class NativeChatHost {
     native.component.setResult(selected, hits.length)
     native.selectionMode = "retain"
     const hit = hits[selected]
-    const previousOwner = previous?.hits[previous.selected]?.field.owner
-    const zeroItemCall = (candidate: SourceHit<Occurrence> | undefined) =>
-      candidate?.field.tool &&
-      !candidate.field.owner.sourceCall &&
-      this.activityItems.items(candidate.field.owner).length === 0
+    const previousHit = previous?.hits[previous.selected]
+    const previousOwner = previousHit?.field.owner
     const visibilityChanged =
-      previousOwner !== hit?.field.owner &&
-      ((this.host.settingsManager.getHideThinkingBlock() &&
+      (previousOwner !== hit?.field.owner &&
+        this.host.settingsManager.getHideThinkingBlock() &&
         ((previousOwner && this.thoughts.has(previousOwner)) ||
           (hit && this.thoughts.has(hit.field.owner)))) ||
-        zeroItemCall(previous?.hits[previous.selected]) ||
-        zeroItemCall(hit))
+      ((previousOwner !== hit?.field.owner ||
+        this.sourceHit(previousHit) !== this.sourceHit(hit)) &&
+        (this.sourceHit(previousHit) || this.sourceHit(hit)))
     if (visibilityChanged) this.layoutChat()
     const revealed =
       hit && (rebuild || mode !== "retain") ? this.revealSearchHit(hit) : false

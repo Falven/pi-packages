@@ -6,11 +6,7 @@ import { join } from "node:path"
 import { setTimeout } from "node:timers/promises"
 import { stripVTControlCharacters } from "node:util"
 import { visibleWidth } from "@earendil-works/pi-tui"
-import {
-  activityType,
-  readActivityUpdate,
-  type ActivityUpdate,
-} from "pi-activity"
+import { activityType, type ActivityUpdate } from "../src/activity.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
@@ -36,8 +32,7 @@ test("completed execution cards expand readable commands while retaining orchest
     columns: 100,
     extension(pi) {
       pi.events.on(activityType, (event) => {
-        const update = readActivityUpdate(event)
-        if (update) operations.push(update)
+        operations.push(event as ActivityUpdate)
       })
       pi.events.on("core-tools.activity", (event) => {
         activity.push(event as (typeof activity)[number])

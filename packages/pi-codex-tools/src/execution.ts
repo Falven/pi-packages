@@ -6,10 +6,11 @@ import { truncateToWidth } from "@earendil-works/pi-tui"
 import {
   activityDetails,
   activityType,
+  operationActivity,
+  errorActivity,
   type ActivityOperation,
   type ActivityUpdate,
-} from "pi-activity"
-import { operationActivity, outputActivity } from "./activity.ts"
+} from "./activity.ts"
 import {
   boundedPreview,
   createExecutionRenderers,
@@ -1036,18 +1037,18 @@ export class ExecutionCells {
     callId = cell.parentId,
   ): ExecutionDetails {
     cell.presentation.status = cell.status
-    const output = outputActivity(cell.presentation, cell.outputRevision)
+    const error = errorActivity(cell.presentation, cell.outputRevision)
     const operations =
       callId === cell.parentId
         ? cell.presentation.operations
             .flatMap((item) => operationActivity(item) ?? [])
-            .concat(output ?? [])
+            .concat(error ?? [])
         : []
     const imageOwners = parts
       .filter((part) => part.type === "image")
       .map((part) => {
         const owner =
-          part.owner === undefined ? output?.id : `${cell.id}/${part.owner}`
+          part.owner === undefined ? undefined : `${cell.id}/${part.owner}`
         return operations.some((item) => item.id === owner) ? owner! : null
       })
     return {
@@ -1079,8 +1080,8 @@ export class ExecutionCells {
     const changed = operation ? [operation, ...omitted] : omitted
     const activity = changed.flatMap((item) => operationActivity(item) ?? [])
     if (!operation) {
-      const output = outputActivity(cell.presentation, cell.outputRevision)
-      if (output) activity.push(output)
+      const error = errorActivity(cell.presentation, cell.outputRevision)
+      if (error) activity.push(error)
     }
     for (const item of activity)
       cell.activityPending.set(item.id, structuredClone(item))

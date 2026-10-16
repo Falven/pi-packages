@@ -17,7 +17,7 @@ const summaries = {
     "viewing an image",
     "viewing images",
   ],
-  output: ["output", "output", "output", "output"],
+  output: ["error", "errors", "error", "errors"],
 } as const
 
 type SummaryGroup = { items: readonly { activityItem?: ActivityItem }[] }

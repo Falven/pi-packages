@@ -50,6 +50,7 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
     ...(path ? { target: path } : {}),
     ...(targetKey ? { targetKey } : {}),
     body: {
+      source: true,
       name,
       args: facts.args,
       cwd: facts.cwd,

@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto"
 import { stripVTControlCharacters } from "node:util"
 import { Text, truncateToWidth } from "@earendil-works/pi-tui"
-import { contentHash, type ActivityDetails } from "pi-activity"
-export { contentHash } from "pi-activity"
+import { contentHash, type ActivityDetails } from "./activity.ts"
+export { contentHash } from "./activity.ts"
 import type {
   AgentToolResult,
   ToolRenderers,

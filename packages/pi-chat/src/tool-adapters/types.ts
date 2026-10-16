@@ -3,8 +3,8 @@ import type {
   SourceInfo,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent"
-import type { ActivityStatus } from "pi-activity"
-export type { ActivityStatus } from "pi-activity"
+import type { ActivityStatus } from "./activity-contract.ts"
+export type { ActivityStatus } from "./activity-contract.ts"
 
 export type ActivityResult = Pick<AgentToolResult<unknown>, "content"> & {
   details?: unknown
@@ -31,6 +31,7 @@ export type ActivityItem = {
   changes?: { added: number; removed: number }
   status: ActivityStatus
   body: {
+    source?: true
     name: string
     args: unknown
     cwd: string

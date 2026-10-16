@@ -2,7 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import { stripTerminalSequences } from "@earendil-works/pi-tui"
-import { activityDetails, activityType, type ActivityUpdate } from "pi-activity"
+import {
+  activityType,
+  type ActivityUpdate,
+} from "../src/tool-adapters/activity-contract.ts"
+import { activityDetails } from "../../../fixtures/activity.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
@@ -142,116 +146,132 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert.match(inherited, /late-generic-failure/)
 })
 
-test("Find temporarily reveals retained source for an explicitly empty activity", async (t) => {
-  let calls = 0
-  const host = await openNativeHost(t, {
-    extensionPaths: [chat],
-    rows: 70,
-    persistSession: true,
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
-    extensionFactories: [
-      (pi) =>
-        pi.registerTool({
-          name: "gather_receipt",
-          label: "Gather receipt",
-          description: "Collect existing work",
-          parameters: createReadToolDefinition(".").parameters,
-          async execute(callId, _args, _signal, _onUpdate, ctx) {
-            calls++
-            const content = [
-              { type: "text" as const, text: "retained-poll-needle" },
-            ]
-            return {
-              content,
-              details: activityDetails(
-                {
-                  version: 1,
-                  id: "empty-source",
-                  callId,
-                  sessionId: ctx.sessionManager.getSessionId(),
-                  revision: 1,
-                  operations: [],
-                },
+for (const legacy of [false, true])
+  test(`Find temporarily reveals retained source for ${legacy ? "old output metadata" : "an explicitly empty activity"}`, async (t) => {
+    let calls = 0
+    const host = await openNativeHost(t, {
+      extensionPaths: [chat],
+      rows: 70,
+      persistSession: true,
+      keybindings: { "tui.altScreen.search": "ctrl+f" },
+      extensionFactories: [
+        (pi) =>
+          pi.registerTool({
+            name: "gather_receipt",
+            label: "Gather receipt",
+            description: "Collect existing work",
+            parameters: createReadToolDefinition(".").parameters,
+            async execute(callId, _args, _signal, _onUpdate, ctx) {
+              calls++
+              const content = [
+                { type: "text" as const, text: "retained-poll-needle" },
+              ]
+              return {
                 content,
-              ),
-            }
-          },
-        }),
-    ],
+                details: activityDetails(
+                  {
+                    version: 1,
+                    id: "empty-source",
+                    callId,
+                    sessionId: ctx.sessionManager.getSessionId(),
+                    revision: 1,
+                    operations: legacy
+                      ? [
+                          {
+                            id: "legacy-output",
+                            order: 0,
+                            revision: 1,
+                            kind: "output",
+                            status: "completed",
+                            output: "old-result-body",
+                          },
+                        ]
+                      : [],
+                  },
+                  content,
+                ),
+              }
+            },
+          }),
+      ],
+    })
+    host.queueResponse(...response("", "gather_receipt"))
+    host.queueResponse(...response("Finished"))
+    await host.type("Collect existing work")
+    await host.key("\r")
+    await host.settled()
+    await host.frame()
+    await host.key("\x0f")
+    await host.frame()
+    assert.doesNotMatch(
+      host.screenLines().join("\n"),
+      /gather_receipt|retained-poll-needle|old-result-body/,
+    )
+    const messages = () =>
+      host.session.sessionManager
+        .getBranch()
+        .filter((entry) => entry.type === "message")
+    const before = JSON.stringify(messages())
+    const requests = host.requests.length
+    await host.key("\x06")
+    await host.type("retained-poll-needle")
+    await host.frame()
+    let screen = host.screenLines().map(stripTerminalSequences).join("\n")
+    assert.match(screen, /1\/1/)
+    assert.match(screen, /gather_receipt/)
+    assert.match(screen, /retained-poll-needle/)
+    await host.key("\x1b")
+    await host.frame()
+    assert.doesNotMatch(
+      host.screenLines().join("\n"),
+      /gather_receipt|retained-poll-needle|old-result-body/,
+    )
+    assert.equal(JSON.stringify(messages()), before)
+    await host.reload()
+    await host.key("\x06")
+    await host.type("original-argument")
+    await host.frame()
+    screen = host.screenLines().map(stripTerminalSequences).join("\n")
+    assert.match(screen, /1\/1/)
+    assert.match(screen, /gather_receipt/)
+    assert.match(screen, /path: original-argument/)
+    await host.key("\x1b")
+    const file = host.session.sessionFile!
+    host.session.sessionManager.appendCompaction(
+      "Compressed context",
+      null,
+      100,
+    )
+    await host.runtime.newSession()
+    await host.runtime.switchSession(file)
+    await host.key("\x06")
+    await host.type("retained-poll-needle")
+    await host.frame()
+    screen = host.screenLines().map(stripTerminalSequences).join("\n")
+    assert.match(screen, /1\/1/)
+    assert.match(screen, /retained-poll-needle/)
+    assert.equal(calls, 1)
+    assert.equal(host.requests.length, requests)
+    await host.key("\x1b")
+    const leaf = host.session.sessionManager.getLeafId()!
+    const fork = await host.runtime.fork(leaf, { position: "at" })
+    assert.equal(fork.cancelled, false)
+    await host.frame()
+    await host.key("\x0f")
+    await host.frame()
+    assert.doesNotMatch(
+      host.screenLines().join("\n"),
+      /gather_receipt|retained-poll-needle|old-result-body/,
+    )
+    await host.key("\x06")
+    await host.type("retained-poll-needle")
+    await host.frame()
+    assert.match(
+      host.screenLines().map(stripTerminalSequences).join("\n"),
+      /1\/1/,
+    )
+    assert.equal(calls, 1)
   })
-  host.queueResponse(...response("", "gather_receipt"))
-  host.queueResponse(...response("Finished"))
-  await host.type("Collect existing work")
-  await host.key("\r")
-  await host.settled()
-  await host.frame()
-  await host.key("\x0f")
-  await host.frame()
-  assert.doesNotMatch(
-    host.screenLines().join("\n"),
-    /gather_receipt|retained-poll-needle/,
-  )
-  const messages = () =>
-    host.session.sessionManager
-      .getBranch()
-      .filter((entry) => entry.type === "message")
-  const before = JSON.stringify(messages())
-  const requests = host.requests.length
-  await host.key("\x06")
-  await host.type("retained-poll-needle")
-  await host.frame()
-  let screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /1\/1/)
-  assert.match(screen, /gather_receipt/)
-  assert.match(screen, /retained-poll-needle/)
-  await host.key("\x1b")
-  await host.frame()
-  assert.doesNotMatch(
-    host.screenLines().join("\n"),
-    /gather_receipt|retained-poll-needle/,
-  )
-  assert.equal(JSON.stringify(messages()), before)
-  await host.reload()
-  await host.key("\x06")
-  await host.type("original-argument")
-  await host.frame()
-  screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /1\/1/)
-  assert.match(screen, /gather_receipt/)
-  assert.match(screen, /path: original-argument/)
-  await host.key("\x1b")
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  await host.key("\x06")
-  await host.type("retained-poll-needle")
-  await host.frame()
-  screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /1\/1/)
-  assert.match(screen, /retained-poll-needle/)
-  assert.equal(calls, 1)
-  assert.equal(host.requests.length, requests)
-  await host.key("\x1b")
-  const leaf = host.session.sessionManager.getLeafId()!
-  const fork = await host.runtime.fork(leaf, { position: "at" })
-  assert.equal(fork.cancelled, false)
-  await host.frame()
-  await host.key("\x0f")
-  await host.frame()
-  assert.doesNotMatch(
-    host.screenLines().join("\n"),
-    /gather_receipt|retained-poll-needle/,
-  )
-  await host.key("\x06")
-  await host.type("retained-poll-needle")
-  await host.frame()
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /1\/1/,
-  )
-  assert.equal(calls, 1)
-})
 
 test("processed output invalidates metadata and cannot regain an earlier live body", async (t) => {
   let publish: (() => void) | undefined
