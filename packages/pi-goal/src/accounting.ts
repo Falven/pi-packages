@@ -83,7 +83,7 @@ export class GoalAccounting {
     const tokens = this.observed - this.accounted
     const seconds = (this.now() - this.accountedAt) / 1_000_000_000n
     if (tokens === 0n && seconds === 0n) return null
-    // Synchronous partial writes serialize snapshots and baseline commits.
+    // Synchronous appends serialize snapshots and baseline commits.
     const goal = store.account(owner, tokens, seconds, mode)
     if (!goal) return null
     this.accounted = this.observed

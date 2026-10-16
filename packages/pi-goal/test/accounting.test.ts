@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
-import test from "node:test"
+import fs from "node:fs"
+import { syncBuiltinESMExports } from "node:module"
+import test, { type TestContext } from "node:test"
 import { setTimeout } from "node:timers/promises"
-import { DatabaseSync } from "node:sqlite"
-import { join } from "node:path"
 import piGoal from "../src/index.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { toolResponse } from "./tool-response.ts"
@@ -69,6 +69,34 @@ function ownUsage(tokens: number) {
     totalTokens: tokens,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   }
+}
+
+function failNextCheckpoint(t: TestContext, host: Host) {
+  const path = host.session.sessionManager.getSessionFile()
+  assert(path)
+  const original = fs.appendFileSync
+  let pending = true
+  const reject: typeof fs.appendFileSync = (file, data, options) => {
+    if (pending && file === path && typeof data === "string") {
+      const entry = JSON.parse(data)
+      if (
+        entry.type === "custom" &&
+        entry.customType === "pi-goal.state" &&
+        typeof entry.data?.tokensUsed === "string" &&
+        entry.data?.tokensUsed !== "0"
+      ) {
+        pending = false
+        throw new Error("Controlled accounting append failure")
+      }
+    }
+    return original(file, data, options)
+  }
+  const append = t.mock.method(fs, "appendFileSync", reject)
+  syncBuiltinESMExports()
+  t.after(() => {
+    append.mock.restore()
+    syncBuiltinESMExports()
+  })
 }
 
 const noUsage = {
@@ -608,28 +636,13 @@ test("final-response exhaustion has no tool notice and completion retains its sn
   assert.equal(result(host, "complete").goal.tokensUsed, 184)
 })
 
-test("a failed native tool checkpoint retains pending usage for the next successful write", async (t) => {
-  let database: DatabaseSync | undefined
+test("a failed native tool checkpoint stops retries and reopening restores the saved counters", async (t) => {
   const host = await openNativeHost(t, {
-    extensionFactories: [
-      piGoal,
-      (pi) => {
-        pi.on("tool_execution_end", (event) => {
-          if (event.toolName === "create_goal") {
-            database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-            database.exec(
-              "CREATE TRIGGER fail_accounting BEFORE UPDATE OF tokensUsed ON goals BEGIN SELECT RAISE(FAIL, 'Accounting storage unavailable'); END",
-            )
-          } else if (event.toolCallId === "failed-read") {
-            database?.exec("DROP TRIGGER fail_accounting")
-          }
-        })
-      },
-    ],
+    extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
   })
-  t.after(() => database?.close())
+  failNextCheckpoint(t, host)
   host.queueResponse(
     ...response(
       "create_goal",
@@ -642,11 +655,41 @@ test("a failed native tool checkpoint retains pending usage for the next success
   host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
   host.queueResponse(...answer())
   await host.session.prompt(
-    "Create the requested goal and pause after the recoverable storage failure.",
+    "Create the requested goal and pause after the controlled storage failure.",
   )
   assert.equal(result(host, "failed-read").goal.tokensUsed, 0)
-  assert.equal(result(host, "retry-read").goal.tokensUsed, 0)
-  assert.equal(result(host, "pause").goal.tokensUsed, 276)
+  for (const id of ["retry-read", "pause"]) {
+    const message = host.session.messages.find(
+      (item) => item.role === "toolResult" && item.toolCallId === id,
+    )
+    assert(message?.role === "toolResult")
+    assert.equal(message.isError, true)
+    const content = message.content[0]
+    assert(content?.type === "text")
+    assert.match(content.text, /Reopen the saved session/)
+  }
+  assert.equal(host.requests.length, 5)
+  assert.equal(
+    host.session.messages.filter((message) => message.role === "custom").length,
+    0,
+  )
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    holdResponses: true,
+  })
+  await reopened.session.prompt("/goal pause")
+  await reopened.session.abort()
+  reopened.queueResponse(...response("get_goal", {}, "restored", noUsage))
+  reopened.queueResponse(...answer(noUsage))
+  await reopened.session.prompt("Inspect the saved counters after reopening.")
+  assert.equal(result(reopened, "restored").goal.tokensUsed, 0)
+  assert.equal(result(reopened, "restored").goal.status, "paused")
 })
 
 test("an unaccountable tool report prevents automatic admission even after later valid checkpoints", async (t) => {
@@ -699,23 +742,12 @@ test("an unaccountable tool report prevents automatic admission even after later
 })
 
 for (const shutdown of [false, true]) {
-  test(`failed settlement accounting suppresses continuation and ${shutdown ? "shutdown still disposes the extension" : "external pause can retry pending usage"}`, async (t) => {
-    let database: DatabaseSync | undefined
+  test(`failed settlement accounting suppresses continuation and ${shutdown ? "shutdown still disposes the extension" : "external pause cannot retry unconfirmed usage"}`, async (t) => {
     let shutdownObserved = false
     const host = await openNativeHost(t, {
+      extensionPaths: [extension],
       extensionFactories: [
-        piGoal,
         (pi) => {
-          pi.on("tool_execution_end", (event) => {
-            if (event.toolName === "create_goal") {
-              database = new DatabaseSync(
-                join(host.directory, "pi-goal.sqlite"),
-              )
-              database.exec(
-                "CREATE TRIGGER fail_accounting BEFORE UPDATE OF tokensUsed ON goals BEGIN SELECT RAISE(FAIL, 'Accounting storage unavailable'); END",
-              )
-            }
-          })
           pi.on("session_shutdown", () => {
             shutdownObserved = true
           })
@@ -725,7 +757,7 @@ for (const shutdown of [false, true]) {
       persistSession: true,
       holdResponses: true,
     })
-    t.after(() => database?.close())
+    failNextCheckpoint(t, host)
     host.queueResponse(
       ...response(
         "create_goal",
@@ -751,13 +783,11 @@ for (const shutdown of [false, true]) {
       await new Promise<void>((resolve) => setImmediate(resolve))
       assert.equal(host.requests.length, 2)
     } else {
-      database?.exec("DROP TRIGGER fail_accounting")
       await host.session.prompt("/goal pause")
-      host.queueResponse(...response("get_goal", {}, "read", noUsage))
-      host.queueResponse(...answer(noUsage))
-      await host.session.prompt("Inspect the recovered checkpoint.")
-      assert.equal(result(host, "read").goal.status, "paused")
-      assert.equal(result(host, "read").goal.tokensUsed, 92)
+      assert.match(await host.frame(), /Reopen the saved session/)
+      await host.session.prompt("/goal inspect")
+      assert.match(await host.frame(), /Reopen the saved session/)
+      assert.equal(host.requests.length, 2)
     }
   })
 }

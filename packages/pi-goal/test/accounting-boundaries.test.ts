@@ -1,29 +1,41 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
+import { mkdirSync, renameSync, rmSync } from "node:fs"
 import test, { type TestContext } from "node:test"
+import {
+  openNativeHost,
+  type NativeHostOptions,
+} from "../../../fixtures/native-host.ts"
 import { GoalAccounting, reportedTokens } from "../src/accounting.ts"
 import { GoalStore, goalResult } from "../src/state.ts"
 
-async function storeFor(t: TestContext) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-goal-accounting-"))
-  const path = join(directory, "goals.sqlite")
-  const store = new GoalStore(path)
-  t.after(async () => {
-    store.close()
-    await rm(directory, { recursive: true, force: true })
+async function storeFor(
+  t: TestContext,
+  options: Pick<NativeHostOptions, "directory" | "sessionFile"> = {},
+) {
+  let store: GoalStore | undefined
+  const host = await openNativeHost(t, {
+    ...options,
+    persistSession: true,
+    headless: true,
+    noTools: "builtin",
+    extensionFactories: [
+      (pi) => {
+        pi.on("session_start", (_event, ctx) => {
+          store = new GoalStore(pi, ctx.sessionManager, () => {})
+        })
+      },
+    ],
   })
-  return { store, path }
+  assert(store)
+  return { store, host, threadId: host.session.sessionManager.getSessionId() }
 }
 
 test("safe reported components retain an exact total beyond numeric precision", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   const accounting = new GoalAccounting(() => 0n)
   accounting.record(123n)
   const goal = store.create(
-    "precision",
+    threadId,
     "Keep the complete reported total",
     9223372036854775807n,
   )
@@ -49,12 +61,9 @@ test("safe reported components retain an exact total beyond numeric precision", 
 })
 
 test("token overflow preserves the stored maximum and the pending baseline", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   const accounting = new GoalAccounting(() => 0n)
-  const goal = store.create(
-    "token-limit",
-    "Preserve the complete integer allowance",
-  )
+  const goal = store.create(threadId, "Preserve the complete integer allowance")
   accounting.start(goal)
   accounting.record(9223372036854775807n)
   const full = accounting.checkpoint(store, goal.threadId, "active", true)
@@ -74,13 +83,14 @@ test("token overflow preserves the stored maximum and the pending baseline", asy
     /Goal accounting exceeds the nonnegative integer range/,
   )
   assert.deepEqual(store.read(goal.threadId), full)
+  assert.equal(store.failed, false)
 })
 
 test("elapsed overflow preserves the full integer clock and uncommitted progress", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const goal = store.create("elapsed-limit", "Preserve elapsed pursuit exactly")
+  const goal = store.create(threadId, "Preserve elapsed pursuit exactly")
   accounting.start(goal)
   now = 9223372036854775807_000000000n
   const full = accounting.checkpoint(store, goal.threadId, "active", true)
@@ -101,51 +111,81 @@ test("elapsed overflow preserves the full integer clock and uncommitted progress
     /Goal accounting exceeds the nonnegative integer range/,
   )
   assert.deepEqual(store.read(goal.threadId), full)
+  assert.equal(store.failed, false)
 })
 
-test("a failed SQLite checkpoint retains tokens and fractional time for retry", async (t) => {
-  const { store, path } = await storeFor(t)
+test("a failed native checkpoint stops retries and reopening restores only saved usage", async (t) => {
+  const { store, host, threadId } = await storeFor(t)
+  await host.session.prompt("Save the conversation before measuring usage.")
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const goal = store.create("write-failure", "Retry the same reported progress")
+  const goal = store.create(threadId, "Recover saved progress")
   accounting.start(goal)
+  accounting.record(7n)
+  now = 500_000_000n
+  const saved = accounting.checkpoint(store, threadId, "active", true)
+  assert.equal(saved?.tokensUsed, 7n)
+  assert.equal(saved?.timeUsedSeconds, 0n)
   accounting.record(11n)
   now = 1_250_000_000n
-  const database = new DatabaseSync(path)
+  const path = host.session.sessionManager.getSessionFile()
+  assert(path)
+  const backup = `${path}.saved`
+  renameSync(path, backup)
+  mkdirSync(path)
   try {
-    database.exec(
-      "CREATE TRIGGER reject_accounting BEFORE UPDATE ON goals BEGIN SELECT RAISE(FAIL, 'Usage storage unavailable'); END",
-    )
     assert.throws(
-      () => accounting.checkpoint(store, goal.threadId, "active", true),
-      /Usage storage unavailable/,
+      () => accounting.checkpoint(store, threadId, "active", true),
+      /EISDIR.*Reopen the saved session/,
     )
-    assert.deepEqual(store.read(goal.threadId), goal)
-    database.exec("DROP TRIGGER reject_accounting")
   } finally {
-    database.close()
+    rmSync(path, { recursive: true })
+    renameSync(backup, path)
   }
+  assert.equal(store.failed, true)
+  assert.throws(() => store.read(threadId), /Reopen the saved session/)
   now = 1_750_000_000n
   accounting.record(4n)
-  const retried = accounting.checkpoint(store, goal.threadId, "active", true)
-  assert.equal(retried?.tokensUsed, 15n)
-  assert.equal(retried?.timeUsedSeconds, 1n)
-  now = 2_000_000_000n
-  const carried = accounting.checkpoint(store, goal.threadId, "active", true)
-  assert.equal(carried?.tokensUsed, 15n)
+  assert.throws(
+    () => accounting.checkpoint(store, threadId, "active", true),
+    /Goal storage is unavailable.*Reopen the saved session/,
+  )
+  await host.close()
+  const reopened = await storeFor(t, {
+    directory: host.directory,
+    sessionFile: path,
+  })
+  const restored = reopened.store.read(threadId)
+  assert.deepEqual(restored, saved)
+  assert(restored)
+  now = 100_000_000_000n
+  const resumed = new GoalAccounting(() => now)
+  resumed.start(restored)
+  resumed.record(3n)
+  now = 101_250_000_000n
+  const current = resumed.checkpoint(reopened.store, threadId, "active", true)
+  assert.equal(current?.tokensUsed, 10n)
+  assert.equal(current?.timeUsedSeconds, 1n)
+  now = 102_000_000_000n
+  const carried = resumed.checkpoint(reopened.store, threadId, "active", true)
+  assert.equal(carried?.tokensUsed, 10n)
   assert.equal(carried?.timeUsedSeconds, 2n)
   assert.equal(
-    accounting.checkpoint(store, goal.threadId, "active", true),
+    resumed.checkpoint(reopened.store, threadId, "active", true),
     null,
   )
 })
 
 test("stale checkpoints protect other sessions and replacements without discarding later reports", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
+  const independent = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const original = store.create("owned-session", "Account only for this goal")
-  const other = store.create("other-session", "Keep independent usage")
+  const original = store.create(threadId, "Account only for this goal")
+  const other = independent.store.create(
+    independent.threadId,
+    "Keep independent usage",
+  )
   accounting.start(original)
   accounting.record(7n)
   now = 1_200_000_000n
@@ -163,7 +203,7 @@ test("stale checkpoints protect other sessions and replacements without discardi
     null,
   )
   assert.deepEqual(store.read(original.threadId), original)
-  assert.deepEqual(store.read(other.threadId), other)
+  assert.deepEqual(independent.store.read(other.threadId), other)
   const first = accounting.checkpoint(store, original.threadId, "active", true)
   assert.equal(first?.tokensUsed, 7n)
   assert.equal(first?.timeUsedSeconds, 1n)
@@ -188,14 +228,14 @@ test("stale checkpoints protect other sessions and replacements without discardi
   assert.equal(current?.tokensUsed, 13n)
   assert.equal(current?.timeUsedSeconds, 0n)
   assert.equal(current?.generation, replacement.generation)
-  assert.deepEqual(store.read(other.threadId), other)
+  assert.deepEqual(independent.store.read(other.threadId), other)
 })
 
 test("active edits preserve the usage baseline and fractional elapsed carry", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const goal = store.create("active-edit", "Finish the original objective")
+  const goal = store.create(threadId, "Finish the original objective")
   accounting.start(goal)
   accounting.record(7n)
   now = 750_000_000n
@@ -223,10 +263,10 @@ test("active edits preserve the usage baseline and fractional elapsed carry", as
 })
 
 test("pause and resume exclude downtime and reports already received while paused", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const goal = store.create("paused-clock", "Count only active pursuit")
+  const goal = store.create(threadId, "Count only active pursuit")
   accounting.start(goal)
   accounting.record(3n)
   now = 1_000_000_000n
@@ -254,10 +294,10 @@ test("pause and resume exclude downtime and reports already received while pause
 })
 
 test("finishing an outer run retains the active clock until an external pause", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
-  const goal = store.create("idle-clock", "Retain the active pursuit clock")
+  const goal = store.create(threadId, "Retain the active pursuit clock")
   accounting.start(goal)
   now = 400_000_000n
   assert.equal(
@@ -283,11 +323,11 @@ test("finishing an outer run retains the active clock until an external pause", 
 })
 
 test("only a nonzero external checkpoint clears exhausted in-flight accounting", async (t) => {
-  const { store } = await storeFor(t)
+  const { store, threadId } = await storeFor(t)
   let now = 0n
   const accounting = new GoalAccounting(() => now)
   const goal = store.create(
-    "exhausted-cutoff",
+    threadId,
     "Account until the effective cutoff",
     100n,
   )

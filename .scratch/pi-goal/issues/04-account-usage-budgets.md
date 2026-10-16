@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: Continue safely and honor Stop.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** native session storage delta complete. Earlier unresolved feature gates remain open.
 
 **Baseline status:** partial — implementation, reported-usage captures, compaction, and supported provider-limit precedence verified; the public capability limits below remain open.
 
@@ -12,11 +12,19 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Preserve existing token formulas, exact integer limits, monotonic elapsed time, live-ledger cutoffs, soft-budget precedence, and mutation checkpoints while recording complete native snapshots.
-- [ ] Advance the accounting baseline only after append returns. A failed checkpoint must neither consume the baseline nor be retried against an unconfirmed in-memory append; recovery uses only the native saved state.
-- [ ] Re-read current counters and check session and generation at each serialized mutation. Concurrent completions, stale captures, and late callbacks must not overwrite counters, double charge usage, or mutate a replacement goal.
-- [ ] Adapt accounting and accounting-boundary suites from database fixtures to native session setup and storage fault injection. Verify direct tool results, budget notices, exact counters, successful checkpoints, failed checkpoints, and fresh-session recovery at the existing seam.
-- [ ] Preserve the existing agent-interface messages and reported-usage evidence dimensions for the final before-and-after capture in ticket 07. No new checkpoint frequency or storage message is introduced.
+- [x] Preserve existing token formulas, exact integer limits, monotonic elapsed time, live-ledger cutoffs, soft-budget precedence, and mutation checkpoints while recording complete native snapshots.
+- [x] Advance the accounting baseline only after append returns. A failed checkpoint must neither consume the baseline nor be retried against an unconfirmed in-memory append; recovery uses only the native saved state.
+- [x] Re-read current counters and check session and generation at each serialized mutation. Concurrent completions, stale captures, and late callbacks must not overwrite counters, double charge usage, or mutate a replacement goal.
+- [x] Adapt accounting and accounting-boundary suites from database fixtures to native session setup and storage fault injection. Verify direct tool results, budget notices, exact counters, successful checkpoints, failed checkpoints, and fresh-session recovery at the existing seam.
+- [x] Preserve the existing agent-interface messages and reported-usage evidence dimensions for the final before-and-after capture in ticket 07. No new checkpoint frequency or storage message is introduced.
+
+## Native storage verification
+
+All 27 accounting checks pass on released Pi 1.1.0: 18 native-session integration cases and nine approved precision, clock, and storage-boundary cases. The latter now bind the store to real public session managers and actual session identities. Independent sessions use independent stores. Exact integer limits, overflow rejection, fractional time carry, pause and resume cutoffs, replacement fences, nested usage, concurrent reports, budget notices, and completion snapshots retain their previous assertions. Arithmetic overflow remains a domain error and does not mark storage failed. The accounting production logic is unchanged; its baseline commits remain after the successful store append.
+
+The failure checks replace SQL triggers with an actual inaccessible session-file append and narrowly targeted native append failures. Tool-finish and settlement failures stop retries even when subsequent file operations can succeed. Native tool errors and command notifications require reopening, and shutdown still disposes the extension. Fresh saved-session reopening restores seven saved tokens while discarding the failed eleven-token checkpoint and later four-token report. A new ledger then records three tokens for a total of ten, excludes downtime, and preserves fractional time. The real tool-result case separately restores zero saved tokens after its first accounting append failed. No failed ledger is replayed into a reopened manager.
+
+The initial run passed 15 of 27 checks; its 12 failures identified the obsolete store constructor and SQL failure fixtures. The migrated run passes all 27. Workspace type checking, scoped lint, formatting, and whitespace checks pass. Logs are `/tmp/pi-goal-native-04-red.tap`, `/tmp/pi-goal-native-04-green.tap`, and `/tmp/pi-goal-native-04-types.log`. No tool schema, goal message, checkpoint frequency, dependency, shared fixture, or host implementation changed. Final matched captures remain assigned to ticket 07; the historical capability gates below remain open.
 
 ## Historical acceptance
 
