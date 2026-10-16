@@ -1,6 +1,6 @@
 # Generic tool activity aligned with ChatGPT.app
 
-Implemented 2026-10-16 at `4e271b8` on `codex/generic-tool-activity`, from repository baseline `6013382`. The [specification](../specs/pi-activity.md) and [resolved tickets](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) record the delivered contract and verification. This plan replaces the earlier proposal to add more tool-specific rules to `pi-chat`.
+The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction now govern the pending delta from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved tickets](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) record the delivered contract and verification. This plan replaces the earlier proposal to add more tool-specific rules to `pi-chat`.
 
 The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the behavior reference; the work does not introduce alternative display preferences.
 
@@ -43,11 +43,11 @@ The [official item model](https://learn.chatgpt.com/docs/app-server#items) also 
 
 The target is therefore stable operations with continuing results. It is not a blanket “one row per tool call” or “one row per process” rule. For the simple test command above, repeated collection adds no new command action.
 
-This is a source inspection, not a live comparison. Script-only output, script errors, collection failures, cancellation, and image delivery were not compared in a live app. The delta preserves their source ownership and native result handling; its “Output” and “Error” headings do not establish exact app parity for those cases.
+This is a source inspection, not a live comparison. Script-only output, script errors, collection failures, cancellation, and image delivery were not compared in a live app. The delta preserves their source ownership and native result handling; the initial “Output” rule is superseded by the correction: returning text adds no activity, and errors are shown once with their call context.
 
 ## Shared interface
 
-The neutral [pi-activity package](../../packages/pi-activity/README.md) contains the shared data types, validation, and protocol identifiers. Both packages use this contract. It contains no tool implementations, chat components, package allowlists, or tool-name rules.
+Both existing packages independently implement the [documented activity format](../specs/tool-activity.md). The producer constructs facts and the consumer validates them. No separate contract package, cross-package runtime import, or provider-specific consumer rule is required.
 
 The contract describes:
 

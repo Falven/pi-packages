@@ -1,6 +1,6 @@
 # 01: Generic operation presentation
 
-**What to build:** Providers can describe command, file, image, and independent output operations through one optional interface. Chat renders those operations without recognizing provider packages or tool names. See the [specification](../../../docs/specs/pi-activity.md).
+**What to build:** Providers can describe command, file, image, and independent output operations through one optional interface. Chat renders those operations without recognizing provider packages or tool names. See the [specification](../../../docs/specs/tool-activity.md).
 
 **Blocked by:** None (can start immediately).
 

@@ -49,13 +49,13 @@ The ordered commentary, thoughts, and tool activity within a turn, presented sep
 _Avoid_: Turn, when referring only to the agent's activity
 
 **Render group**:
-Consecutive activity items and execution activity items displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
+Consecutive activity items displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
 
 **Activity item**:
-A unit of displayed agent activity associated with an action or result. A conversation item or tool call can contribute zero or several activity items; their boundaries need not match. Collecting existing output need not add an action.
+A unit of displayed agent activity identifying an operation, failure, or delivered image. A conversation item or tool call can contribute zero or several activity items; returning text alone is not an operation.
 
 **Execution activity item**:
-An activity item for an execution cell's own output or error when that content does not belong to a child operation.
+An activity item identifying an execution cell's failure independently of a child operation.
 _Avoid_: Child operation, when referring to the execution's own outcome
 
 **Summary**:
@@ -159,7 +159,10 @@ The instructions, messages, tool contracts, calls, and results available to the 
 The model-facing tools for Pi's built-in local command, file, and image capabilities. Tools from unrelated extensions are outside this set.
 
 **Tool call**:
-An invocation of a tool with its inputs and eventual outcome. One tool call can contribute several activity items.
+An invocation of a tool with its inputs and eventual outcome. One tool call can contribute zero or several activity items.
+
+**Tool result**:
+The content and outcome returned by a tool call. Returning or forwarding a tool result does not itself perform another operation.
 
 **Execution cell**:
 One execution whose new output and eventual result can be collected across tool calls.

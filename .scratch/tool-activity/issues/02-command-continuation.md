@@ -1,6 +1,6 @@
 # 02: Command continuation without receipt rows
 
-**What to build:** Command progress stays at its origin across prompts. Successful output polls and empty execution completions add no action. Submitted terminal commands remain associated with the original operation. See the [specification](../../../docs/specs/pi-activity.md).
+**What to build:** Command progress stays at its origin across prompts. Successful output polls and empty execution completions add no action. Submitted terminal commands remain associated with the original operation. See the [specification](../../../docs/specs/tool-activity.md).
 
 **Blocked by:** 01: Generic operation presentation.
 

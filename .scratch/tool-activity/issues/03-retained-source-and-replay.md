@@ -1,6 +1,6 @@
 # 03: Retained source and replay
 
-**What to build:** Reliable operation facts survive reload, while original calls and results remain discoverable even when normal activity has no row. See the [specification](../../../docs/specs/pi-activity.md).
+**What to build:** Reliable operation facts survive reload, while original calls and results remain discoverable even when normal activity has no row. See the [specification](../../../docs/specs/tool-activity.md).
 
 **Blocked by:** 02: Command continuation without receipt rows.
 

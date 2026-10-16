@@ -1,8 +1,8 @@
 # Core toolset
 
-**Status:** resolved — generic activity delta implemented at `4e271b8` on `codex/generic-tool-activity`. [Current verification](../tool-activity/issues/03-retained-source-and-replay.md) records the tested versions and remaining limits. Earlier revisions retain their recorded evidence and limits.
+**Status:** ready-for-agent — action/result and package correction from `4ad78cc`; earlier validation retains its original scope.
 
-**Tracker:** [Activity 01](../tool-activity/issues/01-generic-operation-presentation.md) → [Activity 02](../tool-activity/issues/02-command-continuation.md) → [Activity 03](../tool-activity/issues/03-retained-source-and-replay.md). Earlier core and chat tickets retain their historical scope and evidence.
+**Tracker:** [Activity 04](../tool-activity/issues/04-action-results-without-a-package.md) → [Activity 05](../tool-activity/issues/05-skill-reads-across-tools.md). Earlier core and chat tickets retain their historical scope and evidence.
 
 **Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. Final presentation verification at `d4ffbfd` is recorded separately in ticket 07: 207 package checks pass, as do static checks, two installed-CLI live pipe/PTY checks with the six usable companions, and both independent review rechecks. Main integration at `9c633a3` also passes four mixed checks and both installed-CLI cases with all seven companions, closing the earlier attachments startup gap. The approved native image-placement exception, physical-display gap, and measured cost of rendering expanded output into the native exit transcript remain explicit. Earlier measurements retain their original revision identities.
 
@@ -30,9 +30,9 @@ The captured contract is the baseline for the included tool names, declarations,
 
 Verification uses the existing real Pi host with controlled provider responses. It observes the outgoing model request, executes the requested tools against real temporary resources, and examines the next outgoing request. Matched live-model trials then measure behavior under equivalent task conditions.
 
-This revision publishes the optional neutral activity contract. It preserves stable operation identity, effective inputs, individual outcomes, bounded applicable output, per-file changes, and separately owned script output or errors. A command can have several meaningful submitted actions. Successful polls and empty orchestration completions produce no action. No consumer name, renderer, summary, or layout belongs in this package.
+This revision constructs the documented activity data format inside the existing package, without a shared contract package or dependency on a consumer. It preserves stable operation identity, effective inputs, individual outcomes, bounded applicable output, per-file changes, and separately recorded execution errors. Raw script output remains in model results and retained source without becoming new work. A command can have several meaningful submitted actions. Successful polls and empty orchestration completions produce no action. No consumer name, renderer, summary, or layout belongs in this package.
 
-Command output and process outcomes update their origin through existing process events, independently of model collection or custom renderer creation. Pi result details, event bus, and retained custom entries carry the same validated contract. Original source, result hooks, native image placement, and standalone tool rendering remain intact. Add no polling, extra calls, alerts, settings, or unsolicited turns. The [generic activity specification](../../docs/specs/pi-activity.md) governs the delta.
+Command output and process outcomes update their origin through existing process events, independently of model collection or custom renderer creation. Pi result details, event bus, and retained custom entries carry the same validated contract. Original source, result hooks, native image placement, and standalone tool rendering remain intact. Add no polling, extra calls, alerts, settings, or unsolicited turns. The [generic activity specification](../../docs/specs/tool-activity.md) governs the delta.
 
 ## User Stories
 
@@ -123,8 +123,8 @@ Command output and process outcomes update their origin through existing process
 84. As a package operator, I want semantic facts independent of UI components and private execution records, so that tools remain useful without a chat extension.
 85. As a Pi user, I want edit item summaries to show verified additions and deletions when available and omit unavailable counts, so that a concise summary remains accurate.
 86. As a Pi user, I want partial patch failures to preserve each file's actual outcome, so that completed edits are not confused with failed or unattempted changes.
-87. As a Pi user, I want an execution cell's own output or error in one separate execution activity item, so that I can inspect script-level content independently of child operations.
-88. As a Pi user, I want empty execution activity items omitted and attributed child output excluded from them, so that the render group contains useful entries without repeated output.
+87. As a Pi user, I want raw execution output retained without an additional activity row, so that forwarding text does not look like another operation.
+88. As a Pi user, I want failed operations and any additional execution error kept inspectable without duplicate failure activities, so that the list describes the actual failed work.
 89. As a Pi user, I want genuine script-owned output preserved even when its text matches child output, so that text-based duplicate detection does not silently discard information.
 90. As a Pi user, I want an execution failure before any child starts to remain accessible through an initially collapsed activity item, so that an empty operation list cannot hide the error.
 91. As a Pi user, I want a script failure to leave successful child commands successful, so that the parent outcome does not misrepresent completed work.
@@ -255,13 +255,13 @@ Command output and process outcomes update their origin through existing process
 
 ## Provider activity contract
 
-The [neutral activity specification](../../docs/specs/pi-activity.md) defines the public consumer boundary. Semantic operations identify their originating call/session, stable order and revision, kind, actual outcome, applicable inputs/output, optional verified counts, and explicit omission. Native result details bind those facts to processed content; live events and retained custom-entry metadata publish incremental updates independently of custom renderers. Image ownership references native result parts without copying bytes.
+The [neutral activity specification](../../docs/specs/tool-activity.md) defines the public consumer boundary. Semantic operations identify their originating call/session, stable order and revision, kind, actual outcome, applicable inputs/output, optional verified counts, and explicit omission. Native result details bind those facts to processed content; live events and retained custom-entry metadata publish incremental updates independently of custom renderers. Image ownership references native result parts without copying bytes.
 
 A valid empty record means the call has no new activity; missing or invalid metadata means generic fallback. Private execution details and journals may continue serving standalone rendering and model replay, but consumers do not decode them. Result consistency checks cover text/content shape and activity facts, with the existing exception for native image conversion and normalization hints. They are not authentication. Removed or invalid metadata never revives discarded output from an earlier journal. Session replacement clears live state; replay uses only reliable active-branch records and never recreates resources.
 
 Settled execution bodies retain the latest eight operations; patch bodies retain the latest sixteen changes. These windows remove body content, never compact operation or file records. The existing presentation helper uses a 16,384-column and byte budget with an omission marker for truncated text. Patch count calculation trims unchanged prefixes and suffixes, then bounds mixed comparison to 100,000 cells and 10,000 combined lines; pure additions and deletions remain exact. Unreadable prior content or a larger mixed comparison omits counts. These limits do not change returned command output collection or file mutation semantics.
 
-Output attribution follows object identity before serialization: forwarding a returned child object through `text` or `image` preserves its producing operation. Primitive text has no such identity. A tool or result hook can return a string, and a script can catch a primitive rejection; emitting either through `text` cannot be distinguished from emitting identical script-owned text. That output is retained as execution content and can therefore appear in both bodies. Equality alone never removes it. Native primitive rejection values and helper return semantics remain unchanged; complete attribution for primitive forwarding is not established.
+Standalone output attribution retains the existing object-identity limit for primitive text and rejection values. The activity protocol does not try to recover that identity: raw script text stays in processed results and retained source, and returning it creates no new operation. Execution error facts remain distinct from child outcomes. Neither script values nor native rejection types change for presentation, and matching text alone never assigns ownership.
 
 ## Further Notes
 
