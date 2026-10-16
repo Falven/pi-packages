@@ -4,7 +4,23 @@
 
 **Blocked by:** 04: Account for usage and budgets.
 
-**Status:** partial — public preservation behavior and captures verified; conditional inheritance, deletion notifications, actual-client provenance, and the native active-EOF limit remain open.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** partial — public preservation behavior and captures verified; conditional inheritance, deletion notifications, actual-client provenance, and the native active-EOF limit remain open.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Produce and reopen all six goal statuses through the existing native controls and runtime outcomes, preserving exact objective, ownership, generation, allowance, counters, and timestamps without charging downtime.
+- [ ] Keep the latest current-session snapshot or clear record authoritative across compaction, rewind, reload, and reopening, including records outside the active branch. Replacement and interactive completion must not resurrect historical goals.
+- [ ] Verify ordinary forks and clones copy history without acquiring the source goal; newly authorized target goals and healthy session switches remain independent. Conditional inheritance retains its existing capability gate.
+- [ ] Verify retaining reload preserves both healthy state and a prior storage-failure stop, while a fresh manager restores saved state only. Session disposal invalidates owned callbacks and does not fabricate an explicit pause.
+- [ ] Adapt preservation fixtures to native session entries and observable controls. Goal records share saved-session deletion without an external row; do not claim a deletion notification interrupts another loaded runtime.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Reopen each saved goal with its objective, effective status, allowance, counters, timestamps, ownership, and generation intact. Restoring an active loaded session can admit eligible continuation; inactive statuses remain inactive and downtime adds no elapsed usage.
 - [x] Preserve the current durable goal through compaction and history rewind. Do not replay a historical goal event into current state, reset accounting, refund consumed tokens, or resurrect a cleared objective from transcript history.
@@ -21,7 +37,7 @@
 - [x] Capture lifecycle-related instructions, persisted counters, continuation admission, and subsequent provider requests in Phoenix. Distinguish actual-client, scripted, and replay evidence, verify retrieval, and record the material results here.
 - [x] Preserve Pi source and installed files, native ownership, neutral terminology, and the chosen public integration boundary; complete the relevant checks without claiming unsupported lifecycle coverage.
 
-## Real-session preservation coverage
+## Historical Real-session preservation coverage
 
 The [preservation suite](../../../packages/pi-goal/test/preservation.test.ts) adds 20 native-session checks. It uses the existing public loader, session runtime, tools, commands, compactor, history navigation, and terminal dispatch with a local scripted provider. It changes no production source. The compaction and pending-editor fixes discovered by this suite are owned by [ticket 06](06-stop-unproductive-runs.md).
 
@@ -35,7 +51,7 @@ Compacting a paused goal preserves its full 184-token snapshot while ordinary hi
 
 A generic persisted fork copies conversation history but starts without a goal. A newly authorized target goal has independent ownership and generation; returning to the source preserves its recorded cutoff. A generic ephemeral fork remains ephemeral, and its native goal reads and writes reject the missing persistent owner. These cases do not claim the conditional inheritance mode described above. Switching sessions also cancels a pending objective editor and leaves both goals unchanged, preventing the old command promise from surviving runtime disposal.
 
-## Validation
+## Historical Validation
 
 All 20 cases pass on primary Pi 1.1 source `6fb2e7815167e6b19006fc526d1a5d0f5f998787` with Node `24.13.1`. The full suite ran from the actual preservation worktree against production commit `07a936b39912422eb406736472f07263440395df`, then incorporated its unchanged integration merge `06dd431e6558ae6afa0b4196ccaf36d2d10fe0c5`. There were no failures, cancellations, or skipped cases. Scoped lint, formatting, project type checking, and whitespace checks pass.
 
@@ -48,7 +64,7 @@ All 20 cases pass on primary Pi 1.1 source `6fb2e7815167e6b19006fc526d1a5d0f5f99
 
 The fixture uses native session behavior with a recording terminal or headless bindings. [Ticket 07](07-phoenix-terminal-acceptance.md) supplies separate actual-process evidence for terminal, RPC, print, and JSON lifetimes, including the native active-EOF limit. The native command reload is covered; a bare headless `session.reload()` with no UI, command, shutdown, or error bindings does not emit the same reinitialization events and is not treated as an equivalent lifecycle. The final integrated goal suite passes all 177 cases, including these 20 preservation cases.
 
-## Native preservation captures
+## Historical Native preservation captures
 
 Four scenarios at frozen production revision `f89f03aecb18736432c1cc3f81e76390993b7106` make 47 endpoint requests across 51 Phoenix spans. All 102 full input/output fields were independently retrieved and matched as strings, SHA-256 hashes, and byte counts: 6,777,686 bytes. The five production files and shared fixture match their committed hashes. The evidence root is `/tmp/pi-goal-preservation-capture.mPUNn8/20261014T072735014Z-b7cea3c1`.
 
@@ -61,7 +77,7 @@ Four scenarios at frozen production revision `f89f03aecb18736432c1cc3f81e7639099
 
 Forty-six endpoint requests match public request observations and have parsed response events. One standalone summary bypasses both ordinary public hooks; its endpoint request, scripted response, and successful combined usage report are retained without inventing hook correlation. These captures use a local scripted provider and native sessions. They establish neither actual-client provenance nor conditional inheritance. Shared files remained unchanged. The earlier recorder attempt is retained separately with its observer-count failure and excluded from acceptance.
 
-## Remaining capability and evidence gates
+## Historical Remaining capability and evidence gates
 
 - The inspected public fork operation exposes generic history forking, not the required continuation-deferral request. Actual-client evidence identifying the inheriting operation is still missing. No conditional copy, invented flag, or ephemeral inheritance approximation is implemented.
 - There is no verified public session-deletion notification. Explicit clear preserves conversation history and removes current state; automatic orphan cleanup is not claimed.

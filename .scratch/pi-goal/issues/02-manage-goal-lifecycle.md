@@ -4,7 +4,22 @@
 
 **Blocked by:** 01: Create and inspect goals.
 
-**Status:** in-progress — lifecycle implementation and controlled-session evidence are complete; actual-client user-origin provenance remains an acceptance gap.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** in-progress — lifecycle implementation and controlled-session evidence are complete; actual-client user-origin provenance remains an acceptance gap.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Use explicit session-owned clear records for user clear and interactive completion cleanup. Repeated clear remains well defined; historical snapshots cannot become current after history navigation or reopening.
+- [ ] Preserve native edit, pause, resume, completion, replacement, status precedence, ownership, generation, and accumulated usage through the new store. No goal control or agent message is added for storage.
+- [ ] Retain the completed tool result even if interactive cleanup clears the current goal before delivery. Report failed cleanup independently without rewriting that completed result; ticket 03 supplies the persistent runtime failure stop.
+- [ ] Adapt lifecycle fixtures and observable assertions to native storage. Verify headless completed-state retention, explicit clear, replacement, history navigation, and saved-session reopening through existing controls and tools.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Add `update_goal` with only the specified `complete`, `blocked`, and `paused` inputs. Use Pi's native schema validation, result delivery, and error handling; preserve goal values and the successful result envelope across direct and native programmatic calls.
 - [x] State the explicit-pause, full-completion, three-turn blocked-audit, fresh-audit-after-resume, and returned-budget-reporting policies in independently written descriptions. These are model instructions; do not invent runtime proof checks or additional tool arguments.
@@ -21,7 +36,7 @@
 - [x] Verify lifecycle transitions, invalid statuses, completion cleanup races, replacement, and direct/nested results through the real-session seam. Capture relevant user controls and model exchanges in Phoenix, retrieve them, and record evidence or pending gaps here.
 - [x] Use public extension services, preserve Pi's installed files and unrelated behavior, retain neutral terminology, and complete the relevant checks without claiming unimplemented continuation or accounting behavior.
 
-## Implementation evidence
+## Historical Implementation evidence
 
 The three tools use native registration, schemas, sequential tool execution, text and structured results, and ordinary errors. `update_goal` accepts only completion, blocking, or pause. Its independently written instructions preserve explicit-pause authority, evidence for the entire objective, the three-turn blocked audit, a fresh audit after resume, budget precedence, and reporting the returned usage. These remain model policies rather than invented runtime proof checks.
 
@@ -37,7 +52,7 @@ A successful completion result owns its snapshot. Terminal presentation retains 
 
 The shared fixture gained a small headless option that binds the real runtime in `print` mode without constructing an interactive renderer. The lifecycle checks use this public binding and the existing recording terminal; they do not reproduce the agent loop or patch host internals. Stored-usage and deletion-failure fixtures are explicit system inputs to real sessions, not claims that live accounting is implemented.
 
-## Validation
+## Historical Validation
 
 TDD slices first reproduced missing `update_goal`, missing completion guidance, deletion failure replacing a successful completion, exhaustion becoming paused, missing picker/control behavior, missing running-edit context, retained current state on terminal restore, and command trimming that lost format characters. The implemented behavior then passed through the real-session seam. Generation replacement and session-switch tests observe public tool results and native UI outcomes.
 
@@ -52,7 +67,7 @@ Type checking, scoped lint/format checks, and `git diff --check` passed. Existin
 
 Integration tip `d5bff91` was merged before implementation. Tip `d48c58a99a07dfd01b93c35d758f9b88860e371f` was merged before committing this slice; its additional changes affect evidence and specification text only.
 
-## Agent-interface captures
+## Historical Agent-interface captures
 
 Three fresh scripted Pi 1.1.0 sessions produced **16 request spans and 32 matching full input/output hashes**. The last public request observer equals the endpoint's received decoded request-body string. Captured output includes host context, parsed provider events, tool starts/results with their call identities, and final messages. Complete fields were retrieved from Phoenix and checked by SHA-256 and byte length, correlated by span identity. This establishes fidelity at that capture layer; it does not establish compressed transport-byte identity.
 
@@ -78,7 +93,7 @@ PI_GOAL_CHECKOUT="$PWD" /Users/fran/.nvm/versions/node/v24.13.1/bin/node --exper
 
 Actual-client user-origin authorization is still unverified. Neither native commands nor a visible goal entry establish that conditional message path. This implementation does not invent it. Actual terminal Stop/companion compatibility, RPC transport behavior, live accounting, continuation, fork inheritance, and compaction boundaries retain their own acceptance gates in tickets 03–07.
 
-## Retrieved field hashes
+## Historical Retrieved field hashes
 
 Every row below matched the complete posted and retrieved input/output strings and byte lengths. Request ordinals are local to the named scenario.
 

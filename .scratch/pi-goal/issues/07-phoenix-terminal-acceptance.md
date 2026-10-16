@@ -4,7 +4,25 @@
 
 **Blocked by:** 05: Preserve goals across session changes; 06: Stop unproductive runs.
 
-**Status:** partial — supported native paths, Phoenix retrieval, and 20 process phases verified; actual-client evidence and the capability and active-EOF gates below remain open.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** partial — supported native paths, Phoenix retrieval, and 20 process phases verified; actual-client evidence and the capability and active-EOF gates below remain open.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Validate against installed released Pi 1.1.0 with the supported Node runtime and a temporary public module-resolution preload. Verify actual resolutions in the main process, test workers, extension loading, and companion module paths without changing shared fixtures or dependency manifests.
+- [ ] Run all affected native goal suites and relevant companion integration checks, then scoped formatting, lint, types, and whitespace validation. Review the integration branch against the spec and repository standards; resolve migration findings.
+- [ ] Reuse the existing capture workflow for native-storage create/read, lifecycle, continuation, accounting, and failure/recovery scenarios. Retrieve new Phoenix records and verify full input/output fidelity. Compare tool declarations, values, message roles, ordering, edits, budget notices, and final reporting with the historical interface evidence.
+- [ ] Demonstrate that raw native state entries add no model-facing messages. Label accepted first-save, single-writer, and failed-write limits explicitly; before-and-after evidence does not close older actual-client or host-capability gaps.
+- [ ] Confirm no active SQLite usage, persistent fallback, new storage dependency, host-source change, installed-host-file change, or private adapter. Preserve all existing public goal controls and tool semantics.
+- [ ] Recheck the legacy store immediately before any editable-installation cutover. Activate only after candidate validation and a fresh zero-goal result; preserve unexpected goals and resolve their migration before switching. Do not silently delete the old database.
+- [ ] Record current migration results in these existing tickets and the specification, separate from historical checks. Resolve the native-storage deltas without marking previously unsupported feature acceptance complete.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Assemble the evidence collected by the earlier slices into the full create, inspect, continue, edit, pause, resume, clear, complete, block, budget-exhaustion, usage-exhaustion, and lifecycle scenario matrix. Complete missing cases; do not defer all capture work to this final slice.
 - [ ] Collect actual reference-client and Pi evidence for ordinary controls and the work cycle. Label actual-client observations, bundled-runtime checks, deterministic provider scripts, and payload replays separately. Use controlled failures for unsafe or impractical live-provider conditions; keep unperformed cases pending with their consequence for the compatibility claim.
@@ -21,7 +39,7 @@
 - [x] Record neutral trace references, supported runtime capabilities, verified results, and material limitations in the specification and these tickets. Create no separate comparison report, contract, research note, or extra plan; do not publish the package as part of acceptance.
 - [x] Mark each ticket complete only when its acceptance is demonstrated. No exact-compatibility claim is permitted while a required observable or capability remains unexplained, unsupported, or unverified.
 
-## Scenario matrix
+## Historical Scenario matrix
 
 The table separates demonstrated package behavior from the remaining acceptance gates. Reference-runtime and native-session captures use controlled local responses. An OS PTY is actual native terminal interaction, but neither capture origin establishes reference desktop behavior. Earlier captures retain their recorded package revision. Final preservation, guard, and process captures use frozen production revision `f89f03aecb18736432c1cc3f81e76390993b7106`; the subsequent review cleanup changes tests only.
 
@@ -42,7 +60,7 @@ The table separates demonstrated package behavior from the remaining acceptance 
 
 Pi-owned schemas, validation, error objects, tool advertising, and result framing are intentional native behavior. Objective, authority, status, budget, usage, timestamps, and control timing remain behavioral requirements. Lossless decimal strings carry integers that native numeric values cannot preserve. Dynamic identities, independently written policy text, host instruction stacks, and unaligned model/provider settings are recorded differences, not silently removed comparison data.
 
-## Final process and terminal captures
+## Historical Final process and terminal captures
 
 The harness is outside the repository under `/tmp/pi-goal-acceptance.ieKMuWaR`. It uses Pi 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`, Node 24.13.1, isolated state, and local scripted providers. Twenty accepted process phases produce 49 endpoint requests and 69 Phoenix spans. Independent retrieval verifies all 138 full input/output fields, totaling 8,916,232 bytes, plus all 20 exact raw process outputs and all 49 request bodies. `final-matrix.json` separates 12 successful scenario roots, nine rejected harness attempts, and one failed native active-EOF acceptance case. `root-final-verification.json` identifies every independently verified root. `final-source-and-shared-invariance.json` records 39 loaded package/companion files matching the frozen commit and unchanged protected shared files and source state.
 
@@ -75,7 +93,7 @@ The nine terminal scenarios include ten OS PTY processes and one print seed. The
 
 The companion flow exercises native `./` path completion; offline `@` fuzzy completion depends on an unavailable `fd` executable and was not tested. Terminal observations use public editor state when styled output splits visible text across escape sequences. Retry Stop is verified through native retry cancellation and persisted pause; its settled event retains `aborted: false`. The distinct raw RPC abort reports `aborted: true`. Rejected harness attempts remain separately identified and excluded from accepted counts; correcting an observer assertion does not turn a failed run into evidence.
 
-## Native EOF limitation
+## Historical Native EOF limitation
 
 Closing RPC input during an unfinished response reproduces `turn_end could not resolve the persisted assistant entry ID`. Native CLI controls with no goal package reproduce the same loss: active EOF exits zero with no persisted assistant; explicit abort followed by settlement and EOF exits zero with one persisted aborted assistant and no boundary error. Both controls make exactly one request. The passive observer exposes the error; the unfinished assistant is absent from native session storage.
 
@@ -85,7 +103,7 @@ Evidence is under `/var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-eof-
 
 Source evidence explains the boundary: RPC EOF disposes the runtime; runtime disposal emits shutdown, then aborts and disconnects without awaiting response settlement. The ordinary session-replacement path awaits abort first. No host source change, private integration, synthetic history entry, or inferred user pause was added.
 
-## Final validation and review
+## Historical Final validation and review
 
 The final goal suite passes all 177 cases on the pinned primary runtime, with no failures, cancellations, or skips. The affected shared fixture and seven chat regression suites pass another 120 cases. Type checking, scoped lint, formatting, whitespace, and neutral-terminology checks pass. Logs are `/tmp/pi-goal-final-integrated-tests.log` and `/tmp/pi-goal-fixture-compatibility.log`.
 
@@ -93,7 +111,7 @@ The review fixed point is `466376e1904fc33bcb4b54932314da4f423829af`. Standards 
 
 Spec review found no new actionable defect beyond the recorded partial requirements: conditional inheritance and deletion, actual-client provenance, unavailable activity and execution classifications, opaque accounting cutoffs, and incomplete actual-client acceptance. Tickets 01 and 03 are complete within their stated boundary; tickets 02 and 04–07 retain their affected gates. The native EOF finding adds a demonstrated host persistence limit. No exact-compatibility, registry-release, or universal provider-support claim is made.
 
-## Reference runtime captures
+## Historical Reference runtime captures
 
 Seven controlled scenarios recorded on 2026-10-14 provide 38 provider exchanges, 16 turns, and 45 Phoenix spans. Every span's full input and output was retrieved and independently checked against its saved payload, SHA-256 hash, and byte count: 90 matching fields. These are `bundled-engine-scripted` observations with a localhost provider and control requests that omit `origin`; they do not establish desktop control behavior.
 
@@ -113,7 +131,7 @@ The three runtime-context kinds use user role and persisted `goal.internal_conte
 
 Reported usage is 100 input, 20 cached input, 12 output, four reasoning tokens, and 112 total per response, yielding 92 chargeable tokens. All seven dedicated goals were cleared, both test engines exited, and the shared configuration and authentication files retained their hashes and modes. No live provider was used. Actual desktop controls, completion-display cleanup, Stop, frontend queue timing, pending-admission races, compaction, reload, forks, provider limits, and execution-failure predicates remain outside this batch. The native implementation and its distinct evidence are recorded in the matrix above; these runtime traces alone do not establish actual-client behavior.
 
-## Native terminal startup captures
+## Historical Native terminal startup captures
 
 Three startup checks use Pi 1.1.0 with its unmodified `ProcessTerminal` in an OS PTY, Node 24.13.1, isolated state, and a localhost scripted provider. The public loader loads the goal package alone, before all four companions, and after them. Each run accepts `/goal`, completes ordinary input without creating a goal, accepts `/goal` again, and exits through native Ctrl+D with code zero. Native raw mode, alternate screen, and bracketed paste are entered and restored; extension loading reports no errors.
 
@@ -125,7 +143,7 @@ Three startup checks use Pi 1.1.0 with its unmodified `ProcessTerminal` in an OS
 
 Evidence is under `/tmp/pi-goal-native-pty-v4kUiXAl`, with runs `20261014-005457-native-17104b19`, `20261014-005507-first-6b17680d`, and `20261014-005507-last-a8096954`. Saved raw terminal output, exact input bytes, lifecycle events, request bodies, response streams, source hashes, and retrieved spans identify the capture as `native-process-terminal-pty-scripted`. All six complete Phoenix payloads and three terminal transcript hashes were independently checked. These runs use package revision `5ecd3297`; their scope is startup, ordinary input, and native exit. Later Stop and integrated terminal evidence appears in ticket 03 and above. Emulator-specific negotiation remains unverified.
 
-## Reference failure and preservation captures
+## Historical Reference failure and preservation captures
 
 Seven further `bundled-engine-scripted` scenarios provide 30 transport requests and 37 Phoenix spans. All 74 complete input/output fields were independently retrieved and matched to their saved payloads, hashes, and byte counts. These controlled localhost runs use two configured request retries, no stream retries, and a one-second unload delay. Error and interrupted requests have no invented usage.
 

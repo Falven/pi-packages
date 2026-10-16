@@ -2,9 +2,23 @@
 
 **What to build:** Stop goals for the correct runtime reason when continuations are empty, orchestration repeatedly fails, retries are exhausted, or provider usage is limited, while preserving explicit user control and accounting. Follow the approved [specification](../../../docs/specs/pi-goal.md).
 
-**Dependency:** 04: Account for usage and budgets, integrated.
+**Blocked by:** 04: Account for usage and budgets.
 
-**Status:** partial — supported public paths and captures verified; unavailable activity, execution, and provider classifications remain open.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** partial — supported public paths and captures verified; unavailable activity, execution, and provider classifications remain open.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Adapt existing progress and failure-guard fixtures to native session storage, preserving supported empty-turn thresholds, resets, retry exhaustion, structured usage-limit precedence, ownership, and final accounting.
+- [ ] Native custom state entries must not become model messages, human activity, or automatic-turn identity. Existing guard counters remain runtime-only and storage failures cannot launch another goal turn.
+- [ ] Keep previously unavailable activity, execution, provider, and conditional-mode classifications visibly open. Do not broaden the migration into new runtime safeguards or private host integration.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Block a goal after the specified three consecutive automatic turns with an empty final and no qualifying activity. Record automatic-turn identity only after admission; a rejected or ordinary user turn is not an automatic empty attempt.
 - [ ] Preserve the observed activity definition for text, reasoning summaries, questions, all delivered tool outcomes, and other completed turn items. A missing final is not an empty final; blank text needs a final or absent phase. Preserve latched activity and empty-final flags. Do not infer emptiness from visible chat rendering alone.
@@ -20,7 +34,7 @@
 - [x] Capture failure and recovery exchanges in Phoenix with explicit evidence origin. Scripted failure responses and bundled-runtime checks remain distinguishable from actual-client observations; retrieve captures and record any unsupported error or mode classification here.
 - [x] Keep public extension integration, unchanged Pi files, neutral terminology, and relevant validation intact. Mark unsupported stop predicates or missing evidence as pending rather than broadening the behavior silently.
 
-## Public runtime classification evidence
+## Historical Public runtime classification evidence
 
 Read-only review of the pinned accounting and runtime implementation establishes the empty guard independently of chat rendering. Nonblank agent text in any phase and nonblank reasoning summaries count as activity; raw reasoning alone does not. Presence of a questions field counts even for an empty list. Other completed turn items count regardless of payload, and every delivered tool outcome resets the empty streak before checking whether its turn is still tracked. This broad activity rule is separate from the narrower checkpoint and execution-failure predicates below. Goal-generated hidden continuation context is not a human turn item.
 
@@ -37,7 +51,7 @@ Terminal-error handling can use the verified final boundary. Exact handler-failu
 
 Three additional real-session probes in `/tmp/pi-goal-public-failure.M8XFIf/correlation.mjs` were independently reproduced. A structured quota can be attributed when its nonempty response ID and provider/API/model tuple match the terminal outer assistant message from `turn_end`, with `stopReason: error`. Apply that classification only after final settlement and retry exhaustion. Native cache warming copies the outer request's callbacks: its quota event can overlap an unrelated outer failure with the same provider/API/model, but a different response ID. The overlap tests cover both identified and ID-less background errors. Events or terminal messages without a response ID remain unclassifiable through this join; a per-turn quota flag would produce a false positive.
 
-## Activity and outer-run boundaries
+## Historical Activity and outer-run boundaries
 
 Public source inspection establishes several integration constraints. Native retries and before-settle continuations emit another `agent_start` before the single outer `agent_settled`. Reuse the current accounting binding and retain its activity, empty-final latch, automatic identity, and baselines across those starts. Neither `turnIndex` nor one provider request identifies an outer run. Evaluate the guard once at final settlement, using the latest before-settle outcome.
 
@@ -49,7 +63,7 @@ Every delivered `tool_execution_end` resets the empty streak, including nested a
 
 Later message hooks can replace assistant messages. Use the persisted `turn_end.message` for the terminal outer response and quota correlation while retaining separate completion evidence for partial or retried blocks.
 
-## Implemented public paths
+## Historical Implemented public paths
 
 The guard reuses the accounting module's current goal binding. It retains activity and completion evidence across retries and before-settle continuations, evaluates once at outer settlement, and updates only the matching persisted session and generation. A terminal ordinary error can stop an active goal; a matching structured usage-limit error can also replace an in-flight budget limit. Pause, clear, completion, and an unrelated generation remain protected.
 
@@ -59,7 +73,7 @@ Terminal usage-limit attribution requires the final persisted error message's no
 
 Three preservation fixes share this production slice. A successful manual compaction can queue the owned continuation command, wait through public `waitForIdle`, and recheck lifetime, revision, session, generation, status, pending user work, and compaction cancellation before admission. Its public combined usage report is charged once; standalone completion checkpoints immediately, while in-run compaction leaves usage for existing checkpoints. An objective editor races its public promise against extension lifetime cancellation so a session switch can settle the old command without input in the new session.
 
-## Remaining capability and evidence limits
+## Historical Remaining capability and evidence limits
 
 The immutable executed-handler provenance needed for the separate orchestration-failure counter is unavailable through the verified public outcomes. That counter is not implemented. Structured questions, opaque reasoning summaries, and specialized host modes are also unclassified. No text, question-mark, tool-name, or timing heuristic substitutes for those fields.
 
@@ -67,7 +81,7 @@ Transports that discard structured quota codes or response identities cannot pro
 
 The five package captures below verify the supported failure and recovery paths against the frozen implementation. They do not establish unavailable classifications or actual-client behavior.
 
-## Native guard captures
+## Historical Native guard captures
 
 The evidence root is `/private/tmp/pi-goal-guard-capture-i6ox7ajy/20261014T072705813Z-c8859e53`, at frozen production revision `f89f03aecb18736432c1cc3f81e76390993b7106`. Five scenarios make 27 requests across 32 Phoenix spans. Independent retrieval verified all 64 full fields, totaling 5,029,679 bytes, against saved strings, SHA-256 hashes, and byte counts. Request wire bytes and the 27 saved response bodies were also checked; 14 reference response bodies were replayed byte-for-byte.
 
@@ -83,7 +97,7 @@ All 27 requests have public request observations. The captures retain 22 respons
 
 The reference scenarios create goals through backend controls. Native captures add an explicit authorization prompt and two zero-usage setup responses. Resume repetition, retry recovery, and the background-quota negative control are labeled additions. Model, maximum output, reasoning and service settings, instruction stacks, policy wording, and native tool/result framing differ. Retry delays are controlled at one millisecond. Both hosts send continuation context with user role, and recorded counters advance at the corresponding boundaries. All isolated goals were cleared; shared files, production sources, and previous evidence retained their hashes. The earlier key-order-sensitive recorder failure remains separate and is excluded from acceptance.
 
-## Package validation
+## Historical Package validation
 
 Checks ran on the primary source runtime at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`, version `1.1.0`, with Node `24.13.1`. The package's secondary workspace dependency is not the full-runtime acceptance target.
 

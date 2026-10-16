@@ -4,7 +4,24 @@
 
 **Blocked by:** 02: Manage goal lifecycle.
 
-**Status:** complete for the verified Pi 1.1.0 runtime; inherited provenance and registry distribution remain open outside this ticket
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** complete for the verified Pi 1.1.0 runtime; inherited provenance and registry distribution remain open outside this ticket
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] On a native goal read or append failure, cancel owned pending continuation and reject later automatic admission for that live session manager, including admission after asynchronous settlement. Domain-validation rejections alone do not trigger this stop.
+- [ ] Retain only a process-memory failure flag across extension reload, keyed to the public session manager identity using the existing repository pattern. Do not patch host methods, use private fields, or retain a second goal state. A later successful operation must not clear the flag.
+- [ ] Prevent accounting retries against a failed in-memory snapshot. Retaining reload remains stopped; reopening the saved session through a fresh native manager recovers only saved state. An independent manager remains usable.
+- [ ] Keep native Stop interruption working when pause or cleanup storage fails. Error notifications explain reopening and do not claim a status was saved or that retrying the unchanged command repairs storage.
+- [ ] Adapt Stop fault injection to the native storage boundary. Directly verify pending admission suppression, retaining reload, fresh saved-state recovery, native interruption, and independent-session isolation through the approved seam.
+- [ ] Preserve healthy continuation placement, queued-user-work ordering, pause and clear admission checks, editor ownership, and the separately recorded extension-removal limitation.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Use the public settled-session boundary to request a fresh outer run. Demonstrate that the continuation is a new run; an in-run continuation before settlement is not equivalent.
 - [x] Admit at most one continuation for the current session and generation while the extension remains loaded. Revalidate active status, ownership, limits, shutdown state, and accepted user work when the pending command handler runs. Rejected admission creates neither a model input nor an automatic-turn identity.
@@ -21,7 +38,7 @@
 - [x] Capture continuation, objective editing, queue races, pause, and Stop exchanges in Phoenix. Separate actual-client observations from scripted runs and replays, verify retrieved records, and record supported behavior and unresolved differences here.
 - [x] Leave Pi source and installed files untouched, preserve neutral terminology, run the relevant checks, and keep this ticket incomplete if required admission or Stop behavior remains unproven.
 
-## Admission feasibility evidence
+## Historical Admission feasibility evidence
 
 The six real-session probes in `packages/pi-goal/test/admission-boundaries.test.ts` passed against Pi 1.0.2 and 1.1.0. Retaining reload and ordinary disposal reject a stale nonce command without a second provider request. Removing the extension leaves the queued command without its handler: `/goal admission-1` becomes user input and starts a second request.
 
@@ -29,13 +46,13 @@ An extension-owned `setImmediate` action can be cancelled before synchronous rem
 
 The missing public guarantee concerns a deferred prompt after extension removal, when its command handler is gone. It does not prove that pausing or clearing a goal fails while the handler remains loaded. The 2026-10-14 clarification separates those boundaries: loaded handlers may recheck and discard stale continuations without physically removing commands. The removal probes and timer/idle alternatives remain valid evidence of the separate host-lifecycle limitation; no private integration is approved. The package checks below now establish loaded pause and clear behavior separately.
 
-## Stop feasibility evidence
+## Historical Stop feasibility evidence
 
 The 17 feasibility cases in the former `packages/pi-goal/test/stop-probe.test.ts`, retained at commit `268f5f44417a373f36c8ab853e8d50b8adbb4913`, passed against Pi 1.0.2 and 1.1.0. A public editor composition installed at `before_agent_start` preserves native dispatch, autocomplete and overlays, default and remapped interruption, retry and compaction cancellation, and both companion load orders, including packaged loading. Controlled pause rejection, synchronous failure, and a 500 ms timeout still delegate to native interruption; the timer is not a hard wall-clock bound. Raw backend abort does not request pause. Shutdown preserves a later editor owner and suppresses a delayed Stop callback.
 
 These historical tests use the recording terminal fixture and controlled pause callbacks. Their copied feasibility implementation was retired after the production implementation acquired persisted-state, bounded-callback, and actual-terminal coverage. The checks below exercise that production code.
 
-## Implemented admission and context
+## Historical Implemented admission and context
 
 The package owns one pending nonce and one cancellable `setImmediate` action for the current session, generation, and local revision. The deferred `/goal --continue` handler rechecks the latest stored goal, session, revision, idle state, accepted pending work, and extension lifetime. It sends the hidden custom message with `triggerTurn: true` synchronously after those checks. The continuation identity appears only in the accepted custom message. User mutations invalidate the old nonce; they do not edit Pi's queue.
 
@@ -45,7 +62,7 @@ The paused and cleared asynchronous cases finish with two initial provider reque
 
 The hidden continuation message preserves objective escaping, the `objective` delimiter, `none` and `unbounded` placeholders, the blank line before the closing wrapper, and no trailing newline after that wrapper. Running edits retain `untrusted_objective` and the `unknown` remainder placeholder. Plan guidance appears only for an effective `update_plan` capability. Context includes the whole-objective evidence audit, live-handle wait rule, and three-turn blocked audit; it is not a permanent system prefix or a repeated reminder injected into each request. Recorded accounting is still zero in these fresh scenarios because accounting belongs to ticket 04.
 
-## Persisted Stop and terminal evidence
+## Historical Persisted Stop and terminal evidence
 
 `packages/pi-goal/src/stop.ts` composes the public editor factory and wraps the native interruption callback after the host assigns it. It preserves native key dispatch, autocomplete and focus handling. Its 500 ms pause attempt is followed by native interruption using the current host state even after a pause failure. The timer is an event-loop bound, not a hard wall-clock guarantee. Stored callback descriptors preserve ownership when a companion proxy binds function reads. Teardown invalidates owned callbacks and preserves later factory or callback replacements.
 
@@ -59,7 +76,7 @@ Each successful case retains exact `transcript.bin`, control inputs, runtime/sou
 
 The PTY runs use the same final `stop.ts` and `state.ts` bytes. Their index capture predates only the six added teardown guards in `576ef3f`; the provider captures and 74-case run include those guards. Every capture records its own revision and source hashes rather than claiming all recordings used identical package bytes.
 
-## Phoenix evidence
+## Historical Phoenix evidence
 
 Six scripted provider scenarios in `/tmp/pi-goal-admission-capture.99jO4N` produced 22 spans with 44 matching complete input/output SHA256 values after retrieval. `final-report.json` records every hash; scenario JSON files retain full requests, stream events, tool events, messages, public run boundaries, controls, source hashes, and settings. The public request observer exactly matched each endpoint's decoded request-body string after decompression; no claim is made about compressed transport bytes.
 
@@ -76,7 +93,7 @@ The six actual PTY scenarios produced seven provider requests plus six terminal 
 
 An independent integration review re-retrieved all 35 spans across the twelve scenarios and verified all 70 full input/output fields, their stored hashes and byte counts, and all six exact terminal transcripts. The reference-runtime scripted observations and the Pi scripted and PTY observations remain distinct evidence. The inherited actual-client provenance gate from ticket 02 and full comparison gate in ticket 07 remain open.
 
-## Checks and runtime limits
+## Historical Checks and runtime limits
 
 The supported primary runtime is Pi 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`, running Node 24.13.1. The first command passed 74 tests; the second passed the 13 package Stop cases:
 

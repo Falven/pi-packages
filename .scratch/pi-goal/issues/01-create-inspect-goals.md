@@ -1,10 +1,27 @@
 # 01: Create and inspect goals
 
-**What to build:** Install `pi-goal` as an independent extension, create an explicitly requested goal, inspect its stored state through the agent interface and native status display, and recover that state when the same session reopens. Follow the approved [specification](../../../docs/specs/pi-goal.md).
+**What to build:** Install `pi-goal` as an independent extension, create an explicitly requested goal, inspect its stored state through the agent interface and native status display, and recover saved state when the same session reopens under Pi's native persistence guarantees. Follow the approved [specification](../../../docs/specs/pi-goal.md).
 
 **Blocked by:** None.
 
-**Status:** complete — creation and inspection meet the native interface contract accepted on 2026-10-14. Lifecycle, accounting, continuation, and Stop remain in their own tickets.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** complete — creation and inspection meet the native interface contract accepted on 2026-10-14. Lifecycle, accounting, continuation, and Stop remain in their own tickets.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Replace the internal goal store with public native custom entries for the owning session. Remove active database imports, initialization, paths, queries, and closing logic without adding a dependency, second store, or host modification.
+- [ ] Write full snapshots with session ownership, generation, objective, status, exact decimal-string integer fields, and optional budget. Restore the latest current-session record across all retained entries in append order; exclude clearly foreign owners and report malformed authoritative data rather than returning null or an older snapshot.
+- [ ] Preserve all three native tool contracts, successful result values, validation ownership, and lossless conversions. Re-read current state before serialized mutations so older captures cannot overwrite counters or replacement generations.
+- [ ] Demonstrate native first-save timing: a goal can exist before a conversation message or session file; the first native message saves it, and an early exit has no independent durability promise. Ephemeral sessions remain unsupported and no synthetic message forces persistence.
+- [ ] Keep different sessions independent and document the accepted single-process-per-session limit. Storage errors remain native errors; the retaining failure stop is completed in ticket 03.
+- [ ] Adapt creation and inspection checks through the approved real-session seam, including exact large values, Unicode and embedded NUL text, damaged recognized records, first save, reopen, and exclusion of raw state from provider context.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Load through the repository's extension packaging and public Pi services. Verify the primary Pi 1.1.0 runtime separately from the workspace's 1.0.2 dependency, and choose supported versions from demonstrated capabilities. Companion extensions are optional.
 - [x] Expose `get_goal` and `create_goal` through Pi's native schemas, validation, result delivery, and errors. Preserve the goal policy descriptions, effective overrides, and tool-name collision handling without changing unrelated tools' concurrency. Remove decoder emulation and provider/history rewriting.
@@ -20,7 +37,7 @@
 - [x] Capture the create/read agent-interface scenarios in Phoenix, identify capture layers and runtime settings, and retrieve the records to verify payload fidelity. Record neutral trace references and material differences in this ticket; existing general traces do not establish goal behavior.
 - [x] Keep Pi source and installed files untouched. Use neutral terminology in all authored content, run the relevant checks, and leave unsupported or unperformed acceptance visibly pending.
 
-## Implementation evidence
+## Historical Implementation evidence
 
 The package registers the goal tools through public Pi APIs and stores one current goal per persisted session in `pi-goal.sqlite`. Creation is an atomic SQLite statement with a fresh private generation and zero counters. Unfinished replacement, ephemeral sessions, and storage locks remain failures. Goal tools request sequential execution individually. Replacement after completion and late-event accounting remain in their assigned tickets.
 
@@ -34,7 +51,7 @@ Objectives retain Unicode whitespace trimming and the nonempty 4,000-scalar limi
 
 The effective foreign tool remains authoritative when a name collision occurs, with the native registration diagnostic and a clear goal collision notice. Native inspection and status display preserve other interface ownership. Terminal control sequences are removed only from displayed objective text. Ordinary tasks create no goal, and goal creation contributes only its ordinary tool result.
 
-## Current agent-interface captures
+## Historical Current agent-interface captures
 
 Fresh runs use a real Pi 1.1.0 session with a local scripted provider. They capture complete host context, the last public request observer, received request-body strings after decompression, parsed provider events, tool starts and results, and final messages. The observer equals the received decoded string; this does not establish compressed transport-byte identity. Authorization headers are absent. Each complete stored input and output was retrieved and checked by SHA-256, correlated by span identity. Captures also record hashes of the package source files.
 
@@ -49,7 +66,7 @@ Runtime metadata records Pi 1.1.0 at `6fb2e7815167e6b19006fc526d1a5d0f5f998787`,
 
 The earlier [create/read trace](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=d7dbd987e6a09ed8d0cf61723a451158&limit=1000&order=asc) and [native-error trace](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=889fb6c82fde5470dcd3f1a3ab9da511&limit=1000&order=asc) are historical evidence for the superseded decoder and transport approach. Their files remain intact; they do not prove the revised implementation. The previous exception-type blocker is superseded by the accepted native contract.
 
-## Validation
+## Historical Validation
 
 Both scoped commands passed all 48 checks on Node 24.13.1. The first uses workspace Pi 1.0.2; the second uses primary Pi 1.1.0:
 

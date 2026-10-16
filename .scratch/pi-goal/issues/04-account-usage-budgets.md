@@ -4,7 +4,23 @@
 
 **Blocked by:** 03: Continue safely and honor Stop.
 
-**Status:** partial — implementation, reported-usage captures, compaction, and supported provider-limit precedence verified; the public capability limits below remain open.
+**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+
+**Baseline status:** partial — implementation, reported-usage captures, compaction, and supported provider-limit precedence verified; the public capability limits below remain open.
+
+## Native session storage delta
+
+The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
+
+- [ ] Preserve existing token formulas, exact integer limits, monotonic elapsed time, live-ledger cutoffs, soft-budget precedence, and mutation checkpoints while recording complete native snapshots.
+- [ ] Advance the accounting baseline only after append returns. A failed checkpoint must neither consume the baseline nor be retried against an unconfirmed in-memory append; recovery uses only the native saved state.
+- [ ] Re-read current counters and check session and generation at each serialized mutation. Concurrent completions, stale captures, and late callbacks must not overwrite counters, double charge usage, or mutate a replacement goal.
+- [ ] Adapt accounting and accounting-boundary suites from database fixtures to native session setup and storage fault injection. Verify direct tool results, budget notices, exact counters, successful checkpoints, failed checkpoints, and fresh-session recovery at the existing seam.
+- [ ] Preserve the existing agent-interface messages and reported-usage evidence dimensions for the final before-and-after capture in ticket 07. No new checkpoint frequency or storage message is introduced.
+
+## Historical acceptance
+
+The checklist and evidence below describe the earlier implementation. They are not validation of native storage. Earlier database durability and atomic-write guarantees are superseded by the accepted native persistence limits; unchecked broader feature gates remain open.
 
 - [x] Charge uncached input plus output using the provider's reported usage. Verify Pi's input-plus-cache-write-plus-output mapping against original provider counters; exclude cache reads and avoid counting reasoning again when included in output.
 - [x] Establish accounting when the goal becomes active. Creating a goal partway through a turn excludes previously reported work; replacement establishes a fresh baseline excluding descendant usage already reported. A later descendant report can contribute to the current active goal even when that child started earlier; do not add an originating-goal filter to the shared report counter.
@@ -24,7 +40,7 @@
 - [x] Capture original usage, normalized usage, checkpoints, budget messages, and final results in Phoenix. Correlate nested and background work, retrieve captures to verify completeness, and record any attribution or timing gap before claiming delegated parity.
 - [x] Preserve public extension boundaries and neutral terminology, complete relevant checks, and leave all unreported-usage and unsupported-provider limitations explicit.
 
-## Implementation verification
+## Historical Implementation verification
 
 The accounting module separates reported usage, the active monotonic clock, and the current outer-turn binding. Its `currentGoal` binding can change on activation or replacement within a run; `activeGoal` retains live clock ownership after a raw interruption. Native retries can emit multiple `agent_start` events before one `agent_settled`; they preserve the same accounting baseline. Provider usage comes from the final persisted assistant entry after message hooks, or the corresponding `turn_end` message, and remains pending until an eligible checkpoint.
 
@@ -36,7 +52,7 @@ Real SQLite write failures retain pending usage for a later successful checkpoin
 
 The nine native accounting captures below passed, and all 100 captured input/output fields were independently retrieved and verified. Exact child-abort qualification and cutoffs inside opaque programmatic model calls remain the public capability limits described below. Tools and subprocesses without usage reports remain outside the accounting claim. No configured host maximum is exposed by the inspected extension API, and this change invents no maximum or setting. [Ticket 06](06-stop-unproductive-runs.md) verifies correlated provider-limit precedence and excludes an unrelated background quota. [Ticket 05](05-preserve-session-goals.md) verifies restoration while retaining the conditional-fork capability gate.
 
-## Native accounting captures
+## Historical Native accounting captures
 
 The capture source is commit `278643fa115d2bfbc48c4f81266db0aa2836264d`, integrated without production changes. Nine persisted native-session scenarios make 41 requests across 50 Phoenix spans. All 100 complete input/output fields were independently retrieved again and matched against saved strings, SHA-256 hashes, and byte counts. Package source hashes also match the committed files. Evidence, manifests, full exchanges, original scripted usage, normalized messages, snapshots, and both verification passes are under `/tmp/pi-goal-accounting-capture.aeZWzQ/20261014T063611393Z-73ebcc77`.
 
@@ -62,7 +78,7 @@ Two additional budget runs remove the avoidable prompt and response-script diffe
 
 The raw tool-call IDs, arguments, original usage, and final text are unchanged in these replays. Pi derives compound native call IDs from the call ID and absent item ID, then returns the original IDs and arguments on the next provider request. The notice first appears in request four after the same exhausting call, at input position eight versus thirteen; final-only exhaustion has no notice. The model, provider, reasoning settings, instruction stack, tool advertising, native result delivery, independent notice wording, and dynamic identities still differ. Parsed response events match exactly; the fixture uses data-only SSE framing while the recorded source used named events. These remain deterministic protocol comparisons rather than matched live-model or actual-client trials.
 
-## Accounting boundary evidence
+## Historical Accounting boundary evidence
 
 On the pinned reference local streaming route, a goal at 92 tokens remains at 92 while its manual summary is held, reaches 184 when that summary reports another 92 chargeable tokens, and remains at 184 after explicit pause and interruption of the held follow-up. Successful compaction also admits the next eligible continuation. The integrated package charges the public `session_compact.compactionEntry.usage` report once. Ticket 05 reproduces the 92-to-184 transition and automatic continuation without an edit or resume. Ticket 07 verifies both provider protocols through RPC: two summary requests contribute a combined 184 tokens, advancing the existing 92-token goal to 276 before its next automatic request.
 
@@ -76,7 +92,7 @@ Pi 1.1 exposes each final call's own usage in `tool_execution_end`, with `parent
 
 Two capability limits remain. Native programmatic model calls expose their private accumulated usage only on the final outer result, so public events cannot reconstruct a creation or completion cutoff inside those calls. Also, `durationMs` proves that execution ran, including zero-duration execution, but thrown aborts and ordinary handler failures share the same public error shape. A nested call can use a separate abort signal. Exact exclusion of all aborted tool-finish checkpoints and associated budget notices is therefore not established by the root signal, error text, or `isError`. Unsuccessful completed results and ordinary executed failures remain eligible; do not suppress every native error. These limits require explicit acceptance evidence and must not be concealed by an approximation.
 
-## Exhaustion and interruption captures
+## Historical Exhaustion and interruption captures
 
 Three controlled bundled-runtime cases distinguish stored status, turn accounting, and the live clock. All 14 Phoenix spans were retrieved and independently matched against the complete saved input/output payloads, SHA-256 hashes, and byte counts: 28 matching fields. Each delivered provider response contributes 92 chargeable tokens.
 
