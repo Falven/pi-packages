@@ -1,6 +1,6 @@
 # Core toolset
 
-**Status:** in progress for the approved process-input correction. Command facts and verbatim core guidance are verified at `100316f`; earlier validation retains its recorded scope.
+**Status:** implemented and verified at `fbc8030`, including generic command facts, verbatim core guidance, non-terminal Ctrl+C, and input/script-result activity suppression. Activity 09 records affected-suite verification and queued worktree cleanup; earlier validation retains its recorded scope.
 
 **Tracker:** [Activity 08](../tool-activity/issues/08-verbatim-core-tool-guidance.md) and [Activity 10](../tool-activity/issues/10-process-input-parity.md) → [Activity 09](../tool-activity/issues/09-verify-activity-alignment.md). Earlier core and chat tickets retain their historical scope and evidence.
 

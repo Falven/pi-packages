@@ -16,4 +16,4 @@
 
 **Verification (2026-10-16, `100316f`):** Controlled provider streams establish the absence of a pending row and the later operation's placement across commentary boundaries. Real Pi cancellation before dispatch preserves the native aborted result through reload. Existing Find, disclosure, continuation, and retained-history checks pass in both supported host runs recorded in [Ticket 09](09-verify-activity-alignment.md).
 
-**Limits:** This removes pending placeholders. It does not change the separate failed-input activity policy identified in the later `write_stdin` screenshot; Ticket 09 records that remaining app-parity gap.
+**Limits:** This ticket removes pending placeholders. [Ticket 10](10-process-input-parity.md) separately resolves the failed-input activity and non-terminal Ctrl+C gaps identified in the later screenshot. Ticket 09 records their combined verification.

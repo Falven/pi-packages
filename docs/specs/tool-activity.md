@@ -1,12 +1,14 @@
 # Tool activity
 
-**Status:** in progress — command recognition, configuration, pending calls, and verbatim guidance are verified at `100316f`; the approved input/collection correction continues on `codex/generic-tool-activity` from integration base `a6280f9`.
+**Status:** implemented and verified at `fbc8030` on `codex/generic-tool-activity`, from integration base `a6280f9`. This includes command recognition, configuration, pending calls, verbatim guidance, and the input/collection correction. Ticket 09 records verification and queued worktree cleanup.
 
 **Tracker:** [06: Configurable Codex command recognition](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [07: Pending calls without premature activities](../../.scratch/tool-activity/issues/07-pending-call-activities.md), [08: Verbatim core tool guidance](../../.scratch/tool-activity/issues/08-verbatim-core-tool-guidance.md), and [10: Process input without extra activities](../../.scratch/tool-activity/issues/10-process-input-parity.md) → [09: Verify the activity alignment](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Earlier tickets retain their completed revision evidence.
 
 ## Problem Statement
 
 Routine Output activities have been removed, but common file reads still appear as long shell commands, and an unfinished call can briefly appear as `Called exec (status unknown)`. The existing recognizer covers only a small subset of Codex's command behavior. Recognition and wording are scattered, making operator changes difficult. The toolset also adds local explanatory text to its captured tool guidance, despite the required word-for-word tool interface.
+
+The later screenshot exposed two further differences: failed input calls produced extra activity and duplicate error context, and exact Ctrl+C was rejected for a non-terminal process. The reference updates the original command and supports that interruption.
 
 ## Solution
 
@@ -99,7 +101,9 @@ A separate package, new tools, execution changes beyond the Ctrl+C correction, d
 
 The command reference is [the parser in the installed app's Codex build](https://github.com/openai/codex/blob/740e5af33c71225640e0c1c1555c514c2c93ab74/codex-rs/shell-command/src/parse_command.rs), with its Bash helper and grammar. `/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-package.json` identifies `0.162.0-alpha.17.2`; the upstream release tag resolves to that commit. The user's clarification to match the app requires this newer reference instead of the initial local checkout. This source pin is distinct from the unchanged frozen tool-interface capture and the installed-app presentation evidence. Apache-2.0 attribution accompanies the port. The integration base and existing host/contract seams are already established; the user's explicit direction to implement the agreed delta authorizes the three independent slices and their integration verification.
 
-The correction passes all 343 affected-package checks on Pi 1.0.2 and all 134 chat/combined-workflow checks on Pi 1.1.0 at `789b142`. Typechecking passes on both versions. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) records commands, logs, direct standards/spec review, repaired failures, and unperformed physical-app and live-model checks. The final documentation commit does not change runtime code or tests.
+The current delta passes 351/351 affected-package checks on Pi 1.0.2 and 141/141 chat/combined-workflow checks on Pi 1.1.0 at `fbc8030`. Both typechecks and repository lint/format checks pass. The complete 440-case parser corpus matches the pinned reference; 106 original Rust tests pass, and 9,646 additional differential vectors show no differences. Ticket 09 records commands, logs, direct standards/spec review, repaired assertions, and remaining limits. The closing documentation changes do not alter runtime code or tests.
+
+The earlier correction passed 343 affected-package checks on Pi 1.0.2 and 134 chat/combined-workflow checks on Pi 1.1.0 at `789b142`. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) retains that historical evidence and its unperformed physical-app and live-model checks.
 
 The wire agreement remains `pi.activity`. Live events carry incremental updates; retained custom entries carry the same updates in `data.activity`. Returned `details.activity` carries a complete snapshot, image ownership, and bindings. Each incremental operation is a complete replacement of that operation's facts; a full result snapshot supersedes older observations, while later revisions can continue it.
 

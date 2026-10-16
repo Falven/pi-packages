@@ -2,7 +2,7 @@
 
 **Current revision:** Full reference command recognition, one activity configuration module, pending-call handling, and input/collection activity parity under the [activity specification](tool-activity.md).
 
-**Status:** in progress for the approved input/collection correction. Command recognition, configuration, and pending-call behavior are verified at `100316f`. Earlier validation and physical-terminal acceptance retain their recorded scope.
+**Status:** implemented and verified at `fbc8030`. Command recognition, configuration, pending calls, and the approved input/collection correction pass the affected suites on Pi 1.0.2 and 1.1.0. Activity 09 records verification and queued worktree cleanup. Earlier validation and physical-terminal acceptance retain their recorded scope.
 
 **Tracker:** [Activity 06](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [Activity 07](../../.scratch/tool-activity/issues/07-pending-call-activities.md), and [Activity 10](../../.scratch/tool-activity/issues/10-process-input-parity.md) → [Activity 09](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Earlier tickets retain their recorded scope and evidence.
 
