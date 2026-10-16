@@ -1,18 +1,20 @@
 # Tool activity
 
-**Status:** done — correction from `4ad78cc`, implemented and verified at `789b142` on `codex/generic-tool-activity`.
+**Status:** ready-for-agent — command recognition, operator configuration, pending-call presentation, and verbatim core tool guidance; integration base `a6280f9` on `codex/generic-tool-activity`.
 
-**Tracker:** [04: Action results without a separate package](../../.scratch/tool-activity/issues/04-action-results-without-a-package.md) → [05: Skill reads across tools](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md). Earlier tickets 01–03 retain their original evidence.
+**Tracker:** [06: Configurable Codex command recognition](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [07: Pending calls without premature activities](../../.scratch/tool-activity/issues/07-pending-call-activities.md), and [08: Verbatim core tool guidance](../../.scratch/tool-activity/issues/08-verbatim-core-tool-guidance.md) → [09: Verify the activity alignment](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Tickets 01–05 retain their completed revision evidence.
 
 ## Problem Statement
 
-The chat still inserts unexplained Output activities between actual commands. A command returns text, the script forwards that text, and the display treats the script's result as more work. Reading a skill through a shell command also shows a raw command and Output instead of a readable skill label. The previous change introduced a separate package even though the user requested only a generic interface between independently usable extensions.
+Routine Output activities have been removed, but common file reads still appear as long shell commands, and an unfinished call can briefly appear as `Called exec (status unknown)`. The existing recognizer covers only a small subset of Codex's command behavior. Recognition and wording are scattered, making operator changes difficult. The toolset also adds local explanatory text to its captured tool guidance, despite the required word-for-word tool interface.
 
 ## Solution
 
 Show operations in the activity list and their results inside their bodies. Returning or forwarding text does not create another activity. Keep raw execution results discoverable through source Find. Present a failed operation once, with any additional call failure context in its body; a script failure without a failed operation gets its own failure item. Registered skill-file reads use a `Read <name> skill` label through any supported read path.
 
 The two existing extensions implement the same documented data format over Pi's existing events, result details, and retained custom entries. Neither imports the other, recognizes the other's package identity, or requires a separate contract package. The supplied screenshots define the correction's visible cases. Earlier installed-app source inspection supports continuing command identity and multiple action labels; it does not establish full visual parity for every error or image case.
+
+Match the complete pinned Codex command-recognition behavior, including its general-command fallbacks. Recognized reads, searches, and listings receive clear action labels; actual scripts and tests retain `Running`/`Ran`. Put operator-adjustable recognition and activity wording in one module in the existing chat package. Keep pending calls out of operation activity until execution begins, and preserve failures and unknown historical outcomes. Core tool guidance is verbatim from the scoped frozen reference, with no additional read-style or batching advice.
 
 ## User Stories
 
@@ -38,6 +40,16 @@ The two existing extensions implement the same documented data format over Pi's 
 20. As a provider author, I want to publish generic activity without installing a display or contract package, so that my extension remains independent.
 21. As a chat maintainer, I want to accept an unrelated provider's valid facts without tool-name rules, so that the interface remains generic.
 22. As a user, I want native output controls and single-owner images preserved, so that the correction does not replace Pi's presentation controls.
+23. As a user, I want every command form covered by the pinned Codex parser recognized the same way, so that parity includes fallback and edge cases as well as common reads.
+24. As a user, I want line-range reads and read pipelines labeled by file, so that shell formatting does not obscure the work.
+25. As a user, I want search labels to retain the query and available location, so that I can understand their scope.
+26. As a user, I want shortened display names to retain their real file identity, so that skill recognition and source inspection remain correct after directory changes.
+27. As an operator, I want command recognition and all activity wording in one readable configuration module, so that I can make presentation changes without searching the rendering implementation.
+28. As an operator, I want reference defaults and explicit customizations, so that changing a label or command alias does not change execution or model guidance.
+29. As a user, I want pending calls distinguished from unknown outcomes, so that a still-arriving call does not look completed or broken.
+30. As a user, I want errors, cancellation, and unobserved historical calls retained, so that removing a transient placeholder cannot conceal a real outcome.
+31. As a user, I want the exact scoped core tool guidance, so that local prompt additions do not change how the model uses the toolset.
+32. As a maintainer, I want the pinned reference's complete command cases and actual model-facing declarations checked, so that later edits cannot silently narrow coverage or change wording.
 
 ## Implementation Decisions
 
@@ -48,22 +60,29 @@ The two existing extensions implement the same documented data format over Pi's 
 - **Images.** Image bytes remain in the actual processed collecting result and appear once through native handling. An image with no operation owner gets an image activity, not a generic Output receipt.
 - **Skill identity.** Use the effective public skill registry and resolved file path. Share recognition across native reads and classified command reads, including retained source. Do not infer skill use from returned Markdown, a filename alone, or the name of the calling tool.
 - **Native provenance.** Persist observed built-in identity and working directory through private, non-model custom entries tied to the original assistant entry/content index, call identity, and argument binding. Restore only matching facts on the active branch. This preserves native skill labels after reload without guessing from the currently installed tool registry or copying results. Unobserved history keeps generic fallback.
-- **Command classification.** Recognize bounded literal command sequences and quoted file paths. Preserve other actions, ordering, full command source, and the shared process outcome/output. A formatting-only header can be omitted when introducing recognized reads. Conditional execution, substitutions, redirection, pipelines, possible shell-state changes, and uncertain shell grammar retain the full command summary; do not add a general shell interpreter.
+- **Command recognition.** Port the full behavior of the referenced Codex parser at commit `2c6995ca4dfc23b93db311b59c1b4ead464658b1`, using the same Bash grammar and accepted syntax. Preserve action ordering, deduplication, shell-wrapper handling, formatting-helper rules, option handling, path handling, and exact fallback semantics. Recognition must never evaluate the shell. Preserve full raw commands in source and bodies. Defaults also retain reference limitations, including general-command fallback for a multi-file `cat`; independent read commands can produce separate actions. No claim is made about uninspected later Codex revisions.
+- **Operator configuration.** One source module in the existing chat package exports all activity presentation options: command recognizer mappings, formatting-helper names, display-path shortening, item wording, group wording/order, and operation-body headings. Provide readable names and brief editing instructions. Parser syntax/lifecycle algorithms and data validation remain implementation. Changes take effect on reload; do not add persistent preference files, menus, runtime override layers, new packages, or a repository-wide settings system. Pi remains the source for its native settings.
+- **Pending calls.** Track whether a live call has begun execution separately from its operation outcome. While arguments arrive, no generic fallback row or group count is produced. Execution, result delivery, or interruption resolves the pending state. Unrecognized dispatched tools retain normal generic presentation; cancelled or failed calls and unknown historical outcomes remain visible. The rule is generic and cannot name `exec` or its provider.
+- **Core guidance.** The complete selected tool declaration and retained helper wording match the frozen scoped reference exactly. Remove local lifecycle/image/notification prose and the rewritten notification description. When native selection excludes a tool, remove only that tool's section and directly dependent helper text. Preserve the already approved scope, input forms, permissions, runtime behavior, and unrelated extensions. Do not change system prompts or add instructions encouraging simpler reads or scripts.
 - **Source Find.** Keep original arguments and all processed result text searchable even when operation bodies also exist. Selected raw source can temporarily use the existing native generic presenter. Remove that reveal when selection leaves or Find closes, without disturbing normal operation choices or adding execution. Images remain with their normal activity owner during text inspection.
 - **Result authority and history.** Keep content/activity bindings, active-branch revision reconciliation, original session identity after forks, unknown stale-running status, omission markers, and generic fallback. Missing or invalid processed metadata cannot restore old live or journal bodies. Preserve compact retained updates and native model collection.
-- **Scope.** Keep existing execution, errors returned to scripts, declarations, permissions, cancellation, and model-facing result content. Do not alter JavaScript values to recover lost string provenance or change skill invocation itself.
+- **Scope.** Keep existing execution, errors returned to scripts, declaration schemas, permissions, cancellation, and model-facing result content. Only the specified tool-guidance correction changes the agent interface. Do not alter JavaScript values to recover lost string provenance or change skill invocation itself.
 
 ## Testing Decisions
 
 Use the established real-Pi native-host and combined-workflow seam. It observes activity rows and native bodies alongside retained entries, original calls, and subsequent model requests. Add a failing case for forwarded strings/combined results, implement that slice, then cover raw source Find and failure grouping. Add the skill-read case through the same seam, including a formatting header, several reads, an unrelated command, registered and unregistered paths, and conservative syntax fallback. Reuse continuation, hooks, image settings, load-order, reload, compaction, and fork coverage.
 
+For this delta, retain the existing host seam and add independently sourced input/output cases at the command-recognition boundary. Capture every command case exercised by the unmodified reference tests; record source revision, hashes, dependency versions, and case count. Compare complete parsed actions, not only display labels. Verify operator changes through the same recognition/presentation path. Pause the controlled provider while tool arguments are arriving, then observe dispatch, completion, interruption, and replay. At the existing model-request seam, compare complete selected core declarations byte-for-byte in their description fields. These are the scoped validation seams for the explicitly requested exact coverage; no new live-model prompt experiment is needed.
+
 An unrelated test provider constructs the documented data independently; it must not import the consumer's builder or a shared package. Existing standalone provider checks verify useful facts without chat loaded. Run the affected package suites and repository static checks, plus the established Pi 1.1.0 compatibility suite. Record actual revision/counts and distinguish deterministic recording-terminal evidence from physical app acceptance. Review standards and the spec separately. No new test harness or broad live-model trial is needed for unchanged execution contracts.
 
 ## Out of Scope
 
-A separate package, new tools, public execution-contract changes, a shell interpreter, display settings, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, and claims of complete app visual parity.
+A separate package, new tools, changes to execution behavior or declaration schemas, a shell interpreter, settings UI or persistence, a repository-wide configuration framework, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, ChatGPT.app/Codex system and other prompts, additional model guidance, and claims of complete app visual parity.
 
 ## Further Notes
+
+The command reference is the parser linked in the user's annotation: [Codex at the pinned revision](https://github.com/openai/codex/blob/2c6995ca4dfc23b93db311b59c1b4ead464658b1/codex-rs/core/src/parse_command.rs), with its Bash helper and grammar. It is distinct from the frozen tool-interface capture and the installed-app presentation evidence. Apache-2.0 attribution accompanies the port. The integration base and existing host/contract seams are already established; the user's explicit direction to implement the agreed delta authorizes the three independent slices and their integration verification.
 
 The correction passes all 343 affected-package checks on Pi 1.0.2 and all 134 chat/combined-workflow checks on Pi 1.1.0 at `789b142`. Typechecking passes on both versions. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) records commands, logs, direct standards/spec review, repaired failures, and unperformed physical-app and live-model checks. The final documentation commit does not change runtime code or tests.
 

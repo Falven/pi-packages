@@ -2,7 +2,7 @@
 
 The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction are implemented and verified at `789b142`, from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved correction ticket](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) record the delivered format and verification. Earlier tickets retain their original evidence.
 
-The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the behavior reference; the work does not introduce alternative display preferences.
+The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the default behavior reference. The newly approved delta adds one operator-facing activity configuration module in the existing chat package, complete recognition parity with the annotated Codex parser, pending-call handling, and verbatim scoped core tool guidance. It excludes system prompts and additional model advice. [Tickets 06–09](../specs/tool-activity.md) describe this delta from `a6280f9`; the earlier completion evidence does not cover it.
 
 ## Setting and terms
 

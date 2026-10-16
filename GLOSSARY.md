@@ -67,6 +67,12 @@ A short description in a render group's header that summarizes the types of oper
 **Item summary**:
 A short description identifying the action and target of one activity item. Its wording can become less specific when the full output already shows the command or target.
 
+**Command action**:
+A read, search, directory listing, or general command identified within a shell command for presentation. Recognizing an action does not execute the command or establish its outcome.
+
+**Command recognition**:
+The interpretation of command text into command actions. Unrecognized syntax retains a general command action and its original text.
+
 **Activity body**:
 The content inspected when an activity item's disclosure is expanded. Its output control can show a preview or the full output.
 _Avoid_: Details, when naming the displayed region rather than tool-result metadata
@@ -160,6 +166,9 @@ The model-facing tools for Pi's built-in local command, file, and image capabili
 
 **Tool call**:
 An invocation of a tool with its inputs and eventual outcome. One tool call can contribute zero or several activity items.
+
+**Pending tool call**:
+A call whose inputs are still arriving and which has not begun execution. Pending is distinct from an unknown historical outcome.
 
 **Tool result**:
 The content and outcome returned by a tool call. Returning or forwarding a tool result does not itself perform another operation.
