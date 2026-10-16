@@ -18,6 +18,8 @@
 
 **Verification boundary:** The implementation request authorizes focused regression cases in existing test files. It preserves the already approved real-host/model-loop seam and adds no new user-visible API or chat behavior. Application-time failures remain nontransactional: completed writes survive. Public queues coordinate participating operations in this process; they do not prevent external writers from changing a file between reads and writes.
 
+**Supplemental reference observations:** Current-runtime probes confirm that an update whose source or expected lines disappeared after an earlier operation fails during application and retains earlier effects. A separate delete of an alias made dangling by an earlier delete failed in the reference runtime and left that alias. This correction preserves Pi's existing unlink behavior; that preservation case does not establish reference parity. The reference runtime's exact source revision remains unverified.
+
 ## Activity-item delta — approved 2026-10-15
 
 - [x] Run existing deterministic contract, hooks, collection, lifecycle, and resource-bound checks plus typechecking, lint, formatting, and whitespace validation.
