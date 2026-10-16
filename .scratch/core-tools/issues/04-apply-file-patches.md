@@ -6,20 +6,24 @@
 
 **Blocked by:** None for the patch-state correction; earlier prerequisites are resolved.
 
-**Status:** ready-for-agent — patch-state correction; earlier resolved evidence retained below
+**Status:** resolved — patch-state correction verified; combined review remains in ticket 07
 
 ## Patch-state correction — 2026-10-15
 
-- [ ] Keep whole-patch validation before writes and the existing public file mutation queues, including initial no-mutation failures and repeated-source-path validation.
-- [ ] Reread and recompute each update when it is applied. Preserve both changes through same-patch symlink aliases and move-then-update operations without rejecting supported overlaps.
-- [ ] On application-time read or match failure, retain earlier effects, report the current operation as failed and later operations as unattempted, and return the measured runtime error shape. Preserve cancellation around reads and writes.
-- [ ] Derive update, move, and delete facts from application-time contents. Refresh delete facts best-effort without preventing unlink of a now-dangling or unreadable target; omit unverifiable counts.
-- [ ] Reproduce the bug before the fix and verify final bytes, model results, and per-file facts through focused cases in the existing real-host test file. Preserve existing hook, redaction, queue, encoding, and partial-failure checks.
-- [ ] Keep public schemas, frozen fixtures, dependencies, presentation interfaces, and unrelated comparison findings outside this delta.
+- [x] Keep whole-patch validation before writes and the existing public file mutation queues, including initial no-mutation failures and repeated-source-path validation.
+- [x] Reread and recompute each update when it is applied. Preserve both changes through same-patch symlink aliases and move-then-update operations without rejecting supported overlaps.
+- [x] On application-time read or match failure, retain earlier effects, report the current operation as failed and later operations as unattempted, and return the measured runtime error shape. Preserve cancellation around reads and writes.
+- [x] Derive update, move, and delete facts from application-time contents. Refresh delete facts best-effort without preventing unlink of a now-dangling or unreadable target; omit unverifiable counts.
+- [x] Reproduce the bug before the fix and verify final bytes, model results, and per-file facts through focused cases in the existing real-host test file. Preserve existing hook, redaction, queue, encoding, and partial-failure checks.
+- [x] Keep public schemas, frozen fixtures, dependencies, presentation interfaces, and unrelated comparison findings outside this delta.
 
 **Acceptance examples:** Given `left\nright\n`, an update of `left` to `LEFT` through the real path followed by `right` to `RIGHT` through its alias must leave `LEFT\nRIGHT\n`. Given source `from-a\ncommon\n` and destination `from-b\ncommon\n`, moving the source while changing `from-a` to `A`, then changing destination `common` to `B`, must leave `A\nB\n`. If the second operation instead requires text removed by the first, it fails after preserving the first operation; it must not write cached contents.
 
 **Historical scope:** The preflight evidence below still establishes initial validation before writes. It does not establish that preflight snapshots are safe to write after another operation changes the same file. New evidence belongs to this delta and must retain the tested revision and runtime.
+
+**Correction evidence (2026-10-15, `1c12b6a`, Node 26.8.1, installed Pi host 1.0.2):** The same-patch symlink regression failed before the fix with `left\nRIGHT\n`; it now leaves `LEFT\nRIGHT\n`. A move followed by an update leaves `A\nB\n`, and both successful cases return `{}` with actual per-file diffs. An application-time alias match failure retains the first edit, returns the measured runtime error string, and records completed/failed/unattempted operations. Deleting the source before an alias update exercises the measured read-error shape. A delete after an alias update records the current bytes; deleting a newly dangling alias succeeds without invented counts.
+
+All 68 focused patch and patch-presentation checks pass at that revision. Root `tsc --noEmit`, changed-file `oxlint` and `oxfmt --check`, and `git diff --check` pass. The focused suite retains initial validation, hooks, redaction, queue, cancellation, encoding, and earlier partial-failure coverage. The full package suite and independent combined review remain ticket 07 work. The current native reference fails a delete of a newly dangling alias; this package follows the specified best-effort unlink behavior rather than claiming parity for that case.
 
 ## Activity-item delta — approved 2026-10-15
 
