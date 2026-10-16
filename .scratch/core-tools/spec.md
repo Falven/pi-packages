@@ -1,6 +1,6 @@
 # Core toolset
 
-**Status:** ready-for-agent — action/result and package correction from `4ad78cc`; earlier validation retains its original scope.
+**Status:** done for the activity correction — implemented and verified at `789b142` from `4ad78cc`. Earlier validation retains its recorded scope.
 
 **Tracker:** [Activity 04](../tool-activity/issues/04-action-results-without-a-package.md) → [Activity 05](../tool-activity/issues/05-skill-reads-across-tools.md). Earlier core and chat tickets retain their historical scope and evidence.
 
@@ -264,6 +264,8 @@ Settled execution bodies retain the latest eight operations; patch bodies retain
 Standalone output attribution retains the existing object-identity limit for primitive text and rejection values. The activity protocol does not try to recover that identity: raw script text stays in processed results and retained source, and returning it creates no new operation. Execution error facts remain distinct from child outcomes. Neither script values nor native rejection types change for presentation, and matching text alone never assigns ownership.
 
 ## Further Notes
+
+- **Activity correction (2026-10-16, `789b142`):** The existing package constructs generic facts independently, without a separate contract package or chat dependency. Ordinary returned text creates no operation, and an execution failure stays factual even when its message is empty. All 343 affected-package cases pass on Pi 1.0.2; all 134 chat/combined-workflow cases pass on Pi 1.1.0. Both typechecks pass. [Activity 05](../tool-activity/issues/05-skill-reads-across-tools.md) records final evidence, direct standards/spec reviews, and unperformed checks.
 
 - **Patch-state correction (2026-10-15):** Core 04 implements the repair and Core 07 verifies it from integration base `188aa0c44ef311704af8e9ac92711d361cb1a50d`. Paired observations establish two successes that must preserve earlier changes: updates through a real path and its symlink alias, and a move followed by an update of its existing destination. Fresh reference probes also establish partial failure when an earlier operation removes a later update's expected lines. These observations supplement the frozen baseline; the installed reference runtime's exact source revision is unverified. Keep initial validation, public queues, public hooks, and existing result shapes. [ADR 0024](../../docs/adr/0024-core-tools-use-native-extension-lifecycle.md) records the state and partial-failure boundary. Verification evidence belongs in the existing tickets.
 

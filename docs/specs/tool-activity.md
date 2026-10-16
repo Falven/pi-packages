@@ -1,6 +1,6 @@
 # Tool activity
 
-**Status:** ready-for-agent — correction from `4ad78cc` on `codex/generic-tool-activity`.
+**Status:** done — correction from `4ad78cc`, implemented and verified at `789b142` on `codex/generic-tool-activity`.
 
 **Tracker:** [04: Action results without a separate package](../../.scratch/tool-activity/issues/04-action-results-without-a-package.md) → [05: Skill reads across tools](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md). Earlier tickets 01–03 retain their original evidence.
 
@@ -10,7 +10,7 @@ The chat still inserts unexplained Output activities between actual commands. A 
 
 ## Solution
 
-Show operations in the activity list and their results inside their bodies. Returning or forwarding text does not create another activity. Keep raw execution results discoverable through source Find. Present a failed operation once, with any additional call failure context in its body; a script failure without a failed operation gets its own failure item. Registered skill-file reads use a Read <name> skill label through any supported read path.
+Show operations in the activity list and their results inside their bodies. Returning or forwarding text does not create another activity. Keep raw execution results discoverable through source Find. Present a failed operation once, with any additional call failure context in its body; a script failure without a failed operation gets its own failure item. Registered skill-file reads use a `Read <name> skill` label through any supported read path.
 
 The two existing extensions implement the same documented data format over Pi's existing events, result details, and retained custom entries. Neither imports the other, recognizes the other's package identity, or requires a separate contract package. The supplied screenshots define the correction's visible cases. Earlier installed-app source inspection supports continuing command identity and multiple action labels; it does not establish full visual parity for every error or image case.
 
@@ -26,9 +26,9 @@ The two existing extensions implement the same documented data format over Pi's 
 8. As a user, I want source inspection to avoid execution and model requests, so that navigating history has no tool effects.
 9. As a user, I want each failed operation represented once, so that the parent error does not look like another failed action.
 10. As a user, I want additional execution errors retained as call context, so that a distinct failure is not discarded or falsely attributed to a child.
-11. As a user, I want a failure before any child operation to remain visible, so that a broken script is diagnosable.
+11. As a user, I want a failure before any child operation to remain visible even without an error message, so that a broken script is diagnosable.
 12. As a user, I want successful children to stay successful after their script fails, so that status describes actual work.
-13. As a user, I want a registered skill read labeled Read <name> skill, so that I can identify the loaded instructions.
+13. As a user, I want a registered skill read labeled `Read <name> skill`, so that I can identify the loaded instructions.
 14. As a user, I want skill labels through native reads and declared command operations, so that the tool implementation does not determine the label.
 15. As a user, I want a header followed by a literal file read recognized, so that formatting commands do not obscure skill use.
 16. As a user, I want several reads and other commands to retain their actions, so that one skill label does not conceal mixed work.
@@ -44,7 +44,7 @@ The two existing extensions implement the same documented data format over Pi's 
 - **Package ownership.** Remove the separate activity package, imports, dependencies, and release entry. Keep provider construction and consumer validation local. A small overlap in types, protocol identifiers, and binding rules is the explicit cost of independent implementations. Do not replace the package with a repository-root runtime import, generated shared module, or bundling system.
 - **Data format.** Preserve version 1, source ID, originating call/session identity, revisions, ordered operation facts, result binding, and native image ownership. The protocol remains documented below. Neither side uses the other extension's implementation or private records.
 - **Operations and results.** Normal script text is retained in execution results, not published as new work. The consumer also suppresses ordinary text-only output facts in older valid records. This rule does not depend on string matching, object identity, parsing script source, or how the model forwards results.
-- **Failures.** Failed operation facts remain independent. When a call also has execution error facts, their text appears as explicitly identified call context in an existing failed activity body. With no failed operation, keep a separate failure item. This groups presentation without changing source ownership, removing distinct errors, or changing successful child status.
+- **Failures.** Failed operation facts remain independent. When a call also has execution error facts, their text appears as explicitly identified call context in an existing failed activity body. With no failed operation, keep a separate failure item even if the error message is empty. This groups presentation without changing source ownership, removing distinct errors, or changing successful child status.
 - **Images.** Image bytes remain in the actual processed collecting result and appear once through native handling. An image with no operation owner gets an image activity, not a generic Output receipt.
 - **Skill identity.** Use the effective public skill registry and resolved file path. Share recognition across native reads and classified command reads, including retained source. Do not infer skill use from returned Markdown, a filename alone, or the name of the calling tool.
 - **Native provenance.** Persist observed built-in identity and working directory through private, non-model custom entries tied to the original assistant entry/content index, call identity, and argument binding. Restore only matching facts on the active branch. This preserves native skill labels after reload without guessing from the currently installed tool registry or copying results. Unobserved history keeps generic fallback.
@@ -64,6 +64,8 @@ An unrelated test provider constructs the documented data independently; it must
 A separate package, new tools, public execution-contract changes, a shell interpreter, display settings, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, and claims of complete app visual parity.
 
 ## Further Notes
+
+The correction passes all 343 affected-package checks on Pi 1.0.2 and all 134 chat/combined-workflow checks on Pi 1.1.0 at `789b142`. Typechecking passes on both versions. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) records commands, logs, direct standards/spec review, repaired failures, and unperformed physical-app and live-model checks. The final documentation commit does not change runtime code or tests.
 
 The wire agreement remains `pi.activity`. Live events carry incremental updates; retained custom entries carry the same updates in `data.activity`. Returned `details.activity` carries a complete snapshot, image ownership, and bindings. Each incremental operation is a complete replacement of that operation's facts; a full result snapshot supersedes older observations, while later revisions can continue it.
 

@@ -1,6 +1,6 @@
 # Generic tool activity aligned with ChatGPT.app
 
-The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction now govern the pending delta from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved tickets](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) record the delivered contract and verification. This plan replaces the earlier proposal to add more tool-specific rules to `pi-chat`.
+The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction are implemented and verified at `789b142`, from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved correction ticket](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) record the delivered format and verification. Earlier tickets retain their original evidence.
 
 The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the behavior reference; the work does not introduce alternative display preferences.
 
@@ -12,7 +12,7 @@ Use the existing [glossary](../../GLOSSARY.md):
 
 - **Tool call:** one request to a tool, with its inputs and result.
 - **Operation:** the work being done, such as running a command or changing a file.
-- **Activity item:** a row in the chat that shows an action or result.
+- **Activity item:** a row in the chat that identifies an operation, failure, or delivered image.
 - **Execution cell:** a script execution that can call tools and return before all commands it started have finished.
 
 These are different units. Starting `pnpm test` and checking its output three times requires several tool calls. Those checks do not run the tests again.
@@ -45,7 +45,7 @@ The target is therefore stable operations with continuing results. It is not a b
 
 This is a source inspection, not a live comparison. Script-only output, script errors, collection failures, cancellation, and image delivery were not compared in a live app. The delta preserves their source ownership and native result handling; the initial “Output” rule is superseded by the correction: returning text adds no activity, and errors are shown once with their call context.
 
-## Shared interface
+## Generic interface
 
 Both existing packages independently implement the [documented activity format](../specs/tool-activity.md). The producer constructs facts and the consumer validates them. No separate contract package, cross-package runtime import, or provider-specific consumer rule is required.
 
@@ -65,7 +65,7 @@ Responsibilities are:
 | Component                                | Responsibility                                                                                                      |
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Tool package, including `pi-codex-tools` | Translate its own execution state into the common operation records. Keep command state separate from script state. |
-| Shared contract                          | Define and validate the records and their ownership rules.                                                          |
+| Documented format                        | Specify the records and their ownership rules for independent implementations.                                      |
 | Chat package, including `pi-chat`        | Turn those records into activity items and apply the app's display behavior.                                        |
 | Other tools or displays                  | Use the same contract without either package being installed.                                                       |
 
@@ -82,7 +82,7 @@ Shared action kinds may include commands, file changes, images, and generic tool
 5. **Preserve history and navigation.** Keep original calls and results. Use source identities to keep Find, copy, disclosure state, and later updates correct. Older history without the shared metadata keeps the generic display; no automatic migration is planned.
 6. **Update the existing specifications and verify.** Revise [ADR 0019](../adr/0019-tool-renderers-own-tool-presentation.md), [ADR 0024](../adr/0024-core-tools-use-native-extension-lifecycle.md), the [chat specification](../specs/pi-chat.md), and the [tool specification](../../.scratch/core-tools/spec.md) around the shared contract. Preserve the existing [retained-source search](../adr/0016-search-retained-transcript-content.md) requirement.
 
-The change reaches the shared package and dependency declarations, both packages' activity integration, affected history/search code, existing fixtures, and the documents above. It does not change tool execution, permissions, cancellation, or model-facing call and result content.
+The correction removes the separate package and its dependency declarations. It updates both packages' activity integration, affected history/search code, existing fixtures, and the documents above. It preserves tool execution, permissions, cancellation, and model-facing call and result content.
 
 ## Acceptance and validation
 
@@ -95,6 +95,6 @@ The change reaches the shared package and dependency declarations, both packages
 - Live display and recorded history agree. Unknown records use the generic fallback. Discarded result content is not restored from an earlier snapshot.
 - Existing Find, grouping, disclosure, copy, and image controls still work.
 
-The existing combined workflow, native chat, and source-search checks were reused, with focused public-contract, unrelated-provider, terminal-input, and retained-source checks. The affected packages pass 335/335 checks on Pi 1.0.2; the full chat suite, combined workflows, and contract checks pass 126/126 on Pi 1.1.0. Typechecking passes on both versions; repository lint, formatting, and diff checks pass.
+The existing combined workflow, native chat, and source-search checks were reused, with focused contract, unrelated-provider, terminal-input, retained-source, skill-read, and failure checks. At `789b142`, the affected packages pass 343/343 checks on Pi 1.0.2; the full chat suite, combined workflows, and contract checks pass 134/134 on Pi 1.1.0. Typechecking passes on both versions; repository lint, formatting, and diff checks pass.
 
-Repository code, installed Pi interfaces, official documentation, and the installed app bundle were inspected. Direct standards/spec review is complete; independent review agents failed before running because of a runtime decoding error. Physical-terminal acceptance and live app comparison remain unperformed. [Ticket 03](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) records the exact validation scope and limitations.
+Repository code, installed Pi interfaces, official documentation, and the installed app bundle were inspected. Direct standards/spec review is complete; independent review agents failed before running because of a runtime decoding error. Physical-terminal acceptance and live app comparison remain unperformed. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) records the correction's exact validation scope and limitations.
