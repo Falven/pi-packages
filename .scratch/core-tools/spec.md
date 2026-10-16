@@ -1,6 +1,6 @@
 # Core toolset
 
-**Status:** ready-for-agent — generic activity delta. Earlier revisions retain their recorded evidence and limits.
+**Status:** resolved — generic activity delta implemented at `4e271b8` on `codex/generic-tool-activity`. [Current verification](../tool-activity/issues/03-retained-source-and-replay.md) records the tested versions and remaining limits. Earlier revisions retain their recorded evidence and limits.
 
 **Tracker:** [Activity 01](../tool-activity/issues/01-generic-operation-presentation.md) → [Activity 02](../tool-activity/issues/02-command-continuation.md) → [Activity 03](../tool-activity/issues/03-retained-source-and-replay.md). Earlier core and chat tickets retain their historical scope and evidence.
 

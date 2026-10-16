@@ -1,6 +1,6 @@
 # Generic tool activity aligned with ChatGPT.app
 
-Draft revised 2026-10-16. Repository baseline: `6013382`. This revision replaces the earlier proposal to add more tool-specific rules to `pi-chat`.
+Implemented 2026-10-16 at `4e271b8` on `codex/generic-tool-activity`, from repository baseline `6013382`. The [specification](../specs/pi-activity.md) and [resolved tickets](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) record the delivered contract and verification. This plan replaces the earlier proposal to add more tool-specific rules to `pi-chat`.
 
 The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the behavior reference; the work does not introduce alternative display preferences.
 
@@ -19,13 +19,13 @@ These are different units. Starting `pnpm test` and checking its output three ti
 
 In the screenshot, “Collected output” describes a collection call. “Execution completed” describes the execution cell's status. It does not prove that a command started by that cell has finished.
 
-## What is wrong today
+## Baseline behavior
 
-The [core adapter](../../packages/pi-chat/src/tool-adapters/core-tools.ts) recognizes specific tool names and checks whether their package is named `pi-codex-tools`. It creates collection activity items for `wait` and empty `write_stdin` calls. The [summary code](../../packages/pi-chat/src/item-summary.ts) gives them the labels in the screenshot.
+At `6013382`, `packages/pi-chat/src/tool-adapters/core-tools.ts` recognized specific tool names and checked whether their package was named `pi-codex-tools`. It created collection activity items for `wait` and empty `write_stdin` calls. The summary code gave them the labels in the screenshot.
 
-The chat also reads the tool package's private execution format in [core-activity.ts](../../packages/pi-chat/src/tool-adapters/core-activity.ts) and subscribes to its private activity channel in [index.ts](../../packages/pi-chat/src/index.ts). Changing these special cases would retain the dependency the user rejected.
+The chat also read the tool package's private execution format in `packages/pi-chat/src/tool-adapters/core-activity.ts` and subscribed to its private activity channel. Both adapters have been removed. Their [generic replacement](../../packages/pi-chat/src/tool-adapters/activity.ts) consumes the shared contract.
 
-An execution activity item is currently conditional on script output, an error, or an image. It is not an automatic receipt for every completed script. The expanded raw arguments come from Pi's generic tool rendering.
+The baseline execution activity item was conditional on script output, an error, or an image; it was not an automatic receipt for every completed script. The expanded raw arguments came from Pi's generic tool rendering.
 
 ## ChatGPT.app reference
 
@@ -43,11 +43,11 @@ The [official item model](https://learn.chatgpt.com/docs/app-server#items) also 
 
 The target is therefore stable operations with continuing results. It is not a blanket “one row per tool call” or “one row per process” rule. For the simple test command above, repeated collection adds no new command action.
 
-This is a source inspection, not a live comparison. Before finalizing less common cases, compare script-only output, script errors, collection failures, cancellation, and image delivery with the app. Do not invent “Script output” or “Script failed” headings and call them app parity.
+This is a source inspection, not a live comparison. Script-only output, script errors, collection failures, cancellation, and image delivery were not compared in a live app. The delta preserves their source ownership and native result handling; its “Output” and “Error” headings do not establish exact app parity for those cases.
 
-## Proposed interface
+## Shared interface
 
-Use a small neutral contract package, provisionally `pi-activity`. It contains the shared data types, validation, and protocol identifiers. Both packages use this contract. It contains no tool implementations, chat components, package allowlists, or tool-name rules.
+The neutral [pi-activity package](../../packages/pi-activity/README.md) contains the shared data types, validation, and protocol identifiers. Both packages use this contract. It contains no tool implementations, chat components, package allowlists, or tool-name rules.
 
 The contract describes:
 
@@ -75,7 +75,7 @@ Shared action kinds may include commands, file changes, images, and generic tool
 
 ## Work sequence
 
-1. **Record the app reference cases.** Compare the screenshot scenario and the uncommon cases above. Use the findings as acceptance criteria, including expanded content. The earlier four display-preference questions are withdrawn.
+1. **Record the app reference cases.** Inspect the screenshot scenario and command update/input behavior. Record unverified uncommon cases separately. The earlier four display-preference questions are withdrawn.
 2. **Define the smallest shared contract.** Cover zero/multiple operations, later updates, native source identity, independent outcomes, and result ownership. Preserve validation after result hooks. Do not infer ownership by matching output text.
 3. **Make the tool package publish the contract.** Reuse its existing process observers and execution records. Keep its private worker and process details private. It must work without `pi-chat`.
 4. **Make the chat consume the contract.** Replace its package-specific adapter, decoder, and event subscription. Reuse its current activity items, command classification, grouping, native output controls, and generic fallback. Remove obsolete special cases.
@@ -88,13 +88,13 @@ The change reaches the shared package and dependency declarations, both packages
 
 - A simple command keeps its output and correct final state through repeated collection.
 - Routine collection and script completion add no activity merely because a tool call ended.
-- Meaningful actions, errors, and images follow the verified app behavior; available source content is retained.
+- Command actions and continuing results follow the inspected app behavior. Independent errors and images retain their source and native handling; their exact app presentation remains unverified.
 - Multiple operations have independent identities and outcomes. A completed script cannot mark a still-running command complete.
 - The chat accepts the contract from an unrelated producer with arbitrary tool names. No `pi-codex-tools` package or name check is required.
 - The tool package supplies the contract to a simple subscriber with `pi-chat` absent.
 - Live display and recorded history agree. Unknown records use the generic fallback. Discarded result content is not restored from an earlier snapshot.
 - Existing Find, grouping, disclosure, copy, and image controls still work.
 
-Reuse the existing combined workflow, native chat, and source-search checks. When implementation begins, add the smallest contract self-check needed to prove producer/consumer independence, then run the affected existing provider checks, `pnpm typecheck`, and `pnpm lint`. Compare the result in Ghostty with the recorded app cases.
+The existing combined workflow, native chat, and source-search checks were reused, with focused public-contract, unrelated-provider, terminal-input, and retained-source checks. The affected packages pass 335/335 checks on Pi 1.0.2; the full chat suite, combined workflows, and contract checks pass 126/126 on Pi 1.1.0. Typechecking passes on both versions; repository lint, formatting, and diff checks pass.
 
-Planning validation: repository code, installed Pi interfaces, official documentation, and the installed app bundle were inspected. This turn changes only this plan. Implementation and live behavior comparison remain outstanding.
+Repository code, installed Pi interfaces, official documentation, and the installed app bundle were inspected. Direct standards/spec review is complete; independent review agents failed before running because of a runtime decoding error. Physical-terminal acceptance and live app comparison remain unperformed. [Ticket 03](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) records the exact validation scope and limitations.

@@ -1,6 +1,6 @@
 # Generic tool activity
 
-**Status:** ready-for-agent
+**Status:** resolved — implemented on `codex/generic-tool-activity` at `4e271b8`.
 
 **Tracker:** [01: Generic operation presentation](../../.scratch/tool-activity/issues/01-generic-operation-presentation.md) → [02: Command continuation](../../.scratch/tool-activity/issues/02-command-continuation.md) → [03: Retained source and replay](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md).
 
@@ -32,7 +32,7 @@ The reference is the installed ChatGPT.app's command activity: output updates an
 ## Implementation Decisions
 
 - **Boundary.** A neutral package contains pure data types, validation, content binding, and protocol identifiers. It has no UI, dispatch, polling, registration framework, or dependency on either participating extension. Pi's existing result details, event bus, and retained custom entries carry the contract.
-- **Identity and updates.** Facts identify the originating call and session, revision, and ordered operations. Each operation has stable identity, semantic kind, actual status, applicable inputs and bounded output, optional verified edit counts, and explicit omitted-body state. Meaningful submitted command actions retain their process ownership. Incremental retained updates do not repeat growing execution snapshots or image bytes.
+- **Identity and updates.** Facts identify the originating call and session, revision, and ordered operations. Forked history preserves that originating session identity. Each operation has stable identity, semantic kind, actual status, applicable inputs and bounded output, optional verified edit counts, and explicit omitted-body state. A complete result snapshot supersedes older observations; later operation revisions can extend it. Meaningful submitted command actions retain their process ownership. Incremental retained updates do not repeat growing execution snapshots or image bytes.
 - **Selection.** A valid record with zero operations deliberately suppresses a receipt. Absent, invalid, or unsupported metadata falls back to the native generic call. Tool names, package manifests, and private producer formats are not consumer selection rules. Native built-ins retain their existing verified adapter.
 - **Result authority.** Bind result metadata to the processed content and activity facts. These are consistency checks, not authentication. Native image normalization may change bytes and add known hints; image placement always uses the actual processed content. Missing or invalid bindings prevent journal facts from restoring content discarded by result hooks.
 - **Presentation.** Commands, edits, and images retain their semantic summaries and independent disclosures. The open body has a semantic heading and Pi's generic default result preview/full control. Genuine independent output and failures remain accessible. Empty orchestration receipts and successful empty polls add no action; meaningful input updates originating command facts. No display setting or custom output viewport is added.
@@ -48,5 +48,7 @@ Use the existing real-Pi host fixture as the main seam. Extend its mixed command
 New tools, execution behavior, permission or cancellation changes, display-driven polling, automatic notifications, new chat settings, full application visual parity, old-history migration, custom output controls, and a general plugin or adapter framework.
 
 ## Further Notes
+
+Implemented and verified on 2026-10-16. The affected package suites pass 335/335 on Pi 1.0.2; the full chat suite, combined workflow cases, and contract checks pass 126/126 on Pi 1.1.0. Typechecking passes on both versions, and repository lint, formatting, and diff checks pass. The [retained-source ticket](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) records commands, direct standards/spec review, and verification limits. Independent review agents failed before running because of a runtime decoding error. No live app comparison, physical-terminal acceptance, or live-model trial was performed for this delta.
 
 The [reference plan](../plans/core-tool-activity-alignment.md) records source evidence and known limits. [ADR 0019](../adr/0019-tool-renderers-own-tool-presentation.md), [ADR 0024](../adr/0024-core-tools-use-native-extension-lifecycle.md), and [ADR 0016](../adr/0016-search-retained-transcript-content.md) govern the boundary, continuation, and source navigation. This delta supersedes package-specific extension adapters and collection/execution receipt rows in the [chat specification](pi-chat.md) and [toolset specification](../../.scratch/core-tools/spec.md); earlier validation remains scoped to its recorded revision.

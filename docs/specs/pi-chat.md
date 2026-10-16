@@ -2,7 +2,7 @@
 
 **Current revision:** Generic operation facts, quiet collection, semantic activity bodies, and retained-source navigation under the [activity specification](pi-activity.md).
 
-**Status:** ready-for-agent — generic activity delta; earlier evidence below retains its original scope.
+**Status:** resolved — generic activity delta implemented at `4e271b8` on `codex/generic-tool-activity`. [Current verification](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md) records the tested versions and remaining limits; earlier evidence below retains its original scope.
 
 **Tracker:** [Activity 01](../../.scratch/tool-activity/issues/01-generic-operation-presentation.md) → [Activity 02](../../.scratch/tool-activity/issues/02-command-continuation.md) → [Activity 03](../../.scratch/tool-activity/issues/03-retained-source-and-replay.md). Earlier [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) and [Core 06](../../.scratch/core-tools/issues/06-verify-mixed-native-workflows.md) retain their recorded validation limits.
 
