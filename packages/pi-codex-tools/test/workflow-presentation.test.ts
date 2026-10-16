@@ -6,6 +6,12 @@ import test from "node:test"
 import { setTimeout } from "node:timers/promises"
 import { stripVTControlCharacters } from "node:util"
 import { Text, visibleWidth } from "@earendil-works/pi-tui"
+import {
+  activityType,
+  readActivity,
+  readActivityUpdate,
+  type ActivityUpdate,
+} from "pi-activity"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
@@ -52,6 +58,78 @@ test("the companion-only control loads without extension errors", async (t) => {
   await host.session.prompt("Companion control")
   assert.match(await host.frame(), /Received\./)
 })
+
+test(
+  "terminal submissions update their origin while successful polls and execution receipts stay quiet",
+  { timeout: 15000 },
+  async (t) => {
+    const updates: ActivityUpdate[] = []
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension, ...companions],
+      providerApi,
+      providerProtocol: "responses",
+      rows: 180,
+      columns: 140,
+      extension(pi) {
+        pi.events.on(activityType, (value) => {
+          const update = readActivityUpdate(value)
+          if (update?.callId.startsWith("call_terminal-start"))
+            updates.push(update)
+        })
+      },
+    })
+    host.queueResponse(
+      ...call(
+        'const p = await tools.exec_command({cmd:"read first; read second; printf \'%s:%s\' \\"$first\\" \\"$second\\"",login:false,tty:true,yield_time_ms:1}); store("terminal", p.session_id); text(p);',
+        "terminal-start",
+      ),
+    )
+    await host.session.prompt("Start terminal")
+    const run = async (chars: string, id: string) => {
+      host.queueResponse(
+        ...call(
+          `text(await tools.write_stdin({session_id:load("terminal"),chars:${JSON.stringify(chars)},yield_time_ms:1}));`,
+          id,
+        ),
+      )
+      await host.session.prompt(id)
+    }
+    await run("fir", "partial-input")
+    await run("", "empty-poll")
+    const latest = () =>
+      updates
+        .flatMap((update) => update.operations)
+        .findLast((operation) => operation.kind === "command")
+    assert.equal(latest()?.commands.length, 1)
+    await run("st\nsec", "first-submission")
+    assert.deepEqual(latest()?.commands.slice(1), ["first"])
+    await run("ond\n", "second-submission")
+    await t.waitFor(() => assert.equal(latest()?.status, "completed"))
+    const command = latest()
+    assert(command?.kind === "command")
+    assert.deepEqual(command.commands.slice(1), ["first", "second"])
+    assert.match(command.output ?? "", /first:second/)
+    const history = host.session.sessionManager.getBranch()
+    for (const entry of history) {
+      if (
+        entry.type !== "message" ||
+        entry.message.role !== "toolResult" ||
+        entry.message.toolCallId.startsWith("call_terminal-start")
+      )
+        continue
+      assert.deepEqual(readActivity(entry.message)?.update.operations, [])
+    }
+    await openWork(host)
+    await host.key("\x0f")
+    await host.frame()
+    const screen = stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.doesNotMatch(
+      screen,
+      /Collected output|Execution completed|write_stdin|exec_command/,
+    )
+    assert(screen.indexOf("first:second") < screen.indexOf("partial-input"))
+  },
+)
 
 for (const order of ["first", "last"] as const) {
   test(
@@ -135,7 +213,7 @@ for (const order of ["first", "last"] as const) {
       let screen = await openWork(host)
       assert.match(
         screen,
-        /> Edited files, read files, ran a command, viewed images, executed a script/,
+        /> Edited files, read files, ran a command, viewed images, output/,
       )
       assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
       const groupRow = host
@@ -160,7 +238,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /> Read changed\.txt/)
       assert.match(screen, /> Viewed image .*local\.png/)
       assert.match(screen, /> Viewed image .*late\.png/)
-      assert.match(screen, /> Execution failed/)
+      assert.match(screen, /> Error/)
       assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
       const commandRow = host
         .screenLines()
@@ -176,15 +254,15 @@ for (const order of ["first", "last"] as const) {
       await host.key(`\x1b[<0;2;${commandRow + 1}m`)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
-      assert.match(screen, /exec_command/)
-      assert.match(screen, /cmd="cat changed\.txt"/)
+      assert.doesNotMatch(screen, /exec_command/)
+      assert.match(screen, /cat changed\.txt/)
       assert.match(screen, /validated-result/)
       assert.doesNotMatch(screen, /validated-line-39/)
       assert.match(screen, /more lines/)
       const nativeOutputRow = host
         .screenLines()
-        .findIndex((line) =>
-          stripVTControlCharacters(line).includes("exec_command"),
+        .findIndex(
+          (line) => stripVTControlCharacters(line).trim() === "cat changed.txt",
         )
       assert(nativeOutputRow > commandRow)
       await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
@@ -196,7 +274,7 @@ for (const order of ["first", "last"] as const) {
         40,
       )
       assert.match(screen, /> Ran printf inspect-project/)
-      assert.match(screen, /> Execution failed/)
+      assert.match(screen, /> Error/)
       assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
       await host.key(`\x1b[<0;2;${groupRow + 1}M`)
       await host.key(`\x1b[<0;2;${groupRow + 1}m`)
@@ -234,7 +312,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /Worked for \d+m \d+s ▼/)
       assert.match(screen, /▼ Edited files/)
       assert.match(screen, /▼ Ran command/)
-      assert.match(screen, /▼ Execution failed/)
+      assert.match(screen, /▼ Error/)
       assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 9)
       assert.match(screen, /inspect-project/)
       assert.match(screen, /validated-result/)
@@ -245,7 +323,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /LATE-MIXED-FAILURE/)
       assert.match(screen, /Unrelated workflow notice/)
       assert.match(screen, /Received\./)
-      assert.match(screen, /input: await tools\.exec_command/)
+      assert.doesNotMatch(screen, /input: await tools\.exec_command/)
       assert.doesNotMatch(
         screen,
         /Command ·|Patch ·|Image ·|chunk_id|cell_id|iVBOR|core-tools\.activity/,
@@ -264,9 +342,11 @@ for (const order of ["first", "last"] as const) {
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-FAILURE/)
       screen = await openWork(host)
       assert.match(screen, /> Edited files/)
-      assert.match(screen, /▼ Collected output/)
-      assert.match(screen, /▼ Collected output from/)
-      assert.match(screen, /cell_status: failed/)
+      assert.match(screen, /▼ Output/)
+      assert.doesNotMatch(
+        screen,
+        /Collected output|cell_status|Execution completed/,
+      )
       assert.equal(
         (screen.match(/\[Image: \[image\/png\] 2x1\]/g) ?? []).length,
         1,
@@ -281,7 +361,7 @@ for (const order of ["first", "last"] as const) {
       assert.equal((screen.match(/Received\./g) ?? []).length, 2)
       await host.reload()
       screen = await openWork(host)
-      assert.match(screen, /> Collected output/)
+      assert.match(screen, /> Output/)
       const retainedGroup = host
         .screenLines()
         .findIndex((line) =>
@@ -300,16 +380,16 @@ for (const order of ["first", "last"] as const) {
       )
       const executionRow = host
         .screenLines()
-        .findIndex((line) =>
-          stripVTControlCharacters(line).includes("Execution failed"),
-        )
+        .findIndex((line) => stripVTControlCharacters(line).includes("> Error"))
       assert(executionRow >= 0)
       await host.key(`\x1b[<0;2;${executionRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionRow + 1}m`)
       await host.frame()
       const executionOutputRow = host
         .screenLines()
-        .findIndex((line) => /^\s*exec\s/.test(stripVTControlCharacters(line)))
+        .findIndex((line) =>
+          /^\s*Error\s*$/.test(stripVTControlCharacters(line)),
+        )
       assert(executionOutputRow > executionRow)
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}M`)
       await host.key(`\x1b[<0;2;${executionOutputRow + 1}m`)
@@ -317,7 +397,7 @@ for (const order of ["first", "last"] as const) {
       const collectionRow = host
         .screenLines()
         .findIndex((line) =>
-          stripVTControlCharacters(line).includes("Collected output"),
+          stripVTControlCharacters(line).includes("> Output"),
         )
       assert(collectionRow >= 0)
       await host.key(`\x1b[<0;2;${collectionRow + 1}M`)
@@ -326,7 +406,7 @@ for (const order of ["first", "last"] as const) {
       const collectionItem = host
         .screenLines()
         .findIndex((line) =>
-          stripVTControlCharacters(line).includes("Collected output from"),
+          stripVTControlCharacters(line).includes("> Output"),
         )
       assert(collectionItem >= 0)
       await host.key(`\x1b[<0;2;${collectionItem + 1}M`)
@@ -462,7 +542,9 @@ test(
       const nativeOutputRow = host
         .screenLines()
         .findIndex((line) =>
-          stripVTControlCharacters(line).includes("exec_command"),
+          stripVTControlCharacters(line)
+            .trim()
+            .startsWith("printf STREAM-EARLY"),
         )
       assert(nativeOutputRow > commandRow)
       await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
@@ -519,7 +601,7 @@ test(
         () =>
           assert.match(
             stripVTControlCharacters(host.screenLines().join("\n")),
-            /exit_code: 9/,
+            /Ran command \(failed\)/,
           ),
         { timeout: 5000 },
       )
@@ -539,7 +621,7 @@ test(
       assert.match(output(host, "stream-collect"), /STREAM-EARLYSTREAM-LATE/)
       assert.match(output(host, "stream-collect"), /"exit_code":9/)
       const collected = await openWork(host)
-      assert.match(collected, /> Collected output/)
+      assert.doesNotMatch(collected, /Collected output|Execution completed/)
       assert.equal(
         (collected.match(/STREAM-EARLYSTREAM-LATE/g) ?? []).length,
         1,

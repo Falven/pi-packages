@@ -38,10 +38,7 @@ export function itemSummary(item: ActivityItem, expanded: boolean) {
   }
   if (item.kind === "image")
     return `${running ? "Viewing" : "Viewed"} image${target}${outcome}`
-  if (item.kind === "input")
-    return `${running ? "Sending" : "Sent"} input${target ? ` to${target}` : ""}${outcome}`
-  if (item.kind === "collection")
-    return `${running ? "Collecting" : "Collected"} output${target ? ` from${target}` : ""}${outcome}`
-  if (item.kind === "execution") return `Execution ${item.status}`
+  if (item.kind === "output")
+    return item.status === "failed" ? "Error" : `Output${outcome}`
   return `${running ? "Calling" : "Called"}${target}${outcome}`
 }

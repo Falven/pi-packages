@@ -210,8 +210,8 @@ export default function coreTools(pi: ExtensionAPI): void {
     exposure: "model-only",
     namespace: { name: contract.namespace.name },
     executionMode: "sequential",
-    execute(_id, args, signal) {
-      return cells.wait(args, signal)
+    execute(id, args, signal) {
+      return cells.wait(args, signal, id)
     },
   })
   const ownsTool = (name: string) =>

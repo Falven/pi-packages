@@ -1058,7 +1058,10 @@ export class NativeChatHost {
       this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 })
   }
 
-  private projectActivityItems(source: Occurrence): ChatRow[] {
+  private projectActivityItems(
+    source: Occurrence,
+    revealSource = true,
+  ): ChatRow[] {
     let disclosures = this.activityDisclosures.get(source)
     if (!disclosures) {
       disclosures = new Map()
@@ -1071,7 +1074,15 @@ export class NativeChatHost {
       source.resultMessage?.role === "toolResult"
         ? source.resultMessage
         : nativeResult
-    const items = this.activityItems.items(source, result)
+    let items = this.activityItems.items(source, result)
+    if (!items.length) {
+      if (!revealSource) return []
+      if (
+        this.searchState?.hits[this.searchState.selected]?.field.owner ===
+        source
+      )
+        items = this.activityItems.sourceItems(source)
+    }
     const present = new Set(items.map((item) => item.id))
     for (const [id, disclosure] of disclosures)
       if (!present.has(id)) {
@@ -1561,6 +1572,7 @@ export class NativeChatHost {
               part,
               owner === this.streaming,
               this.host.sessionManager.getCwd(),
+              this.host.sessionManager.getSessionId(),
               owner?.entry,
               index,
             )
@@ -1657,7 +1669,7 @@ export class NativeChatHost {
       addAssistant(this.streaming, this.streaming.message)
     const projected = new Map<Occurrence, ChatRow[]>()
     for (const [call, id] of toolCalls) {
-      const rows = this.projectActivityItems(call)
+      const rows = this.projectActivityItems(call, false)
       projected.set(call, rows)
       if (rows.length === 1 && rows[0]?.activityItem?.id === id) continue
       for (const row of rows) {
@@ -1696,7 +1708,7 @@ export class NativeChatHost {
     }
     return fields.flatMap((field) => {
       const rows = projected.get(field.owner)
-      if (!rows) return [field]
+      if (!rows?.length) return [field]
       const row = rows[0]
       if (
         rows.length === 1 &&
@@ -1968,11 +1980,17 @@ export class NativeChatHost {
     native.selectionMode = "retain"
     const hit = hits[selected]
     const previousOwner = previous?.hits[previous.selected]?.field.owner
+    const zeroItemCall = (candidate: SourceHit<Occurrence> | undefined) =>
+      candidate?.field.tool &&
+      !candidate.field.owner.sourceCall &&
+      this.activityItems.items(candidate.field.owner).length === 0
     const visibilityChanged =
-      this.host.settingsManager.getHideThinkingBlock() &&
       previousOwner !== hit?.field.owner &&
-      ((previousOwner && this.thoughts.has(previousOwner)) ||
-        (hit && this.thoughts.has(hit.field.owner)))
+      ((this.host.settingsManager.getHideThinkingBlock() &&
+        ((previousOwner && this.thoughts.has(previousOwner)) ||
+          (hit && this.thoughts.has(hit.field.owner)))) ||
+        zeroItemCall(previous?.hits[previous.selected]) ||
+        zeroItemCall(hit))
     if (visibilityChanged) this.layoutChat()
     const revealed =
       hit && (rebuild || mode !== "retain") ? this.revealSearchHit(hit) : false
@@ -2728,6 +2746,7 @@ export class NativeChatHost {
         content,
         this.streaming === owner,
         this.host.sessionManager.getCwd(),
+        this.host.sessionManager.getSessionId(),
         part.entry,
         index,
       )
@@ -3392,6 +3411,7 @@ export class NativeChatHost {
             content,
             false,
             this.host.sessionManager.getCwd(),
+            this.host.sessionManager.getSessionId(),
             entry,
             part.contentIndex,
           )

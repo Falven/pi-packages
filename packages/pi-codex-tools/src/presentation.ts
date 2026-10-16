@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto"
 import { stripVTControlCharacters } from "node:util"
 import { Text, truncateToWidth } from "@earendil-works/pi-tui"
+import { contentHash, type ActivityDetails } from "pi-activity"
+export { contentHash } from "pi-activity"
 import type {
   AgentToolResult,
   ToolRenderers,
@@ -44,8 +46,9 @@ export type OperationPresentation = {
   input?: boolean
   live?: boolean
   exitCode?: number
+  submitted?: string[]
 }
-export type ExecutionDetails = {
+export type ExecutionDetails = Partial<ActivityDetails> & {
   contentHash: string
   executionHash?: string
   imageOrigins?: (string | null)[]
@@ -69,31 +72,6 @@ export type ExecutionDetails = {
 
 export const executionHash = (execution: ExecutionDetails["execution"]) =>
   createHash("sha256").update(JSON.stringify(execution)).digest("hex")
-
-export const contentHash = (
-  content: AgentToolResult<unknown>["content"],
-  nativeHints = false,
-) =>
-  createHash("sha256")
-    .update(
-      JSON.stringify(
-        content.flatMap((part, index) => {
-          if (part.type === "image") return [{ type: "image" }]
-          // Native image normalization appends hints immediately after its image.
-          if (
-            nativeHints &&
-            part.type === "text" &&
-            content[index - 1]?.type === "image" &&
-            /^(?:\[Image converted from [\w/+.-]+ to [\w/+.-]+\.\](?:\n|$))(?:\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\])?$|^\[Image: original \d+x\d+, displayed at \d+x\d+\. Multiply coordinates by \d+\.\d+ to map to original image\.\]$/.test(
-              part.text,
-            )
-          )
-            return []
-          return [part]
-        }),
-      ),
-    )
-    .digest("hex")
 
 const previewLimit = 16384
 export function boundedPreview(text: string): string {

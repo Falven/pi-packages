@@ -5,6 +5,7 @@ import type {
   ToolExecutionUpdateEvent,
 } from "@earendil-works/pi-coding-agent"
 import { ActivityAdapters } from "./tool-adapters/index.ts"
+import { fallbackItems } from "./tool-adapters/fallback.ts"
 import type {
   ActivityItem,
   ActivityResult,
@@ -34,6 +35,7 @@ export class ActivityItems {
     call: Call,
     live: boolean,
     cwd: string,
+    sessionId: string,
     entry?: object,
     index?: number,
   ) {
@@ -42,6 +44,7 @@ export class ActivityItems {
       (index !== undefined ? parts?.get(index) : undefined) ?? {
         facts: {
           id: call.id,
+          sessionId,
           name: call.name,
           args: call.arguments,
           cwd,
@@ -122,6 +125,11 @@ export class ActivityItems {
     for (const id of changed)
       for (const state of this.byId.get(id) ?? []) delete state.items
     return changed.length > 0
+  }
+
+  sourceItems(owner: object): readonly ActivityItem[] {
+    const state = this.calls.get(owner)
+    return state ? fallbackItems(state.facts) : []
   }
 
   rebase() {

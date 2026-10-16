@@ -1,0 +1,17 @@
+{
+  "name": "pi-activity",
+  "version": "0.1.0",
+  "description": "Optional operation facts for Pi tool providers and consumers",
+  "files": [
+    "src/**/*.ts"
+  ],
+  "type": "module",
+  "exports": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

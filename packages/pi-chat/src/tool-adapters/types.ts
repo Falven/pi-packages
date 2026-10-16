@@ -3,19 +3,16 @@ import type {
   SourceInfo,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent"
+import type { ActivityStatus } from "pi-activity"
+export type { ActivityStatus } from "pi-activity"
 
-export type ActivityStatus =
-  | "running"
-  | "completed"
-  | "failed"
-  | "unknown"
-  | "unattempted"
 export type ActivityResult = Pick<AgentToolResult<unknown>, "content"> & {
   details?: unknown
   isError: boolean
 }
 export type CallFacts = {
   id: string
+  sessionId: string
   name: string
   args: unknown
   cwd: string
@@ -26,16 +23,7 @@ export type CallFacts = {
 }
 export type ActivityItem = {
   id: string
-  kind:
-    | "loaded"
-    | "tool"
-    | "edit"
-    | "read"
-    | "command"
-    | "image"
-    | "execution"
-    | "input"
-    | "collection"
+  kind: "loaded" | "tool" | "edit" | "read" | "command" | "image" | "output"
   action?: "read" | "search" | "list"
   target?: string | undefined
   targetKey?: string

@@ -191,6 +191,8 @@ importers:
         specifier: 7.0.2
         version: 7.0.2
 
+  packages/pi-activity: {}
+
   packages/pi-attachments:
     dependencies:
       '@earendil-works/pi-coding-agent':
@@ -209,6 +211,9 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: ^1.0.2
         version: 1.0.2(@aws-sdk/credential-provider-node@3.972.84)(@smithy/signature-v4@5.7.4)(ws@8.22.0)
+      pi-activity:
+        specifier: workspace:*
+        version: link:../pi-activity
     devDependencies:
       '@earendil-works/pi-tui':
         specifier: 1.0.2
@@ -222,6 +227,9 @@ importers:
       node-pty:
         specifier: 1.2.0-beta.15
         version: 1.2.0-beta.15
+      pi-activity:
+        specifier: workspace:*
+        version: link:../pi-activity
     devDependencies:
       '@earendil-works/pi-tui':
         specifier: ^1.0.2

@@ -4,6 +4,13 @@ import { Worker } from "node:worker_threads"
 import { stripVTControlCharacters } from "node:util"
 import { truncateToWidth } from "@earendil-works/pi-tui"
 import {
+  activityDetails,
+  activityType,
+  type ActivityOperation,
+  type ActivityUpdate,
+} from "pi-activity"
+import { operationActivity, outputActivity } from "./activity.ts"
+import {
   boundedPreview,
   createExecutionRenderers,
   type LivePresentation,
@@ -56,6 +63,7 @@ type Journal = {
   session_id: string
   status: Status
   events: Activity[]
+  activity?: ActivityUpdate
 }
 type Cutoff = {
   status: Status
@@ -102,6 +110,8 @@ type Cell = {
   scriptOutputReset: boolean
   eventCount: number
   revision: number
+  outputRevision: number
+  activityPending: Map<string, ActivityOperation>
   notificationBytes: number
   presentation: ExecutionDetails["execution"]
   activeOperations: Set<OperationPresentation>
@@ -237,6 +247,8 @@ export class ExecutionCells {
       scriptOutputReset: false,
       eventCount: 0,
       revision: 0,
+      outputRevision: 0,
+      activityPending: new Map(),
       notificationBytes: 0,
       presentation: {
         cellId: "",
@@ -254,6 +266,7 @@ export class ExecutionCells {
       invalidates: new Set(),
     })
     this.cells.set(cell.id, cell)
+    this.pi.events.emit(activityType, this.activityUpdate(cell, []))
     this.record(cell, { type: "created" })
     const tools = ctx.tools.filter(
       (tool) => selectedNames.has(tool.name) && this.available(tool.name),
@@ -310,6 +323,7 @@ export class ExecutionCells {
   async wait(
     args: WaitOptions,
     signal: AbortSignal | undefined,
+    callId: string,
   ): Promise<Result> {
     try {
       const maxTokens = integer(args.max_tokens, 10000, "max_tokens")
@@ -317,8 +331,9 @@ export class ExecutionCells {
       const cell = this.cells.get(args.cell_id)
       if (!cell || cell.collected)
         return failure(`exec cell ${args.cell_id} not found`)
+      this.pi.events.emit(activityType, this.activityUpdate(cell, [], callId))
       if (args.terminate) await this.stop(cell)
-      return await this.collect(cell, yieldTime, maxTokens, signal)
+      return await this.collect(cell, yieldTime, maxTokens, signal, callId)
     } catch (error) {
       return failure(error instanceof Error ? error.message : String(error))
     }
@@ -438,13 +453,17 @@ export class ExecutionCells {
     let processId: number | undefined
     let observing = false
     const observe = (process: ProcessPresentation) => {
+      const submitted =
+        (process.submitted?.length ?? 0) !== (operation.submitted?.length ?? 0)
       operation.live = true
       operation.output = process.output
+      if (process.submitted) operation.submitted = process.submitted
       operation.status = process.status
       if (process.exitCode !== undefined) operation.exitCode = process.exitCode
       if (returned && process.status !== "running")
         this.settleOperation(cell, operation)
       this.update(cell, operation)
+      if (submitted) this.flush(cell)
       if (returned && process.status !== "running") {
         this.record(cell, {
           type: "process-completed",
@@ -832,6 +851,7 @@ export class ExecutionCells {
     yieldTime: number,
     maxTokens: number,
     signal?: AbortSignal,
+    callId = cell.parentId,
   ): Promise<Result> {
     if (signal?.aborted) return failure("Wait cancelled")
     if (cell.collectors >= 32)
@@ -901,7 +921,7 @@ export class ExecutionCells {
           ]
           return {
             content: failed,
-            details: this.details(cell, failed, cutoff.parts),
+            details: this.details(cell, failed, cutoff.parts, callId),
             isError: true,
           }
         }
@@ -918,7 +938,7 @@ export class ExecutionCells {
         ]
         return {
           content: resultContent,
-          details: this.details(cell, resultContent, cutoff.parts),
+          details: this.details(cell, resultContent, cutoff.parts, callId),
         }
       })
       .catch((error: unknown) =>
@@ -1013,9 +1033,29 @@ export class ExecutionCells {
     cell: Cell,
     content: Result["content"] = [],
     parts: Part[] = [],
+    callId = cell.parentId,
   ): ExecutionDetails {
     cell.presentation.status = cell.status
+    const output = outputActivity(cell.presentation, cell.outputRevision)
+    const operations =
+      callId === cell.parentId
+        ? cell.presentation.operations
+            .flatMap((item) => operationActivity(item) ?? [])
+            .concat(output ?? [])
+        : []
+    const imageOwners = parts
+      .filter((part) => part.type === "image")
+      .map((part) => {
+        const owner =
+          part.owner === undefined ? output?.id : `${cell.id}/${part.owner}`
+        return operations.some((item) => item.id === owner) ? owner! : null
+      })
     return {
+      ...activityDetails(
+        this.activityUpdate(cell, structuredClone(operations), callId),
+        content,
+        imageOwners,
+      ),
       contentHash: contentHash(content),
       executionHash: executionHash(cell.presentation),
       imageOrigins: parts
@@ -1029,12 +1069,25 @@ export class ExecutionCells {
 
   private update(cell: Cell, operation?: OperationPresentation): void {
     cell.presentation.status = cell.status
-    if (operation) operation.revision = ++cell.revision
+    cell.revision++
+    if (operation) operation.revision = cell.revision
+    else cell.outputRevision = cell.revision
     const omitted = this.trimOperations(cell.presentation, (candidate) =>
       cell.activeOperations.has(candidate),
     )
     for (const trimmed of omitted) trimmed.revision = ++cell.revision
     const changed = operation ? [operation, ...omitted] : omitted
+    const activity = changed.flatMap((item) => operationActivity(item) ?? [])
+    if (!operation) {
+      const output = outputActivity(cell.presentation, cell.outputRevision)
+      if (output) activity.push(output)
+    }
+    for (const item of activity)
+      cell.activityPending.set(item.id, structuredClone(item))
+    this.pi.events.emit(
+      activityType,
+      this.activityUpdate(cell, structuredClone(activity)),
+    )
     if (changed.length)
       this.pi.events.emit(journalType, {
         cell_id: cell.id,
@@ -1184,15 +1237,58 @@ export class ExecutionCells {
       cell.scriptOutput = ""
       cell.scriptOutputReset = false
     }
-    if (!cell.events.length || this.closed) return
-    this.pi.appendEntry<Journal>(journalType, {
+    if ((!cell.events.length && !cell.activityPending.size) || this.closed)
+      return
+    const empty = () => ({
       cell_id: cell.id,
       parent_call_id: cell.parentId,
       session_id: cell.sessionId,
       status: cell.status,
-      events: cell.events.splice(0),
+      events: [] as Activity[],
+      activity: this.activityUpdate(cell, []),
     })
+    let batch = empty()
+    const overhead = Buffer.byteLength(JSON.stringify(batch))
+    let bytes = overhead
+    const reserve = (value: Activity | ActivityOperation) => {
+      const extra = Buffer.byteLength(JSON.stringify(value)) + 1
+      if (
+        (batch.events.length || batch.activity.operations.length) &&
+        (bytes + extra > 8192 || batch.events.length >= 16)
+      ) {
+        this.pi.appendEntry<Journal>(journalType, batch)
+        batch = empty()
+        bytes = overhead
+      }
+      // A single bounded body may exceed the batch threshold; never split its facts.
+      bytes += extra
+    }
+    for (const event of cell.events.splice(0)) {
+      reserve(event)
+      batch.events.push(event)
+    }
+    for (const operation of cell.activityPending.values()) {
+      reserve(operation)
+      batch.activity.operations.push(operation)
+    }
+    this.pi.appendEntry<Journal>(journalType, batch)
+    cell.activityPending.clear()
     cell.eventBytes = 0
+  }
+
+  private activityUpdate(
+    cell: Cell,
+    operations: ActivityOperation[],
+    callId = cell.parentId,
+  ): ActivityUpdate {
+    return {
+      version: 1,
+      id: callId === cell.parentId ? cell.id : `${cell.id}/${callId}`,
+      callId,
+      sessionId: cell.sessionId,
+      revision: cell.revision,
+      operations,
+    }
   }
 
   async close(): Promise<void> {

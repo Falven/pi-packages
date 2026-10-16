@@ -12,6 +12,8 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 `pi-attachments` and `pi-skill-references` also work with Pi's native editor.
 
+[`pi-activity`](packages/pi-activity) is the optional data contract for operation progress and output. Tool providers and chat consumers use it independently; it is not installed as a Pi extension.
+
 ## Install
 
 Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.0.2 or later. These packages are not published to npm yet. Install them from the repository root, loading `pi-composer` before editor decorators such as `pi-attachments`:

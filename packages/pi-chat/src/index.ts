@@ -17,8 +17,8 @@ export default function piChat(pi: ExtensionAPI) {
   let adapter: NativeChatHost | undefined
   let unlistenActivity: (() => void) | undefined
   const listenActivity = () => {
-    unlistenActivity ??= pi.events.on("core-tools.activity", (data) =>
-      adapter?.observeActivity("core-tools.activity", data),
+    unlistenActivity ??= pi.events.on(activityType, (data) =>
+      adapter?.observeActivity(activityType, data),
     )
   }
   listenActivity()
@@ -99,3 +99,4 @@ export default function piChat(pi: ExtensionAPI) {
     adapter?.observeProviderEvent(event.data),
   )
 }
+import { activityType } from "pi-activity"

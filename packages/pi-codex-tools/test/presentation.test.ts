@@ -6,6 +6,11 @@ import { join } from "node:path"
 import { setTimeout } from "node:timers/promises"
 import { stripVTControlCharacters } from "node:util"
 import { visibleWidth } from "@earendil-works/pi-tui"
+import {
+  activityType,
+  readActivityUpdate,
+  type ActivityUpdate,
+} from "pi-activity"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import {
   call,
@@ -17,6 +22,7 @@ import {
 } from "./fixtures/model-loop.ts"
 
 test("completed execution cards expand readable commands while retaining orchestration", async (t) => {
+  const operations: ActivityUpdate[] = []
   const activity: {
     events: {
       type: string
@@ -29,6 +35,10 @@ test("completed execution cards expand readable commands while retaining orchest
     rows: 100,
     columns: 100,
     extension(pi) {
+      pi.events.on(activityType, (event) => {
+        const update = readActivityUpdate(event)
+        if (update) operations.push(update)
+      })
       pi.events.on("core-tools.activity", (event) => {
         activity.push(event as (typeof activity)[number])
       })
@@ -53,6 +63,18 @@ test("completed execution cards expand readable commands while retaining orchest
   assert.match(expanded, /readable-command/)
   assert.doesNotMatch(expanded, /await tools|Execution cell|Wall time|chunk_id/)
   assert.doesNotMatch(output(host), /readable-command/)
+  assert(
+    operations.some((update) =>
+      update.operations.some(
+        (operation) =>
+          operation.kind === "command" &&
+          operation.commands[0] === "printf readable-command" &&
+          operation.status === "completed" &&
+          operation.output === "readable-command",
+      ),
+    ),
+    "a consumer without chat receives semantic command facts",
+  )
   assert(
     activity.some((batch) =>
       batch.events.some(

@@ -9,6 +9,7 @@ export type ProcessPresentation = {
   output: string
   status: "running" | "completed" | "failed"
   exitCode?: number
+  submitted?: string[]
 }
 
 type Process = {
@@ -16,6 +17,8 @@ type Process = {
   replacePresentation: (text: string) => void
   observe: Set<(snapshot: ProcessPresentation) => void>
   presentation: ProcessPresentation
+  inputBuffer: string
+  inputOverflow: number
   pid?: number
   output: OutputStore
   cursor: OutputCursor
@@ -75,6 +78,8 @@ export class ProcessSessions {
       },
       observe: new Set(),
       presentation: { id: this.nextId - 1, output: "", status: "running" },
+      inputBuffer: "",
+      inputOverflow: 0,
       output,
       cursor: output.snapshot(),
       done,
@@ -135,6 +140,9 @@ export class ProcessSessions {
               ? "running"
               : "completed",
         ...(child.exitCode === undefined ? {} : { exitCode: child.exitCode }),
+        ...(child.presentation.submitted
+          ? { submitted: child.presentation.submitted }
+          : {}),
       }
       for (const observer of child.observe) observer(child.presentation)
     }
@@ -346,6 +354,37 @@ export class ProcessSessions {
     }
   }
 
+  private recordInput(child: Process, chars: string): void {
+    const submitted: string[] = []
+    for (let index = 0; index < chars.length; index++) {
+      const character = chars[index]!
+      if (character === "\r" || character === "\n") {
+        const command = child.inputBuffer.trim()
+        if (command || child.inputOverflow)
+          submitted.push(
+            boundedPreview(command) +
+              (child.inputOverflow ? " … [input omitted]" : ""),
+          )
+        child.inputBuffer = ""
+        child.inputOverflow = 0
+      } else if (character === "\x03") {
+        child.inputBuffer = ""
+        child.inputOverflow = 0
+      } else if (character === "\b" || character === "\x7f") {
+        if (child.inputOverflow) child.inputOverflow--
+        else child.inputBuffer = child.inputBuffer.slice(0, -1)
+      } else if (child.inputBuffer.length < 16384)
+        child.inputBuffer += character
+      else child.inputOverflow++
+    }
+    if (!submitted.length) return
+    child.presentation = {
+      ...child.presentation,
+      submitted: [...(child.presentation.submitted ?? []), ...submitted],
+    }
+    for (const observer of child.observe) observer(child.presentation)
+  }
+
   private collect(
     child: Process,
     yieldTime: number,
@@ -367,7 +406,10 @@ export class ProcessSessions {
       signal.addEventListener("abort", stop, { once: true })
       try {
         if (signal.aborted) stop()
-        else if (chars && child.exitCode === undefined) child.write!(chars)
+        else if (chars && child.exitCode === undefined) {
+          child.write!(chars)
+          this.recordInput(child, chars)
+        }
         await Promise.race([
           child.done,
           new Promise<void>((resolve) => {
