@@ -389,7 +389,7 @@ Six matched storage comparisons preserve all 21 provider request pairs after exp
 
 Independent Standards and Spec reviews of the implementation from `188aa0c44ef311704af8e9ac92711d361cb1a50d` through `1cf53dd5bf7c2afcc5c1f65979092204f43288db` found no actionable findings. All seven native storage ticket deltas are complete. The migration does not close the earlier conditional-inheritance, deletion-notification, activity-classification, accounting-observability, active-EOF, or actual-client evidence gates.
 
-No editable-installation cutover was performed. A fresh read-only check at `2026-10-16T03:47:18Z` found zero legacy goal rows and no registered goal package or extension link. The old file remains unchanged. Any later activation must repeat the count immediately beforehand and preserve unexpected goals. This migration accepts native first-save timing, one writer per session, and recovery of saved state only; it makes no stronger durability or complete-feature compatibility claim.
+After validation, the authorized editable-installation cutover on `main` repeated the legacy-store check at `2026-10-16T04:06:28Z` and found zero goal rows immediately before activation. Pi's native installer registered `/Users/fran/Source/pi-packages/packages/pi-goal` as a user-scoped local package, and a fresh Pi 1.1.0 process loaded `/goal` from that source. Existing package registrations and unrelated settings were preserved, and the old file remains unchanged. Ticket 07 records the cutover evidence. This migration accepts native first-save timing, one writer per session, and recovery of saved state only; it makes no stronger durability or complete-feature compatibility claim.
 
 ### Historical implementation evidence
 
