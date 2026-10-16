@@ -1,8 +1,7 @@
 import assert from "node:assert/strict"
-import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
 import test from "node:test"
 import { setImmediate as nextImmediate } from "node:timers/promises"
+import { SessionManager } from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { toolResponse } from "./tool-response.ts"
 
@@ -60,14 +59,19 @@ function result(host: Host, id: string) {
 }
 
 function generation(host: Host) {
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  try {
-    return database
-      .prepare("SELECT generation FROM goals WHERE threadId = ?")
-      .get(host.session.sessionManager.getSessionId())?.["generation"]
-  } finally {
-    database.close()
-  }
+  const entry = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (item) =>
+        item.type === "custom" &&
+        item.customType === "pi-goal.state" &&
+        (item.data as { threadId?: unknown }).threadId ===
+          host.session.sessionManager.getSessionId(),
+    )
+  assert(entry?.type === "custom")
+  const value = (entry.data as { generation?: unknown }).generation
+  assert(typeof value === "string")
+  return value
 }
 
 test("shutdown flushes live pursuit without pausing and restoration excludes downtime", async (t) => {
@@ -155,47 +159,107 @@ for (const status of [
   "complete",
 ] as const) {
   test(`restoration preserves the saved ${status} goal and its identity`, async (t) => {
+    let now = 1_000_000_000n
+    let wallClock = 1_710_000_000_000
+    t.mock.method(process.hrtime, "bigint", () => now)
+    t.mock.method(Date, "now", () => wallClock)
     const host = await openNativeHost(t, {
       extensionPaths: [extension],
       noTools: "builtin",
       persistSession: true,
       headless: true,
+      holdResponses: true,
     })
     host.queueResponse(
       ...response(
         "create_goal",
         {
           objective: "Keep the saved objective 🧭",
-          token_budget: "9223372036854775807",
+          token_budget:
+            status === "budgetLimited" ? 100 : "9223372036854775807",
         },
         "create",
       ),
     )
     host.queueResponse(
-      ...response("update_goal", { status: "paused" }, "pause"),
+      { pause: true },
+      ...response(
+        "update_goal",
+        {
+          status: ["blocked", "complete"].includes(status) ? status : "paused",
+        },
+        "save",
+        { prompt_tokens: 125, completion_tokens: 12, total_tokens: 137 },
+      ),
     )
     host.queueResponse(...answer())
-    await host.session.prompt("Create and pause the explicitly requested goal.")
+    const saving = host.session.prompt(
+      "Create the explicitly requested goal and apply its requested status.",
+    )
+    await t.waitFor(() => assert.equal(host.requests.length, 2))
+    now += 19_000_000_000n
+    wallClock += 5000
+    host.resumeResponse()
+    await saving
+    assert.equal(result(host, "save").goal.tokensUsed, 137)
+    assert.equal(result(host, "save").goal.timeUsedSeconds, 19)
     const sessionFile = host.session.sessionManager.getSessionFile()
     assert(sessionFile)
     const originalGeneration = generation(host)
     const owner = host.session.sessionManager.getSessionId()
-    await host.close()
-    // The saved-state fixture covers statuses whose runtime producers are separate.
-    const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-    try {
-      database
-        .prepare(
-          "UPDATE goals SET status = ?, tokenBudget = ?, tokensUsed = 137, timeUsedSeconds = 19, createdAt = 1710000000, updatedAt = 1710000005 WHERE threadId = ?",
-        )
-        .run(
-          status,
-          status === "budgetLimited" ? 100n : 9223372036854775807n,
-          owner,
-        )
-    } finally {
-      database.close()
+    if (status === "active") {
+      host.queueResponse(...response("get_goal", {}, "resumed"))
+      await host.session.prompt("/goal resume")
+      await t.waitFor(() => assert.equal(host.requests.length, 5))
+      assert.equal(result(host, "resumed").goal.status, "active")
+      await host.session.abort()
     }
+    await host.close()
+    if (status === "usageLimited") {
+      let limitedSettled = false
+      const limited = await openNativeHost(t, {
+        extensionPaths: [extension],
+        noTools: "builtin",
+        directory: host.directory,
+        sessionFile,
+        headless: true,
+        providerProtocol: "responses",
+        extension: (pi) => {
+          pi.on("agent_settled", () => {
+            limitedSettled = true
+          })
+        },
+      })
+      limited.queueResponse(
+        {
+          event: {
+            type: "response.created",
+            response: { id: "preservation-limit" },
+          },
+        },
+        {
+          event: {
+            type: "response.failed",
+            response: {
+              id: "preservation-limit",
+              status: "failed",
+              error: {
+                code: "insufficient_quota",
+                message: "Controlled usage limit",
+              },
+            },
+          },
+        },
+        { end: true },
+      )
+      await limited.session.prompt("/goal resume")
+      await t.waitFor(() => assert.equal(limitedSettled, true))
+      assert.equal(limited.requests.length, 1)
+      assert.equal(generation(limited), originalGeneration)
+      await limited.close()
+    }
+    now += 3_600_000_000_000n
+    wallClock += 3_600_000
 
     const ready = Promise.withResolvers<void>()
     let settled = 0
@@ -248,7 +312,7 @@ for (const status of [
     assert.equal(
       restored.session.messages.filter((message) => message.role === "custom")
         .length,
-      status === "active" ? 1 : 0,
+      status === "active" ? 2 : status === "usageLimited" ? 1 : 0,
     )
   })
 }
@@ -660,88 +724,112 @@ test("retaining reload checkpoints once and admits one fresh continuation", asyn
   assert.equal(result(host, "pause").goal.tokensUsed, 92)
 })
 
-test("a generic persisted fork retains history without inheriting the source goal", async (t) => {
-  let now = 1_000_000_000n
-  t.mock.method(process.hrtime, "bigint", () => now)
-  let settled = 0
-  const host = await openNativeHost(t, {
-    extensionPaths: [extension],
-    noTools: "builtin",
-    persistSession: true,
-    headless: true,
-    holdResponses: true,
-    extension: (pi) => {
-      pi.on("agent_settled", () => {
-        settled++
-      })
-    },
-  })
-  host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "The source session objective" },
-      "create-source",
-      reported,
-    ),
-  )
-  host.queueResponse(...response("get_goal", {}, "source-read", reported))
-  host.queueResponse(...answer())
-  await host.session.prompt("Create the explicitly requested source goal.")
-  const sourceFile = host.session.sessionManager.getSessionFile()
-  const sourceId = host.session.sessionManager.getSessionId()
-  const sourceGeneration = generation(host)
-  const entry = host.session.sessionManager.getLeafId()
-  assert(sourceFile && entry)
-  now += 1_300_000_000n
-  assert.equal(
-    (await host.runtime.fork(entry, { position: "at" })).cancelled,
-    false,
-  )
-  const targetId = host.session.sessionManager.getSessionId()
-  assert.notEqual(targetId, sourceId)
-  assert(host.session.sessionManager.getSessionFile())
-  assert.match(
-    JSON.stringify(host.session.messages),
-    /The source session objective/,
-  )
-  assert.equal(host.requests.length, 3)
-  host.queueResponse(...response("get_goal", {}, "target-read", reported))
-  host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "The separately authorized target" },
-      "create-target",
-      reported,
-    ),
-  )
-  host.queueResponse(
-    ...response("update_goal", { status: "paused" }, "pause-target", reported),
-  )
-  host.queueResponse(...answer())
-  await host.session.prompt(
-    "Inspect this session, then create and pause its separately authorized goal.",
-  )
-  assert.equal(result(host, "target-read").goal, null)
-  assert.equal(result(host, "create-target").goal.tokensUsed, 0)
-  assert.equal(result(host, "pause-target").goal.tokensUsed, 92)
-  assert.equal(result(host, "pause-target").goal.threadId, targetId)
-  assert.notEqual(generation(host), sourceGeneration)
+for (const operation of ["fork", "clone"] as const) {
+  test(`a generic persisted ${operation} retains history without inheriting the source goal`, async (t) => {
+    let now = 1_000_000_000n
+    t.mock.method(process.hrtime, "bigint", () => now)
+    let settled = 0
+    const host = await openNativeHost(t, {
+      extensionPaths: [extension],
+      noTools: "builtin",
+      persistSession: true,
+      headless: true,
+      holdResponses: true,
+      extension: (pi) => {
+        pi.on("agent_settled", () => {
+          settled++
+        })
+      },
+    })
+    host.queueResponse(
+      ...response(
+        "create_goal",
+        { objective: "The source session objective" },
+        "create-source",
+        reported,
+      ),
+    )
+    host.queueResponse(...response("get_goal", {}, "source-read", reported))
+    host.queueResponse(...answer())
+    await host.session.prompt("Create the explicitly requested source goal.")
+    const sourceFile = host.session.sessionManager.getSessionFile()
+    const sourceId = host.session.sessionManager.getSessionId()
+    const sourceGeneration = generation(host)
+    const entry = host.session.sessionManager.getLeafId()
+    assert(sourceFile && entry)
+    now += 1_300_000_000n
+    if (operation === "fork") {
+      assert.equal(
+        (await host.runtime.fork(entry, { position: "at" })).cancelled,
+        false,
+      )
+    } else {
+      const clone = SessionManager.forkFrom(sourceFile, host.directory)
+      const cloneFile = clone.getSessionFile()
+      assert(cloneFile)
+      assert.deepEqual(
+        clone.getEntries(),
+        SessionManager.open(sourceFile).getEntries(),
+      )
+      assert.equal(
+        (await host.runtime.switchSession(cloneFile)).cancelled,
+        false,
+      )
+    }
+    const targetId = host.session.sessionManager.getSessionId()
+    assert.notEqual(targetId, sourceId)
+    assert(host.session.sessionManager.getSessionFile())
+    assert.match(
+      JSON.stringify(host.session.messages),
+      /The source session objective/,
+    )
+    assert.equal(host.requests.length, 3)
+    host.queueResponse(...response("get_goal", {}, "target-read", reported))
+    host.queueResponse(
+      ...response(
+        "create_goal",
+        { objective: "The separately authorized target" },
+        "create-target",
+        reported,
+      ),
+    )
+    host.queueResponse(
+      ...response(
+        "update_goal",
+        { status: "paused" },
+        "pause-target",
+        reported,
+      ),
+    )
+    host.queueResponse(...answer())
+    await host.session.prompt(
+      "Inspect this session, then create and pause its separately authorized goal.",
+    )
+    assert.equal(result(host, "target-read").goal, null)
+    assert.equal(result(host, "create-target").goal.tokensUsed, 0)
+    assert.equal(result(host, "pause-target").goal.tokensUsed, 92)
+    assert.equal(result(host, "pause-target").goal.threadId, targetId)
+    assert.notEqual(generation(host), sourceGeneration)
 
-  host.queueResponse(...response("get_goal", {}, "restored-source"))
-  host.queueResponse(
-    ...response("update_goal", { status: "paused" }, "pause-source"),
-  )
-  host.queueResponse(...answer())
-  assert.equal((await host.runtime.switchSession(sourceFile)).cancelled, false)
-  await t.waitFor(() => assert.equal(settled, 3))
-  const source = result(host, "restored-source").goal
-  assert.equal(source.status, "active")
-  assert.equal(source.threadId, sourceId)
-  assert.equal(source.objective, "The source session objective")
-  assert.equal(source.tokensUsed, 92)
-  assert.equal(source.timeUsedSeconds, 1)
-  assert.equal(generation(host), sourceGeneration)
-})
+    host.queueResponse(...response("get_goal", {}, "restored-source"))
+    host.queueResponse(
+      ...response("update_goal", { status: "paused" }, "pause-source"),
+    )
+    host.queueResponse(...answer())
+    assert.equal(
+      (await host.runtime.switchSession(sourceFile)).cancelled,
+      false,
+    )
+    await t.waitFor(() => assert.equal(settled, 3))
+    const source = result(host, "restored-source").goal
+    assert.equal(source.status, "active")
+    assert.equal(source.threadId, sourceId)
+    assert.equal(source.objective, "The source session objective")
+    assert.equal(source.tokensUsed, 92)
+    assert.equal(source.timeUsedSeconds, 1)
+    assert.equal(generation(host), sourceGeneration)
+  })
+}
 
 test("a generic ephemeral fork remains ephemeral and cannot persist a goal", async (t) => {
   const host = await openNativeHost(t, {

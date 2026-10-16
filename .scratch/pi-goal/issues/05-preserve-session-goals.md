@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Account for usage and budgets.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** native session storage delta complete. Earlier unresolved feature gates remain open.
 
 **Baseline status:** partial — public preservation behavior and captures verified; conditional inheritance, deletion notifications, actual-client provenance, and the native active-EOF limit remain open.
 
@@ -12,11 +12,29 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Produce and reopen all six goal statuses through the existing native controls and runtime outcomes, preserving exact objective, ownership, generation, allowance, counters, and timestamps without charging downtime.
-- [ ] Keep the latest current-session snapshot or clear record authoritative across compaction, rewind, reload, and reopening, including records outside the active branch. Replacement and interactive completion must not resurrect historical goals.
-- [ ] Verify ordinary forks and clones copy history without acquiring the source goal; newly authorized target goals and healthy session switches remain independent. Conditional inheritance retains its existing capability gate.
-- [ ] Verify retaining reload preserves both healthy state and a prior storage-failure stop, while a fresh manager restores saved state only. Session disposal invalidates owned callbacks and does not fabricate an explicit pause.
-- [ ] Adapt preservation fixtures to native session entries and observable controls. Goal records share saved-session deletion without an external row; do not claim a deletion notification interrupts another loaded runtime.
+- [x] Produce and reopen all six goal statuses through the existing native controls and runtime outcomes, preserving exact objective, ownership, generation, allowance, counters, and timestamps without charging downtime.
+- [x] Keep the latest current-session snapshot or clear record authoritative across compaction, rewind, reload, and reopening, including records outside the active branch. Replacement and interactive completion must not resurrect historical goals.
+- [x] Verify ordinary forks and clones copy history without acquiring the source goal; newly authorized target goals and healthy session switches remain independent. Conditional inheritance retains its existing capability gate.
+- [x] Verify retaining reload preserves both healthy state and a prior storage-failure stop, while a fresh manager restores saved state only. Session disposal invalidates owned callbacks and does not fabricate an explicit pause.
+- [x] Adapt preservation fixtures to native session entries and observable controls. Goal records share saved-session deletion without an external row; do not claim a deletion notification interrupts another loaded runtime.
+
+## Native storage verification
+
+The preservation suite now reads private generation identities from public session entries instead of querying a database. All six restoration cases produce their saved status through native behavior: model tools pause, block, or complete; an explicit resume leaves an active goal after raw interruption; reported usage exhausts a 100-token allowance; and a structured provider quota failure produces `usageLimited`. No saved goal fields are seeded or rewritten by the fixture.
+
+Each case reports 137 tokens and accumulates 19 seconds before disposal. After an unloaded hour, the native `get_goal` result preserves the Unicode objective, session owner, generation, counters, both timestamps, and exact allowance. The five unexhausted cases retain `9223372036854775807` and the exact remaining value `9223372036854775670`; the exhausted case retains 100 and zero remaining. Only the active restored goal admits an automatic continuation. Clock control makes the timestamps and downtime assertions independent of test duration.
+
+The existing compaction, history rewind, clear, session switch, retaining reload, shutdown, and pending-editor scenarios pass through the native store. They retain current state outside the selected history branch, consumed usage, native interruption behavior, and independent session ownership. An ordinary branch fork and a full-history clone both copy conversation history without acquiring a goal. The clone uses public `SessionManager.forkFrom()` and matches the saved source entries; each target accepts a separately authorized goal with its own generation, while switching back restores the source cutoff unchanged.
+
+[Ticket 02](02-manage-goal-lifecycle.md) covers replacement, interactive completion cleanup, and clear followed by navigation and saved-session reopening. [Ticket 03](03-continue-safely-honor-stop.md) covers retaining reload after storage failure, fresh-manager recovery from disk, and disposal of owned pending callbacks. These checks are reused rather than duplicated here. Goal records now live only in their session file, so deleting that saved file removes its saved goal records too. No session-deletion notification or interruption of another loaded runtime is claimed. First-message persistence and possible loss before that boundary remain the accepted limits verified in [ticket 01](01-create-inspect-goals.md).
+
+On 2026-10-15, the initial released-runtime run passed 6 of 20 cases; the other 14 failed at the removed database probes. After replacing those probes and seeded statuses, all **21 preservation cases pass** on released Pi **1.1.0** with Node **24.13.1**, including the added clone case:
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-reporter=tap --test-concurrency=1 packages/pi-goal/test/preservation.test.ts
+```
+
+The final run is recorded in `/tmp/pi-goal-native-05-final.tap`. Full workspace type checking, scoped lint, formatting, and whitespace checks pass. No production, shared-fixture, dependency, host, or installation files changed. Fresh integrated terminal and capture verification belongs to ticket 07; the historical evidence below remains separate. Conditional inheritance, origin-sensitive compaction behavior, deletion notification, and the active-EOF lifecycle limits remain open.
 
 ## Historical acceptance
 
