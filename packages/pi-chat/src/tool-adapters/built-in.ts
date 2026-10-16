@@ -60,6 +60,7 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
   else if (name === "ls") item.action = "list"
   else if (name === "grep" || name === "find") {
     item.action = "search"
+    item.searchPath = path
     if (typeof args["pattern"] === "string") item.target = args["pattern"]
   }
   const details = argumentsOf(facts.result?.details)

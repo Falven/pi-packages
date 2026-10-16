@@ -149,6 +149,11 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   host.queueResponse(steps[0]!, { pause: true }, ...steps.slice(1))
   const work = host.session.prompt("Inspect the workspace")
   await t.waitFor(() => assert(received))
+  await host.frame()
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /─+ [^\n]*Thinking/,
+  )
   await host.session.abort()
   await work
   await host.key("\x0f")
@@ -157,6 +162,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   assert.equal(executions, 0)
   assert.match(screen(), /Called inspect_workspace \(failed\)/)
   assert.match(screen(), /Operation aborted/)
+  assert.doesNotMatch(screen(), /─+ [^\n]*(Thinking|Working)/)
   await host.reload()
   await host.key("\x0f")
   await host.key("\x0f")
@@ -254,13 +260,26 @@ test("native reads and an unrelated command provider share skill labels and reta
   })
   host.queueResponse(...response("", "read", { path }))
   host.queueResponse(
+    { pause: true },
     ...response("", "bash", {
       command: `printf '\\n--- skill ---\\n'; cat '${path}'`,
     }),
   )
-  host.queueResponse(...response("", "opaque_read"))
-  host.queueResponse(...response("Finished"))
-  await host.session.prompt("Read the registered skill")
+  host.queueResponse({ pause: true }, ...response("", "opaque_read"))
+  host.queueResponse({ pause: true }, ...response("Finished"))
+  const work = host.session.prompt("Read the registered skill")
+  for (const requests of [2, 3, 4]) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Check each native/declared skill read before the next request proceeds.
+    await t.waitFor(() => assert.equal(host.requests.length, requests))
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Paint the paused native indicator.
+    await host.frame()
+    assert.match(
+      host.screenLines().map(stripTerminalSequences).join("\n"),
+      /─+ [^\n]*Reading review skill/,
+    )
+    host.resumeResponse()
+  }
+  await work
   await host.frame()
   await host.key("\x0f")
   await host.frame()
@@ -306,10 +325,11 @@ test("native reads and an unrelated command provider share skill labels and reta
 })
 
 test("an unrelated provider presents semantic operations and late updates without tool-name mappings", async (t) => {
-  let publish: (() => void) | undefined
+  let publish: ((operations?: ActivityUpdate["operations"]) => void) | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 64,
+    rows: 140,
+    columns: 110,
     persistSession: true,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     extensionFactories: [
@@ -339,18 +359,23 @@ test("an unrelated provider presents semantic operations and late updates withou
                 },
               ],
             }
-            publish = () => {
+            let revision = update.revision
+            publish = (
+              operations = [
+                {
+                  ...update.operations[0]!,
+                  status: "failed",
+                  output: "late-generic-failure",
+                },
+              ],
+            ) => {
               const later: ActivityUpdate = {
                 ...update,
-                revision: 2,
-                operations: [
-                  {
-                    ...update.operations[0]!,
-                    revision: 2,
-                    status: "failed",
-                    output: "late-generic-failure",
-                  },
-                ],
+                revision: ++revision,
+                operations: operations.map((operation) => ({
+                  ...operation,
+                  revision,
+                })),
               }
               pi.events.emit(activityType, later)
               pi.appendEntry(activityType, { activity: later })
@@ -366,10 +391,94 @@ test("an unrelated provider presents semantic operations and late updates withou
     ],
   })
   host.queueResponse(...response("", "opaque_job"))
-  host.queueResponse(...response("Finished"))
-  await host.type("Start work")
-  await host.key("\r")
-  await host.settled()
+  const final = response("Finished")
+  host.queueResponse(
+    { pause: true },
+    final[0]!,
+    { pause: true },
+    ...final.slice(1),
+  )
+  const work = host.session.prompt("Start work")
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  const status = async (label: string) => {
+    await host.frame()
+    const indicator = host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .findLast((line) => line.startsWith("── "))
+    assert(
+      indicator?.includes(label),
+      `Expected working label ${label}, got ${indicator}`,
+    )
+    assert(indicator)
+    assert.doesNotMatch(indicator, /Working|opaque_job/)
+  }
+  await status("Running printf generic-evidence")
+  await host.key("\x14")
+  await status("Running printf generic-evidence")
+  await host.key("\x14")
+  assert(publish)
+  const firstRead = {
+    id: "read-a",
+    order: 1,
+    revision: 1,
+    kind: "command" as const,
+    commands: ["head /tmp/first.log"],
+    status: "running" as const,
+  }
+  const lastRead = {
+    id: "read-b",
+    order: 2,
+    revision: 1,
+    kind: "command" as const,
+    commands: ["tail /tmp/second.log"],
+    status: "running" as const,
+  }
+  publish([firstRead, lastRead])
+  await status("Reading second.log")
+  publish([{ ...lastRead, status: "completed" }])
+  await status("Reading first.log")
+  publish([{ ...firstRead, status: "completed" }])
+  await status("Reading second.log")
+  const edit = {
+    id: "edit",
+    order: 3,
+    revision: 1,
+    kind: "edit" as const,
+    path: "example.ts",
+    status: "running" as const,
+  }
+  publish([edit])
+  await status("Editing files")
+  publish([{ ...edit, status: "completed" }])
+  await status("Running printf generic-evidence")
+  for (const [order, command, label] of [
+    [4, "rg needle ./packages", "Searching files in packages folder"],
+    [5, "rg needle", "Searching for needle"],
+    [6, "rg", "Searching files"],
+    [7, "ls ./packages", "Listing files in packages folder"],
+    [8, "ls", "Listing files"],
+    [9, "cat /tmp/pi-command-red.log", "Reading pi-command-red.log"],
+  ] as const) {
+    publish([
+      {
+        id: `explore-${order}`,
+        order,
+        revision: 1,
+        kind: "command",
+        commands: [command],
+        status: "completed",
+      },
+    ])
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Observe each published operation in source order.
+    await status(label)
+  }
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /Finished/))
+  await status("Thinking")
+  host.resumeResponse()
+  await work
   await host.frame()
   await host.key("\x0f")
   await host.frame()
@@ -379,12 +488,12 @@ test("an unrelated provider presents semantic operations and late updates withou
     before,
     /opaque_job|original-argument|original transport result/,
   )
-  assert(publish)
   publish()
   await host.frame()
   const after = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(after, /late-generic-failure/)
   assert.match(after, /Ran command \(failed\)/)
+  assert.doesNotMatch(after, /─+ [^\n]*(Thinking|Working|Running)/)
   assert.equal((after.match(/late-generic-failure/g) ?? []).length, 1)
   const fork = await host.runtime.fork(
     host.session.sessionManager.getLeafId()!,

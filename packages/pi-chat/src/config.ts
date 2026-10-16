@@ -108,6 +108,21 @@ export const activityConfig = {
     unknown: " (status unknown)",
     unattempted: " (not attempted)",
   },
+  // Native working indicator. {value} is the file, command, query, folder, or tool name.
+  working: {
+    thinking: "Thinking",
+    read: "Reading {value}",
+    skill: "Reading {value} skill",
+    edit: "Editing files",
+    command: "Running {value}",
+    emptyCommand: "Running command",
+    search: "Searching for {value}",
+    searchFiles: "Searching files",
+    searchFolder: "Searching files in {value} folder",
+    listFolder: "Listing files in {value} folder",
+    listFiles: "Listing files",
+    tool: "Calling {value}",
+  },
   // Entry order is the group summary order.
   groups: {
     loaded: {

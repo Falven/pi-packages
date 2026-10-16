@@ -84,7 +84,7 @@ function writableClipboard(
   assert(clipboard?.setText)
 }
 
-test("native Hide thinking controls prose while activity headings keep updating the working indicator", async (t) => {
+test("native Hide thinking controls prose while the working label follows streamed reasoning", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -92,21 +92,30 @@ test("native Hide thinking controls prose while activity headings keep updating 
     settings: { hideThinkingBlock: true },
     keybindings: { "app.thinking.toggle": "ctrl+t" },
   })
+  const plain = "Determining valid header extraction"
+  const partial = `${plain}\n\n**Analyzing the `
   const initial =
-    "**Analyzing the `tools` schema**\n\nOriginal thought with **inline emphasis**.\n\n```text\n**Code sample**\n```"
+    partial +
+    "`tools` schema**\n\nOriginal thought with **inline emphasis**.\n\n```text\n**Code sample**\n```\n\n**Analyzing the `tools` schema**\n<!-- retained metadata -->"
   const continuation =
-    "\n\n**Considering documentation needs**\n\nMore thought prose."
+    "\n\nMore thought prose.\n\n**Considering documentation needs**\n\n<!"
   const full = initial + continuation
   host.queueResponse(
     start,
     thoughtStart(0),
-    thoughtDelta(0, "**Analyzing the "),
+    thoughtDelta(0, plain),
     { pause: true },
-    thoughtDelta(0, initial.slice("**Analyzing the ".length)),
+    thoughtDelta(0, partial.slice(plain.length)),
+    { pause: true },
+    thoughtDelta(0, initial.slice(partial.length)),
     { pause: true },
     thoughtDelta(0, continuation),
     { pause: true },
     thoughtEnd(0, full),
+    thoughtStart(1),
+    thoughtDelta(1, "<!-- pending reasoning metadata"),
+    { pause: true },
+    thoughtEnd(1, "<!-- pending reasoning metadata"),
     answerStart,
     answerDelta("Answer in progress"),
     { pause: true },
@@ -119,8 +128,12 @@ test("native Hide thinking controls prose while activity headings keep updating 
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await t.waitFor(() => assert.equal(host.requests.length, 1))
   await host.frame()
-  assert.match(screen(), /Working/)
+  assert.match(screen(), /Determining valid header extraction/)
+  assert.doesNotMatch(screen(), /Working/)
   assert.doesNotMatch(screen(), /Analyzing the|Thought|thinking hidden/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /\*\*Analyzing the/))
+  assert.doesNotMatch(screen(), /Working|Determining valid header extraction/)
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Analyzing the tools schema/))
   assert.doesNotMatch(screen(), /Original thought|Code sample|Thought/)
@@ -142,14 +155,15 @@ test("native Hide thinking controls prose while activity headings keep updating 
   assert.doesNotMatch(screen(), /Original thought|More thought prose/)
   assert.match(screen(), /Considering documentation needs/)
   host.resumeResponse()
+  await host.frame()
+  assert.match(screen(), /Considering documentation needs/)
+  assert.doesNotMatch(screen(), /Working/)
+  host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Answer in progress/))
   assert.equal(host.session.isStreaming, true)
   assert.doesNotMatch(screen(), /Original thought|More thought prose|Thought/)
-  assert.match(screen(), /Working/)
-  assert.doesNotMatch(
-    screen(),
-    /Analyzing the tools schema|Considering documentation needs/,
-  )
+  assert.match(screen(), /Considering documentation needs/)
+  assert.doesNotMatch(screen(), /Working|Analyzing the tools schema/)
   await host.key("\x14")
   await host.frame()
   assert.match(screen(), /Original thought[\s\S]*Answer in progress/)
@@ -179,6 +193,18 @@ test("native Hide thinking controls prose while activity headings keep updating 
       full,
     )
   assert.doesNotMatch(JSON.stringify(host.session.messages.at(-1)), /▼|▶/)
+
+  host.queueResponse(start, { pause: true }, done, end)
+  const next = host.session.prompt("Start a new request")
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  await host.frame()
+  assert.match(screen(), /Thinking/)
+  assert.doesNotMatch(screen(), /Working|Considering documentation needs/)
+  host.resumeResponse()
+  await next
+  await host.reload()
+  await host.frame()
+  assert.doesNotMatch(screen(), /Working|Considering documentation needs/)
 })
 
 test("a full inline thought follows chat scrolling, preserves an anchor, and keeps native Markdown caches", async (t) => {
@@ -319,11 +345,8 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Later thought"))),
   )
-  assert.equal(
-    screen().filter((row) => row.includes("Figuring out file processing"))
-      .length,
-    1,
-  )
+  assert(!screen().some((row) => row.includes("Figuring out file processing")))
+  assert.match(screen().join("\n"), /─+ [^\n]*Later thought/)
   assert(!screen().some((row) => row.includes("Thought")))
   assert(screen().some((row) => row.includes("First adjacent block")))
   assert(screen().some((row) => row.includes("Second adjacent block")))
@@ -466,7 +489,15 @@ test("a live thought leaves the screen with its source row during chat scrollbac
   await host.key("\x1b[5~")
   await host.frame()
   assert.match(screen(), /later-row-0/)
-  assert.doesNotMatch(screen(), /Thought|Inline thought body/)
+  assert.match(screen(), /─+ [^\n]*Inline thought body/)
+  assert.doesNotMatch(
+    host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .filter((line) => !line.startsWith("── "))
+      .join("\n"),
+    /Thought|Inline thought body/,
+  )
   await host.key("\x1b[6~")
   await host.key("\x1b[6~")
   await host.key("\x1b[6~")

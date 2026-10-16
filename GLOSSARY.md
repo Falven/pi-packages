@@ -95,7 +95,10 @@ The choice to omit thoughts from ordinary chat flow while retaining them in conv
 A thought shown at its conversation position in ordinary chat flow, without its own header, scroll area, or disclosure. It remains visible after thinking completes whenever thinking is shown and its enclosing agent activity is expanded.
 
 **Activity heading**:
-A standalone bold paragraph within a thought that names current activity. It appears transiently as a working label rather than in the displayed thought prose; the original thought remains in the conversation source.
+A standalone bold paragraph within a thought that is omitted from displayed thought prose. Its original text remains in the conversation source.
+
+**Working label**:
+The transient text in Pi's native working indicator, selected from current operations or the latest usable reasoning line. It describes current work independently of thought visibility and activity disclosure state.
 
 ### Composition
 

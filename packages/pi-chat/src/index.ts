@@ -10,6 +10,7 @@ import {
 } from "./native-host.ts"
 import { thoughtPresentation } from "./thought.ts"
 import { ActivityItems, nativeToolType } from "./activity-items.ts"
+import { WorkingLabel } from "./working-label.ts"
 
 const relationshipRenderer = () => undefined
 
@@ -17,52 +18,55 @@ export default function piChat(pi: ExtensionAPI) {
   pi.registerEntryRenderer("pi-chat.relationship", relationshipRenderer)
   pi.registerEntryRenderer(nativeToolType, relationshipRenderer)
   let adapter: NativeChatHost | undefined
+  const working = new WorkingLabel(
+    (id) => adapter?.activityItems.forCall(id) ?? [],
+    () => adapter?.agentActivity.hasFinalResponse() ?? false,
+  )
   let unlistenActivity: (() => void) | undefined
   const listenActivity = () => {
-    unlistenActivity ??= pi.events.on(activityType, (data) =>
-      adapter?.observeActivity(activityType, data),
-    )
+    unlistenActivity ??= pi.events.on(activityType, (data) => {
+      adapter?.observeActivity(activityType, data)
+      working.refresh()
+    })
   }
   listenActivity()
-  let workingHeading: string | undefined
-  const setHeading = (
-    heading: string | undefined,
-    context: ExtensionContext,
-  ) => {
-    if (heading === workingHeading) return
-    workingHeading = heading
-    context.ui.setWorkingMessage(heading)
-  }
-  const clearHeading = (_event: unknown, context: ExtensionContext) =>
-    setHeading(undefined, context)
   pi.registerMarkdownTransformer((markdown, context) =>
     context.messageType === "assistant-thinking"
       ? thoughtPresentation(markdown).body
       : markdown,
   )
-  pi.on("message_update", ({ assistantMessageEvent: event }, context) => {
-    if (event.type === "thinking_start" || event.type === "thinking_delta") {
-      const block = event.partial.content[event.contentIndex]
-      if (block?.type === "thinking")
-        setHeading(thoughtPresentation(block.thinking.trim()).heading, context)
-    } else if (event.type === "thinking_end") clearHeading(event, context)
+  pi.on("agent_start", (_event, context) => working.start(context.ui))
+  pi.on("message_start", ({ message }) => {
+    if (message.role === "user") working.reset()
+    else if (message.role === "assistant") working.startMessage()
   })
-  pi.on("message_end", (event, context) => {
-    if (event.message.role === "assistant") clearHeading(event, context)
+  pi.on("message_update", ({ message, assistantMessageEvent: event }) => {
+    if (message.role === "assistant" && "contentIndex" in event)
+      working.update(message, event.contentIndex)
   })
-  pi.on("agent_end", clearHeading)
-  pi.on("tool_execution_start", (event, context) =>
-    adapter?.activityItems.start(event, context.cwd),
-  )
-  pi.on("tool_execution_update", (event) =>
-    adapter?.activityItems.update(event),
-  )
-  pi.on("tool_execution_end", (event) => adapter?.activityItems.end(event))
-  pi.on("agent_end", () => adapter?.activityItems.stop())
+  pi.on("message_end", ({ message }) => {
+    if (message.role === "assistant") working.update(message)
+  })
+  pi.on("tool_execution_start", (event, context) => {
+    adapter?.activityItems.start(event, context.cwd)
+    if (!event.parentToolCallId) working.dispatch(event.toolCallId)
+  })
+  pi.on("tool_execution_update", (event) => {
+    adapter?.activityItems.update(event)
+    working.refresh()
+  })
+  pi.on("tool_execution_end", (event) => {
+    adapter?.activityItems.end(event)
+    working.refresh()
+  })
+  pi.on("agent_end", () => {
+    working.stop()
+    adapter?.activityItems.stop()
+  })
   const install = (host: Parameters<typeof NativeChatHost.install>[0]) => {
     adapter?.dispose()
     adapter = undefined
-    adapter = NativeChatHost.install(host, new ActivityItems(pi))
+    adapter = NativeChatHost.install(host, new ActivityItems(pi), working)
   }
   const disarm = armHistoryBootstrap(relationshipRenderer, install)
 
@@ -74,7 +78,7 @@ export default function piChat(pi: ExtensionAPI) {
   pi.on("session_start", (_event, context: ExtensionContext) => {
     disarm()
     listenActivity()
-    clearHeading(_event, context)
+    working.stop()
     try {
       const host = captureHost(context)
       if (!adapter || NativeChatHost.current(host) !== adapter) install(host)
@@ -87,15 +91,18 @@ export default function piChat(pi: ExtensionAPI) {
       )
     }
   })
-  pi.on("session_shutdown", (event, context) => {
+  pi.on("session_shutdown", () => {
     disarm()
     unlistenActivity?.()
     unlistenActivity = undefined
-    clearHeading(event, context)
+    working.stop()
     adapter?.dispose()
     adapter = undefined
   })
-  pi.on("session_tree", () => adapter?.rebaseRelationships())
+  pi.on("session_tree", () => {
+    working.stop()
+    adapter?.rebaseRelationships()
+  })
   pi.on("turn_start", () => adapter?.beginProviderRequest())
   pi.on("provider_stream_event", (event) =>
     adapter?.observeProviderEvent(event.data),

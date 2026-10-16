@@ -43,6 +43,7 @@ export class ActivityItems {
   private readonly calls = new WeakMap<object, State>()
   private readonly entries = new WeakMap<object, Map<number, State>>()
   private readonly live = new Map<string, State>()
+  private readonly dispatched = new Map<string, State>()
   private readonly byId = new Map<string, Set<State>>()
   private readonly adapters = new ActivityAdapters()
   private readonly nativeTools = new Map<string, NativeTool>()
@@ -96,6 +97,7 @@ export class ActivityItems {
     if (event.parentToolCallId) return
     const state = this.live.get(event.toolCallId)
     if (!state) return
+    this.dispatched.set(event.toolCallId, state)
     state.pending = false
     state.facts = {
       ...state.facts,
@@ -149,6 +151,15 @@ export class ActivityItems {
         state.facts.status = result.isError ? "failed" : "completed"
       delete state.items
     }
+    return this.describe(state)
+  }
+
+  forCall(id: string): readonly ActivityItem[] {
+    const state = this.dispatched.get(id)
+    return state ? this.describe(state) : []
+  }
+
+  private describe(state: State): readonly ActivityItem[] {
     if (state.pending) return []
     if (!state.items) {
       const native =
@@ -229,6 +240,7 @@ export class ActivityItems {
       }
     this.byId.clear()
     this.live.clear()
+    this.dispatched.clear()
   }
 
   stop() {
@@ -238,5 +250,6 @@ export class ActivityItems {
       delete state.items
     }
     this.live.clear()
+    this.dispatched.clear()
   }
 }

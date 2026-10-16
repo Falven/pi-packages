@@ -1,14 +1,18 @@
 # Tool activity
 
-**Status:** implemented and verified at `fbc8030` on `codex/generic-tool-activity`, from integration base `a6280f9`. This includes command recognition, configuration, pending calls, verbatim guidance, and the input/collection correction. Ticket 09 records verification and queued worktree cleanup.
+**Status:** working-label implementation complete; verification in progress from `bf30b7a` on `codex/generic-tool-activity`. Earlier command recognition, configuration, pending calls, verbatim guidance, and input/collection behavior are implemented and verified at `fbc8030`; Ticket 09 retains that evidence and queued cleanup.
 
 **Tracker:** [06: Configurable Codex command recognition](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [07: Pending calls without premature activities](../../.scratch/tool-activity/issues/07-pending-call-activities.md), [08: Verbatim core tool guidance](../../.scratch/tool-activity/issues/08-verbatim-core-tool-guidance.md), and [10: Process input without extra activities](../../.scratch/tool-activity/issues/10-process-input-parity.md) → [09: Verify the activity alignment](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Earlier tickets retain their completed revision evidence.
+
+**Current delta:** [11: Working labels from current activity](../../.scratch/tool-activity/issues/11-working-labels.md) → [12: Verify working label parity](../../.scratch/tool-activity/issues/12-verify-working-labels.md).
 
 ## Problem Statement
 
 Routine Output activities have been removed, but common file reads still appear as long shell commands, and an unfinished call can briefly appear as `Called exec (status unknown)`. The existing recognizer covers only a small subset of Codex's command behavior. Recognition and wording are scattered, making operator changes difficult. The toolset also adds local explanatory text to its captured tool guidance, despite the required word-for-word tool interface.
 
 The later screenshot exposed two further differences: failed input calls produced extra activity and duplicate error context, and exact Ctrl+C was rejected for a non-terminal process. The reference updates the original command and supports that interruption.
+
+The working indicator still says `Working` during commands and between many reasoning updates. It only receives complete bold headings and clears them too early. The installed desktop app instead uses current operations, the latest usable reasoning line, and a `Thinking` fallback.
 
 ## Solution
 
@@ -17,6 +21,8 @@ Show operations in the activity list and their results inside their bodies. Retu
 The two existing extensions implement the same documented data format over Pi's existing events, result details, and retained custom entries. Neither imports the other, recognizes the other's package identity, or requires a separate contract package. The supplied screenshots define the correction's visible cases. Earlier installed-app source inspection supports continuing command identity and multiple action labels; it does not establish full visual parity for every error or image case.
 
 Match the complete pinned Codex command-recognition behavior, including its general-command fallbacks. Recognized reads, searches, and listings receive clear action labels; actual scripts and tests retain `Running`/`Ran`. Put operator-adjustable recognition and activity wording in one module in the existing chat package. Keep pending calls out of operation activity until execution begins, and preserve failures and unknown historical outcomes. Core tool guidance is verbatim from the scoped frozen reference, with no additional read-style or batching advice.
+
+Feed Pi's native working indicator from those same generic operations and streamed reasoning. Match the installed desktop app's choice of current operation and reasoning text. Preserve useful labels across thinking/message completion, use `Thinking` when no label is available, and reset transient state at actual request/session boundaries. Hide the working indicator when a confirmed final answer appears without a current operation.
 
 ## User Stories
 
@@ -55,6 +61,16 @@ Match the complete pinned Codex command-recognition behavior, including its gene
 33. As a user, I want Ctrl+C to interrupt a non-terminal process as it does in the reference app, so that the agent can stop a running command without restarting it in a terminal.
 34. As a user, I want successful and failed input/collection calls to add no activity of their own, so that the list continues to describe the original command.
 35. As a user, I want an input failure and its propagated script error retained without duplicate activity or body text, so that I can inspect the failure without mistaking it for more work.
+36. As a user, I want the working label to name a read, search, listing, edit, or command while it runs, so that I can understand progress without expanding the activity list.
+37. As a user, I want a continuing exploration to retain its latest relevant read/search/list label, so that fast completed reads do not leave an uninformative gap.
+38. As a user, I want the latest usable reasoning line displayed even without complete bold markup, so that streamed progress matches the app reference.
+39. As a user, I want reasoning retained across thinking and message completion, so that the indicator does not reset between related steps.
+40. As a user, I want `Thinking` when no specific label is available, so that fallback behavior matches the reference without invented work.
+41. As a user, I want new requests and session changes to clear old status, so that history and completed work do not masquerade as current work.
+42. As a user, I want the same working label with thinking hidden or visible and disclosures open or closed, so that presentation controls do not change the reported work.
+43. As a provider author, I want existing generic operation facts to drive status, so that my tools need no chat-specific integration.
+44. As an operator, I want working-label wording beside the existing activity settings, so that presentation changes stay in one place without modifying model guidance.
+45. As a user, I want a confirmed final answer to suppress the working indicator when no operation remains current, so that completed reasoning does not appear to continue alongside the answer.
 
 ## Implementation Decisions
 
@@ -73,6 +89,9 @@ Match the complete pinned Codex command-recognition behavior, including its gene
 - **Source Find.** Keep original arguments and all processed result text searchable even when operation bodies also exist. Selected raw source can temporarily use the existing native generic presenter. Remove that reveal when selection leaves or Find closes, without disturbing normal operation choices or adding execution. Images remain with their normal activity owner during text inspection.
 - **Result authority and history.** Keep content/activity bindings, active-branch revision reconciliation, original session identity after forks, unknown stale-running status, omission markers, and generic fallback. Missing or invalid processed metadata cannot restore old live or journal bodies. Preserve compact retained updates and native model collection.
 - **Process interruption.** Match the pinned process manager's exact Ctrl+C exception: for a non-terminal process, input consisting only of `\u0003` sends an interrupt signal to the owned process group. Other nonempty input still fails with closed stdin. Terminal input follows the existing terminal path. Preserve collection serialization, trailing output, observed exit status, and origin identity. A command may handle or ignore the signal; do not invent a stopped outcome.
+- **Working-label selection.** Within the active request and current activity slice, prefer the latest running read/search/list in a trailing exploration, otherwise its latest operation. Otherwise prefer the latest running operation. Assistant text closes a slice; reasoning alone does not. Use validated activity items in original order, including later updates after a parent call returns. Pending calls, empty snapshots, and hidden result text cannot invent work. Read labels use `Reading <target>` or `Reading <name> skill`; edits use `Editing files`; commands use `Running <command>` or `Running command`. Search labels prefer `Searching files in <folder> folder`, then `Searching for <query>`, then `Searching files`; listings use `Listing files` with the same folder suffix when known. Completed rows retain their existing outcome labels.
+- **Reasoning fallback.** With no qualifying operation, choose the latest reasoning item with a usable line. Within an item, take the last nonblank line that is not solely leading HTML comments or a partial comment opener, parse it as CommonMark, and extract text with the reference's recursive single-strong unwrapping. Plain text and incomplete markup participate. Use the same standard parser/text libraries as the reference instead of a custom Markdown recognizer. Fall back to `Thinking`. Do not clear at thinking/message completion or invent a summary through another model call.
+- **Working-label lifetime.** Feed the public native working-message API from public lifecycle events and the existing generic activity observations. Cache selected text to avoid redundant setter calls. Clear state on end/cancel, a new delivered request, session replacement, and shutdown; retained history cannot activate status. With no current operation, hide the working indicator for a confirmed final answer through the public visibility API and existing provider-phase reconciliation. Revoked phase evidence or new work restores it; end/reset restores the native default. Do not infer a final answer from ordinary text. Keep canonical reasoning and the existing thought-body heading omission unchanged. Native spinner, placement, retry/compaction indicators, and the shared slot's ownership behavior stay with Pi. Add adjustable working wording to the existing activity configuration.
 - **Scope.** The approved Ctrl+C exception is the only execution change. Preserve errors returned to scripts, declaration schemas, permissions, other cancellation behavior, and model-facing result content. Only the specified tool-guidance correction changes guidance. Do not alter JavaScript values to recover lost string provenance or change skill invocation itself.
 
 ## Testing Decisions
@@ -83,6 +102,8 @@ For this delta, retain the existing host seam and add independently sourced inpu
 
 An unrelated test provider constructs the documented data independently; it must not import the consumer's builder or a shared package. Existing standalone provider checks verify useful facts without chat loaded. The input correction uses real process and combined-host cases: Ctrl+C reaches a non-terminal process, ordinary nonempty input still fails, input/script failures create no rows, exact errors remain in outgoing results and Find, and actual failed commands retain their outcomes. Verify both caught and uncaught errors, reload, and both extension orders. Run the affected package suites and repository static checks, plus the established Pi 1.1.0 compatibility suite. Record actual revision/counts and distinguish deterministic recording-terminal evidence from physical app acceptance. Review standards and the spec separately. No new test harness or broad live-model trial is needed.
 
+For working labels, extend existing native-host thought, activity, and combined-workflow cases. Pause provider streams and operations to inspect the actual indicator during plain/partial reasoning, source-ordered concurrent activity, late completion, commands, edits, reads, searches, listings, and registered skill reads. Verify reasoning persistence, current-slice boundaries, fallback, cancellation, new requests, reload, and both Hide thinking settings. Preserve the existing final-phase checks, including suppression and correction while a final answer streams. Compare extraction cases against the installed desktop function and its actual bundled CommonMark parser/text helpers. Reuse the established supported-host checks and static validation; no new test seam is needed.
+
 ## Operator Configuration
 
 Edit the exported `activityConfig` in [packages/pi-chat/src/config.ts](../../packages/pi-chat/src/config.ts), then reload Pi. This is the single entry point for activity presentation settings:
@@ -90,6 +111,7 @@ Edit the exported `activityConfig` in [packages/pi-chat/src/config.ts](../../pac
 - `commands` lists recognized names, case-insensitive names, version prefixes, formatting helpers, and directory names omitted from short labels. Map an alias to an existing command syntax, or remove a name to leave it as a general command. Shell syntax and command-option rules remain the pinned reference algorithms.
 - `labels` supplies item verbs, nouns, and status suffixes. `groups` supplies singular/plural wording and its entry order determines summary order. `emptyGroup` supplies the empty summary.
 - `body` supplies headings for declared operation details. Native Pi renderer text and native settings remain owned by Pi.
+- `working` supplies plain text templates for the working indicator, including the `Thinking` fallback. `{value}` receives the file, command, query, folder, or tool name; it is literal replacement, not executable code. It changes displayed text only; the pinned selection and lifetime rules remain implementation.
 
 For example, adding `view: "cat"` to `commands.names` recognizes a `view` executable with `cat` syntax. Changing `labels.read.completed` to `"Inspected"` changes its completed activity to `Inspected <file>`. These settings never execute a command, change its arguments, or add model guidance. Defaults match the recorded reference; operator overrides deliberately change presentation.
 
@@ -101,7 +123,7 @@ A separate package, new tools, execution changes beyond the Ctrl+C correction, d
 
 The command reference is [the parser in the installed app's Codex build](https://github.com/openai/codex/blob/740e5af33c71225640e0c1c1555c514c2c93ab74/codex-rs/shell-command/src/parse_command.rs), with its Bash helper and grammar. `/Applications/ChatGPT.app/Contents/Resources/codex-cli/codex-package.json` identifies `0.162.0-alpha.17.2`; the upstream release tag resolves to that commit. The user's clarification to match the app requires this newer reference instead of the initial local checkout. This source pin is distinct from the unchanged frozen tool-interface capture and the installed-app presentation evidence. Apache-2.0 attribution accompanies the port. The integration base and existing host/contract seams are already established; the user's explicit direction to implement the agreed delta authorizes the three independent slices and their integration verification.
 
-The current delta passes 351/351 affected-package checks on Pi 1.0.2 and 141/141 chat/combined-workflow checks on Pi 1.1.0 at `fbc8030`. Both typechecks and repository lint/format checks pass. The complete 440-case parser corpus matches the pinned reference; 106 original Rust tests pass, and 9,646 additional differential vectors show no differences. Ticket 09 records commands, logs, direct standards/spec review, repaired assertions, and remaining limits. The closing documentation changes do not alter runtime code or tests.
+The earlier activity delta passes 351/351 affected-package checks on Pi 1.0.2 and 141/141 chat/combined-workflow checks on Pi 1.1.0 at `fbc8030`. Both typechecks and repository lint/format checks pass. The complete 440-case parser corpus matches the pinned reference; 106 original Rust tests pass, and 9,646 additional differential vectors show no differences. Ticket 09 records that evidence. The [working-label source record](../plans/working-label-parity.md) and Ticket 12 separately govern the new indicator correction; earlier counts do not establish it.
 
 The earlier correction passed 343 affected-package checks on Pi 1.0.2 and 134 chat/combined-workflow checks on Pi 1.1.0 at `789b142`. [Ticket 05](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) retains that historical evidence and its unperformed physical-app and live-model checks.
 

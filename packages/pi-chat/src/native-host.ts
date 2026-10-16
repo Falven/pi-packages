@@ -38,6 +38,7 @@ import type { ActivityItem, ActivityResult } from "./tool-adapters/types.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
+import type { WorkingLabel } from "./working-label.ts"
 import { ProviderPhaseIndex } from "./provider-phase.ts"
 import {
   SourceSearch,
@@ -630,6 +631,7 @@ export class NativeChatHost {
   private constructor(
     host: NativeMode,
     readonly activityItems: ActivityItems,
+    private readonly working: WorkingLabel,
   ) {
     this.host = host
     this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
@@ -670,6 +672,7 @@ export class NativeChatHost {
   static install(
     host: InteractiveMode,
     activityItems: ActivityItems,
+    working: WorkingLabel,
   ): NativeChatHost {
     const mode = host as unknown as NativeMode
     if (
@@ -679,7 +682,7 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(mode, activityItems)
+    const adapter = new NativeChatHost(mode, activityItems, working)
     try {
       adapter.wrapNativeConstruction()
       adapter.forkCleanup = carryObservedFork(
@@ -3240,6 +3243,7 @@ export class NativeChatHost {
           if (event.type === "message_end" && event.message?.role === "user")
             this.deliveringUser = undefined
           if (event.message) this.sourceRevision++
+          this.working.refresh()
           return result
         },
     )

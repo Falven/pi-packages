@@ -105,6 +105,7 @@ test("streaming exec arguments stay quiet until the command starts", async (t) =
   await host.frame()
   const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
   assert.doesNotMatch(screen(), /Called|Calling|status unknown/)
+  assert.match(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Thinking/)
   host.resumeResponse()
   await t.waitFor(() => assert(argumentsReceived))
   await host.frame()
@@ -114,11 +115,13 @@ test("streaming exec arguments stay quiet until the command starts", async (t) =
   await t.waitFor(() => assert(commandStarted))
   await host.frame()
   assert.match(screen(), /Running (?:node|command)/)
+  assert.match(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Running node/)
   assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
   await work
   await openWork(host)
   await host.frame()
   assert.match(screen(), /Ran command/)
+  assert.doesNotMatch(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*(Thinking|Running)/)
   assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
   const commandFacts = host.session.messages
     .flatMap((message) =>

@@ -109,6 +109,12 @@ export class AgentActivityIndex {
     )
   }
 
+  hasFinalResponse() {
+    return Boolean(
+      this.current && !this.current.settled && this.current.finalParts?.length,
+    )
+  }
+
   notePhase(occurrence: Occurrence, contentIndex: number, phase: MessagePhase) {
     const phases = new Map(this.phases.get(occurrence))
     phases.set(contentIndex, phase)
