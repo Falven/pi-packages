@@ -59,7 +59,7 @@ export class ProcessSessions {
       throw new Error("Process identifier range exhausted")
     const fail = (error: unknown) => {
       child.error ??= error instanceof Error ? error : new Error(String(error))
-      this.stop(child)
+      this.sendSignal(child)
     }
     const output = new OutputStore(fail)
     const { promise: done, resolve } = Promise.withResolvers<void>()
@@ -312,7 +312,7 @@ export class ProcessSessions {
 
   async close(): Promise<void> {
     const children = [...this.processes.values()]
-    for (const child of children) this.stop(child)
+    for (const child of children) this.sendSignal(child)
     const done = Promise.all(children.map((child) => child.done))
     let timer: NodeJS.Timeout | undefined
     const complete = await Promise.race([
@@ -342,13 +342,16 @@ export class ProcessSessions {
     if (error) throw error
   }
 
-  private stop(child: Process): void {
+  private sendSignal(
+    child: Process,
+    name: "SIGINT" | "SIGKILL" = "SIGKILL",
+  ): void {
     child.resume?.()
     if (child.stopped) return
     if (!child.pid) return
-    child.stopped = true
+    if (name === "SIGKILL") child.stopped = true
     try {
-      process.kill(-child.pid, "SIGKILL")
+      process.kill(-child.pid, name)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error
     }
@@ -395,19 +398,20 @@ export class ProcessSessions {
     const call = child.collected.then(async () => {
       if (this.processes.get(child.id) !== child)
         throw new Error(`write_stdin failed: Unknown process id ${child.id}`)
-      if (chars && !child.write)
+      if (chars && !child.write && chars !== "\u0003")
         throw new Error(
           "write_stdin failed: stdin is closed for this session; rerun exec_command with tty=true to keep stdin open",
         )
       const started = performance.now()
       let timer: NodeJS.Timeout | undefined
       let retire = false
-      const stop = () => this.stop(child)
+      const stop = () => this.sendSignal(child)
       signal.addEventListener("abort", stop, { once: true })
       try {
         if (signal.aborted) stop()
         else if (chars && child.exitCode === undefined) {
-          child.write!(chars)
+          if (child.write) child.write(chars)
+          else this.sendSignal(child, "SIGINT")
           this.recordInput(child, chars)
         }
         await Promise.race([
@@ -443,7 +447,7 @@ export class ProcessSessions {
           ...collected,
         }
       } catch (error) {
-        this.stop(child)
+        this.sendSignal(child)
         await child.done
         retire = true
         throw error

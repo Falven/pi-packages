@@ -204,7 +204,7 @@ test("forwarded and combined results stay out of activity while mixed source rem
   assert.equal(host.requests.length, requests)
 })
 
-test("a failed operation carries distinct call error context without a duplicate activity", async (t) => {
+test("a failed command keeps its activity while a distinct script error stays in source", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension, ...companions],
     providerApi,
@@ -212,38 +212,50 @@ test("a failed operation carries distinct call error context without a duplicate
     rows: 90,
     columns: 120,
     persistSession: true,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
   host.queueResponse(
     ...call(
-      'await tools.exec_command({cmd:"printf successful-child",login:false}); try { await tools.write_stdin({session_id:2147483647,chars:""}); } catch { throw new Error("distinct-call-failure"); }',
+      'await tools.exec_command({cmd:"printf unsuccessful-child; exit 7",login:false}); throw new Error("distinct-call-failure");',
       "failed-child",
     ),
   )
-  await host.session.prompt("Run work with a failing collection")
+  await host.session.prompt("Run work with a failing command and script")
   assert.match(output(host, "failed-child"), /distinct-call-failure/)
   await openWork(host)
   await host.key("\x0f")
   await host.frame()
   const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
-  assert.doesNotMatch(screen(), /(?:>|▼) Error|Ran command \(failed\)/)
-  assert.match(screen(), /Called write_stdin \(failed\)/)
-  assert.match(screen(), /successful-child/)
-  assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
-  assert.equal((screen().match(/distinct-call-failure/g) ?? []).length, 1)
+  assert.match(screen(), /Ran command \(failed\)/)
+  assert.match(screen(), /unsuccessful-child/)
+  assert.doesNotMatch(
+    screen(),
+    /(?:>|▼) Error|Call error:|distinct-call-failure/,
+  )
+  await host.key("\x06")
+  await host.type("Error: distinct-call-failure")
+  await host.frame()
+  assert.match(screen(), /1\/1/)
+  assert.match(screen(), /Script error:/)
+  await host.key("\x1b")
   await host.reload()
   await openWork(host)
   await host.frame()
-  assert.doesNotMatch(screen(), /(?:>|▼) Error|Ran command \(failed\)/)
-  assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
+  assert.match(screen(), /Ran command \(failed\)/)
+  assert.doesNotMatch(
+    screen(),
+    /(?:>|▼) Error|Call error:|distinct-call-failure/,
+  )
 })
 
-test("a script failure with no message still has a failure activity", async (t) => {
+test("a script failure with no message remains in model results and source without an activity", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension, ...companions],
     providerApi,
     providerProtocol: "responses",
     rows: 60,
     persistSession: true,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
   host.queueResponse(...call('throw "";', "empty-error"))
   await host.session.prompt("Run a script that fails without a message")
@@ -252,21 +264,132 @@ test("a script failure with no message still has a failure activity", async (t) 
   await host.key("\x0f")
   await host.frame()
   const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
-  assert.equal(
-    (screen().match(/(?:>|▼) Error/g) ?? []).length,
-    2,
-    "one render group and one failure item",
+  assert.doesNotMatch(screen(), /(?:>|▼) Error|Called exec/)
+  const failure = host.session.messages.find(
+    (message) =>
+      message.role === "toolResult" &&
+      message.toolCallId.startsWith("call_empty-error"),
   )
+  assert(failure?.role === "toolResult" && failure.isError)
+  assert.deepEqual(readActivity(failure)?.update.operations, [])
+  await host.key("\x06")
+  await host.type("Script error:")
+  await host.frame()
+  assert.match(screen(), /1\/1/)
+  await host.key("\x1b")
   await host.reload()
   await openWork(host)
   await host.frame()
-  assert.equal(
-    (screen().match(/(?:>|▼) Error/g) ?? []).length,
-    2,
-    "one retained render group and one failure item",
-  )
+  assert.doesNotMatch(screen(), /(?:>|▼) Error|Called exec/)
   assert.equal(output(host, "empty-error"), "Script error:\n")
 })
+
+for (const order of ["first", "last"] as const) {
+  test(`input failures stay in source and Ctrl+C updates the original command with the toolset loaded ${order}`, async (t) => {
+    const updates: ActivityUpdate[] = []
+    const host = await openNativeHost(t, {
+      extensionPaths:
+        order === "first"
+          ? [extension, ...companions]
+          : [...companions, extension],
+      providerApi,
+      providerProtocol: "responses",
+      rows: 120,
+      columns: 120,
+      persistSession: true,
+      keybindings: { "tui.altScreen.search": "ctrl+f" },
+      extension(pi) {
+        pi.events.on(activityType, (value) => {
+          const update = readActivityUpdate(value)
+          if (update) updates.push(update)
+        })
+      },
+    })
+    const command =
+      'trap \'printf "STOPPED\\n"; exit 23\' INT; printf "READY\\n"; sleep 30; printf "AFTER\\n"'
+    host.queueResponse(
+      ...call(
+        `const p = await tools.exec_command(${JSON.stringify({ cmd: command, shell: "/bin/sh", login: false, yield_time_ms: 250 })}); store("process", p.session_id); text(p);`,
+        "input-start",
+      ),
+    )
+    await host.session.prompt("Start a non-terminal command")
+    const latest = () =>
+      updates
+        .flatMap((update) => update.operations)
+        .findLast((operation) => operation.kind === "command")
+    const origin = latest()?.id
+    assert(origin)
+    const rejected =
+      'await tools.write_stdin({session_id:load("process"),chars:"ordinary input\\n"});'
+    for (const [id, source, expected] of [
+      ["input-rejected", rejected, "stdin is closed"],
+      [
+        "input-caught",
+        `try { ${rejected} } catch (error) { text([typeof error, error]); }`,
+        '["string","write_stdin failed: stdin is closed',
+      ],
+      [
+        "input-unknown",
+        'await tools.write_stdin({session_id:2147483647,chars:""});',
+        "Unknown process id 2147483647",
+      ],
+    ]) {
+      host.queueResponse(...call(source!, id!))
+      await host.session.prompt(id!)
+      assert(output(host, id!).includes(expected!))
+      assert.equal(latest()?.status, "running")
+    }
+    host.queueResponse(
+      ...call(
+        'text(await tools.write_stdin({session_id:load("process"),chars:"\\u0003",yield_time_ms:1000}));',
+        "input-interrupt",
+      ),
+    )
+    await host.session.prompt("Interrupt the command")
+    assert.match(output(host, "input-interrupt"), /"exit_code":23/)
+    await t.waitFor(() => assert.equal(latest()?.status, "failed"))
+    assert.equal(latest()?.id, origin)
+    assert.match(latest()?.output ?? "", /READY\nSTOPPED\n/)
+    for (const update of updates)
+      for (const operation of update.operations)
+        assert.equal(operation.id, origin)
+    for (const message of host.session.messages) {
+      if (
+        message.role !== "toolResult" ||
+        message.toolCallId.startsWith("call_input-start")
+      )
+        continue
+      assert.deepEqual(readActivity(message)?.update.operations, [])
+    }
+    await openWork(host)
+    await host.key("\x0f")
+    await host.frame()
+    const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(screen(), /Ran command \(failed\)/)
+    assert.match(screen(), /READY\s+STOPPED/)
+    assert.doesNotMatch(
+      screen(),
+      /write_stdin|Called exec|(?:>|▼) Error|Call error:|stdin is closed|Unknown process id/,
+    )
+    const requests = host.requests.length
+    await host.key("\x06")
+    await host.type("Unknown process id 2147483647")
+    await host.frame()
+    assert.match(screen(), /1\/1/)
+    assert.match(screen(), /write_stdin failed: Unknown process id 2147483647/)
+    await host.key("\x1b")
+    await host.reload()
+    await openWork(host)
+    await host.frame()
+    assert.match(screen(), /Ran command \(failed\)/)
+    assert.doesNotMatch(
+      screen(),
+      /write_stdin|Called exec|(?:>|▼) Error|Call error:/,
+    )
+    assert.equal(host.requests.length, requests)
+  })
+}
 
 for (const order of ["first", "last"] as const) {
   test(`skill reads keep their labels and other actions with the toolset loaded ${order}`, async (t) => {

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto"
 import { fileURLToPath } from "node:url"
-import type { ExecutionDetails, OperationPresentation } from "./presentation.ts"
+import type { OperationPresentation } from "./presentation.ts"
 
 export const activityType = "pi.activity"
 
@@ -100,25 +100,8 @@ export function activityDetails(
 }
 
 const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url))
-const status = (
-  value:
-    | OperationPresentation["status"]
-    | ExecutionDetails["execution"]["status"],
-): ActivityStatus =>
-  value === "interrupted or unknown"
-    ? "unknown"
-    : value === "terminated"
-      ? "failed"
-      : value
-
-function collectionFailure(
-  operation: OperationPresentation,
-): string | undefined {
-  if (operation.status !== "failed" || operation.input) return
-  return (
-    operation.resultText ?? (!operation.live ? operation.output : undefined)
-  )
-}
+const status = (value: OperationPresentation["status"]): ActivityStatus =>
+  value === "interrupted or unknown" ? "unknown" : value
 
 export function operationActivity(
   operation: OperationPresentation,
@@ -155,10 +138,8 @@ export function operationActivity(
           : {}),
       }
     }
-    case "write_stdin": {
-      const output = collectionFailure(operation)
-      return output ? { ...tool, output } : undefined
-    }
+    case "write_stdin":
+      return
     case "apply_patch":
       return {
         ...common,
@@ -200,21 +181,5 @@ export function operationActivity(
       }
     default:
       return tool
-  }
-}
-
-export function errorActivity(
-  execution: ExecutionDetails["execution"],
-  revision: number,
-): ActivityOperation | undefined {
-  const output = execution.error ?? ""
-  if (execution.status !== "failed" && !output) return
-  return {
-    id: `${execution.cellId}:output`,
-    order: Number.MAX_SAFE_INTEGER,
-    revision,
-    kind: "output",
-    status: "failed",
-    output,
   }
 }

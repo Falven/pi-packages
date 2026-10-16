@@ -2,7 +2,7 @@
 
 The first revision was implemented at `4e271b8` from baseline `6013382`. The user's later screenshots and package correction are implemented and verified at `789b142`, from `4ad78cc` on `codex/generic-tool-activity`. The [specification](../specs/tool-activity.md) and [resolved correction ticket](../../.scratch/tool-activity/issues/05-skill-reads-across-tools.md) record the delivered format and verification. Earlier tickets retain their original evidence.
 
-The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the default behavior reference. The newly approved delta adds one operator-facing activity configuration module in the existing chat package, complete recognition parity with the installed app's Codex parser, pending-call handling, and verbatim scoped core tool guidance. It excludes system prompts and additional model advice. [Tickets 06–09](../specs/tool-activity.md) describe this delta from `a6280f9`; the earlier completion evidence does not cover it.
+The user requires a generic interface. Neither `pi-chat` nor `pi-codex-tools` may depend on knowledge of the other package. ChatGPT.app's command activity is the default behavior reference. Command recognition, one activity configuration module, pending-call handling, and verbatim scoped core guidance are verified at `100316f` from `a6280f9`. The user then approved correcting failed input/collection activities and non-terminal Ctrl+C. [Ticket 10](../../.scratch/tool-activity/issues/10-process-input-parity.md) defines that continuation; [Ticket 09](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md) records combined verification. System prompts and additional model advice remain excluded.
 
 ## Setting and terms
 
@@ -47,7 +47,9 @@ The [official item model](https://learn.chatgpt.com/docs/app-server#items) also 
 
 The target is therefore stable operations with continuing results. It is not a blanket “one row per tool call” or “one row per process” rule. For the simple test command above, repeated collection adds no new command action.
 
-This is a source inspection, not a live comparison. Script-only output, script errors, collection failures, cancellation, and image delivery were not compared in a live app. The delta preserves their source ownership and native result handling; the initial “Output” rule is superseded by the correction: returning text adds no activity, and errors are shown once with their call context.
+The later input-failure screenshot prompted source inspection of the same pinned Codex build. Its [input handler](https://github.com/openai/codex/blob/740e5af33c71225640e0c1c1555c514c2c93ab74/codex-rs/core/src/tools/handlers/unified_exec/write_stdin.rs) returns failures to the model. Its [process manager](https://github.com/openai/codex/blob/740e5af33c71225640e0c1c1555c514c2c93ab74/codex-rs/core/src/unified_exec/process_manager.rs) sends successful interaction events using the original command ID and special-cases exact Ctrl+C for non-terminal processes by sending an interrupt signal. The installed app applies those events to the existing command; raw function results do not produce normal activity rows. The core producer therefore publishes no input/collection or script-result operation, including failures. Actual operation failures remain visible, and raw errors remain available to the model and through Find. This removes both the extra failed-input row and repeated script-error context without guessing error identity.
+
+This is source inspection, not a live app comparison. Physical presentation of uncommon errors, cancellation, and images remains unverified. Earlier automatic script-error publication is superseded by the approved input correction. Existing historical error facts remain supported; no history migration is included.
 
 ## Generic interface
 

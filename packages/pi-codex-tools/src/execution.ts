@@ -7,7 +7,6 @@ import {
   activityDetails,
   activityType,
   operationActivity,
-  errorActivity,
   type ActivityOperation,
   type ActivityUpdate,
 } from "./activity.ts"
@@ -111,7 +110,6 @@ type Cell = {
   scriptOutputReset: boolean
   eventCount: number
   revision: number
-  outputRevision: number
   activityPending: Map<string, ActivityOperation>
   notificationBytes: number
   presentation: ExecutionDetails["execution"]
@@ -248,7 +246,6 @@ export class ExecutionCells {
       scriptOutputReset: false,
       eventCount: 0,
       revision: 0,
-      outputRevision: 0,
       activityPending: new Map(),
       notificationBytes: 0,
       presentation: {
@@ -1037,12 +1034,11 @@ export class ExecutionCells {
     callId = cell.parentId,
   ): ExecutionDetails {
     cell.presentation.status = cell.status
-    const error = errorActivity(cell.presentation, cell.outputRevision)
     const operations =
       callId === cell.parentId
-        ? cell.presentation.operations
-            .flatMap((item) => operationActivity(item) ?? [])
-            .concat(error ?? [])
+        ? cell.presentation.operations.flatMap(
+            (item) => operationActivity(item) ?? [],
+          )
         : []
     const imageOwners = parts
       .filter((part) => part.type === "image")
@@ -1072,17 +1068,12 @@ export class ExecutionCells {
     cell.presentation.status = cell.status
     cell.revision++
     if (operation) operation.revision = cell.revision
-    else cell.outputRevision = cell.revision
     const omitted = this.trimOperations(cell.presentation, (candidate) =>
       cell.activeOperations.has(candidate),
     )
     for (const trimmed of omitted) trimmed.revision = ++cell.revision
     const changed = operation ? [operation, ...omitted] : omitted
     const activity = changed.flatMap((item) => operationActivity(item) ?? [])
-    if (!operation) {
-      const error = errorActivity(cell.presentation, cell.outputRevision)
-      if (error) activity.push(error)
-    }
     for (const item of activity)
       cell.activityPending.set(item.id, structuredClone(item))
     this.pi.events.emit(

@@ -1,8 +1,8 @@
 # Tool activity
 
-**Status:** ready-for-agent — command recognition, operator configuration, pending-call presentation, and verbatim core tool guidance; integration base `a6280f9` on `codex/generic-tool-activity`.
+**Status:** in progress — command recognition, configuration, pending calls, and verbatim guidance are verified at `100316f`; the approved input/collection correction continues on `codex/generic-tool-activity` from integration base `a6280f9`.
 
-**Tracker:** [06: Configurable Codex command recognition](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [07: Pending calls without premature activities](../../.scratch/tool-activity/issues/07-pending-call-activities.md), and [08: Verbatim core tool guidance](../../.scratch/tool-activity/issues/08-verbatim-core-tool-guidance.md) → [09: Verify the activity alignment](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Tickets 01–05 retain their completed revision evidence.
+**Tracker:** [06: Configurable Codex command recognition](../../.scratch/tool-activity/issues/06-configurable-command-recognition.md), [07: Pending calls without premature activities](../../.scratch/tool-activity/issues/07-pending-call-activities.md), [08: Verbatim core tool guidance](../../.scratch/tool-activity/issues/08-verbatim-core-tool-guidance.md), and [10: Process input without extra activities](../../.scratch/tool-activity/issues/10-process-input-parity.md) → [09: Verify the activity alignment](../../.scratch/tool-activity/issues/09-verify-activity-alignment.md). Earlier tickets retain their completed revision evidence.
 
 ## Problem Statement
 
@@ -10,7 +10,7 @@ Routine Output activities have been removed, but common file reads still appear 
 
 ## Solution
 
-Show operations in the activity list and their results inside their bodies. Returning or forwarding text does not create another activity. Keep raw execution results discoverable through source Find. Present a failed operation once, with any additional call failure context in its body; a script failure without a failed operation gets its own failure item. Registered skill-file reads use a `Read <name> skill` label through any supported read path.
+Show operations in the activity list and their results inside their bodies. Returning or forwarding text does not create another activity. Keep raw execution results, including script and input errors, discoverable through source Find. Present an actual failed operation once. Input/collection calls and script results create no operation just because they fail. Registered skill-file reads use a `Read <name> skill` label through any supported read path.
 
 The two existing extensions implement the same documented data format over Pi's existing events, result details, and retained custom entries. Neither imports the other, recognizes the other's package identity, or requires a separate contract package. The supplied screenshots define the correction's visible cases. Earlier installed-app source inspection supports continuing command identity and multiple action labels; it does not establish full visual parity for every error or image case.
 
@@ -27,8 +27,8 @@ Match the complete pinned Codex command-recognition behavior, including its gene
 7. As a user, I want leaving a source hit to remove only its temporary reveal, so that operation disclosure choices remain intact.
 8. As a user, I want source inspection to avoid execution and model requests, so that navigating history has no tool effects.
 9. As a user, I want each failed operation represented once, so that the parent error does not look like another failed action.
-10. As a user, I want additional execution errors retained as call context, so that a distinct failure is not discarded or falsely attributed to a child.
-11. As a user, I want a failure before any child operation to remain visible even without an error message, so that a broken script is diagnosable.
+10. As a user, I want additional execution errors retained in model results and source Find, so that a distinct failure is not discarded or falsely attributed to a child.
+11. As a user, I want a failure before any child operation to remain inspectable even without an error message, so that a broken script is diagnosable without inventing an operation.
 12. As a user, I want successful children to stay successful after their script fails, so that status describes actual work.
 13. As a user, I want a registered skill read labeled `Read <name> skill`, so that I can identify the loaded instructions.
 14. As a user, I want skill labels through native reads and declared command operations, so that the tool implementation does not determine the label.
@@ -50,13 +50,16 @@ Match the complete pinned Codex command-recognition behavior, including its gene
 30. As a user, I want errors, cancellation, and unobserved historical calls retained, so that removing a transient placeholder cannot conceal a real outcome.
 31. As a user, I want the exact scoped core tool guidance, so that local prompt additions do not change how the model uses the toolset.
 32. As a maintainer, I want the pinned reference's complete command cases and actual model-facing declarations checked, so that later edits cannot silently narrow coverage or change wording.
+33. As a user, I want Ctrl+C to interrupt a non-terminal process as it does in the reference app, so that the agent can stop a running command without restarting it in a terminal.
+34. As a user, I want successful and failed input/collection calls to add no activity of their own, so that the list continues to describe the original command.
+35. As a user, I want an input failure and its propagated script error retained without duplicate activity or body text, so that I can inspect the failure without mistaking it for more work.
 
 ## Implementation Decisions
 
 - **Package ownership.** Remove the separate activity package, imports, dependencies, and release entry. Keep provider construction and consumer validation local. A small overlap in types, protocol identifiers, and binding rules is the explicit cost of independent implementations. Do not replace the package with a repository-root runtime import, generated shared module, or bundling system.
 - **Data format.** Preserve version 1, source ID, originating call/session identity, revisions, ordered operation facts, result binding, and native image ownership. A command operation may provide `shell`, the executable and argument prefix to which each command text is appended for recognition. For example, `["/bin/zsh", "-lc"]` preserves the actual shell invocation. Omitted `shell` retains the existing Bash-compatible interpretation. This generic field avoids reading another package's opaque argument schema. The protocol remains documented below. Neither side uses the other extension's implementation or private records.
 - **Operations and results.** Normal script text is retained in execution results, not published as new work. The consumer also suppresses ordinary text-only output facts in older valid records. This rule does not depend on string matching, object identity, parsing script source, or how the model forwards results.
-- **Failures.** Failed operation facts remain independent. When a call also has execution error facts, their text appears as explicitly identified call context in an existing failed activity body. With no failed operation, keep a separate failure item even if the error message is empty. This groups presentation without changing source ownership, removing distinct errors, or changing successful child status.
+- **Failures.** Actual failed operation facts remain visible and independent. The core producer publishes no operation for input/collection calls or script results, including failures; exact errors remain in model results and source Find. This removes both the failed-input row and the duplicate script-error context without matching error text, changing rejection values, or rewriting child status. Existing valid error facts from other producers or retained records remain supported through the generic error presenter. Empty operation snapshots are valid for failed calls; invalid or absent metadata still uses generic fallback.
 - **Empty recognition.** When the parser returns no actions, keep a general command activity with the submitted command, outcome, and body, matching the app's display fallback. An explicitly empty operation snapshot still describes zero operations.
 - **Images.** Image bytes remain in the actual processed collecting result and appear once through native handling. An image with no operation owner gets an image activity, not a generic Output receipt.
 - **Skill identity.** Use the effective public skill registry and resolved file path. Share recognition across native reads and classified command reads, including retained source. Do not infer skill use from returned Markdown, a filename alone, or the name of the calling tool.
@@ -67,7 +70,8 @@ Match the complete pinned Codex command-recognition behavior, including its gene
 - **Core guidance.** The complete selected tool declaration and retained helper wording match the frozen scoped reference exactly. Remove local lifecycle/image/notification prose and the rewritten notification description. When native selection excludes a tool, remove only that tool's section and directly dependent helper text. Preserve the already approved scope, input forms, permissions, runtime behavior, and unrelated extensions. Do not change system prompts or add instructions encouraging simpler reads or scripts.
 - **Source Find.** Keep original arguments and all processed result text searchable even when operation bodies also exist. Selected raw source can temporarily use the existing native generic presenter. Remove that reveal when selection leaves or Find closes, without disturbing normal operation choices or adding execution. Images remain with their normal activity owner during text inspection.
 - **Result authority and history.** Keep content/activity bindings, active-branch revision reconciliation, original session identity after forks, unknown stale-running status, omission markers, and generic fallback. Missing or invalid processed metadata cannot restore old live or journal bodies. Preserve compact retained updates and native model collection.
-- **Scope.** Keep existing execution, errors returned to scripts, declaration schemas, permissions, cancellation, and model-facing result content. Only the specified tool-guidance correction changes the agent interface. Do not alter JavaScript values to recover lost string provenance or change skill invocation itself.
+- **Process interruption.** Match the pinned process manager's exact Ctrl+C exception: for a non-terminal process, input consisting only of `\u0003` sends an interrupt signal to the owned process group. Other nonempty input still fails with closed stdin. Terminal input follows the existing terminal path. Preserve collection serialization, trailing output, observed exit status, and origin identity. A command may handle or ignore the signal; do not invent a stopped outcome.
+- **Scope.** The approved Ctrl+C exception is the only execution change. Preserve errors returned to scripts, declaration schemas, permissions, other cancellation behavior, and model-facing result content. Only the specified tool-guidance correction changes guidance. Do not alter JavaScript values to recover lost string provenance or change skill invocation itself.
 
 ## Testing Decisions
 
@@ -75,7 +79,7 @@ Use the established real-Pi native-host and combined-workflow seam. It observes 
 
 For this delta, retain the existing host seam and add independently sourced input/output cases at the command-recognition boundary. Capture every command case exercised by the unmodified reference tests; record source revision, hashes, dependency versions, and case count. Compare complete parsed actions, not only display labels. Verify operator changes through the same recognition/presentation path. Pause the controlled provider while tool arguments are arriving, then observe dispatch, completion, interruption, and replay. At the existing model-request seam, compare complete selected core declarations byte-for-byte in their description fields. These are the scoped validation seams for the explicitly requested exact coverage; no new live-model prompt experiment is needed.
 
-An unrelated test provider constructs the documented data independently; it must not import the consumer's builder or a shared package. Existing standalone provider checks verify useful facts without chat loaded. Run the affected package suites and repository static checks, plus the established Pi 1.1.0 compatibility suite. Record actual revision/counts and distinguish deterministic recording-terminal evidence from physical app acceptance. Review standards and the spec separately. No new test harness or broad live-model trial is needed for unchanged execution contracts.
+An unrelated test provider constructs the documented data independently; it must not import the consumer's builder or a shared package. Existing standalone provider checks verify useful facts without chat loaded. The input correction uses real process and combined-host cases: Ctrl+C reaches a non-terminal process, ordinary nonempty input still fails, input/script failures create no rows, exact errors remain in outgoing results and Find, and actual failed commands retain their outcomes. Verify both caught and uncaught errors, reload, and both extension orders. Run the affected package suites and repository static checks, plus the established Pi 1.1.0 compatibility suite. Record actual revision/counts and distinguish deterministic recording-terminal evidence from physical app acceptance. Review standards and the spec separately. No new test harness or broad live-model trial is needed.
 
 ## Operator Configuration
 
@@ -89,7 +93,7 @@ For example, adding `view: "cat"` to `commands.names` recognizes a `view` execut
 
 ## Out of Scope
 
-A separate package, new tools, changes to execution behavior or declaration schemas, a shell interpreter, settings UI or persistence, a repository-wide configuration framework, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, ChatGPT.app/Codex system and other prompts, additional model guidance, and claims of complete app visual parity.
+A separate package, new tools, execution changes beyond the Ctrl+C correction, declaration-schema changes, a shell interpreter, settings UI or persistence, a repository-wide configuration framework, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, ChatGPT.app/Codex system and other prompts, additional model guidance, and claims of complete app visual parity.
 
 ## Further Notes
 

@@ -55,7 +55,7 @@ Consecutive activity items displayed together within agent activity. Visible sta
 A unit of displayed agent activity identifying an operation, failure, or delivered image. A conversation item or tool call can contribute zero or several activity items; returning text alone is not an operation.
 
 **Execution activity item**:
-An activity item identifying an execution cell's failure independently of a child operation.
+An activity item for explicitly declared execution-error facts. Core script and input/collection failures remain in model results and retained source without creating this item.
 _Avoid_: Child operation, when referring to the execution's own outcome
 
 **Summary**:

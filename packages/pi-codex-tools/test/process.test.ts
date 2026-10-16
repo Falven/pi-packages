@@ -195,6 +195,49 @@ test("interrupt input preserves terminal output and the observed exit status", a
   assert.equal("session_id" in interrupted, false)
 })
 
+test("exact Ctrl+C interrupts a non-terminal process group and preserves its output", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+  })
+  await request(
+    host,
+    `text(await tools.exec_command(${JSON.stringify({
+      cmd: 'trap \'printf "INTERRUPTED\\n"; exit 23\' INT; printf "READY\\n"; sleep 30; printf "AFTER\\n"',
+      shell: "/bin/sh",
+      login: false,
+      tty: false,
+      yield_time_ms: 250,
+    })}));`,
+    "pipe-start",
+  )
+  const initial = result(host, "pipe-start")
+  await expectRunningOutput(host, initial, "READY\n")
+  for (const [index, chars] of ["ordinary input\n", "\u0003\n"].entries()) {
+    const rejected = await request(
+      host,
+      `try { await tools.write_stdin(${JSON.stringify({ session_id: initial.session_id, chars })}); } catch (error) { text([typeof error, error]); }`,
+      `pipe-rejected-${index}`,
+    )
+    assert.match(rejected, /\["string","write_stdin failed: stdin is closed/)
+  }
+  await request(
+    host,
+    `text(await tools.write_stdin(${JSON.stringify({ session_id: initial.session_id, chars: "\u0003", yield_time_ms: 1000 })}));`,
+    "pipe-interrupt",
+  )
+  const interrupted = result(host, "pipe-interrupt")
+  assert.equal(interrupted.exit_code, 23)
+  assert.equal(interrupted.output, "INTERRUPTED\n")
+  assert.equal("session_id" in interrupted, false)
+  const stale = await request(
+    host,
+    `try { await tools.write_stdin({session_id:${initial.session_id}}); } catch (error) { text(error); }`,
+    "pipe-stale",
+  )
+  assert.match(stale, /Unknown process id/)
+})
+
 test("empty polls default to five seconds and clamp short waits without consuming input", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
