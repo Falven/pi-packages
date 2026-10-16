@@ -4,7 +4,7 @@
 
 **Blocked by:** None.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** complete — native session storage delta. The earlier acceptance boundary remains as recorded below.
 
 **Baseline status:** complete — creation and inspection meet the native interface contract accepted on 2026-10-14. Lifecycle, accounting, continuation, and Stop remain in their own tickets.
 

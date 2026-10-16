@@ -1,6 +1,6 @@
 # pi-goal specification
 
-**Status:** ready-for-agent — native session storage revision; implementation pending
+**Status:** native session storage revision complete; broader feature acceptance remains partial
 
 ## Problem Statement
 
@@ -8,7 +8,7 @@ A Pi user needs to authorize an outcome once, let the agent pursue it across suc
 
 The package must preserve the goal rules for authorization, lifecycle, persistence, budgets, accounting, and Stop through the extension ecosystem. Pi owns tool validation, result delivery, and error handling. Goal values must survive any conversion without rounding or loss. Pi's source and installed host files must remain untouched.
 
-The current implementation keeps goal state in a separate SQLite database even though Pi provides session storage for extensions. This revision removes that separate storage system and makes goal persistence follow the owning Pi session, with the explicitly accepted first-save, concurrent-access, and write-failure limits.
+The previous implementation kept goal state in a separate SQLite database even though Pi provides session storage for extensions. This revision removes that separate storage system and makes goal persistence follow the owning Pi session, with the explicitly accepted first-save, concurrent-access, and write-failure limits.
 
 ## Solution
 
@@ -381,7 +381,15 @@ The 2026-10-15 storage decision is accepted in [ADR 0025](../adr/0025-store-goal
 
 Read-only inspection of the current installation found zero goal rows in the old store. That observation supports an initial cutover without an importer, subject to a fresh check immediately before activation. The installed released host is Pi 1.1.0; the workspace's 1.0.2 dependency and the unavailable former source checkout must not determine primary migration validation.
 
-This revision updates the specification only. The native storage implementation, its failure flag across reload, the temporary release-test resolver, and migration acceptance captures remain unimplemented or unverified. The approved real-session seam and existing capture workflow are retained. A subsequent ticket update must distinguish migration work from the earlier seven-ticket results instead of reusing their completion status as proof.
+The native storage implementation is integrated at `1cf53dd5bf7c2afcc5c1f65979092204f43288db`. Tickets 01–06 verify public session snapshots and explicit clears, exact values, first-save behavior, all six restored statuses, ordinary fork and full-history clone isolation, failed-write suppression across retaining reload, fresh saved-session recovery, accounting, and native Stop. Storage uses only `pi.appendEntry()` and the public read-only session manager. No storage dependency, persistent fallback, private adapter, host patch, manifest upgrade, or shared-fixture change was introduced.
+
+Current released-runtime validation passes all 188 goal cases and 120 shared-fixture and chat regressions, without failures, cancellations, or skips. Fresh main-process and worker probes verify the released Pi and terminal-UI 1.1.0 imports, native extension loading, companion resolutions, and an actual session request. Full workspace type checking, scoped lint and formatting, whitespace, and neutral added-text checks pass. [Ticket 07](../../.scratch/pi-goal/issues/07-phoenix-terminal-acceptance.md) records the commands and current evidence separately from the historical results below.
+
+Six matched storage comparisons preserve all 21 provider request pairs after explicit identity, working-directory, and timestamp normalization, with identical tool declarations and 105 parsed response events. Objectives, statuses, usage, budgets, elapsed pursuit, errors, role and message order, context placement, and final reporting are preserved without normalizing those fields. Raw native state entries never become model messages. Native execution-duration differences remain recorded. Five further terminal commands cover six actual PTY process phases: failed persistence and fresh reopen, remapped Stop and goal controls, switching and reload, and all four companions in both load orders. The candidate evidence totals 36 requests, 44 Phoenix spans, and 88 fully retrieved input/output fields, plus six exact terminal outputs. Scripted response events, decoded requests, and raw terminal transport captures retain their distinct evidence boundaries. Accepted first-save and failure limits remain explicit; no live-provider or new actual-client claim is made.
+
+Independent Standards and Spec reviews of the implementation from `188aa0c44ef311704af8e9ac92711d361cb1a50d` through `1cf53dd5bf7c2afcc5c1f65979092204f43288db` found no actionable findings. All seven native storage ticket deltas are complete. The migration does not close the earlier conditional-inheritance, deletion-notification, activity-classification, accounting-observability, active-EOF, or actual-client evidence gates.
+
+No editable-installation cutover was performed. A fresh read-only check at `2026-10-16T03:47:18Z` found zero legacy goal rows and no registered goal package or extension link. The old file remains unchanged. Any later activation must repeat the count immediately beforehand and preserve unexpected goals. This migration accepts native first-save timing, one writer per session, and recovery of saved state only; it makes no stronger durability or complete-feature compatibility claim.
 
 ### Historical implementation evidence
 

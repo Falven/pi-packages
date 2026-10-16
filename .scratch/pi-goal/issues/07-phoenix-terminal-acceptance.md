@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Preserve goals across session changes; 06: Stop unproductive runs.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** native session storage delta complete. Earlier unresolved feature gates remain open.
 
 **Baseline status:** partial — supported native paths, Phoenix retrieval, and 20 process phases verified; actual-client evidence and the capability and active-EOF gates below remain open.
 
@@ -12,13 +12,70 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Validate against installed released Pi 1.1.0 with the supported Node runtime and a temporary public module-resolution preload. Verify actual resolutions in the main process, test workers, extension loading, and companion module paths without changing shared fixtures or dependency manifests.
-- [ ] Run all affected native goal suites and relevant companion integration checks, then scoped formatting, lint, types, and whitespace validation. Review the integration branch against the spec and repository standards; resolve migration findings.
-- [ ] Reuse the existing capture workflow for native-storage create/read, lifecycle, continuation, accounting, and failure/recovery scenarios. Retrieve new Phoenix records and verify full input/output fidelity. Compare tool declarations, values, message roles, ordering, edits, budget notices, and final reporting with the historical interface evidence.
-- [ ] Demonstrate that raw native state entries add no model-facing messages. Label accepted first-save, single-writer, and failed-write limits explicitly; before-and-after evidence does not close older actual-client or host-capability gaps.
-- [ ] Confirm no active SQLite usage, persistent fallback, new storage dependency, host-source change, installed-host-file change, or private adapter. Preserve all existing public goal controls and tool semantics.
-- [ ] Recheck the legacy store immediately before any editable-installation cutover. Activate only after candidate validation and a fresh zero-goal result; preserve unexpected goals and resolve their migration before switching. Do not silently delete the old database.
-- [ ] Record current migration results in these existing tickets and the specification, separate from historical checks. Resolve the native-storage deltas without marking previously unsupported feature acceptance complete.
+- [x] Validate against installed released Pi 1.1.0 with the supported Node runtime and a temporary public module-resolution preload. Verify actual resolutions in the main process, test workers, extension loading, and companion module paths without changing shared fixtures or dependency manifests.
+- [x] Run all affected native goal suites and relevant companion integration checks, then scoped formatting, lint, types, and whitespace validation. Review the integration branch against the spec and repository standards; resolve migration findings.
+- [x] Reuse the existing capture workflow for native-storage create/read, lifecycle, continuation, accounting, and failure/recovery scenarios. Retrieve new Phoenix records and verify full input/output fidelity. Compare tool declarations, values, message roles, ordering, edits, budget notices, and final reporting with the historical interface evidence.
+- [x] Demonstrate that raw native state entries add no model-facing messages. Label accepted first-save, single-writer, and failed-write limits explicitly; before-and-after evidence does not close older actual-client or host-capability gaps.
+- [x] Confirm no active SQLite usage, persistent fallback, new storage dependency, host-source change, installed-host-file change, or private adapter. Preserve all existing public goal controls and tool semantics.
+- [x] Recheck the legacy store immediately before any editable-installation cutover. Activate only after candidate validation and a fresh zero-goal result; preserve unexpected goals and resolve their migration before switching. Do not silently delete the old database.
+- [x] Record current migration results in these existing tickets and the specification, separate from historical checks. Resolve the native-storage deltas without marking previously unsupported feature acceptance complete.
+
+## Native storage validation
+
+The current validation target is integration revision `1cf53dd5bf7c2afcc5c1f65979092204f43288db`. All 188 goal checks and 120 shared-fixture and chat regression checks pass on Node 24.13.1 and released Pi 1.1.0, with no failures, cancellations, or skips. The companion command covers the shared native-host fixture and all seven existing chat suites. Full workspace type checking, scoped lint and formatting, whitespace, and neutral added-text checks pass. Logs are `/tmp/pi-goal-native-07-goals.tap`, `/tmp/pi-goal-native-07-companions.tap`, `/tmp/pi-goal-native-07-types.log`, `/tmp/pi-goal-native-07-lint.log`, and `/tmp/pi-goal-native-07-format.log`.
+
+Fresh main-process and test-worker probes confirm Pi and terminal-UI 1.1.0, identical constructors in the native file-extension loader, the public session-manager identity, companion import resolution, and a real session provider request with all four companions loaded. Their logs are `/tmp/pi-goal-native-07-main-resolution.tap` and `/tmp/pi-goal-native-07-worker-resolution.tap`. The temporary preload redirects only the two exact public package names; released internal imports, repository dependency manifests, and shared fixtures remain unchanged.
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-concurrency=1 packages/pi-goal/test/*.test.ts
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-concurrency=1 test/native-host.test.ts packages/pi-chat/test/*.test.ts
+```
+
+The native cases exercise first-message persistence, all six restored statuses, exact values, rewind and compaction, clear, ordinary fork and full-history clone isolation, storage failure across retaining reload, fresh saved-state recovery, and native Stop after a failed pause. Raw `pi-goal.state` entries contribute neither provider messages nor activity to the empty-final guard. Tickets 01–06 record the individual failing reproductions and their current passing checks.
+
+The accepted storage limits remain explicit: custom entries can be lost before Pi's first user or assistant message saves the session; one process manages a session's goal at a time; and failed writes can leave changed in-memory history and lose unsaved usage. A retaining reload preserves the failure stop. Recovery requires freshly reopening the saved session. These boundaries replace the earlier database guarantees without closing any older actual-client or host-capability gate.
+
+The cutover criterion is conditional: no editable installation was activated in this revision. A read-only check at `2026-10-16T03:47:18Z` found zero legacy goal rows, no registered goal package or extension link, and no alternate agent directory. The 12,288-byte legacy file retained SHA-256 `315ffecc63658066b614cc97cc6a61be59e56869a2c04be3144f6e8116d2108c`; it was neither imported nor deleted. `/tmp/pi-goal-native-07-cutover.json` records the check. A later activation still requires a fresh count immediately beforehand.
+
+## Native storage agent-interface comparison
+
+The six matched scenarios compare baseline `188aa0c44ef311704af8e9ac92711d361cb1a50d` with the current validation target. Each side has 21 provider exchanges, 23 Phoenix spans, and 105 parsed response events. All 46 full candidate input/output fields were retrieved and verified by payload hash and byte count, then independently retrieved again. Evidence is under `/tmp/pi-goal-storage-comparison-wuq_4jt6`, including `before/verification.json`, `after/verification.json`, and `semantic-comparison.json`; the independent retrieval is `/tmp/pi-goal-native-root-phoenix-verification.json`.
+
+| Scenario                          | Before trace                       | Native-storage trace                                                                                                                                    |
+| --------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Native values and errors          | `eb28ba2ad7169dbc2baf6b16e9470674` | [a0b22763d713c371a39d196413123232](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=a0b22763d713c371a39d196413123232&limit=1000&order=asc) |
+| Active objective edit             | `4cd7343d151c1e5204885cc1bd4ee2c6` | [309d8599f610cf6e9b534c708e155ed9](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=309d8599f610cf6e9b534c708e155ed9&limit=1000&order=asc) |
+| Queued work and clear             | `1022486d43efd6df2c97d9aa2cab586b` | [7a70d1fe7e35c03d54f1a5609de863c1](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=7a70d1fe7e35c03d54f1a5609de863c1&limit=1000&order=asc) |
+| Idle objective edit               | `b5478fa99fbe9f615c4121fabc30cfae` | [bd1396d766c3e91b527909e501ca9bef](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=bd1396d766c3e91b527909e501ca9bef&limit=1000&order=asc) |
+| Creation, read, and completion    | `8432343ac2fac42d3f80ce9affe3fd45` | [185a88ff2340d1e89b23a2f1fa06da6c](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=185a88ff2340d1e89b23a2f1fa06da6c&limit=1000&order=asc) |
+| Tool-checkpoint budget exhaustion | `ed32e05744c8485c8f57086686d6c301` | [d644250f42c69a5fae6259fb6348238c](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=d644250f42c69a5fae6259fb6348238c&limit=1000&order=asc) |
+
+All 21 request pairs match after explicit normalization of session, generation, and continuation identities, captured working directories, native message timestamps, and goal creation/update timestamps. Tool declarations and all 105 parsed response events match exactly. Objectives, statuses, budgets, token and elapsed-time counters, remaining allowances, original usage, errors, result formatting, roles, ordering, and context placement are not normalized. Native execution-duration differences remain individually recorded and do not appear in these provider requests. Raw `pi-goal.state` records add no model-facing messages.
+
+The maximum exact budget remains `9223372036854775807`. Completion reports 184 tokens against 5,000, with 4,816 remaining. The tool-checkpoint exhaustion case emits one budget notice at 184 tokens against a 100-token allowance and finishes with 368 tokens. Running and idle edits, loaded queued-clear suppression, native error shapes, and completion guidance preserve the earlier exchanges.
+
+These are real Pi sessions with a local scripted provider and a recording terminal. The capture contains exact decoded endpoint request bodies and public parsed response events; it is not a raw response-byte or actual-terminal capture. One default fixture final omits usage on both sides, and that omission remains explicit. The comparison verifies the selected storage regression and does not establish new actual-client provenance or broader host capabilities.
+
+## Native storage terminal acceptance
+
+Five commands complete six actual native PTY process phases at the same validation target. They produce 15 endpoint requests and 21 Phoenix spans. Independent retrieval verifies all 42 full input/output fields, totaling 3,759,544 bytes, all 15 encoded requests and corresponding response-stream files, and six raw terminal outputs totaling 140,380 bytes. The run index and verification are `/tmp/pi-goal-acceptance.8flktj5h/execution.json` and `terminal-verification.json`; independent retrieval is `/tmp/pi-goal-native-root-terminal-verification.json`.
+
+| Phase                                | Phoenix trace                                                                                                                                           | Observed result                                                                                                                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Failed pause, Stop, retaining reload | [00e4b06a4d195bdf4c3e3440f98f7069](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=00e4b06a4d195bdf4c3e3440f98f7069&limit=1000&order=asc) | The append error is visible; native Stop interrupts; retaining reload admits no further work. Saved state remains active at 92 tokens and one second. |
+| Fresh saved-session recovery         | [f2d31cb843b9fa5c8dcb1279b7d0a594](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=f2d31cb843b9fa5c8dcb1279b7d0a594&limit=1000&order=asc) | A new process restores saved state, admits one continuation, and successfully pauses through native Stop without adding missing usage.                |
+| Picker controls and remapped Stop    | [fb8cb93a56e6aba12b42bb03991212b1](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=fb8cb93a56e6aba12b42bb03991212b1&limit=1000&order=asc) | Native inspection, edit, pause, resume, clear, overlay handling, and configured Stop pass with companions.                                            |
+| Session switch and retaining reload  | [884406fa62f8d5ce63c9117c8d3304ab](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=884406fa62f8d5ce63c9117c8d3304ab&limit=1000&order=asc) | Healthy reload permits one eligible continuation; a new session has no goal; returning to the paused source preserves its ownership and usage.        |
+| Goal loaded before companions        | [26c7d2b3dd1b72a00e0619dce8fddbf0](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=26c7d2b3dd1b72a00e0619dce8fddbf0&limit=1000&order=asc) | Path-completion Escape, native Stop, the public attachment picker, inline skill expansion, and chat composition pass.                                 |
+| Goal loaded after companions         | [27e19cf3dee30031ed47ac8b669c9b1b](http://127.0.0.1:6006/v1/projects/UHJvamVjdDoz/spans?trace_id=27e19cf3dee30031ed47ac8b669c9b1b&limit=1000&order=asc) | The same companion workflow passes in the reverse load order.                                                                                         |
+
+The failure case temporarily makes an isolated session-file path a directory for the pause append, then restores the file before Stop. It verifies interruption after goal persistence fails; it does not claim that the host can persist an interrupted assistant while its file path remains unusable. Eight held responses intentionally end by interruption without final usage. Their exact partial response bytes remain in the capture. The provider is scripted, and emulator-specific negotiation remains unverified.
+
+Two failed temporary-harness attempts remain preserved and excluded from accepted counts: a deferred observer used an expired context after reload, and an older companion script invoked the removed `/attach-file` command. The reruns use an observer lifetime check and the current public `/attach` picker. Assertions were retained, and no package source changed to accommodate either attempt.
+
+Source and evidence checks preserve all 53 recorded package/fixture files, five protected shared-file states, the released-runtime preload, the original terminal harness, and all 68 before-capture files. No active SQLite use, alternate goal store, storage dependency, host-file modification, or private adapter was introduced. The combined candidate capture has 36 requests, 44 spans, and 88 retrieved full fields; the preceding comparison and terminal boundaries remain distinct.
+
+Independent Standards and Spec reviews of changes since `188aa0c44ef311704af8e9ac92711d361cb1a50d` through `1cf53dd5bf7c2afcc5c1f65979092204f43288db` found no actionable implementation findings. Native storage deltas 01–07 are complete. Older unsupported capabilities and actual-client acceptance remain open regardless of migration completion.
 
 ## Historical acceptance
 
