@@ -52,7 +52,7 @@ _Avoid_: Turn, when referring only to the agent's activity
 Consecutive activity items and execution activity items displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
 
 **Activity item**:
-A unit of displayed agent activity associated with an action or result. A conversation item or tool call can contribute several activity items; their boundaries need not match.
+A unit of displayed agent activity associated with an action or result. A conversation item or tool call can contribute zero or several activity items; their boundaries need not match. Collecting existing output need not add an action.
 
 **Execution activity item**:
 An activity item for an execution cell's own output or error when that content does not belong to a child operation.
