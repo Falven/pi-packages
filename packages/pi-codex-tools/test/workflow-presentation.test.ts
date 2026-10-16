@@ -635,9 +635,9 @@ for (const order of ["first", "last"] as const) {
       let screen = await openWork(host)
       assert.match(
         screen,
-        /> Edited files, read files, ran a command, viewed images, error/,
+        /> Edited files, read files, ran a command, viewed images/,
       )
-      assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
+      assert.doesNotMatch(screen, /validated-result|LATE-MIXED|, error/)
       const groupRow = host
         .screenLines()
         .findIndex((line) =>
@@ -660,8 +660,7 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /> Read changed\.txt/)
       assert.match(screen, /> Viewed image .*local\.png/)
       assert.match(screen, /> Viewed image .*late\.png/)
-      assert.match(screen, /> Error/)
-      assert.doesNotMatch(screen, /validated-result|LATE-MIXED-RESULT/)
+      assert.doesNotMatch(screen, /> Error|validated-result|LATE-MIXED/)
       const commandRow = host
         .screenLines()
         .findIndex((line) =>
@@ -696,8 +695,7 @@ for (const order of ["first", "last"] as const) {
         40,
       )
       assert.match(screen, /> Ran printf inspect-project/)
-      assert.match(screen, /> Error/)
-      assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
+      assert.doesNotMatch(screen, /> Error|LATE-MIXED/)
       await host.key(`\x1b[<0;2;${groupRow + 1}M`)
       await host.key(`\x1b[<0;2;${groupRow + 1}m`)
       assert.doesNotMatch(await host.frame(), /validated-result/)
@@ -734,15 +732,14 @@ for (const order of ["first", "last"] as const) {
       assert.match(screen, /Worked for \d+m \d+s ▼/)
       assert.match(screen, /▼ Edited files/)
       assert.match(screen, /▼ Ran command/)
-      assert.match(screen, /▼ Error/)
-      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 10)
+      assert.doesNotMatch(screen, /▼ Error/)
+      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 9)
       assert.match(screen, /inspect-project/)
       assert.match(screen, /validated-result/)
       assert.match(screen, /validated-line-39/)
       assert.match(screen, /local\.png/)
       assert.match(screen, /late\.png/)
-      assert.doesNotMatch(screen, /LATE-MIXED-RESULT/)
-      assert.match(screen, /LATE-MIXED-FAILURE/)
+      assert.doesNotMatch(screen, /LATE-MIXED/)
       assert.match(screen, /Unrelated workflow notice/)
       assert.match(screen, /Received\./)
       assert.doesNotMatch(screen, /input: await tools\.exec_command/)
@@ -800,22 +797,7 @@ for (const order of ["first", "last"] as const) {
         (screen.match(/> Edited .*\/.*\.txt \+1 -0/g) ?? []).length,
         3,
       )
-      const executionRow = host
-        .screenLines()
-        .findIndex((line) => stripVTControlCharacters(line).includes("> Error"))
-      assert(executionRow >= 0)
-      await host.key(`\x1b[<0;2;${executionRow + 1}M`)
-      await host.key(`\x1b[<0;2;${executionRow + 1}m`)
-      await host.frame()
-      const executionOutputRow = host
-        .screenLines()
-        .findIndex((line) =>
-          /^\s*Error\s*$/.test(stripVTControlCharacters(line)),
-        )
-      assert(executionOutputRow > executionRow)
-      await host.key(`\x1b[<0;2;${executionOutputRow + 1}M`)
-      await host.key(`\x1b[<0;2;${executionOutputRow + 1}m`)
-      await host.frame()
+      assert.doesNotMatch(screen, /> Error|LATE-MIXED/)
       const originImageRow = host
         .screenLines()
         .findIndex(
@@ -846,7 +828,7 @@ for (const order of ["first", "last"] as const) {
       await host.key(`\x1b[<0;2;${collectionItem + 1}m`)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
-      assert.match(screen, /LATE-MIXED-FAILURE/)
+      assert.doesNotMatch(screen, /LATE-MIXED-FAILURE/)
       assert.equal((screen.match(/validated-result/g) ?? []).length, 0)
       assert.equal(
         screen.split("\n").filter((line) => line.trim() === "LATE-MIXED-RESULT")
@@ -860,6 +842,13 @@ for (const order of ["first", "last"] as const) {
       assert.doesNotMatch(screen, /interrupted or unknown/)
       assert.match(screen, /Unrelated workflow notice/)
       const collectedRequests = host.requests.length
+      await host.key("\x06")
+      await host.type("Script error:")
+      await host.frame()
+      screen = stripVTControlCharacters(host.screenLines().join("\n"))
+      assert.match(screen, /1\/1/)
+      assert.match(screen, /LATE-MIXED-FAILURE/)
+      await host.key("\x1b")
       await host.key("\x06")
       await host.type("LATE-MIXED-RESULT")
       await host.frame()
