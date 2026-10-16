@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Create and inspect goals.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** native session storage delta complete — actual-client user-origin provenance remains open.
 
 **Baseline status:** in-progress — lifecycle implementation and controlled-session evidence are complete; actual-client user-origin provenance remains an acceptance gap.
 
@@ -12,10 +12,26 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] Use explicit session-owned clear records for user clear and interactive completion cleanup. Repeated clear remains well defined; historical snapshots cannot become current after history navigation or reopening.
-- [ ] Preserve native edit, pause, resume, completion, replacement, status precedence, ownership, generation, and accumulated usage through the new store. No goal control or agent message is added for storage.
-- [ ] Retain the completed tool result even if interactive cleanup clears the current goal before delivery. Report failed cleanup independently without rewriting that completed result; ticket 03 supplies the persistent runtime failure stop.
-- [ ] Adapt lifecycle fixtures and observable assertions to native storage. Verify headless completed-state retention, explicit clear, replacement, history navigation, and saved-session reopening through existing controls and tools.
+- [x] Use explicit session-owned clear records for user clear and interactive completion cleanup. Repeated clear remains well defined; historical snapshots cannot become current after history navigation or reopening.
+- [x] Preserve native edit, pause, resume, completion, replacement, status precedence, ownership, generation, and accumulated usage through the new store. No goal control or agent message is added for storage.
+- [x] Retain the completed tool result even if interactive cleanup clears the current goal before delivery. Report failed cleanup independently without rewriting that completed result; ticket 03 supplies the persistent runtime failure stop.
+- [x] Adapt lifecycle fixtures and observable assertions to native storage. Verify headless completed-state retention, explicit clear, replacement, history navigation, and saved-session reopening through existing controls and tools.
+
+## Native storage validation
+
+The lifecycle suite now exercises the native store introduced by ticket 01 without further production changes. All four database fixtures were removed. Provider responses supply known token usage, the approved monotonic-clock seam supplies elapsed time, and native controls produce each lifecycle status. A structured provider limit produces `usageLimited`; a fresh reopen and explicit resume preserve its generation, allowance, counters, objective, and creation time. Paused and blocked goals retain 61 tokens and 17 seconds across resume. An exhausted 100-token allowance retains 125 tokens and 17 seconds through rejected resume, block, edit, and completion. Replacement receives a new generation with fresh counters.
+
+Repeated clear remains empty after navigating to a branch with an earlier goal and reopening the saved session. Interactive completion cleanup also remains empty after reopening. Headless completion stays readable until replacement. Existing checks still cover stale editors, session switching, native picker keys, running edits, direct and programmatic results, and exact large allowances.
+
+A narrow filesystem-boundary failure rejects only the completion cleanup append. The completion tool still returns its successful snapshot and the interface reports the cleanup failure. Pi retains the failed clear in memory; a fresh headless reopen restores the completed snapshot actually saved to disk. This verifies result preservation without promising in-memory rollback. Retaining the failure stop across reload remains ticket 03 work.
+
+The initial native-store run passed 13 of 17 cases; four failed because their old fixtures accessed the removed database. Each replacement passed individually. The complete revised lifecycle suite passes **18/18** on released Pi 1.1.0 and Node 24.13.1:
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-concurrency=1 packages/pi-goal/test/lifecycle.test.ts
+```
+
+Scoped TypeScript checking, lint, formatting, and `git diff --check` pass. The temporary resolver selects the released host and its companion terminal package without changing installed files or dependencies. No shared fixture changed. Fresh agent-interface captures and physical-terminal acceptance remain ticket 07 work; the historical actual-client provenance gap below remains open.
 
 ## Historical acceptance
 

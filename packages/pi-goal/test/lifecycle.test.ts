@@ -1,46 +1,18 @@
 /* eslint-disable no-await-in-loop -- Each mutation is observed through the same live session before the next operation. */
 import assert from "node:assert/strict"
-import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
+import fs from "node:fs"
+import { syncBuiltinESMExports } from "node:module"
 import test from "node:test"
 import { createCodemodeExtension } from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
+import { toolResponse } from "./tool-response.ts"
 
 const extension = new URL("../src/index.ts", import.meta.url).pathname
 type Host = Awaited<ReturnType<typeof openNativeHost>>
 let nextCall = 0
 
-function response(name: string, args: unknown) {
-  return [
-    {
-      event: {
-        choices: [
-          {
-            index: 0,
-            delta: {
-              role: "assistant",
-              tool_calls: [
-                {
-                  index: 0,
-                  id: `lifecycle-${++nextCall}`,
-                  type: "function",
-                  function: { name, arguments: JSON.stringify(args) },
-                },
-              ],
-            },
-            finish_reason: null,
-          },
-        ],
-      },
-    },
-    {
-      event: {
-        choices: [{ index: 0, delta: {}, finish_reason: "tool_calls" }],
-      },
-    },
-    { event: "[DONE]" },
-    { end: true } as const,
-  ]
+function response(name: string, args: unknown, usage?: unknown) {
+  return toolResponse(name, args, `lifecycle-${++nextCall}`, usage)
 }
 
 function lastResult(host: Host) {
@@ -53,12 +25,29 @@ function lastResult(host: Host) {
   return { text: content.text, isError: result.isError }
 }
 
-async function call(host: Host, name: string, args: unknown = {}) {
-  host.queueResponse(...response(name, args))
+async function call(
+  host: Host,
+  name: string,
+  args: unknown = {},
+  usage?: unknown,
+) {
+  host.queueResponse(...response(name, args, usage))
   await host.session.prompt("Apply the explicitly requested goal operation")
   const result = lastResult(host)
   assert.equal(result.isError, false, result.text)
   return JSON.parse(result.text)
+}
+
+function generation(host: Host) {
+  const entry = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (item) => item.type === "custom" && item.customType === "pi-goal.state",
+    )
+  assert(entry?.type === "custom")
+  const value = (entry.data as { generation?: unknown }).generation
+  assert(typeof value === "string")
+  return value
 }
 
 test("model status updates preserve the objective and exact allowance", async (t) => {
@@ -98,6 +87,7 @@ test("terminal completion returns its snapshot and retains the display after cle
     objective: "Verify the completion snapshot",
     token_budget: "9223372036854775807",
   })
+  const originalGeneration = generation(host)
   const completed = await call(host, "update_goal", { status: "complete" })
   assert.equal(completed.goal.status, "complete")
   assert.equal(completed.goal.tokenBudget, "9223372036854775807")
@@ -124,6 +114,7 @@ test("terminal completion returns its snapshot and retains the display after cle
   assert.equal(replacement.goal.status, "active")
   assert.equal(replacement.goal.tokensUsed, 0)
   assert.equal("tokenBudget" in replacement.goal, false)
+  assert.notEqual(generation(host), originalGeneration)
   await host.session.prompt("/goal pause")
   assert.doesNotMatch(await host.frame(), /Goal: complete/)
 })
@@ -136,6 +127,7 @@ test("headless completion stays readable and a later replacement starts fresh", 
     headless: true,
   })
   await call(host, "create_goal", { objective: "Finish the unbounded work" })
+  const originalGeneration = generation(host)
   const completed = await call(host, "update_goal", { status: "complete" })
   assert.equal(completed.goal.status, "complete")
   assert.equal(completed.completionBudgetReport, null)
@@ -151,6 +143,7 @@ test("headless completion stays readable and a later replacement starts fresh", 
     headless: true,
   })
   assert.deepEqual(await call(reopened, "get_goal"), completed)
+  assert.equal(generation(reopened), originalGeneration)
   const replacement = await call(reopened, "create_goal", {
     objective: "The next authorized goal",
     token_budget: 100,
@@ -160,6 +153,7 @@ test("headless completion stays readable and a later replacement starts fresh", 
   assert.equal(replacement.goal.tokensUsed, 0)
   assert.equal(replacement.goal.timeUsedSeconds, 0)
   assert.equal(replacement.remainingTokens, 100)
+  assert.notEqual(generation(reopened), originalGeneration)
   await reopened.session.prompt("/goal pause")
 })
 
@@ -173,15 +167,53 @@ test("a presentation cleanup failure preserves the successful completion snapsho
     objective: "Finish despite unavailable presentation cleanup",
     token_budget: 100,
   })
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  t.after(() => database.close())
-  database.exec(`CREATE TRIGGER reject_cleanup BEFORE DELETE ON goals
-    BEGIN SELECT RAISE(ABORT, 'Controlled cleanup failure'); END`)
-  const completed = await call(host, "update_goal", { status: "complete" })
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  const originalAppend = fs.appendFileSync
+  let failed = false
+  const failCleanup: typeof fs.appendFileSync = (file, data, options) => {
+    if (
+      file === sessionFile &&
+      typeof data === "string" &&
+      JSON.parse(data).data?.clear === true
+    ) {
+      failed = true
+      throw new Error("Controlled cleanup failure")
+    }
+    return originalAppend(file, data, options)
+  }
+  const append = t.mock.method(fs, "appendFileSync", failCleanup)
+  syncBuiltinESMExports()
+  const completed = await call(host, "update_goal", {
+    status: "complete",
+  }).finally(() => {
+    append.mock.restore()
+    syncBuiltinESMExports()
+  })
+  assert.equal(failed, true)
   assert.equal(completed.goal.status, "complete")
   assert.match(completed.completionBudgetReport, /report/i)
   assert.match(await host.frame(), /Could not clear the completed goal/)
-  const retained = await call(host, "get_goal")
+  const lastEntry = host.session.sessionManager
+    .getEntries()
+    .findLast(
+      (entry) =>
+        entry.type === "custom" && entry.customType === "pi-goal.state",
+    )
+  assert(lastEntry?.type === "custom")
+  assert.deepEqual(lastEntry.data, {
+    threadId: host.session.sessionManager.getSessionId(),
+    clear: true,
+  })
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+  })
+  const retained = await call(reopened, "get_goal")
   assert.deepEqual(retained.goal, completed.goal)
   assert.equal(retained.completionBudgetReport, null)
 })
@@ -208,6 +240,15 @@ test("opening a headless completion in the terminal retains its display and clea
   })
   assert.match(await terminal.frame(), /Goal: complete/)
   assert.equal((await call(terminal, "get_goal")).goal, null)
+  await terminal.close()
+  const reopened = await openNativeHost(t, {
+    directory: terminal.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+  })
+  assert.equal((await call(reopened, "get_goal")).goal, null)
 })
 
 test("explicit controls mutate the goal before automatic admission", async (t) => {
@@ -236,6 +277,10 @@ test("explicit controls mutate the goal before automatic admission", async (t) =
   await host.session.prompt("/goal inspect")
   await host.session.prompt("/goal pause")
   assert.match(await host.frame(), /active: Finish the revised scope/)
+  const beforeClearLeaf = host.session.sessionManager.getLeafId()
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(beforeClearLeaf)
+  assert(sessionFile)
   const beforeClear = host.session.messages.length
   await host.session.prompt("/goal clear")
   await host.session.prompt("/goal clear")
@@ -246,6 +291,20 @@ test("explicit controls mutate the goal before automatic admission", async (t) =
     host.session.messages.some((message) => message.role === "custom"),
     false,
   )
+  assert.equal(
+    (await host.session.navigateTree(beforeClearLeaf)).cancelled,
+    false,
+  )
+  assert.equal((await call(host, "get_goal")).goal, null)
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+  })
+  assert.equal((await call(reopened, "get_goal")).goal, null)
 })
 
 test("pause and clear change durable state without interrupting a running turn", async (t) => {
@@ -322,7 +381,9 @@ test("native validation rejects invalid model statuses without changing the goal
   }
 })
 
-test("resume preserves recorded usage and is unavailable for completed or budget-limited goals", async (t) => {
+test("resume preserves paused and blocked usage and is unavailable for completed goals", async (t) => {
+  let now = 1_000_000_000n
+  t.mock.method(process.hrtime, "bigint", () => now)
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -333,35 +394,122 @@ test("resume preserves recorded usage and is unavailable for completed or budget
     objective: "Resume the same allowance",
     token_budget: 100,
   })
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  t.after(() => database.close())
-  for (const status of [
-    "paused",
-    "blocked",
-    "usageLimited",
-    "budgetLimited",
-    "complete",
-  ]) {
-    const tokens = status === "budgetLimited" ? 100 : 61
-    database
-      .prepare(
-        "UPDATE goals SET status = ?, tokensUsed = ?, timeUsedSeconds = 17 WHERE threadId = ?",
-      )
-      .run(status, tokens, host.session.sessionManager.getSessionId())
+  const originalGeneration = generation(host)
+  now += 17_000_000_000n
+  for (const status of ["paused", "blocked", "complete"]) {
+    await call(
+      host,
+      "update_goal",
+      { status },
+      status === "paused"
+        ? { prompt_tokens: 50, completion_tokens: 11, total_tokens: 61 }
+        : undefined,
+    )
     await host.session.prompt("/goal resume")
     const resumed = await call(host, "get_goal")
     assert.equal(
       resumed.goal.status,
-      ["complete", "budgetLimited"].includes(status) ? status : "active",
+      status === "complete" ? "complete" : "active",
     )
-    assert.equal(resumed.goal.tokensUsed, tokens)
+    assert.equal(resumed.goal.tokensUsed, 61)
     assert.equal(resumed.goal.timeUsedSeconds, 17)
     assert.equal(resumed.goal.tokenBudget, 100)
     assert.equal(resumed.goal.createdAt, created.goal.createdAt)
+    assert.equal(generation(host), originalGeneration)
   }
 })
 
+test("resume preserves a restored usage-limited goal and its recorded usage", async (t) => {
+  let now = 1_000_000_000n
+  t.mock.method(process.hrtime, "bigint", () => now)
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    headless: true,
+  })
+  const created = await call(host, "create_goal", {
+    objective: "Resume after the provider limit",
+    token_budget: 100,
+  })
+  const originalGeneration = generation(host)
+  now += 17_000_000_000n
+  await call(
+    host,
+    "update_goal",
+    { status: "paused" },
+    {
+      prompt_tokens: 50,
+      completion_tokens: 11,
+      total_tokens: 61,
+    },
+  )
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  await host.close()
+  let settled = false
+  const limited = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+    providerProtocol: "responses",
+    extension: (pi) => {
+      pi.on("agent_settled", () => {
+        settled = true
+      })
+    },
+  })
+  limited.queueResponse(
+    {
+      event: { type: "response.created", response: { id: "lifecycle-limit" } },
+    },
+    {
+      event: {
+        type: "response.failed",
+        response: {
+          id: "lifecycle-limit",
+          status: "failed",
+          error: {
+            code: "insufficient_quota",
+            message: "Controlled usage limit",
+          },
+        },
+      },
+    },
+    { end: true },
+  )
+  await limited.session.prompt("/goal resume")
+  await t.waitFor(() => assert.equal(settled, true))
+  await limited.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+  })
+  const before = await call(reopened, "get_goal")
+  assert.equal(before.goal.status, "usageLimited")
+  assert.equal(before.goal.tokensUsed, 61)
+  assert.equal(before.goal.timeUsedSeconds, 17)
+  assert.equal(before.goal.tokenBudget, 100)
+  assert.equal(before.goal.createdAt, created.goal.createdAt)
+  await reopened.session.prompt("/goal resume")
+  const resumed = await call(reopened, "get_goal")
+  assert.deepEqual(resumed.goal, {
+    ...before.goal,
+    status: "active",
+    updatedAt: resumed.goal.updatedAt,
+  })
+  assert.equal(generation(reopened), originalGeneration)
+  await reopened.session.prompt("/goal pause")
+})
+
 test("stored exhaustion prevents activation and pause or block while completion retains final usage", async (t) => {
+  let now = 1_000_000_000n
+  t.mock.method(process.hrtime, "bigint", () => now)
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -372,19 +520,20 @@ test("stored exhaustion prevents activation and pause or block while completion 
     objective: "Finish within the existing allowance",
     token_budget: 100,
   })
-  // Restored usage is fixture input; this slice does not run live accounting.
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  database
-    .prepare(
-      "UPDATE goals SET tokensUsed = 125, timeUsedSeconds = 17 WHERE threadId = ?",
-    )
-    .run(host.session.sessionManager.getSessionId())
-  database.close()
-  const paused = await call(host, "update_goal", { status: "paused" })
+  const originalGeneration = generation(host)
+  now += 17_000_000_000n
+  const paused = await call(
+    host,
+    "update_goal",
+    { status: "paused" },
+    { prompt_tokens: 100, completion_tokens: 25, total_tokens: 125 },
+  )
   assert.equal(paused.goal.status, "budgetLimited")
   assert.equal(paused.goal.tokensUsed, 125)
   assert.equal(paused.goal.timeUsedSeconds, 17)
   assert.equal(paused.remainingTokens, 0)
+  await host.session.prompt("/goal resume")
+  assert.deepEqual(await call(host, "get_goal"), paused)
   assert.equal(
     (await call(host, "update_goal", { status: "blocked" })).goal.status,
     "budgetLimited",
@@ -396,6 +545,7 @@ test("stored exhaustion prevents activation and pause or block while completion 
   assert.equal(edited.goal.createdAt, created.goal.createdAt)
   assert.equal(edited.goal.tokenBudget, 100)
   assert.equal(edited.goal.tokensUsed, 125)
+  assert.equal(generation(host), originalGeneration)
   const completed = await call(host, "update_goal", { status: "complete" })
   assert.equal(completed.goal.status, "complete")
   assert.equal(completed.goal.tokensUsed, 125)
@@ -639,6 +789,8 @@ test("native programmatic updates preserve completion values and reject invalid 
 })
 
 test("a restored unbounded goal reports elapsed completion time without adding a budget", async (t) => {
+  let now = 1_000_000_000n
+  t.mock.method(process.hrtime, "bigint", () => now)
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -648,14 +800,22 @@ test("a restored unbounded goal reports elapsed completion time without adding a
   await call(host, "create_goal", {
     objective: "Finish the unbounded objective",
   })
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  database
-    .prepare("UPDATE goals SET timeUsedSeconds = 17 WHERE threadId = ?")
-    .run(host.session.sessionManager.getSessionId())
-  database.close()
-  const completed = await call(host, "update_goal", { status: "complete" })
+  now += 17_000_000_000n
+  await host.session.prompt("/goal pause")
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  await host.close()
+  now += 3_600_000_000_000n
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    headless: true,
+  })
+  const completed = await call(reopened, "update_goal", { status: "complete" })
   assert.equal("tokenBudget" in completed.goal, false)
   assert.equal(completed.goal.timeUsedSeconds, 17)
   assert.match(completed.completionBudgetReport, /goal\.timeUsedSeconds/)
-  assert.equal((await call(host, "get_goal")).completionBudgetReport, null)
+  assert.equal((await call(reopened, "get_goal")).completionBudgetReport, null)
 })
