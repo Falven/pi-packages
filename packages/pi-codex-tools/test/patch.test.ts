@@ -1,6 +1,13 @@
 /* eslint-disable no-await-in-loop -- Each case owns a real host and must finish before the next one. */
 import assert from "node:assert/strict"
-import { mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises"
+import {
+  lstat,
+  mkdir,
+  readFile,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises"
 import { join } from "node:path"
 import test from "node:test"
 import {
@@ -648,6 +655,346 @@ test("overlapping multi-file patches retain both edits without lock-order deadlo
   assert.equal(
     await readFile(join(host.directory, "two.txt"), "utf8"),
     "LEFT\nRIGHT\n",
+  )
+})
+
+test("updates through a symlink alias preserve both same-patch edits and actual facts", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const path = join(host.directory, "real.txt")
+  await writeFile(path, "left\nright\n")
+  await symlink(path, join(host.directory, "alias.txt"))
+  const patch =
+    "*** Begin Patch\n*** Update File: real.txt\n@@\n-left\n+LEFT\n*** Update File: alias.txt\n@@\n-right\n+RIGHT\n*** End Patch"
+  host.queueResponse(
+    ...call(`text(await tools.apply_patch(${JSON.stringify(patch)}));`),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Apply both edits through the alias")
+  assert.match(output(host), /\n\{\}$/)
+  assert.equal(await readFile(path, "utf8"), "LEFT\nRIGHT\n")
+  assert.deepEqual(
+    (
+      changes as {
+        status: string
+        added?: number
+        removed?: number
+        output?: string
+      }[]
+    ).map(({ status, added, removed, output: detail }) => ({
+      status,
+      added,
+      removed,
+      output: detail,
+    })),
+    [
+      { status: "completed", added: 1, removed: 1, output: "-left\n+LEFT\n" },
+      { status: "completed", added: 1, removed: 1, output: "-right\n+RIGHT\n" },
+    ],
+  )
+})
+
+test("an update after a move edits moved contents and records the current source", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const source = join(host.directory, "source.txt")
+  const destination = join(host.directory, "destination.txt")
+  await writeFile(source, "from-a\ncommon\n")
+  await writeFile(destination, "from-b\ncommon\n")
+  const patch =
+    "*** Begin Patch\n*** Update File: source.txt\n*** Move to: destination.txt\n@@\n-from-a\n+A\n*** Update File: destination.txt\n@@\n-common\n+B\n*** End Patch"
+  host.queueResponse(
+    ...call(`text(await tools.apply_patch(${JSON.stringify(patch)}));`),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Move and then edit the destination")
+  assert.match(output(host), /\n\{\}$/)
+  assert.equal(await readFile(destination, "utf8"), "A\nB\n")
+  await assert.rejects(readFile(source), { code: "ENOENT" })
+  assert.deepEqual(
+    (
+      changes as {
+        id: string
+        action: string
+        added?: number
+        removed?: number
+        output?: string
+      }[]
+    ).map(({ id, action, added, removed, output: detail }) => ({
+      id,
+      action,
+      added,
+      removed,
+      output: detail,
+    })),
+    [
+      {
+        id: "0",
+        action: "Moved",
+        added: 1,
+        removed: 1,
+        output: "-from-a\n+A\n",
+      },
+      {
+        id: "0:destination",
+        action: "Updated",
+        added: 1,
+        removed: 1,
+        output: "-from-b\n+A\n",
+      },
+      {
+        id: "1",
+        action: "Updated",
+        added: 1,
+        removed: 1,
+        output: "-common\n+B\n",
+      },
+    ],
+  )
+})
+
+test("a later match failure retains completed edits and identifies unattempted files", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const path = join(host.directory, "real.txt")
+  const alias = join(host.directory, "alias.txt")
+  const later = join(host.directory, "later.txt")
+  await writeFile(path, "left\nright\n")
+  await symlink(path, alias)
+  const patch =
+    "*** Begin Patch\n*** Update File: real.txt\n@@\n-left\n+LEFT\n*** Update File: alias.txt\n@@\n-left\n+changed\n*** Add File: later.txt\n+later\n*** End Patch"
+  host.queueResponse(
+    ...call(
+      `try { await tools.apply_patch(${JSON.stringify(patch)}); } catch (error) { text({type: typeof error, error}); }`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Apply the conflicting alias patch")
+  const text = output(host)
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf("{"))), {
+    type: "string",
+    error: `Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to find expected lines in ${alias}:\nleft\n`,
+  })
+  assert.equal(await readFile(path, "utf8"), "LEFT\nright\n")
+  await assert.rejects(readFile(later), { code: "ENOENT" })
+  assert.deepEqual(
+    (
+      changes as {
+        status: string
+        added?: number
+        removed?: number
+        output?: string
+      }[]
+    ).map(({ status, added, removed, output: detail }) => ({
+      status,
+      added,
+      removed,
+      output: detail,
+    })),
+    [
+      { status: "completed", added: 1, removed: 1, output: "-left\n+LEFT\n" },
+      {
+        status: "failed",
+        added: undefined,
+        removed: undefined,
+        output: `Failed to find expected lines in ${alias}:\nleft`,
+      },
+      {
+        status: "unattempted",
+        added: undefined,
+        removed: undefined,
+        output: undefined,
+      },
+    ],
+  )
+})
+
+test("a later read failure reports the completed deletion and leaves later files unattempted", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const path = join(host.directory, "real.txt")
+  const alias = join(host.directory, "alias.txt")
+  const later = join(host.directory, "later.txt")
+  await writeFile(path, "left\nright\n")
+  await symlink(path, alias)
+  const patch =
+    "*** Begin Patch\n*** Delete File: real.txt\n*** Update File: alias.txt\n@@\n-left\n+LEFT\n*** Add File: later.txt\n+later\n*** End Patch"
+  host.queueResponse(
+    ...call(
+      `try { await tools.apply_patch(${JSON.stringify(patch)}); } catch (error) { text({type: typeof error, error}); }`,
+    ),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Delete the source before its alias update")
+  const text = output(host)
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf("{"))), {
+    type: "string",
+    error: `Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to read file to update ${alias}: No such file or directory (os error 2)\n`,
+  })
+  await assert.rejects(readFile(path), { code: "ENOENT" })
+  await assert.rejects(readFile(later), { code: "ENOENT" })
+  assert.deepEqual(
+    (changes as { status: string; added?: number; removed?: number }[]).map(
+      ({ status, added, removed }) => ({ status, added, removed }),
+    ),
+    [
+      { status: "completed", added: 0, removed: 2 },
+      { status: "failed", added: undefined, removed: undefined },
+      { status: "unattempted", added: undefined, removed: undefined },
+    ],
+  )
+})
+
+test("delete facts describe contents after an earlier alias update", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const path = join(host.directory, "real.txt")
+  await writeFile(path, "left\nright\n")
+  await symlink(path, join(host.directory, "alias.txt"))
+  const patch =
+    "*** Begin Patch\n*** Update File: alias.txt\n@@\n-left\n+LEFT\n*** Delete File: real.txt\n*** End Patch"
+  host.queueResponse(
+    ...call(`text(await tools.apply_patch(${JSON.stringify(patch)}));`),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Update through an alias and delete the real file")
+  assert.match(output(host), /\n\{\}$/)
+  await assert.rejects(readFile(path), { code: "ENOENT" })
+  assert.deepEqual(
+    (
+      changes as {
+        action: string
+        status: string
+        added?: number
+        removed?: number
+        output?: string
+      }[]
+    ).map(({ action, status, added, removed, output: detail }) => ({
+      action,
+      status,
+      added,
+      removed,
+      output: detail,
+    })),
+    [
+      {
+        action: "Updated",
+        status: "completed",
+        added: 1,
+        removed: 1,
+        output: "-left\n+LEFT\n",
+      },
+      {
+        action: "Deleted",
+        status: "completed",
+        added: 0,
+        removed: 2,
+        output: "-LEFT\n-right\n",
+      },
+    ],
+  )
+})
+
+test("deleting a now-dangling alias omits unverifiable counts but still unlinks it", async (t) => {
+  let changes: unknown
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    providerApi,
+    extension(pi) {
+      pi.on("tool_result", (event) => {
+        if (event.toolName === "apply_patch")
+          changes = (event.details as { patchChanges?: unknown }).patchChanges
+        return undefined
+      })
+    },
+  })
+  const path = join(host.directory, "real.txt")
+  const alias = join(host.directory, "alias.txt")
+  await writeFile(path, "left\nright\n")
+  await symlink(path, alias)
+  const patch =
+    "*** Begin Patch\n*** Delete File: real.txt\n*** Delete File: alias.txt\n*** End Patch"
+  host.queueResponse(
+    ...call(`text(await tools.apply_patch(${JSON.stringify(patch)}));`),
+  )
+  host.queueResponse(completed)
+  await host.session.prompt("Delete the source and its alias")
+  assert.match(output(host), /\n\{\}$/)
+  await assert.rejects(lstat(path), { code: "ENOENT" })
+  await assert.rejects(lstat(alias), { code: "ENOENT" })
+  assert.deepEqual(
+    (
+      changes as {
+        status: string
+        added?: number
+        removed?: number
+        output?: string
+      }[]
+    ).map(({ status, added, removed, output: detail }) => ({
+      status,
+      added,
+      removed,
+      output: detail,
+    })),
+    [
+      { status: "completed", added: 0, removed: 2, output: "-left\n-right\n" },
+      {
+        status: "completed",
+        added: undefined,
+        removed: undefined,
+        output: undefined,
+      },
+    ],
   )
 })
 

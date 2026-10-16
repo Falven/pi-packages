@@ -455,17 +455,10 @@ export function createPatch(
               : [operation.path],
           ),
           async () => {
-            const plans: {
-              operation: Operation
-              content?: string
-              before?: string
-            }[] = []
             for (const [index, operation] of operations.entries()) {
               try {
                 abort.throwIfAborted()
-                if (operation.kind === "add")
-                  plans.push({ operation, content: operation.content })
-                else {
+                if (operation.kind !== "add") {
                   let before: string
                   try {
                     before = decode(await readFile(operation.path))
@@ -476,13 +469,7 @@ export function createPatch(
                     )
                   }
                   abort.throwIfAborted()
-                  plans.push({
-                    operation,
-                    before,
-                    ...(operation.kind === "update"
-                      ? { content: update(before, operation) }
-                      : {}),
-                  })
+                  if (operation.kind === "update") update(before, operation)
                 }
               } catch (error) {
                 records[index]!.status = "failed"
@@ -498,12 +485,34 @@ export function createPatch(
               new Error(
                 `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}`,
               )
-            for (const [
-              index,
-              { operation, content, before },
-            ] of plans.entries()) {
+            for (const [index, operation] of operations.entries()) {
               abort.throwIfAborted()
               const change = records[index]!
+              let content =
+                operation.kind === "add" ? operation.content : undefined
+              let before: string | undefined
+              if (operation.kind === "update") {
+                try {
+                  try {
+                    before = decode(await readFile(operation.path))
+                  } catch (error) {
+                    throw new Error(
+                      `Failed to read file to update ${operation.path}: ${readError(error)}`,
+                      { cause: error },
+                    )
+                  }
+                  abort.throwIfAborted()
+                  content = update(before, operation)
+                } catch (error) {
+                  abort.throwIfAborted()
+                  change.status = "failed"
+                  const reason = (
+                    error instanceof Error ? error.message : String(error)
+                  ).replace(/^apply_patch verification failed: /, "")
+                  body(change, reason)
+                  throw failure(`${reason}\n`)
+                }
+              }
               let destinationBefore: string | null | undefined
               if (operation.kind !== "delete") {
                 const path =
@@ -542,6 +551,10 @@ export function createPatch(
                 operation.kind === "delete" ||
                 (operation.kind === "update" && operation.destination)
               ) {
+                if (operation.kind === "delete") {
+                  before = (await priorContent(operation.path)) ?? undefined
+                  abort.throwIfAborted()
+                }
                 try {
                   await unlink(operation.path)
                 } catch {
