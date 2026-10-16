@@ -115,6 +115,7 @@ test("native reads and an unrelated command provider share skill labels and reta
               replacements++
               return {
                 content: [{ type: "text", text: "Replacement tool output" }],
+              details: undefined,
               }
             },
           })
