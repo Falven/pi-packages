@@ -180,11 +180,19 @@ test("a script failure with no message still has a failure activity", async (t) 
   await host.key("\x0f")
   await host.frame()
   const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
-  assert.equal((screen().match(/(?:>|▼) Error/g) ?? []).length, 1)
+  assert.equal(
+    (screen().match(/(?:>|▼) Error/g) ?? []).length,
+    2,
+    "one render group and one failure item",
+  )
   await host.reload()
   await openWork(host)
   await host.frame()
-  assert.equal((screen().match(/(?:>|▼) Error/g) ?? []).length, 1)
+  assert.equal(
+    (screen().match(/(?:>|▼) Error/g) ?? []).length,
+    2,
+    "one retained render group and one failure item",
+  )
   assert.equal(output(host, "empty-error"), "Script error:\n")
 })
 
