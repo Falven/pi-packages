@@ -6,7 +6,7 @@
 
 **Blocked by:** None for the patch-state correction; earlier prerequisites are resolved.
 
-**Status:** resolved — patch-state correction verified; combined review remains in ticket 07
+**Status:** resolved — patch-state correction verified; combined verification and review are recorded in ticket 07
 
 ## Patch-state correction — 2026-10-15
 
@@ -23,7 +23,7 @@
 
 **Correction evidence (2026-10-15, `1c12b6a`, Node 26.8.1, installed Pi host 1.0.2):** The same-patch symlink regression failed before the fix with `left\nRIGHT\n`; it now leaves `LEFT\nRIGHT\n`. A move followed by an update leaves `A\nB\n`, and both successful cases return `{}` with actual per-file diffs. An application-time alias match failure retains the first edit, returns the measured runtime error string, and records completed/failed/unattempted operations. Deleting the source before an alias update exercises the measured read-error shape. A delete after an alias update records the current bytes; deleting a newly dangling alias succeeds without invented counts.
 
-All 68 focused patch and patch-presentation checks pass at that revision. Root `tsc --noEmit`, changed-file `oxlint` and `oxfmt --check`, and `git diff --check` pass. The focused suite retains initial validation, hooks, redaction, queue, cancellation, encoding, and earlier partial-failure coverage. The full package suite and independent combined review remain ticket 07 work. The current native reference fails a delete of a newly dangling alias; this package follows the specified best-effort unlink behavior rather than claiming parity for that case.
+All 68 focused patch and patch-presentation checks pass at that revision. Root `tsc --noEmit`, changed-file `oxlint` and `oxfmt --check`, and `git diff --check` pass. The focused suite retains initial validation, hooks, redaction, queue, cancellation, encoding, and earlier partial-failure coverage. [Ticket 07](07-verify-contract-and-matched-trials.md) records the later full package run and independent combined review. The current native reference fails a delete of a newly dangling alias; this package follows the specified best-effort unlink behavior rather than claiming parity for that case.
 
 ## Activity-item delta — approved 2026-10-15
 

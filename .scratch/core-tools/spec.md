@@ -1,6 +1,6 @@
 # Core toolset
 
-**Status:** patch-state correction ready-for-agent; earlier operation-facts and native output preview acceptance remain resolved within their recorded limits
+**Status:** patch-state correction resolved; Core 04 and Core 07 record the implementation, 213/213 package checks, static checks, and independent reviews. Earlier revisions retain their recorded evidence and limits.
 
 **Tracker:** existing [Core 04](issues/04-apply-file-patches.md) and [Core 07](issues/07-verify-contract-and-matched-trials.md) patch-state deltas. The earlier [activity-item revision](../pi-chat/issues/13-activity-item-adapters-and-independent-bodies.md) remains coordinated with the chat specification.
 

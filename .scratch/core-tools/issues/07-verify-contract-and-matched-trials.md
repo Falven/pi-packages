@@ -4,16 +4,16 @@
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** Independent standards and spec review.
+**Blocked by:** None; Core 04 and independent reviews are complete.
 
-**Status:** verified-awaiting-review — patch-state checks pass; independent review remains open. Earlier resolved evidence remains below.
+**Status:** resolved — patch-state correction verified and independently reviewed. Earlier resolved evidence remains below.
 
 ## Patch-state correction — 2026-10-15
 
 - [x] Verify same-patch alias updates, move-then-update, later read/match failure, actual before/after facts, and deletion when an earlier operation leaves a dangling alias through the existing real-host seam.
 - [x] Run the affected patch/presentation checks, complete core-package checks, package typechecking, targeted lint and formatting, and whitespace validation. Record exact counts, revisions, runtime, and any failure.
 - [x] Confirm initial invalid patches still mutate nothing and existing queue, cancellation, hook/redaction, bounded metadata, public result shapes, and frozen contract checks pass.
-- [ ] Complete independent standards and spec reviews against integration base `188aa0c44ef311704af8e9ac92711d361cb1a50d`; resolve actionable findings before closing this delta.
+- [x] Complete independent standards and spec reviews against integration base `188aa0c44ef311704af8e9ac92711d361cb1a50d`; resolve actionable findings before closing this delta.
 - [x] Keep earlier evidence attached to its original revision. For this deterministic file-state repair, broader live-model, performance, physical-terminal, and cross-platform trials are not required and must remain explicitly unperformed; add no new harness or comparison report.
 
 **Verification evidence (2026-10-15, integration revision `672c4eef81a8870729b8dacee4a40e5d5af0cf26`, Node 26.8.1, installed Pi host 1.0.2):** `node --test packages/pi-codex-tools/test/*.test.ts` passed 213/213 tests, with zero failures, cancellations, skips, or todos, in 83.216 seconds. The complete package run includes the six new real-host patch regressions plus existing patch presentation, hook, frozen declaration, command, collection, lifecycle, and mixed-workflow checks. Its log is `/tmp/patch-file-state-07-package-tests.log`. [Core 04](04-apply-file-patches.md) retains the red/green and 68/68 focused-check evidence at `1c12b6a`; those earlier results are not relabeled as this revision.
@@ -26,7 +26,9 @@ The new cases verify final bytes and model results for same-patch symlink aliase
 
 `git diff --exit-code 188aa0c44ef311704af8e9ac92711d361cb1a50d HEAD -- packages/pi-codex-tools/test/fixtures packages/pi-codex-tools/src/contract.json packages/pi-codex-tools/src/index.ts packages/pi-codex-tools/package.json pnpm-lock.yaml` passed. The observed fixtures, frozen contract, public entry point, manifest, and lockfile are unchanged; `src/patch.ts` is the only changed runtime source.
 
-No broader live-model, performance, physical-terminal, or cross-platform trial was performed for this delta. Earlier matched trials and measurements retain their recorded revisions and limits. The current reference runtime fails to delete a newly dangling alias; Pi's specified best-effort unlink behavior remains different. The reference runtime's exact source revision is unverified. Independent standards and spec reviews of the combined delta remain to be done before closure.
+No broader live-model, performance, physical-terminal, or cross-platform trial was performed for this delta. Earlier matched trials and measurements retain their recorded revisions and limits. The current reference runtime fails to delete a newly dangling alias; Pi's specified best-effort unlink behavior remains different. The reference runtime's exact source revision is unverified.
+
+**Independent review (2026-10-15, `1a349af`, fixed point `188aa0c44ef311704af8e9ac92711d361cb1a50d`):** The standards review found no documented-standard violations. It noted one optional duplication of result-capture setup across the six new tests; the existing self-contained host setup is retained to match this file's established pattern. The spec review found no missing requirements, incorrect behavior, or scope creep. Neither review found an actionable defect requiring a repair. Only documentation status and review evidence changed after the verified implementation.
 
 **Verification boundary:** The implementation request authorizes focused regression cases in existing test files. It preserves the already approved real-host/model-loop seam and adds no new user-visible API or chat behavior. Application-time failures remain nontransactional: completed writes survive. Public queues coordinate participating operations in this process; they do not prevent external writers from changing a file between reads and writes.
 
