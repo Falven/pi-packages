@@ -1,12 +1,22 @@
 # 07: Verify the complete contract and matched model trials
 
-**What to build:** Verify unchanged execution/tool contracts and review the completed activity-item delta, with evidence scoped to its tested runtime.
+**What to build:** Verify the patch-state repair's final file contents, model results, actual change facts, and preserved public contracts; review the completed delta independently.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** Core 06 and Chat 12: combined acceptance.
+**Blocked by:** Core 04: patch-state correction.
 
-**Status:** resolved — approved activity-item delta; earlier evidence retained below
+**Status:** ready-for-agent — patch-state correction, blocked by Core 04; earlier resolved evidence retained below
+
+## Patch-state correction — 2026-10-15
+
+- [ ] Verify same-patch alias updates, move-then-update, later read/match failure, actual before/after facts, and deletion when an earlier operation leaves a dangling alias through the existing real-host seam.
+- [ ] Run the affected patch/presentation checks, complete core-package checks, package typechecking, targeted lint and formatting, and whitespace validation. Record exact counts, revisions, runtime, and any failure.
+- [ ] Confirm initial invalid patches still mutate nothing and existing queue, cancellation, hook/redaction, bounded metadata, public result shapes, and frozen contract checks pass.
+- [ ] Complete independent standards and spec reviews against integration base `188aa0c44ef311704af8e9ac92711d361cb1a50d`; resolve actionable findings before closing this delta.
+- [ ] Keep earlier evidence attached to its original revision. For this deterministic file-state repair, broader live-model, performance, physical-terminal, and cross-platform trials are not required and must remain explicitly unperformed; add no new harness or comparison report.
+
+**Verification boundary:** The implementation request authorizes focused regression cases in existing test files. It preserves the already approved real-host/model-loop seam and adds no new user-visible API or chat behavior. Application-time failures remain nontransactional: completed writes survive. Public queues coordinate participating operations in this process; they do not prevent external writers from changing a file between reads and writes.
 
 ## Activity-item delta — approved 2026-10-15
 

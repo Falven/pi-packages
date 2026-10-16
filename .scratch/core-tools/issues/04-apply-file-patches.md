@@ -1,12 +1,25 @@
 # 04: Apply file patches through native dispatch
 
-**What to build:** Inspect each known file changed by a patch independently, with its actual outcome and verified change counts where available.
+**What to build:** Preserve earlier operations in the same patch by recomputing each update from current file contents, and record the actual contents changed or deleted.
 
 **Specification:** [Core toolset](../spec.md).
 
-**Blocked by:** Core 01: common core-operation projection.
+**Blocked by:** None for the patch-state correction; earlier prerequisites are resolved.
 
-**Status:** resolved — approved activity-item delta; earlier evidence retained below
+**Status:** ready-for-agent — patch-state correction; earlier resolved evidence retained below
+
+## Patch-state correction — 2026-10-15
+
+- [ ] Keep whole-patch validation before writes and the existing public file mutation queues, including initial no-mutation failures and repeated-source-path validation.
+- [ ] Reread and recompute each update when it is applied. Preserve both changes through same-patch symlink aliases and move-then-update operations without rejecting supported overlaps.
+- [ ] On application-time read or match failure, retain earlier effects, report the current operation as failed and later operations as unattempted, and return the measured runtime error shape. Preserve cancellation around reads and writes.
+- [ ] Derive update, move, and delete facts from application-time contents. Refresh delete facts best-effort without preventing unlink of a now-dangling or unreadable target; omit unverifiable counts.
+- [ ] Reproduce the bug before the fix and verify final bytes, model results, and per-file facts through focused cases in the existing real-host test file. Preserve existing hook, redaction, queue, encoding, and partial-failure checks.
+- [ ] Keep public schemas, frozen fixtures, dependencies, presentation interfaces, and unrelated comparison findings outside this delta.
+
+**Acceptance examples:** Given `left\nright\n`, an update of `left` to `LEFT` through the real path followed by `right` to `RIGHT` through its alias must leave `LEFT\nRIGHT\n`. Given source `from-a\ncommon\n` and destination `from-b\ncommon\n`, moving the source while changing `from-a` to `A`, then changing destination `common` to `B`, must leave `A\nB\n`. If the second operation instead requires text removed by the first, it fails after preserving the first operation; it must not write cached contents.
+
+**Historical scope:** The preflight evidence below still establishes initial validation before writes. It does not establish that preflight snapshots are safe to write after another operation changes the same file. New evidence belongs to this delta and must retain the tested revision and runtime.
 
 ## Activity-item delta — approved 2026-10-15
 
