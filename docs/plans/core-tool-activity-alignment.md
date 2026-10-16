@@ -41,6 +41,8 @@ Its `webview/assets/app-shared-8340f229c2b3.js` provides direct evidence:
 | `applyTerminalInteraction`    | Associates submitted terminal commands with the existing command record.                                                            |
 | `commandExecution` projection | Builds displayed command actions from that record's actions, output, and status. One record can contain several meaningful actions. |
 
+The same projection supplies the original command when its parsed action list is empty. The command-recognition delta retains that fallback, including failed directory changes. The inspected asset's SHA-256 is `3b4cabc382e71f0da7398393a619d7c62d13dfae598a5fe2e9880ab8d31d1bf5`.
+
 The [official item model](https://learn.chatgpt.com/docs/app-server#items) also defines command identity, status, output, and exit code. Its [output event](https://learn.chatgpt.com/docs/app-server#item-deltas) updates an existing item.
 
 The target is therefore stable operations with continuing results. It is not a blanket “one row per tool call” or “one row per process” rule. For the simple test command above, repeated collection adds no new command action.

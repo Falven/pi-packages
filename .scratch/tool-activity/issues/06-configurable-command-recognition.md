@@ -10,6 +10,7 @@
 
 - [ ] The reference revision, source hashes, grammar version, and complete command-case corpus are recorded; full parsed results match.
 - [ ] Shell wrappers, pipelines, sequencing, quoting, options, directory changes, formatting helpers, display names, deduplication, and fallback follow the reference.
+- [ ] Empty parsed action lists retain the app's general command activity, including failed native and declared commands.
 - [ ] Generic command facts carry an optional shell invocation prefix; producers supply their actual shell and consumers never inspect producer-specific argument keys.
 - [ ] One operator module supplies recognition mappings, presentation wording, group ordering, and operation-body headings; defaults preserve reference behavior.
 - [ ] Effective paths retain skill identity independently of shortened names, and full commands/results remain inspectable.

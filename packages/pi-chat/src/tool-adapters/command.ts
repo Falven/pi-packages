@@ -714,6 +714,7 @@ export function describeCommands(
   shell: readonly string[] = ["bash", "-lc"],
 ): CommandAction[] {
   const commands = parseCommand([...shell, command])
+  if (commands.length === 0) return [{ kind: "command", command }]
   return commands.map((parsed) => {
     switch (parsed.type) {
       case "read":

@@ -666,12 +666,24 @@ test("declared command actions use the app parser and retain full command bodies
               shell: ["pwsh", "-c"],
               status: "completed",
             })
+            update.operations.push({
+              id: "failed-directory-change",
+              order: commands.length + 1,
+              revision: 1,
+              kind: "command",
+              commands: ["cd missing-declared-directory"],
+              status: "failed",
+              output: "Declared directory missing",
+            })
             return { content, details: activityDetails(update, content) }
           },
         }),
     ],
   })
   host.queueResponse(...response("", "command_report"))
+  host.queueResponse(
+    ...response("", "bash", { command: "cd missing-native-directory" }),
+  )
   host.queueResponse(...response("Finished"))
   await host.type("Inspect the command report")
   await host.key("\r")
@@ -684,8 +696,12 @@ test("declared command actions use the app parser and retain full command bodies
   assert.equal((screen.match(/▼ Read (?!files\b)/g) ?? []).length, 11)
   assert.equal(
     (screen.match(/▼ Ran command\s/g) ?? []).length,
-    uncertain.length + 2,
+    uncertain.length + 4,
   )
+  assert.equal((screen.match(/▼ Ran command \(failed\)/g) ?? []).length, 2)
+  assert.match(screen, /cd missing-native-directory/)
+  assert.match(screen, /cd missing-declared-directory/)
+  assert.match(screen, /Declared directory missing/)
   for (const target of [
     "one file.md",
     "two.md",

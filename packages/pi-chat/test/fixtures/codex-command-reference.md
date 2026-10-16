@@ -28,6 +28,8 @@ To refresh the corpus deliberately:
 
 The integration checks also cover native commands, unrelated activity providers, registered skill paths, pending calls, and retained history. An additional deterministic comparison of 9,646 generated command vectors against the same Rust parser found no differences; it supplements the checked-in reference corpus.
 
+The app's display layer also supplies a general command when its parsed action list is empty. This was verified in `webview/assets/app-shared-8340f229c2b3.js` from the installed app's `app.asar` (app version `26.1007.71326`, asset SHA-256 `3b4cabc382e71f0da7398393a619d7c62d13dfae598a5fe2e9880ab8d31d1bf5`). The `commandExecution` projection checks the mapped action count and falls back to the original command. Native-host checks preserve a failed directory-change command from both native execution and an unrelated activity provider. The public parser still returns the exact reference result, including empty arrays.
+
 The defaults deliberately retain the reference's boundaries: if any action in a submitted script remains unknown, the public parser returns one general command for that script. Operator overrides in `src/config.ts` change presentation; they do not change the captured reference expectations.
 
 The port and fixture are attributed in [NOTICE](../../NOTICE) and distributed with [LICENSE-APACHE-2.0](../../LICENSE-APACHE-2.0).
