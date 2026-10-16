@@ -9,7 +9,7 @@ import {
   createReadToolDefinition,
   createWriteToolDefinition,
 } from "@earendil-works/pi-coding-agent"
-import { describeCommand } from "./command.ts"
+import { describeCommands } from "./command.ts"
 import { argumentsOf, type ActivityItem, type CallFacts } from "./types.ts"
 
 const definitions = {
@@ -23,19 +23,13 @@ const definitions = {
 }
 
 export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
-  if (
-    facts.provenance?.source !== "builtin" ||
-    !Object.hasOwn(definitions, facts.name)
-  )
-    return
+  if (!facts.builtin || !Object.hasOwn(definitions, facts.name)) return
   const name = facts.name as keyof typeof definitions
   const args = argumentsOf(facts.args)
   const path = typeof args["path"] === "string" ? args["path"] : undefined
   const targetKey = path
     ? resolve(facts.cwd, path.replace(/^~(?=\/|$)/, homedir()))
     : undefined
-  const skill =
-    name === "read" && facts.skills.find((item) => item.path === targetKey)
   const item: ActivityItem = {
     id: facts.id,
     kind:
@@ -43,9 +37,7 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
         ? "command"
         : name === "edit" || name === "write"
           ? "edit"
-          : skill
-            ? "loaded"
-            : "read",
+          : "read",
     status: facts.status,
     ...(path ? { target: path } : {}),
     ...(targetKey ? { targetKey } : {}),
@@ -59,8 +51,11 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
     },
   }
   if (name === "bash" && typeof args["command"] === "string")
-    Object.assign(item, describeCommand(args["command"]))
-  else if (skill) item.target = skill.name.replace(/^skill:/, "")
+    return describeCommands(args["command"]).map((action, index) =>
+      Object.assign({}, item, action, {
+        id: index ? `${facts.id}:action:${index}` : facts.id,
+      }),
+    )
   else if (name === "read") item.action = "read"
   else if (name === "ls") item.action = "list"
   else if (name === "grep" || name === "find") {

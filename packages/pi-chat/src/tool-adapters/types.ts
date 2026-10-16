@@ -1,6 +1,5 @@
 import type {
   AgentToolResult,
-  SourceInfo,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent"
 import type { ActivityStatus } from "./activity-contract.ts"
@@ -17,7 +16,7 @@ export type CallFacts = {
   args: unknown
   cwd: string
   status: ActivityStatus
-  provenance: SourceInfo | undefined
+  builtin: boolean
   result: ActivityResult | undefined
   skills: readonly { name: string; path: string }[]
 }

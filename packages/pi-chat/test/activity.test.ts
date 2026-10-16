@@ -1,4 +1,7 @@
 import assert from "node:assert/strict"
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import test from "node:test"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import { stripTerminalSequences } from "@earendil-works/pi-tui"
@@ -10,7 +13,11 @@ import { activityDetails } from "../../../fixtures/activity.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
-const response = (content: string, name?: string) => [
+const response = (
+  content: string,
+  name?: string,
+  args: unknown = { path: "original-argument" },
+) => [
   {
     event: {
       choices: [
@@ -28,9 +35,7 @@ const response = (content: string, name?: string) => [
                       type: "function",
                       function: {
                         name,
-                        arguments: JSON.stringify({
-                          path: "original-argument",
-                        }),
+                        arguments: JSON.stringify(args),
                       },
                     },
                   ],
@@ -51,6 +56,127 @@ const response = (content: string, name?: string) => [
   },
   { event: "[DONE]" },
 ]
+
+test("native reads and an unrelated command provider share skill labels and retain source Find", async (t) => {
+  const catalog = await mkdtemp(join(tmpdir(), "pi-chat-skills-"))
+  t.after(() => rm(catalog, { recursive: true, force: true }))
+  const directory = join(catalog, "review")
+  const path = join(directory, "SKILL.md")
+  let replaceReads = false
+  let replacements = 0
+  await mkdir(directory)
+  await writeFile(
+    path,
+    "---\nname: review\ndescription: Review work\n---\nInspect the requested work.\n",
+  )
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    skillPaths: [catalog],
+    rows: 110,
+    persistSession: true,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) =>
+        pi.registerTool({
+          name: "opaque_read",
+          label: "Opaque read",
+          description: "An independent activity publisher",
+          parameters: createReadToolDefinition(".").parameters,
+          async execute(callId, _args, _signal, _onUpdate, ctx) {
+            const content = [
+              { type: "text" as const, text: "opaque-source-needle" },
+            ]
+            const update: ActivityUpdate = {
+              version: 1,
+              id: "opaque-read-source",
+              callId,
+              sessionId: ctx.sessionManager.getSessionId(),
+              revision: 1,
+              operations: [
+                {
+                  id: callId,
+                  order: 0,
+                  revision: 1,
+                  kind: "command",
+                  commands: [`cat '${path}'`],
+                  status: "completed",
+                  output: "Independent skill contents.",
+                },
+              ],
+            }
+            return { content, details: activityDetails(update, content) }
+          },
+        }),
+      (pi) => {
+        if (replaceReads)
+          pi.registerTool({
+            ...createReadToolDefinition("."),
+            async execute() {
+              replacements++
+              return {
+                content: [{ type: "text", text: "Replacement tool output" }],
+              }
+            },
+          })
+      },
+    ],
+  })
+  host.queueResponse(...response("", "read", { path }))
+  host.queueResponse(
+    ...response("", "bash", {
+      command: `printf '\\n--- skill ---\\n'; cat '${path}'`,
+    }),
+  )
+  host.queueResponse(...response("", "opaque_read"))
+  host.queueResponse(...response("Finished"))
+  await host.type("Read the registered skill")
+  await host.key("\r")
+  await host.settled()
+  await host.frame()
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  await host.key("\x06")
+  await host.type("opaque-source-needle")
+  await host.frame()
+  assert.match(screen(), /1\/1/)
+  assert.match(screen(), /opaque_read/)
+  await host.key("\x1b")
+  await host.frame()
+  assert.doesNotMatch(screen(), /opaque-source-needle|opaque_read/)
+  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  replaceReads = true
+  await host.reload()
+  await host.key("\x0f")
+  await host.key("\x0f")
+  await host.frame()
+  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  host.queueResponse(...response("", "read", { path }))
+  host.queueResponse(...response("Finished"))
+  await host.type("Use the replacement")
+  await host.key("\r")
+  await host.settled()
+  await host.frame()
+  await host.key("\x0f")
+  await host.key("\x0f")
+  await host.frame()
+  assert.match(screen(), /▼ Called read/)
+  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  const requests = host.requests.length
+  const fork = await host.runtime.fork(
+    host.session.sessionManager.getLeafId()!,
+    { position: "at" },
+  )
+  assert.equal(fork.cancelled, false)
+  await host.key("\x0f")
+  await host.key("\x0f")
+  await host.frame()
+  assert.match(screen(), /▼ Called read/)
+  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.equal(host.requests.length, requests)
+  assert.equal(replacements, 1)
+})
 
 test("an unrelated provider presents semantic operations and late updates without tool-name mappings", async (t) => {
   let publish: (() => void) | undefined
@@ -342,4 +468,88 @@ test("processed output invalidates metadata and cannot regain an earlier live bo
   assert.match(screen, /transformed_job/)
   assert.match(screen, /sanitized-only/)
   assert.doesNotMatch(screen, /discarded-body|original transport/)
+})
+
+test("declared commands preserve literal read paths and keep uncertain shell execution intact", async (t) => {
+  const uncertain = [
+    "true && cat SKILL.md",
+    "false || cat SKILL.md",
+    "cat SKILL.md | head",
+    "cat SKILL.md > result.txt",
+    'cat "$HOME/SKILL.md"',
+    "cat $(pwd)/SKILL.md",
+    "cat *.md",
+    "cat ~/SKILL.md",
+    "printf -v HOME elsewhere; cat SKILL.md",
+    "cat 'incomplete",
+    'cat pre"fix"',
+    "cat one\\ file.md",
+    "cat SKILL.md # comment",
+    "cd subdirectory; cat SKILL.md",
+    "unknown_command; cat SKILL.md",
+    "cat one.md;; cat two.md",
+  ]
+  const commands = [
+    "printf '\\n--- files ---\\n'; cat 'one file.md' \"two.md\"; git status --short",
+    "cat 'literal$[];file.md'\ncat '~/SKILL.md'",
+    "printf useful-output; cat notes.txt",
+    ...uncertain,
+  ]
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 200,
+    columns: 160,
+    extensionFactories: [
+      (pi) =>
+        pi.registerTool({
+          name: "command_report",
+          label: "Command report",
+          description: "An independent publisher of command facts",
+          parameters: createReadToolDefinition(".").parameters,
+          async execute(callId, _args, _signal, _onUpdate, ctx) {
+            const content = [
+              { type: "text" as const, text: "Command facts delivered" },
+            ]
+            const update: ActivityUpdate = {
+              version: 1,
+              id: "command-report",
+              callId,
+              sessionId: ctx.sessionManager.getSessionId(),
+              revision: 1,
+              operations: commands.map((command, order) => ({
+                id: order === 1 ? "command-0:action:1" : `command-${order}`,
+                order,
+                revision: 1,
+                kind: "command",
+                commands: [command],
+                status: "completed",
+              })),
+            }
+            return { content, details: activityDetails(update, content) }
+          },
+        }),
+    ],
+  })
+  host.queueResponse(...response("", "command_report"))
+  host.queueResponse(...response("Finished"))
+  await host.type("Inspect the command report")
+  await host.key("\r")
+  await host.settled()
+  await host.frame()
+  await host.key("\x0f")
+  await host.frame()
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
+  assert.equal((screen.match(/▼ Read (?!files\b)/g) ?? []).length, 5)
+  assert.equal((screen.match(/▼ Ran command\s/g) ?? []).length, 18)
+  for (const target of [
+    "one file.md",
+    "two.md",
+    "literal$[];file.md",
+    "~/SKILL.md",
+    "notes.txt",
+  ])
+    assert(screen.includes(`▼ Read ${target}`), target)
+  for (const command of uncertain) assert(screen.includes(command), command)
+  assert.match(screen, /git status --short/)
+  assert.match(screen, /printf useful-output/)
 })

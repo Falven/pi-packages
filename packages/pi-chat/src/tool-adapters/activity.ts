@@ -7,7 +7,7 @@ import {
   type ActivityOperation,
   type ActivityUpdate,
 } from "./activity-contract.ts"
-import { describeCommand } from "./command.ts"
+import { describeCommands } from "./command.ts"
 import {
   argumentsOf,
   type ActivityItem,
@@ -179,6 +179,7 @@ export class ActivityAdapter {
     live: boolean,
     images: ImagePart[],
   ): ActivityItem[] {
+    const id = JSON.stringify([operation.id])
     const status =
       operation.status === "running" && !live ? "unknown" : operation.status
     const cwd = operation.cwd ?? facts.cwd
@@ -190,22 +191,28 @@ export class ActivityAdapter {
       ...(operation.outputOmitted ? { availability: "omitted" } : {}),
     }
     if (operation.kind === "command")
-      return operation.commands.map((command, index) => ({
-        id: index ? `${operation.id}:command:${index}` : operation.id,
-        ...describeCommand(command),
-        status,
-        body: {
-          ...body,
-          args: { command },
-          renderers: heading(command),
-          ...(index
-            ? { result: result(operation.output, status === "failed", []) }
-            : {}),
-        },
-      }))
+      return operation.commands.flatMap((command, index) =>
+        describeCommands(command).map((action, actionIndex) =>
+          Object.assign(action, {
+            id:
+              index || actionIndex
+                ? JSON.stringify([operation.id, index, actionIndex])
+                : id,
+            status,
+            body: {
+              ...body,
+              args: { command },
+              renderers: heading(command),
+              ...(index || actionIndex
+                ? { result: result(operation.output, status === "failed", []) }
+                : {}),
+            },
+          }),
+        ),
+      )
     if (operation.kind === "edit" && operation.files)
       return operation.files.map((file, index) => ({
-        id: `${operation.id}:${file.id}`,
+        id: JSON.stringify([operation.id, file.id]),
         kind: "edit",
         target: file.path,
         targetKey: resolve(cwd, file.path),
@@ -229,7 +236,7 @@ export class ActivityAdapter {
     if (operation.kind === "tool")
       return [
         {
-          id: operation.id,
+          id,
           kind: "tool",
           target: operation.name,
           status,
@@ -242,7 +249,7 @@ export class ActivityAdapter {
         return []
       return [
         {
-          id: operation.id,
+          id,
           kind: status === "failed" ? "output" : "image",
           status,
           body: {
@@ -259,7 +266,7 @@ export class ActivityAdapter {
     }
     return [
       {
-        id: operation.id,
+        id,
         kind: operation.kind,
         target: operation.path,
         status,

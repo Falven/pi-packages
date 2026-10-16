@@ -28,7 +28,7 @@ export function itemSummary(item: ActivityItem, expanded: boolean) {
     return `${verb}${target}${item.changes ? ` +${item.changes.added} -${item.changes.removed}` : ""}`
   }
   if (item.kind === "loaded")
-    return `${running ? "Loading" : "Loaded"}${target} skill${outcome}`
+    return `${running ? "Reading" : "Read"}${target} skill${outcome}`
   if (item.kind === "read") {
     if (item.action === "list")
       return `${running ? "Listing" : "Listed"} files${target ? ` in${target}` : ""}${outcome}`

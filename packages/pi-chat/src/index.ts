@@ -9,12 +9,13 @@ import {
   NativeChatHost,
 } from "./native-host.ts"
 import { thoughtPresentation } from "./thought.ts"
-import { ActivityItems } from "./activity-items.ts"
+import { ActivityItems, nativeToolType } from "./activity-items.ts"
 
 const relationshipRenderer = () => undefined
 
 export default function piChat(pi: ExtensionAPI) {
   pi.registerEntryRenderer("pi-chat.relationship", relationshipRenderer)
+  pi.registerEntryRenderer(nativeToolType, relationshipRenderer)
   let adapter: NativeChatHost | undefined
   let unlistenActivity: (() => void) | undefined
   const listenActivity = () => {

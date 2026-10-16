@@ -1,6 +1,7 @@
 /* eslint-disable no-await-in-loop -- Native companion sessions share host state and controls. */
 import assert from "node:assert/strict"
-import { writeFile } from "node:fs/promises"
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import { setTimeout } from "node:timers/promises"
@@ -163,6 +164,93 @@ test("a failed operation carries distinct call error context without a duplicate
   assert.doesNotMatch(screen(), /(?:>|▼) Error|Ran command \(failed\)/)
   assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
 })
+
+for (const order of ["first", "last"] as const) {
+  test(`skill reads keep their labels and other actions with the toolset loaded ${order}`, async (t) => {
+    const catalog = await mkdtemp(join(tmpdir(), "pi-skill reads-"))
+    t.after(() => rm(catalog, { recursive: true, force: true }))
+    const directory = join(catalog, "domain-modeling")
+    const skill = join(directory, "SKILL.md")
+    await mkdir(directory)
+    await writeFile(
+      skill,
+      "---\nname: domain-modeling\ndescription: Inspect the domain\n---\nRegistered skill instructions.\n",
+    )
+    const host = await openNativeHost(t, {
+      extensionPaths:
+        order === "first"
+          ? [extension, ...companions]
+          : [...companions, extension],
+      skillPaths: [catalog],
+      providerApi,
+      providerProtocol: "responses",
+      rows: 150,
+      columns: 120,
+      persistSession: true,
+    })
+    await writeFile(
+      join(host.directory, "notes.txt"),
+      "Ordinary file content.\n",
+    )
+    await mkdir(join(host.directory, "unregistered"))
+    await writeFile(
+      join(host.directory, "unregistered", "SKILL.md"),
+      "---\nname: domain-modeling\n---\nUnregistered skill-shaped text.\n",
+    )
+    const command = `printf '\\n--- domain-modeling skill ---\\n'; cat '${skill}' notes.txt; printf separate-action`
+    host.queueResponse(
+      ...call(
+        `text((await tools.exec_command({cmd:${JSON.stringify(command)},login:false})).output); await tools.exec_command({cmd:"cat unregistered/SKILL.md",login:false}); await tools.exec_command({cmd:${JSON.stringify(`true && cat '${skill}'`)},login:false});`,
+        "skill-read",
+      ),
+    )
+    await host.session.prompt("Read the skill and inspect the other work")
+    assert.match(
+      output(host, "skill-read"),
+      /Registered skill instructions|Ordinary file content|separate-action/,
+    )
+    await openWork(host)
+    const groupRow = host
+      .screenLines()
+      .findIndex((line) =>
+        stripVTControlCharacters(line).includes(
+          "> Loaded a tool, read files, ran commands",
+        ),
+      )
+    assert(groupRow >= 0)
+    await host.key(`\x1b[<0;2;${groupRow + 1}M`)
+    await host.key(`\x1b[<0;2;${groupRow + 1}m`)
+    await host.frame()
+    const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+    assert.match(screen(), /> Read domain-modeling skill/)
+    assert.match(screen(), /> Read notes\.txt/)
+    assert.match(screen(), /> Read unregistered\/SKILL\.md/)
+    assert.match(screen(), /> Ran printf separate-action/)
+    assert.match(screen(), /> Ran true && cat/)
+    assert.doesNotMatch(screen(), /(?:>|▼) Output|> Ran printf '\\n---/)
+    await host.key("\x0f")
+    await host.frame()
+    assert.match(screen(), /Registered skill instructions/)
+    assert.match(screen(), /Ordinary file content/)
+    assert.match(screen(), /separate-action/)
+    await host.reload()
+    await openWork(host)
+    assert.equal(
+      (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
+      1,
+    )
+    const fork = await host.runtime.fork(
+      host.session.sessionManager.getLeafId()!,
+      { position: "at" },
+    )
+    assert.equal(fork.cancelled, false)
+    await openWork(host)
+    assert.equal(
+      (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
+      1,
+    )
+  })
+}
 
 test(
   "terminal submissions update their origin while successful polls and execution receipts stay quiet",
