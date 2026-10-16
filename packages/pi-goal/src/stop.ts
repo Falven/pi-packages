@@ -138,7 +138,7 @@ export function createGoalStop(
             } finally {
               if (failure)
                 installed.ctx.ui.notify(
-                  `Could not pause the goal: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}. Use /goal inspect to check its state.`,
+                  `Could not pause the goal: ${failure.error instanceof Error ? failure.error.message : String(failure.error)}`,
                   "error",
                 )
             }

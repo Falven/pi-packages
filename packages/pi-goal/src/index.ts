@@ -223,7 +223,7 @@ export default function piGoal(pi: ExtensionAPI): void {
       )
   }
   const storage = (ctx: ExtensionContext) =>
-    new GoalStore(pi, ctx.sessionManager)
+    new GoalStore(pi, ctx.sessionManager, cancelContinuation)
   const present = (ctx: ExtensionContext, goal: StoredGoal | null) => {
     ctx.ui.setStatus(
       "pi-goal",
@@ -236,7 +236,7 @@ export default function piGoal(pi: ExtensionAPI): void {
         storage(ctx).clear(goal)
       } catch (error) {
         ctx.ui.notify(
-          `Could not clear the completed goal: ${error instanceof Error ? error.message : String(error)}. Use /goal clear to retry.`,
+          `Could not clear the completed goal: ${error instanceof Error ? error.message : String(error)}`,
           "error",
         )
       }
@@ -268,6 +268,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     if (
       lifetime.signal.aborted ||
       accountingFailed ||
+      storage(ctx).failed ||
       pending ||
       running ||
       (!ctx.isIdle() && !compactionSignal) ||
@@ -291,6 +292,10 @@ export default function piGoal(pi: ExtensionAPI): void {
       scheduled = setImmediate(() => {
         scheduled = undefined
         if (lifetime.signal.aborted || pending !== candidate) return
+        if (accountingFailed || storage(ctx).failed) {
+          cancelContinuation()
+          return
+        }
         pi.sendUserMessage(`/goal --continue ${candidate.nonce}`, {
           expandPromptTemplates: true,
         })
@@ -320,7 +325,11 @@ export default function piGoal(pi: ExtensionAPI): void {
     mode: AccountingMode = "active",
     keepBudgetLimited = false,
   ) => {
-    if (lifetime.signal.aborted || !ctx.sessionManager.getSessionFile())
+    if (
+      lifetime.signal.aborted ||
+      !ctx.sessionManager.getSessionFile() ||
+      storage(ctx).failed
+    )
       return null
     try {
       const previous = accounting.activeGoal
@@ -444,12 +453,15 @@ export default function piGoal(pi: ExtensionAPI): void {
         const candidate = pending
         if (!candidate || args !== `--continue ${candidate.nonce}`) return
         if (candidate.compactionSignal) await ctx.waitForIdle()
+        if (lifetime.signal.aborted || pending !== candidate) return
         if (
-          lifetime.signal.aborted ||
-          pending !== candidate ||
+          accountingFailed ||
+          storage(ctx).failed ||
           candidate.compactionSignal?.aborted
-        )
+        ) {
+          cancelContinuation()
           return
+        }
         pending = undefined
         if (
           candidate.revision !== revision ||
@@ -678,7 +690,11 @@ export default function piGoal(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (_event, ctx) => {
     if (lifetime.signal.aborted) return
-    if (ctx.sessionManager.getSessionFile() && eligible(read(ctx)))
+    if (
+      ctx.sessionManager.getSessionFile() &&
+      !storage(ctx).failed &&
+      eligible(read(ctx))
+    )
       stop.install(ctx)
   })
 
@@ -687,7 +703,8 @@ export default function piGoal(pi: ExtensionAPI): void {
     cancelContinuation()
     if (!running) {
       guards.start(ctx.sessionManager.getEntries())
-      if (ctx.sessionManager.getSessionFile()) accounting.start(read(ctx))
+      if (ctx.sessionManager.getSessionFile() && !storage(ctx).failed)
+        accounting.start(read(ctx))
     }
     running = true
     runSignal = ctx.signal
@@ -810,7 +827,11 @@ export default function piGoal(pi: ExtensionAPI): void {
       const owner = accounting.currentGoal
       const reason = aborted ? undefined : guards.finish()
       checkpoint(ctx)
-      if (reason && owner?.threadId === ctx.sessionManager.getSessionId()) {
+      if (
+        reason &&
+        owner?.threadId === ctx.sessionManager.getSessionId() &&
+        !storage(ctx).failed
+      ) {
         const stopped = storage(ctx).stop(owner, reason)
         accounting.clear()
         guards.reset()

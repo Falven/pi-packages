@@ -35,6 +35,15 @@ const statuses = new Set<Goal["status"]>([
   "complete",
 ])
 
+// Retaining reload reuses the manager, including its failed in-memory appends.
+const failedManagersKey = Symbol.for("pi-goal:failed-managers")
+const processState = globalThis as typeof globalThis & {
+  [failedManagersKey]?: WeakSet<ExtensionContext["sessionManager"]>
+}
+const failedManagers = (processState[failedManagersKey] ??= new WeakSet())
+const recovery =
+  "Automatic goal pursuit is stopped. Reopen the saved session to recover saved state."
+
 function integerField(value: unknown, name: string, positive = false): bigint {
   if (typeof value !== "string" || !/^(0|[1-9][0-9]*)$/.test(value))
     throw new Error(`invalid goal snapshot: ${name}`)
@@ -103,28 +112,54 @@ export class GoalStore {
   constructor(
     private readonly pi: ExtensionAPI,
     private readonly sessionManager: ExtensionContext["sessionManager"],
+    private readonly onFailure: () => void,
   ) {}
+
+  get failed(): boolean {
+    return failedManagers.has(this.sessionManager)
+  }
+
+  private access<T>(operation: () => T): T {
+    if (this.failed) {
+      this.onFailure()
+      throw new Error(
+        `Goal storage is unavailable for this session. ${recovery}`,
+      )
+    }
+    try {
+      return operation()
+    } catch (error) {
+      failedManagers.add(this.sessionManager)
+      this.onFailure()
+      throw new Error(
+        `Goal storage failed: ${error instanceof Error ? error.message : String(error)}. ${recovery}`,
+        { cause: error },
+      )
+    }
+  }
 
   read(threadId: string): StoredGoal | null {
     if (threadId !== this.sessionManager.getSessionId())
       throw new Error("goal session changed")
-    let latest: unknown
-    let found = false
-    for (const entry of this.sessionManager.getEntries()) {
-      if (entry.type !== "custom" || entry.customType !== entryType) continue
-      const data = entry.data
-      if (
-        data &&
-        typeof data === "object" &&
-        !Array.isArray(data) &&
-        typeof (data as { threadId?: unknown }).threadId === "string" &&
-        (data as { threadId: string }).threadId !== threadId
-      )
-        continue
-      latest = data
-      found = true
-    }
-    return found ? decode(latest, threadId) : null
+    return this.access(() => {
+      let latest: unknown
+      let found = false
+      for (const entry of this.sessionManager.getEntries()) {
+        if (entry.type !== "custom" || entry.customType !== entryType) continue
+        const data = entry.data
+        if (
+          data &&
+          typeof data === "object" &&
+          !Array.isArray(data) &&
+          typeof (data as { threadId?: unknown }).threadId === "string" &&
+          (data as { threadId: string }).threadId !== threadId
+        )
+          continue
+        latest = data
+        found = true
+      }
+      return found ? decode(latest, threadId) : null
+    })
   }
 
   private append(goal: StoredGoal): StoredGoal {
@@ -144,7 +179,7 @@ export class GoalStore {
       updatedAt: goal.updatedAt.toString(),
     }
     decode(data, goal.threadId)
-    this.pi.appendEntry(entryType, data)
+    this.access(() => this.pi.appendEntry(entryType, data))
     return goal
   }
 
@@ -264,7 +299,9 @@ export class GoalStore {
     if (goal.threadId !== this.sessionManager.getSessionId()) return
     const current = this.read(goal.threadId)
     if (current?.generation !== goal.generation) return
-    this.pi.appendEntry(entryType, { threadId: goal.threadId, clear: true })
+    this.access(() =>
+      this.pi.appendEntry(entryType, { threadId: goal.threadId, clear: true }),
+    )
   }
 }
 

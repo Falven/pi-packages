@@ -1,4 +1,5 @@
 import assert from "node:assert/strict"
+import { mkdirSync, renameSync, rmSync } from "node:fs"
 import test from "node:test"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
@@ -37,7 +38,7 @@ function call(name: string, args: unknown, id: string) {
   ]
 }
 
-function answer(text: string) {
+function answer(text: string, usage?: unknown) {
   return [
     {
       event: {
@@ -50,7 +51,12 @@ function answer(text: string) {
         ],
       },
     },
-    { event: { choices: [{ index: 0, delta: {}, finish_reason: "stop" }] } },
+    {
+      event: {
+        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
+        ...(usage ? { usage } : {}),
+      },
+    },
     { event: "[DONE]" },
     { end: true } as const,
   ]
@@ -391,6 +397,265 @@ test("restoring the individual active session admits its current goal", async (t
   )
   await restored.session.prompt("/goal pause")
   await restored.session.abort()
+})
+
+test("a failed native append stops a manager across file-loaded reload until saved-session reopening", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+  })
+  host.queueResponse(...answer("The initial session is saved."))
+  await host.session.prompt("Save this session before managing its goal.")
+  await host.session.prompt("/goal create Saved objective")
+  const manager = host.session.sessionManager
+  const sessionFile = manager.getSessionFile()
+  assert(sessionFile)
+  const savedFile = `${sessionFile}.saved`
+  renameSync(sessionFile, savedFile)
+  mkdirSync(sessionFile)
+  try {
+    await host.session.prompt("/goal edit Unsaved objective")
+  } finally {
+    rmSync(sessionFile, { recursive: true })
+    renameSync(savedFile, sessionFile)
+  }
+  const entriesAfterFailure = manager.getEntries().length
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /Reopen the saved session/)
+  await host.session.prompt("/goal pause")
+  assert.equal(manager.getEntries().length, entriesAfterFailure)
+  await host.reload()
+  assert.equal(host.session.sessionManager, manager)
+  assert.match(await host.frame(), /Reopen the saved session/)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.equal(host.requests.length, 1)
+  assert.equal(
+    host.session.messages.some((message) => message.role === "custom"),
+    false,
+  )
+  await host.close()
+
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    holdResponses: true,
+  })
+  assert.notEqual(reopened.session.sessionManager, manager)
+  await t.waitFor(() => assert.equal(reopened.requests.length, 1))
+  const input = JSON.stringify(reopened.requests[0]?.messages.at(-1))
+  assert.match(input, /Saved objective/)
+  assert.doesNotMatch(input, /Unsaved objective/)
+  await reopened.session.prompt("/goal pause")
+  await reopened.session.abort()
+  await reopened.session.prompt("/goal inspect")
+  assert.match(await reopened.frame(), /paused: Saved objective/)
+
+  const independent = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+  })
+  await independent.session.prompt("/goal create Independent work")
+  await independent.session.prompt("/goal pause")
+  await independent.session.prompt("/goal inspect")
+  assert.match(await independent.frame(), /paused: Independent work/)
+})
+
+test("a read failure during asynchronous settlement rejects a deferred continuation even after the entry is repaired", async (t) => {
+  let queued = false
+  const boundaries: string[] = []
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.registerCommand("goal-storage-probe", {
+          description: "Exercise a malformed native goal entry",
+          handler: async (_args, ctx) => {
+            const saved = ctx.sessionManager
+              .getEntries()
+              .findLast(
+                (entry) =>
+                  entry.type === "custom" &&
+                  entry.customType === "pi-goal.state",
+              )
+            assert(saved?.type === "custom")
+            pi.appendEntry("pi-goal.state", {
+              threadId: ctx.sessionManager.getSessionId(),
+              status: "active",
+            })
+            await host.session.prompt("/goal inspect")
+            pi.appendEntry("pi-goal.state", saved.data)
+            boundaries.push("repaired")
+          },
+        })
+        pi.on("agent_start", () => {
+          boundaries.push("start")
+        })
+        pi.on("agent_settled", async () => {
+          boundaries.push("settled")
+          if (queued) return
+          queued = true
+          pi.sendUserMessage("/goal-storage-probe", {
+            expandPromptTemplates: true,
+          })
+          await new Promise<void>((resolve) => setImmediate(resolve))
+        })
+      },
+    ],
+  })
+  host.queueResponse(
+    ...call("create_goal", { objective: "Retain the storage stop" }, "create"),
+  )
+  host.queueResponse(...answer("The first work attempt is finished."))
+  await host.session.prompt(
+    "Create the requested goal before the storage probe.",
+  )
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  assert.deepEqual(boundaries, ["start", "settled", "repaired"])
+  assert.equal(host.requests.length, 2)
+  assert.equal(
+    host.session.messages.some((message) => message.role === "custom"),
+    false,
+  )
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /Goal\s+storage is unavailable/)
+  assert.match(await host.frame(), /Reopen the saved session/)
+})
+
+test("domain rejections leave healthy automatic admission available", async (t) => {
+  const boundaries: string[] = []
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("agent_start", () => {
+          boundaries.push("start")
+        })
+        pi.on("agent_settled", () => {
+          boundaries.push("settled")
+        })
+      },
+    ],
+  })
+  host.queueResponse(...call("update_goal", { status: "paused" }, "pause"))
+  host.queueResponse(...answer("Paused after the healthy continuation."))
+  await host.session.prompt("/goal create Keep the authorized objective")
+  await host.session.prompt("/goal create Reject an unfinished replacement")
+  await host.session.prompt("/goal edit \ud800")
+  await host.session.prompt("/goal resume")
+  await t.waitFor(() => assert.deepEqual(boundaries, ["start", "settled"]))
+  assert.equal(host.requests.length, 2)
+  assert.match(
+    JSON.stringify(host.requests[0]?.messages.at(-1)),
+    /Keep the authorized objective/,
+  )
+  const result = host.session.messages.findLast(
+    (message) => message.role === "toolResult",
+  )
+  assert(result?.role === "toolResult" && result.content[0]?.type === "text")
+  assert.equal(result.isError, false)
+  assert.equal(JSON.parse(result.content[0].text).goal.status, "paused")
+})
+
+test("a failed accounting append is not retried against the manager's changed history", async (t) => {
+  let blockWrite = false
+  let failedFile: string | undefined
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension],
+    noTools: "builtin",
+    persistSession: true,
+    holdResponses: true,
+    extensionFactories: [
+      (pi) => {
+        pi.on("turn_end", (_event, ctx) => {
+          if (!blockWrite) return
+          blockWrite = false
+          const sessionFile = ctx.sessionManager.getSessionFile()
+          assert(sessionFile)
+          renameSync(sessionFile, `${sessionFile}.saved`)
+          mkdirSync(sessionFile)
+          failedFile = sessionFile
+        })
+      },
+    ],
+  })
+  await host.session.prompt(
+    "/goal create Count each successful checkpoint once",
+  )
+  host.queueResponse(
+    ...answer("Work before the failed checkpoint.", {
+      prompt_tokens: 41,
+      completion_tokens: 9,
+      total_tokens: 50,
+    }),
+  )
+  blockWrite = true
+  try {
+    await host.session.prompt(
+      "Work on the requested goal before the storage fault.",
+    )
+  } finally {
+    if (failedFile) {
+      rmSync(failedFile, { recursive: true })
+      renameSync(`${failedFile}.saved`, failedFile)
+    }
+  }
+  assert(failedFile)
+  await host.session.prompt("/goal inspect")
+  assert.match(await host.frame(), /Reopen the saved session/)
+  const snapshots = () =>
+    host.session.sessionManager
+      .getEntries()
+      .filter(
+        (entry) =>
+          entry.type === "custom" && entry.customType === "pi-goal.state",
+      )
+  const afterFailure = snapshots()
+  const failedSnapshot = afterFailure.at(-1)
+  assert(failedSnapshot?.type === "custom")
+  assert.equal((failedSnapshot.data as { tokensUsed: string }).tokensUsed, "50")
+  host.queueResponse(
+    ...answer("Unrelated explicit work can still finish.", {
+      prompt_tokens: 7,
+      completion_tokens: 3,
+      total_tokens: 10,
+    }),
+  )
+  await host.session.prompt("Do this unrelated explicit work.")
+  assert.deepEqual(snapshots(), afterFailure)
+  assert.equal(host.requests.length, 2)
+  assert.equal(
+    host.session.messages.some((message) => message.role === "custom"),
+    false,
+  )
+  await host.reload()
+  assert.deepEqual(snapshots(), afterFailure)
+  assert.equal(host.requests.length, 2)
+  await host.close()
+
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile: failedFile,
+    extensionPaths: [extension],
+    noTools: "builtin",
+    holdResponses: true,
+  })
+  await t.waitFor(() => assert.equal(reopened.requests.length, 1))
+  assert.match(
+    JSON.stringify(reopened.requests[0]?.messages.at(-1)),
+    /Tokens used: 0/,
+  )
+  await reopened.session.prompt("/goal pause")
+  await reopened.session.abort()
 })
 
 test("already queued user work runs before an idle continuation and can pause it", async (t) => {

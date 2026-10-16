@@ -4,7 +4,7 @@
 
 **Blocked by:** 02: Manage goal lifecycle.
 
-**Status:** ready-for-agent — native session storage delta. Earlier unresolved feature gates remain open.
+**Status:** complete — native session storage delta verified on Pi 1.1.0. Earlier unresolved feature gates remain open.
 
 **Baseline status:** complete for the verified Pi 1.1.0 runtime; inherited provenance and registry distribution remain open outside this ticket
 
@@ -12,12 +12,30 @@
 
 The accepted storage revision in the specification and ADR 0025 governs this delta. Each ticket retains its existing dependency edges; only these new criteria are being implemented in this revision.
 
-- [ ] On a native goal read or append failure, cancel owned pending continuation and reject later automatic admission for that live session manager, including admission after asynchronous settlement. Domain-validation rejections alone do not trigger this stop.
-- [ ] Retain only a process-memory failure flag across extension reload, keyed to the public session manager identity using the existing repository pattern. Do not patch host methods, use private fields, or retain a second goal state. A later successful operation must not clear the flag.
-- [ ] Prevent accounting retries against a failed in-memory snapshot. Retaining reload remains stopped; reopening the saved session through a fresh native manager recovers only saved state. An independent manager remains usable.
-- [ ] Keep native Stop interruption working when pause or cleanup storage fails. Error notifications explain reopening and do not claim a status was saved or that retrying the unchanged command repairs storage.
-- [ ] Adapt Stop fault injection to the native storage boundary. Directly verify pending admission suppression, retaining reload, fresh saved-state recovery, native interruption, and independent-session isolation through the approved seam.
-- [ ] Preserve healthy continuation placement, queued-user-work ordering, pause and clear admission checks, editor ownership, and the separately recorded extension-removal limitation.
+- [x] On a native goal read or append failure, cancel owned pending continuation and reject later automatic admission for that live session manager, including admission after asynchronous settlement. Domain-validation rejections alone do not trigger this stop.
+- [x] Retain only a process-memory failure flag across extension reload, keyed to the public session manager identity using the existing repository pattern. Do not patch host methods, use private fields, or retain a second goal state. A later successful operation must not clear the flag.
+- [x] Prevent accounting retries against a failed in-memory snapshot. Retaining reload remains stopped; reopening the saved session through a fresh native manager recovers only saved state. An independent manager remains usable.
+- [x] Keep native Stop interruption working when pause or cleanup storage fails. Error notifications explain reopening and do not claim a status was saved or that retrying the unchanged command repairs storage.
+- [x] Adapt Stop fault injection to the native storage boundary. Directly verify pending admission suppression, retaining reload, fresh saved-state recovery, native interruption, and independent-session isolation through the approved seam.
+- [x] Preserve healthy continuation placement, queued-user-work ordering, pause and clear admission checks, editor ownership, and the separately recorded extension-removal limitation.
+
+## Native storage verification
+
+`GoalStore` retains a `WeakSet` of failed public session managers under a process-global symbol. Only native reads, recognized stored-data validation, and native appends enter the failure boundary. Input validation, unfinished-goal rejection, and stale ownership stay outside it. A failed manager rejects subsequent goal storage operations with a saved-session reopening instruction; the set contains no goal snapshots and has no reset operation. Failure cancels owned scheduling immediately. Admission checks the flag and existing accounting safeguards before sending, and again after asynchronous waiting. A stale handler cannot cancel its replacement.
+
+The first red test reproduced an actual native `EISDIR` append error followed by successful inspection of the unsaved objective and automatic model work. The final test verifies no automatic request, no mutation retry, the same failed manager after a file-loaded extension reload, and recovery of the original saved objective through a fresh manager. Another manager continues to work independently.
+
+Four new real-session checks in `continuation.test.ts` verify that recovery boundary, a malformed read during asynchronous settlement followed by a valid replacement entry, healthy continuation after domain rejection, and a failed accounting checkpoint. The accounting case leaves 50 tokens in the failed in-memory entry, adds no goal snapshot during later explicit work or reload, and reopens with the saved total of zero. This demonstrates the accepted loss of unsaved usage without retrying the same delta.
+
+All 13 Stop cases now use native controls and saved-session reopening instead of database inspection. The pause-failure case targets the native filesystem append for the pause entry, leaving native interruption and its own persistence available. It still interrupts, reports the reopen instruction, rejects an unchanged pause retry, and recovers the saved active state through a fresh manager. Default and remapped keys, autocomplete, overlays, retry, compaction, both companion load orders, and later editor ownership remain verified. The lifecycle cleanup case additionally verifies that Stop still interrupts after a failed clear, the completed tool result survives, and later inspection returns an ordinary error with recovery guidance.
+
+On 2026-10-15, all **102 tests passed** across `goals`, `lifecycle`, `protocols`, `continuation`, `stop`, and `admission-boundaries` using released Pi **1.1.0** and Node **24.13.1**:
+
+```sh
+/Users/fran/.nvm/versions/node/v24.13.1/bin/node --experimental-transform-types --import /var/folders/z8/66twpw0n05z3dy2dtkn_z8v40000gn/T/pi-goal-release-check-25aanwzt/release.mjs --test --test-concurrency=1 packages/pi-goal/test/goals.test.ts packages/pi-goal/test/lifecycle.test.ts packages/pi-goal/test/protocols.test.ts packages/pi-goal/test/continuation.test.ts packages/pi-goal/test/stop.test.ts packages/pi-goal/test/admission-boundaries.test.ts
+```
+
+Formatting, scoped lint, and whitespace checks pass. The full workspace type check reports only ticket 04's two remaining legacy accounting-fixture errors: its one-argument store construction and removed `close()` call. Type checking with that unchanged fixture excluded passes. No host, shared fixture, companion, dependency, or installation configuration changed. Fresh terminal and capture acceptance remain in ticket 07; historical recordings below are not native-storage evidence. Extension removal still has the separately reproduced host queue limitation.
 
 ## Historical acceptance
 

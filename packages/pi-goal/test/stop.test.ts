@@ -1,8 +1,9 @@
 import assert from "node:assert/strict"
+import fs from "node:fs"
 import { writeFile } from "node:fs/promises"
+import { syncBuiltinESMExports } from "node:module"
 import { join } from "node:path"
-import { DatabaseSync } from "node:sqlite"
-import test from "node:test"
+import test, { type TestContext } from "node:test"
 import { fileURLToPath } from "node:url"
 import {
   CustomEditor,
@@ -20,6 +21,25 @@ const companionPaths = [
 ].map((name) =>
   fileURLToPath(new URL(`../../${name}/src/index.ts`, import.meta.url)),
 )
+
+async function assertPausedAfterReopen(
+  t: TestContext,
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+) {
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [goalPath],
+    noTools: "all",
+    holdResponses: true,
+  })
+  await reopened.session.prompt("/goal inspect")
+  assert.match(await reopened.frame(), /paused: Finish the authorized work/)
+  assert.equal(reopened.requests.length, 0)
+}
 
 for (const order of ["native", "first", "last"] as const) {
   for (const remapped of [false, true]) {
@@ -45,14 +65,9 @@ for (const order of ["native", "first", "last"] as const) {
       t.diagnostic(`Runtime ${VERSION}; public package paths; ${order}`)
       await writeFile(join(host.directory, "probe-note.md"), "Goal note")
       await host.session.prompt("/goal create Finish the authorized work")
+      const run = host.session.prompt("Work on the explicitly authorized goal.")
       await t.waitFor(() => assert.equal(host.requests.length, 1))
-      const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-      t.after(() => database.close())
-      const status = () =>
-        database
-          .prepare("SELECT status FROM goals WHERE threadId = ?")
-          .get(host.session.sessionManager.getSessionId())?.["status"]
-      assert.equal(status(), "active")
+      assert.match(await host.frame(), /Goal: active/)
 
       if (order !== "native") {
         await host.type("A draft kept by the composer")
@@ -69,7 +84,7 @@ for (const order of ["native", "first", "last"] as const) {
       )
       await host.key("\x1b")
       assert.doesNotMatch(await host.frame(), /probe-note\.md/)
-      assert.equal(status(), "active")
+      assert.match(await host.frame(), /Goal: active/)
       assert.equal(host.session.isStreaming, true)
       host.ui.setEditorText("")
 
@@ -87,20 +102,21 @@ for (const order of ["native", "first", "last"] as const) {
       assert.match(await host.frame(), /Goal controls overlay/)
       await host.key(stopKey)
       await overlay
-      assert.equal(status(), "active")
+      assert.match(await host.frame(), /Goal: active/)
       assert.equal(host.session.isStreaming, true)
       if (remapped) {
         await host.key("\x1b")
-        assert.equal(status(), "active")
+        assert.match(await host.frame(), /Goal: active/)
         assert.equal(host.session.isStreaming, true)
       }
       await host.key(stopKey)
       await t.waitFor(() => assert.equal(settlements, 1))
-      assert.equal(status(), "paused")
+      await run
       assert.equal(host.session.isStreaming, false)
       await host.session.prompt("/goal inspect")
-      assert.match(await host.frame(), /paused/)
+      assert.match(await host.frame(), /paused: Finish the authorized work/)
       assert.equal(host.requests.length, 1)
+      await assertPausedAfterReopen(t, host)
     })
   }
 }
@@ -132,6 +148,7 @@ for (const replacement of ["factory", "callback"] as const) {
       holdResponses: true,
     })
     await host.session.prompt("/goal create Finish the authorized work")
+    const run = host.session.prompt("Work on the explicitly authorized goal.")
     await t.waitFor(() => assert.equal(host.requests.length, 1))
     host.ui.setEditorComponent(factory)
     if (replacement === "callback") {
@@ -140,16 +157,24 @@ for (const replacement of ["factory", "callback"] as const) {
       editor.onEscape = callback
     }
     const currentFactory = host.ui.getEditorComponent()
+    const sessionFile = host.session.sessionManager.getSessionFile()
+    assert(sessionFile)
     await host.close()
+    await run
     assert.equal(shutdownFactory, currentFactory)
     if (replacement === "callback") assert.equal(shutdownCallback, callback)
-    const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-    t.after(() => database.close())
-    assert.equal(
-      database.prepare("SELECT status FROM goals").get()?.["status"],
-      "active",
-    )
     assert.equal(host.requests.length, 1)
+    const reopened = await openNativeHost(t, {
+      directory: host.directory,
+      sessionFile,
+      extensionPaths: [goalPath],
+      noTools: "all",
+      holdResponses: true,
+    })
+    await reopened.session.prompt("/goal inspect")
+    assert.match(await reopened.frame(), /active: Finish the/)
+    await reopened.session.prompt("/goal pause")
+    await reopened.session.abort()
   })
 }
 
@@ -167,28 +192,55 @@ test("native interruption survives a real pause storage failure", async (t) => {
     holdResponses: true,
   })
   await host.session.prompt("/goal create Finish the authorized work")
+  const run = host.session.prompt("Work on the explicitly authorized goal.")
   await t.waitFor(() => assert.equal(host.requests.length, 1))
-  const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-  t.after(() => database.close())
-  database.exec(
-    "CREATE TRIGGER reject_pause BEFORE UPDATE OF status ON goals BEGIN SELECT RAISE(FAIL, 'Pause storage unavailable'); END",
-  )
-  await host.key("\x1b")
-  await t.waitFor(() => assert.equal(settlements, 1))
+  const sessionFile = host.session.sessionManager.getSessionFile()
+  assert(sessionFile)
+  const originalAppend = fs.appendFileSync
+  let failed = false
+  const failPause: typeof fs.appendFileSync = (file, data, options) => {
+    if (
+      file === sessionFile &&
+      typeof data === "string" &&
+      JSON.parse(data).data?.status === "paused"
+    ) {
+      failed = true
+      throw new Error("Pause storage unavailable")
+    }
+    return originalAppend(file, data, options)
+  }
+  const append = t.mock.method(fs, "appendFileSync", failPause)
+  syncBuiltinESMExports()
+  try {
+    await host.key("\x1b")
+    await t.waitFor(() => assert.equal(settlements, 1))
+    await run
+  } finally {
+    append.mock.restore()
+    syncBuiltinESMExports()
+  }
+  assert.equal(failed, true)
   assert.equal(host.session.isStreaming, false)
   assert.equal(host.requests.length, 1)
-  assert.equal(
-    database.prepare("SELECT status FROM goals").get()?.["status"],
-    "active",
-  )
   assert.match(await host.frame(), /Could not pause the goal/)
   assert.match(await host.frame(), /Pause storage\s+unavailable/)
-  database.exec("DROP TRIGGER reject_pause")
+  assert.match(await host.frame(), /Reopen the saved session/)
   await host.session.prompt("/goal pause")
-  assert.equal(
-    database.prepare("SELECT status FROM goals").get()?.["status"],
-    "paused",
-  )
+  assert.match(await host.frame(), /Goal\s+storage is unavailable/)
+  await host.close()
+  const reopened = await openNativeHost(t, {
+    directory: host.directory,
+    sessionFile,
+    extensionPaths: [goalPath],
+    noTools: "all",
+    holdResponses: true,
+  })
+  await reopened.session.prompt("/goal inspect")
+  assert.match(await reopened.frame(), /active: Finish the authorized work/)
+  await reopened.session.prompt("/goal pause")
+  await reopened.session.abort()
+  await reopened.session.prompt("/goal inspect")
+  assert.match(await reopened.frame(), /paused: Finish the authorized work/)
 })
 
 for (const remapped of [false, true]) {
@@ -220,17 +272,16 @@ for (const remapped of [false, true]) {
       if (event.type === "auto_retry_end") retryError = event.finalError
     })
     await host.session.prompt("/goal create Finish the authorized work")
+    const run = host.session.prompt("Work on the explicitly authorized goal.")
     await t.waitFor(() => assert.equal(host.session.isRetrying, true))
     await host.key(remapped ? "\x1b[107;6u" : "\x1b")
     await t.waitFor(() => assert.equal(settlements, 1))
+    await run
     assert.equal(retryError, "Retry cancelled")
-    const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-    t.after(() => database.close())
-    assert.equal(
-      database.prepare("SELECT status FROM goals").get()?.["status"],
-      "paused",
-    )
+    await host.session.prompt("/goal inspect")
+    assert.match(await host.frame(), /paused: Finish the authorized work/)
     assert.equal(host.requests.length, 1)
+    await assertPausedAfterReopen(t, host)
   })
 
   test(`native Stop pauses during compaction: ${remapped ? "remapped" : "default"}`, async (t) => {
@@ -264,20 +315,14 @@ for (const remapped of [false, true]) {
     const compaction = assert.rejects(host.session.compact(), /cancel|abort/i)
     await t.waitFor(() => assert.equal(host.requests.length, 3))
     await host.session.prompt("/goal create Finish the authorized work")
-    const database = new DatabaseSync(join(host.directory, "pi-goal.sqlite"))
-    t.after(() => database.close())
-    assert.equal(
-      database.prepare("SELECT status FROM goals").get()?.["status"],
-      "active",
-    )
+    assert.match(await host.frame(), /Goal: active/)
     await host.key(remapped ? "\x1b[107;6u" : "\x1b")
     await compaction
     assert.equal(compactionAborted, true)
     assert.equal(host.session.isCompacting, false)
-    assert.equal(
-      database.prepare("SELECT status FROM goals").get()?.["status"],
-      "paused",
-    )
+    await host.session.prompt("/goal inspect")
+    assert.match(await host.frame(), /paused: Finish the authorized work/)
     assert.equal(host.requests.length, 3)
+    await assertPausedAfterReopen(t, host)
   })
 }

@@ -184,16 +184,29 @@ test("a presentation cleanup failure preserves the successful completion snapsho
   }
   const append = t.mock.method(fs, "appendFileSync", failCleanup)
   syncBuiltinESMExports()
-  const completed = await call(host, "update_goal", {
-    status: "complete",
-  }).finally(() => {
+  host.queueResponse(...response("update_goal", { status: "complete" }))
+  host.queueResponse({ pause: true })
+  const before = host.requests.length
+  const completing = host.session.prompt(
+    "Complete the explicitly requested goal.",
+  )
+  try {
+    await t.waitFor(() => assert.equal(host.requests.length, before + 2))
+    assert.match(await host.frame(), /Could not clear the completed goal/)
+    await host.key("\x1b")
+    await completing
+  } finally {
     append.mock.restore()
     syncBuiltinESMExports()
-  })
+  }
+  assert.equal(lastResult(host).isError, false)
+  const completed = JSON.parse(lastResult(host).text)
   assert.equal(failed, true)
   assert.equal(completed.goal.status, "complete")
   assert.match(completed.completionBudgetReport, /report/i)
-  assert.match(await host.frame(), /Could not clear the completed goal/)
+  assert.equal(host.session.isStreaming, false)
+  assert.match(await host.frame(), /Could not pause the goal/)
+  assert.match(await host.frame(), /Reopen the saved session/)
   const lastEntry = host.session.sessionManager
     .getEntries()
     .findLast(
@@ -205,6 +218,10 @@ test("a presentation cleanup failure preserves the successful completion snapsho
     threadId: host.session.sessionManager.getSessionId(),
     clear: true,
   })
+  host.queueResponse(...response("get_goal", {}))
+  await host.session.prompt("Inspect after the failed presentation cleanup.")
+  assert.equal(lastResult(host).isError, true)
+  assert.match(lastResult(host).text, /Reopen the saved session/)
   await host.close()
   const reopened = await openNativeHost(t, {
     directory: host.directory,
