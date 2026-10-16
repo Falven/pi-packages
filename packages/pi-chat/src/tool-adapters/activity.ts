@@ -245,8 +245,6 @@ export class ActivityAdapter {
       ]
     if (operation.kind === "output") {
       if (status !== "failed" && !images.length) return []
-      if (!operation.output && !images.length && !operation.outputOmitted)
-        return []
       return [
         {
           id,

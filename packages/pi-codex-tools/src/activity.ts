@@ -201,8 +201,8 @@ export function errorActivity(
   execution: ExecutionDetails["execution"],
   revision: number,
 ): ActivityOperation | undefined {
-  const output = execution.error
-  if (!output) return
+  const output = execution.error ?? ""
+  if (execution.status !== "failed" && !output) return
   return {
     id: `${execution.cellId}:output`,
     order: Number.MAX_SAFE_INTEGER,

@@ -901,16 +901,15 @@ test("Find restores separate retained calls with reused IDs and their own result
   assert.match(await host.frame(), /1\/1/)
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
-    /path: first\.txt[\s\S]*first-needle output/,
+    /read first\.txt[\s\S]*first-needle output/,
   )
   await host.key("\x1b")
   await host.key("\x06")
   await host.type("second-needle")
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /path: second\.txt[\s\S]*second-needle output/)
-  assert.match(screen, /▼ Called a tool/)
-  assert.doesNotMatch(screen, /Called tools/)
+  assert.match(screen, /read second\.txt[\s\S]*second-needle output/)
+  assert.equal(screen.match(/▼ Read files/g)?.length, 2)
   await host.key("\x1b")
   await host.type("/settings")
   await host.key("\r")
@@ -924,7 +923,7 @@ test("Find restores separate retained calls with reused IDs and their own result
     host
       .screenLines()
       .map(stripTerminalSequences)
-      .find((line) => line.trim() === "read")
+      .find((line) => line.trim() === "read first.txt")
       ?.indexOf("read"),
     "setOutputPad" in ToolExecutionComponent.prototype ? 0 : 1,
   )
@@ -966,8 +965,8 @@ test("configured native global expansion reaches a revealed retained call", asyn
   await host.key("\x0f")
   assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
   await host.key("\x05")
-  assert.match(await host.frame(), /▼ Called a tool/)
-  assert.match(await host.frame(), /▼ Called read/)
+  assert.match(await host.frame(), /▼ Read files/)
+  assert.match(await host.frame(), /▼ Read older\.txt/)
   assert.match(await host.frame(), /retained-tool-needle output/)
   assert.equal(host.requests.length, 2)
 })
@@ -1178,7 +1177,7 @@ test("Find keeps source order when selecting a retained assistant's calls backwa
   await host.type("one-needle")
   assert.match(await host.frame(), /1\/1/)
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /Called tools/)
+  assert.match(screen, /Read files/)
   assert.match(screen, /one-needle output/)
   assert.match(screen, /two-needle output/)
   assert.ok(

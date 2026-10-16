@@ -165,6 +165,29 @@ test("a failed operation carries distinct call error context without a duplicate
   assert.match(screen(), /Call error:\s*Error: distinct-call-failure/)
 })
 
+test("a script failure with no message still has a failure activity", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [extension, ...companions],
+    providerApi,
+    providerProtocol: "responses",
+    rows: 60,
+    persistSession: true,
+  })
+  host.queueResponse(...call('throw "";', "empty-error"))
+  await host.session.prompt("Run a script that fails without a message")
+  assert.equal(output(host, "empty-error"), "Script error:\n")
+  await openWork(host)
+  await host.key("\x0f")
+  await host.frame()
+  const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
+  assert.equal((screen().match(/(?:>|▼) Error/g) ?? []).length, 1)
+  await host.reload()
+  await openWork(host)
+  await host.frame()
+  assert.equal((screen().match(/(?:>|▼) Error/g) ?? []).length, 1)
+  assert.equal(output(host, "empty-error"), "Script error:\n")
+})
+
 for (const order of ["first", "last"] as const) {
   test(`skill reads keep their labels and other actions with the toolset loaded ${order}`, async (t) => {
     const catalog = await mkdtemp(join(tmpdir(), "pi-skill reads-"))
