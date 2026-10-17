@@ -557,7 +557,18 @@ test("a finished call retains choices while arriving groups and items inherit na
 })
 
 test("a single tool call stays grouped and collapsed after completion", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 28,
+    settings: { fullscreenCopyOnSelect: false },
+    keybindings: { "tui.altScreen.top": "home" },
+  })
   await writeFile(join(host.directory, "one.txt"), "only")
   host.queueResponse(readDelta("only", "one.txt"), toolFinish, done, end)
   host.queueResponse(
@@ -567,7 +578,13 @@ test("a single tool call stays grouped and collapsed after completion", async (t
         choices: [
           {
             index: 0,
-            delta: { role: "assistant", content: "Finished" },
+            delta: {
+              role: "assistant",
+              content: Array.from(
+                { length: 100 },
+                (_, row) => `answer-row-${String(row).padStart(2, "0")}`,
+              ).join("\n"),
+            },
             finish_reason: null,
           },
         ],
@@ -586,6 +603,7 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   assert.doesNotMatch(screen(), /Read one\.txt/)
   host.resumeResponse()
   await host.settled()
+  await host.key("\x1b[H")
   await openWork(host)
   await host.frame()
   assert.match(screen(), /> Read files/)
@@ -600,6 +618,76 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   await host.frame()
   assert.match(screen(), /read one\.txt/)
   assert.doesNotMatch(screen(), /only/)
+
+  await host.key("\x1b[H")
+  await host.frame()
+  const workRow = host
+    .screenLines()
+    .findIndex((line) =>
+      /Worked for \d+m \d+s ▼/.test(stripTerminalSequences(line)),
+    )
+  assert(workRow >= 0, screen())
+  await host.key(`\x1b[<0;2;${workRow + 1}M`)
+  await host.key(`\x1b[<0;2;${workRow + 1}m`)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  const summary = stripTerminalSequences(host.screenLines()[workRow]!).match(
+    /Worked for \d+m \d+s ▶/,
+  )?.[0]
+  assert(summary)
+  assert(
+    host.screenLines()[workRow]!.includes(host.ui.theme.underline(summary)),
+  )
+  const answerPosition = () => {
+    const row = host
+      .screenLines()
+      .findIndex((line) => /answer-row-\d+/.test(stripTerminalSequences(line)))
+    const match = stripTerminalSequences(host.screenLines()[row] ?? "").match(
+      /answer-row-(\d+)/,
+    )
+    assert(match, screen())
+    return Number(match[1]) - row
+  }
+  let previous = answerPosition()
+  /* oxlint-disable eslint/no-await-in-loop -- Terminal wheel events and frames must remain ordered. */
+  for (let step = 0; step < 8; step++) {
+    await host.key("\x1b[<65;3;2M")
+    await host.frame()
+    const current = answerPosition()
+    assert(current > previous, `wheel ${step}: ${screen()}`)
+    await host.frame()
+    assert.equal(answerPosition(), current)
+    previous = current
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
+
+  const answerRow = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("answer-row-"))
+  assert(answerRow >= 0)
+  const start =
+    stripTerminalSequences(host.screenLines()[answerRow]!).indexOf(
+      "answer-row-",
+    ) + 1
+  await host.key(`\x1b[<0;${start};${answerRow + 1}M`)
+  await host.key(`\x1b[<32;${start + 13};${answerRow + 1}M`)
+  await host.key(`\x1b[<0;${start + 13};${answerRow + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert.match(copied, /^answer-row-\d\d$/))
+  const selected = copied
+  previous = answerPosition()
+  await host.key("\x1b[<65;3;2M")
+  await host.frame()
+  assert(answerPosition() > previous, screen())
+  copied = ""
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, selected))
+  await host.key("\x1b")
+  await host.type("reading draft")
+  assert.match(await host.frame(), /reading draft/)
+  previous = answerPosition()
+  await host.key("\x1b[<65;3;2M")
+  await host.frame()
+  assert(answerPosition() > previous, screen())
 })
 
 test("commentary between model iterations separates render groups in source order", async (t) => {

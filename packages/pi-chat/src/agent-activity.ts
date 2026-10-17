@@ -319,7 +319,9 @@ export class AgentActivityIndex {
 
 export class AgentActivityHeader implements Component {
   focused = false
-  readonly spacing = new Spacer(1)
+  readonly beforeSpacing = new Spacer(1)
+  readonly afterSpacing = new Spacer(1)
+  readonly beforeFinalSpacing = new Spacer(1)
 
   constructor(
     private readonly adapter: NativeChatHost,

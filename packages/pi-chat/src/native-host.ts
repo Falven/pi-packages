@@ -857,16 +857,18 @@ export class NativeChatHost {
         const { component } = chatRow
         const previous = all[index - 1]?.component
         const spacing =
-          component instanceof RenderGroupHeader ||
           component instanceof AgentActivityHeader
-            ? component.spacing
-            : previous instanceof AgentActivityHeader ||
-                (component instanceof ActivityItemDisclosure &&
-                  previous instanceof ActivityItemDisclosure &&
-                  previous.expanded)
-              ? previous.spacing
-              : chatRow.occurrence &&
-                this.thoughts.get(chatRow.occurrence)?.spacing
+            ? component.beforeSpacing
+            : component instanceof RenderGroupHeader
+              ? component.spacing
+              : previous instanceof AgentActivityHeader
+                ? previous.afterSpacing
+                : component instanceof ActivityItemDisclosure &&
+                    previous instanceof ActivityItemDisclosure &&
+                    previous.expanded
+                  ? previous.spacing
+                  : chatRow.occurrence &&
+                    this.thoughts.get(chatRow.occurrence)?.spacing
         return index > 0 &&
           spacing &&
           !(component instanceof Spacer) &&
@@ -1472,7 +1474,7 @@ export class NativeChatHost {
             final[0]?.occurrence?.contentIndex !== undefined
           )
             result.push({
-              component: agentActivity.header.spacing,
+              component: agentActivity.header.beforeFinalSpacing,
               tool: false,
             })
         }
