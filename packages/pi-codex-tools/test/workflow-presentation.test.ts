@@ -790,7 +790,8 @@ for (const order of ["first", "last"] as const) {
       assert.equal((screen.match(/Received\./g) ?? []).length, 2)
       await host.reload()
       screen = await openWork(host)
-      assert.match(screen, /> Viewed an image/)
+      assert.match(screen, /> Viewed image/)
+      assert.doesNotMatch(screen, /Viewed an image/)
       const retainedGroup = host
         .screenLines()
         .findIndex((line) =>
@@ -819,23 +820,14 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       const collectionRow = host
         .screenLines()
-        .findIndex((line) =>
-          stripVTControlCharacters(line).includes("> Viewed an image"),
+        .findIndex(
+          (line, index) =>
+            index > originImageRow &&
+            stripVTControlCharacters(line).trim() === "> Viewed image",
         )
       assert(collectionRow >= 0)
       await host.key(`\x1b[<0;2;${collectionRow + 1}M`)
       await host.key(`\x1b[<0;2;${collectionRow + 1}m`)
-      await host.frame()
-      const collectionItem = host
-        .screenLines()
-        .findIndex(
-          (line, index) =>
-            index > collectionRow &&
-            stripVTControlCharacters(line).includes("> Viewed image"),
-        )
-      assert(collectionItem >= 0)
-      await host.key(`\x1b[<0;2;${collectionItem + 1}M`)
-      await host.key(`\x1b[<0;2;${collectionItem + 1}m`)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.doesNotMatch(screen, /LATE-MIXED-FAILURE/)

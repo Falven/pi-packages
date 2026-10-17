@@ -528,7 +528,8 @@ test("revealed retained tool images follow native image settings", async (t) => 
   await host.key("\x06")
   await host.type("image-needle")
   assert.match(await host.frame(), /1\/1/)
-  assert.match(await host.frame(), /▼ Called a tool/)
+  assert.match(await host.frame(), /▼ Called read/)
+  assert.doesNotMatch(await host.frame(), /Called a tool/)
   assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/)
   await host.key("\x1b")
 

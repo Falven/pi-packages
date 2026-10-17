@@ -137,6 +137,63 @@ test("phase-bearing final text collapses identical commentary while it streams",
   const nextInput = JSON.stringify(host.requests[1])
   assert.equal((nextInput.match(/"text":"Done"/g) ?? []).length, 2)
   assert.doesNotMatch(nextInput, /Worked/)
+
+  await host.runtime.newSession()
+  const requestsBeforeRead = host.requests.length
+  await writeFile(join(host.directory, "phase.txt"), "Native phase output")
+  host.queueResponse(
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: {
+          id: "read-item",
+          call_id: "read-phase",
+          type: "function_call",
+          name: "read",
+          arguments: '{"path":"phase.txt"}',
+        },
+      },
+    },
+    completed,
+  )
+  host.queueResponse(
+    { pause: true },
+    added(0, "read-answer", "final_answer"),
+    delta(0, "Read finished"),
+    { pause: true },
+    ended(0, "read-answer", "final_answer", "Read finished"),
+    completed,
+  )
+  await submit(host, "Read before the final phase")
+  await t.waitFor(() =>
+    assert.equal(host.requests.length, requestsBeforeRead + 2),
+  )
+  const open = await host.frame()
+  assert.match(open, /> Read files/)
+  assert.doesNotMatch(open, /Read phase\.txt/)
+  host.resumeResponse()
+  await t.waitFor(async () => assert.match(await host.frame(), /Read finished/))
+  assert.equal(host.session.isStreaming, true)
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  const closedSlice = await host.frame()
+  assert.match(closedSlice, /> Read phase\.txt/)
+  assert.doesNotMatch(closedSlice, /Read files|Native phase output/)
+  host.resumeResponse()
+  await host.settled()
+  const source = JSON.stringify(host.session.messages)
+  const requests = host.requests.length
+  await host.reload()
+  await host.frame()
+  await host.key("\x1bg")
+  await host.key("\r")
+  const replayed = await host.frame()
+  assert.match(replayed, /> Read phase\.txt/)
+  assert.doesNotMatch(replayed, /Read files|Native phase output/)
+  assert.equal(JSON.stringify(host.session.messages), source)
+  assert.equal(host.requests.length, requests)
 })
 
 test("the subscription Responses API carries the same explicit final phase over SSE", async (t) => {

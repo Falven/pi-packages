@@ -599,16 +599,17 @@ test("a finished call retains choices while arriving groups and items inherit na
   await host.frame()
   if (/Worked for \d+m \d+s ▶/.test(screen())) await openWork(host)
   await host.frame()
-  assert.equal(screen().match(/> Read files/g)?.length, 3)
-  assert.doesNotMatch(screen(), /Read four\.txt|FOUR BODY/)
+  assert.equal(screen().match(/> Read files/g)?.length, 1)
+  assert.match(screen(), /> Read three\.txt[\s\S]*> Read four\.txt/)
+  assert.doesNotMatch(screen(), /FOUR BODY/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /> Read four\.txt/)
+  assert.match(screen(), /▼ Read four\.txt[\s\S]*read four\.txt/)
   assert.doesNotMatch(screen(), /FOUR BODY/)
 })
 
-test("a single tool call stays grouped and collapsed after completion", async (t) => {
+test("a completed singleton keeps its independent item and native controls", async (t) => {
   const clipboard = getNativeClipboard()
   assertWritableClipboard(clipboard)
   let copied = ""
@@ -624,6 +625,19 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   await writeFile(join(host.directory, "one.txt"), "only")
   host.queueResponse(readDelta("only", "one.txt"), toolFinish, done, end)
   host.queueResponse(
+    {
+      event: {
+        choices: [
+          { index: 0, delta: { role: "assistant" }, finish_reason: null },
+        ],
+      },
+    },
+    { pause: true },
+    {
+      event: {
+        choices: [{ index: 0, delta: { content: " " }, finish_reason: null }],
+      },
+    },
     { pause: true },
     {
       event: {
@@ -654,20 +668,20 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   assert.match(screen(), /^\s*> Reading one\.txt\s*$/m)
   assert.doesNotMatch(screen(), /Read one\.txt/)
   host.resumeResponse()
+  await host.frame()
+  assert.match(screen(), /Read files/)
+  assert.doesNotMatch(screen(), /Read one\.txt/)
+  host.resumeResponse()
   await host.settled()
   await host.key("\x1b[H")
   await openWork(host)
   await host.frame()
-  assert.match(screen(), /> Read files/)
-  assert.doesNotMatch(screen(), /Read one\.txt/)
+  assert.doesNotMatch(screen(), /Read files/)
+  assert.match(screen(), /> Read one\.txt/)
   await host.key("\x1bg")
   await host.key("\r")
   await host.frame()
-  assert.match(screen(), /▼ Read files/)
-  assert.match(screen(), /Read one\.txt/)
-  await host.key("\x1b[B")
-  await host.key("\r")
-  await host.frame()
+  assert.match(screen(), /▼ Read one\.txt/)
   assert.match(screen(), /read one\.txt/)
   assert.doesNotMatch(screen(), /only/)
 
@@ -768,6 +782,7 @@ test("commentary between model iterations separates render groups in source orde
   await writeFile(join(host.directory, "two.txt"), "second")
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
   host.queueResponse(
+    { pause: true },
     {
       event: {
         choices: [
@@ -806,23 +821,44 @@ test("commentary between model iterations separates render groups in source orde
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await host.frame()
-  assert.match(screen(), /Read files[\s\S]*Between calls/)
+  assert.match(screen(), /> Read files/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.key("\x1b[B")
+  await host.key("\r")
+  assert.match(await host.frame(), /▼ Read one\.txt[\s\S]*read one\.txt/)
+  await host.key("\x1b[A")
+  await host.key("\r")
+  assert.match(await host.frame(), /> Read files/)
+  host.resumeResponse()
+  await t.waitFor(() => assert.match(screen(), /Between calls/))
+  await host.frame()
+  assert.match(
+    screen(),
+    /▼ Read one\.txt[\s\S]*read one\.txt[\s\S]*Between calls/,
+  )
+  assert.doesNotMatch(screen(), /Read files|Read two\.txt/)
+  // The focused group disappeared; confirm now controls its surviving item.
+  await host.key("\r")
+  await host.frame()
+  assert.match(screen(), /> Read one\.txt[\s\S]*Between calls/)
   assert.equal(screen().match(/> /g)?.length, 1)
   assert.doesNotMatch(
     screen(),
-    /Called a tool|Reading |Read one\.txt|Read two\.txt/,
+    /Called a tool|Reading |read one\.txt|Read two\.txt/,
   )
   host.resumeResponse()
   await t.waitFor(() => assert.equal(host.requests.length, 3))
   await host.frame()
   assert.match(
     screen(),
-    /> Read files[\s\S]*Between calls[\s\S]*> Reading two\.txt/,
+    /> Read one\.txt[\s\S]*Between calls[\s\S]*> Reading two\.txt/,
   )
   assert.equal(screen().match(/> /g)?.length, 2)
   host.resumeResponse()
   await host.settled()
 
+  await host.key("\x1b")
   noticeBetweenCalls = true
   host.queueResponse(
     readDelta("notice-first", "one.txt"),
@@ -857,9 +893,9 @@ test("commentary between model iterations separates render groups in source orde
   const expanded = await host.frame()
   assert.match(
     expanded,
-    /> Read files[\s\S]*Notice between calls[\s\S]*> Read files[\s\S]*Received\./,
+    /> Read one\.txt[\s\S]*Notice between calls[\s\S]*> Read two\.txt[\s\S]*Received\./,
   )
-  assert.equal((expanded.match(/> Read files/g) ?? []).length, 2)
+  assert.doesNotMatch(expanded, /Read files/)
   assert.equal((expanded.match(/Notice between calls/g) ?? []).length, 1)
   await host.reload()
   const replayed = await host.frame()
@@ -956,7 +992,7 @@ test("native Hide thinking controls whether reasoning separates render groups", 
   assert.match(reconstructed, /FIRST TOOL BODY[\s\S]*SECOND TOOL BODY/)
   await host.key("\x14")
   const split = await host.frame()
-  assert.equal(split.match(/▼ Read files/g)?.length, 2)
+  assert.doesNotMatch(split, /Read files/)
   assert.match(
     split,
     /FIRST TOOL BODY[\s\S]*Considering next call[\s\S]*SECOND TOOL BODY/,
@@ -967,16 +1003,20 @@ test("native Hide thinking controls whether reasoning separates render groups", 
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(
     screen,
-    /> Read files[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*> Read files/,
+    /> Read one\.txt[^\n]*\n\s*\n[^\n]*Considering next call[^\n]*\n\s*\n[^\n]*> Read two\.txt/,
   )
-  assert.doesNotMatch(screen, /Read one\.txt|Read two\.txt|Thought/)
+  assert.doesNotMatch(
+    screen,
+    /Read files|Thought|FIRST TOOL BODY|SECOND TOOL BODY/,
+  )
   await host.key("\x14")
   const hidden = await host.frame()
   assert.equal(hidden.match(/> Read files/g)?.length, 1)
   assert.doesNotMatch(hidden, /Considering next call|Thought/)
   await host.key("\x14")
   const visible = await host.frame()
-  assert.equal(visible.match(/> Read files/g)?.length, 2)
+  assert.doesNotMatch(visible, /Read files/)
+  assert.match(visible, /> Read one\.txt[\s\S]*> Read two\.txt/)
   assert.match(visible, /Considering next call/)
 })
 

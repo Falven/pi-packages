@@ -307,6 +307,7 @@ type ChatRow = {
   zoneStart?: boolean
   zoneEnd?: boolean
   sourceZone?: number | undefined
+  spacing?: Spacer
 }
 type RenderGroup = {
   items: ChatRow[]
@@ -1133,6 +1134,34 @@ export class NativeChatHost {
     }
     const chatRows = this.orderedChatRows(components)
     const operation = this.working.currentOperation()
+    const latest = new Map<AgentActivity, ChatRow>()
+    for (const chatRow of chatRows) {
+      const occurrence = chatRow.occurrence
+      const message = (occurrence?.parent ?? occurrence)?.message
+      if (
+        !chatRow.tool &&
+        message?.role === "assistant" &&
+        !message.content.some(
+          (part, index) =>
+            (occurrence?.contentIndex === undefined ||
+              (occurrence.contentIndices ?? [occurrence.contentIndex]).includes(
+                index,
+              )) &&
+            ((part.type === "text" && part.text.trim()) ||
+              (part.type === "thinking" && part.thinking.trim())),
+        )
+      )
+        continue
+      const activity = this.agentActivity.find(chatRow.occurrence)
+      if (
+        activity &&
+        !(chatRow.component instanceof Spacer) &&
+        !this.agentActivity.isFinal(chatRow.occurrence, activity) &&
+        !this.agentActivity.isRequest(chatRow.occurrence, activity)
+      )
+        latest.set(activity, chatRow)
+    }
+    const unwrapped = new Map<Component, Component>()
     let composed: ChatRow[] = []
     for (let index = 0; index < chatRows.length;) {
       const chatRow = chatRows[index]!
@@ -1171,10 +1200,27 @@ export class NativeChatHost {
         operation && items.some((row) => row.activityItem === operation.item)
           ? operation.label
           : undefined
+      const activity = this.agentActivity.find(first)
+      const item = items.length === 1 ? items[0]!.activityItem : undefined
+      const status =
+        item?.kind === "edit" ? item.editOperation?.status : item?.status
+      if (
+        item &&
+        (item.kind !== "edit" || item.editOperation?.fileCount === 1) &&
+        (status === "completed" || status === "failed") &&
+        activity &&
+        (activity.settled ||
+          activity.final ||
+          !items.includes(latest.get(activity)!))
+      ) {
+        unwrapped.set(group.header!, items[0]!.component)
+        composed.push({ ...items[0]!, spacing: group.header!.spacing })
+        continue
+      }
       composed.push({
         component: group.header!,
         tool: false,
-        agentActivity: this.agentActivity.find(first),
+        agentActivity: activity,
       })
       if (group.expanded) composed.push(...items)
     }
@@ -1187,14 +1233,16 @@ export class NativeChatHost {
             ? component.beforeSpacing
             : component instanceof RenderGroupHeader
               ? component.spacing
-              : previous instanceof AgentActivityHeader
-                ? previous.afterSpacing
-                : component instanceof ActivityItemDisclosure &&
-                    previous instanceof ActivityItemDisclosure &&
-                    previous.expanded
-                  ? previous.spacing
-                  : chatRow.occurrence &&
-                    this.thoughts.get(chatRow.occurrence)?.spacing
+              : chatRow.spacing
+                ? chatRow.spacing
+                : previous instanceof AgentActivityHeader
+                  ? previous.afterSpacing
+                  : component instanceof ActivityItemDisclosure &&
+                      previous instanceof ActivityItemDisclosure &&
+                      previous.expanded
+                    ? previous.spacing
+                    : chatRow.occurrence &&
+                      this.thoughts.get(chatRow.occurrence)?.spacing
         return index > 0 &&
           spacing &&
           !(component instanceof Spacer) &&
@@ -1288,20 +1336,22 @@ export class NativeChatHost {
         ? [component]
         : []
     })
+    const focused = renderer.getFocusedComponent()
     if (
-      (renderer.getFocusedComponent() instanceof RenderGroupHeader ||
-        renderer.getFocusedComponent() instanceof ActivityItemDisclosure ||
-        renderer.getFocusedComponent() instanceof AgentActivityHeader ||
-        renderer.getFocusedComponent() instanceof CopyAction) &&
-      !this.visibleDisclosures.includes(
-        renderer.getFocusedComponent() as
-          | RenderGroupHeader
-          | ActivityItemDisclosure
-          | AgentActivityHeader
-          | CopyAction,
+      (focused instanceof RenderGroupHeader ||
+        focused instanceof ActivityItemDisclosure ||
+        focused instanceof AgentActivityHeader ||
+        focused instanceof CopyAction) &&
+      !this.visibleDisclosures.includes(focused)
+    ) {
+      const surviving = unwrapped.get(focused)
+      if (
+        surviving instanceof ActivityItemDisclosure &&
+        this.visibleDisclosures.includes(surviving)
       )
-    )
-      this.returnToComposer()
+        renderer.setFocus(surviving)
+      else this.returnToComposer()
+    }
     this.viewportHeight = available ?? 0
     this.transcript.updateLayout(contentHeight, this.viewportHeight, () =>
       renderer.requestRender(),
@@ -1310,7 +1360,8 @@ export class NativeChatHost {
       const next = leaves.find((leaf) =>
         anchor.occurrence
           ? leaf.occurrence === anchor.occurrence
-          : leaf.component === anchor.component,
+          : leaf.component ===
+            (unwrapped.get(anchor.component) ?? anchor.component),
       )
       if (next)
         this.transcript.scrollTo(
@@ -2373,6 +2424,8 @@ export class NativeChatHost {
     }
     for (const group of this.renderGroups.values()) {
       if (
+        group.header &&
+        this.visibleDisclosures.includes(group.header) &&
         group.items.some(
           (item) =>
             item.occurrence === disclosure?.occurrence ||

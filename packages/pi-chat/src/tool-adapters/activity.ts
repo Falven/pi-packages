@@ -216,13 +216,15 @@ export class ActivityAdapter {
           }),
         ),
       )
-    if (operation.kind === "edit" && operation.files)
+    if (operation.kind === "edit" && operation.files) {
+      const editOperation = { status, fileCount: operation.files.length }
       return operation.files.map((file, index) => ({
         id: JSON.stringify([operation.id, file.id]),
         kind: "edit",
         target: file.path,
         targetKey: resolve(cwd, file.path),
         status: file.status === "running" && !live ? "unknown" : file.status,
+        editOperation,
         ...(file.status === "completed" && file.changes
           ? { changes: file.changes }
           : {}),
@@ -239,6 +241,7 @@ export class ActivityAdapter {
           ...(file.outputOmitted ? { availability: "omitted" } : {}),
         },
       }))
+    }
     if (operation.kind === "tool")
       return [
         {

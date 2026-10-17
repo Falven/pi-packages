@@ -33,6 +33,7 @@ export type ActivityItem = {
   command?: string
   changes?: { added: number; removed: number }
   status: ActivityStatus
+  editOperation?: { status: ActivityStatus; fileCount: number }
   body: {
     source?: true
     name: string

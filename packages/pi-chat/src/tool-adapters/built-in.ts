@@ -151,6 +151,8 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
     item.searchPath = path
     if (typeof args["pattern"] === "string") item.target = args["pattern"]
   }
+  if (item.kind === "edit" && path)
+    item.editOperation = { status: facts.status, fileCount: 1 }
   const details = argumentsOf(facts.result?.details)
   if (
     item.kind === "edit" &&

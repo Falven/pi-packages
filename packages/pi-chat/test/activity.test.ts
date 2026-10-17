@@ -179,6 +179,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   assert.equal(executions, 0)
   assert.match(screen(), /Called inspect_workspace \(failed\)/)
+  assert.doesNotMatch(screen(), /Called a tool/)
   assert.match(screen(), /Operation aborted/)
   assert.doesNotMatch(screen(), /─+ [^\n]*(Thinking|Working)/)
   await host.reload()
@@ -186,6 +187,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   await host.key("\x0f")
   await host.frame()
   assert.match(screen(), /Called inspect_workspace \(failed\)/)
+  assert.doesNotMatch(screen(), /Called a tool/)
   assert.equal(executions, 0)
   const source = host.session.messages.find(
     (message) => message.role === "assistant",
@@ -204,10 +206,32 @@ test("cancellation and unknown historical outcomes remain visible after reload",
     ],
   }
   delete historical.errorMessage
+  host.session.sessionManager.appendMessage({
+    role: "user",
+    content: "Unobserved history",
+    timestamp: Date.now(),
+  })
   host.session.sessionManager.appendMessage(historical)
   await host.reload()
   await host.frame()
   assert.match(screen(), /Called unobserved_job \(status unknown\)/)
+  assert.match(screen(), /Called a tool/)
+  assert.equal(executions, 0)
+  host.session.sessionManager.appendMessage({
+    role: "toolResult",
+    toolCallId: "unobserved",
+    toolName: "unobserved_job",
+    content: [{ type: "text", text: "Retained result" }],
+    isError: false,
+    timestamp: Date.now(),
+  })
+  await host.reload()
+  await host.frame()
+  assert.match(
+    screen(),
+    /Called a tool[\s\S]*Called unobserved_job[\s\S]*Retained result/,
+  )
+  assert.doesNotMatch(screen(), /status unknown/)
   assert.equal(executions, 0)
 })
 
@@ -381,11 +405,13 @@ test("an unrelated provider presents semantic operations and late updates withou
     status: "running" as const,
     output: "generic-evidence",
   }
+  let initial: ActivityUpdate["operations"] | undefined
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 140,
     columns: 110,
     persistSession: true,
+    settings: { fullscreenCopyOnSelect: false },
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     extensionFactories: [
       (pi) => {
@@ -402,7 +428,7 @@ test("an unrelated provider presents semantic operations and late updates withou
               callId,
               sessionId: ctx.sessionManager.getSessionId(),
               revision: 1,
-              operations: [
+              operations: initial ?? [
                 {
                   ...runningCommand,
                   output: `\x1b[31m${longOutput}\x1b[0m`,
@@ -738,6 +764,258 @@ test("an unrelated provider presents semantic operations and late updates withou
   await host.key("\x06")
   await host.type("Copy command")
   assert.match(await host.frame(), /No matches/)
+
+  await host.key("\x1b")
+  await host.runtime.newSession()
+  const file = {
+    id: "single-file",
+    path: "single.ts",
+    status: "completed" as const,
+    output:
+      Array.from({ length: 40 }, (_, index) => `patch-row-${index}`).join(
+        "\n",
+      ) + "\npatch-visible-needle",
+  }
+  const singlePatch = {
+    id: "patch",
+    order: 0,
+    revision: 1,
+    kind: "edit" as const,
+    status: "completed" as const,
+    files: [file],
+  }
+  initial = [singlePatch]
+  host.queueResponse(...response("", "opaque_job"))
+  host.queueResponse(...response("Patch finished"))
+  await host.session.prompt("Verify patch provenance")
+  await host.frame()
+  const workRow = host
+    .screenLines()
+    .findIndex((line) => /Worked for .*▶/.test(stripTerminalSequences(line)))
+  assert(workRow >= 0)
+  await host.key(`\x1b[<0;2;${workRow + 1}M`)
+  await host.key(`\x1b[<0;2;${workRow + 1}m`)
+  await host.frame()
+  assert.doesNotMatch(screen(), /Edited a file/)
+  assert.match(screen(), /Edited single\.ts/)
+  publish([
+    {
+      ...singlePatch,
+      status: "failed",
+      files: [{ ...file, status: "unattempted" }],
+    },
+  ])
+  await host.frame()
+  assert.doesNotMatch(screen(), /Edited a file/)
+  assert.match(screen(), /Not edited single\.ts \(not attempted\)/)
+  const source = JSON.stringify(host.session.messages)
+  const requests = host.requests.length
+  for (const outcome of ["running", "unknown", "unattempted"] as const) {
+    publish([{ ...singlePatch, status: outcome }])
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each operation revision must receive a fresh visible frame.
+    await host.frame()
+    assert.match(screen(), /Edited a file/)
+  }
+  publish([
+    {
+      id: singlePatch.id,
+      order: 0,
+      revision: 1,
+      kind: "edit",
+      status: "completed",
+      path: "single.ts",
+    },
+  ])
+  await host.frame()
+  assert.match(screen(), /Edited a file/)
+  publish([{ ...singlePatch, files: [] }])
+  await host.frame()
+  assert.doesNotMatch(screen(), /Edited|single\.ts|Worked/)
+  publish([singlePatch])
+  await host.frame()
+  assert.doesNotMatch(screen(), /Edited a file/)
+  assert.match(screen(), /Edited single\.ts/)
+  assert.equal(JSON.stringify(host.session.messages), source)
+  assert.equal(host.requests.length, requests)
+  const clickItem = async (pattern: RegExp) => {
+    await host.frame()
+    const row = host
+      .screenLines()
+      .findIndex((line) => pattern.test(stripTerminalSequences(line)))
+    assert(row >= 0, screen())
+    await host.key(`\x1b[<0;2;${row + 1}M`)
+    await host.key(`\x1b[<0;2;${row + 1}m`)
+    await host.frame()
+  }
+  const select = async (text: string) => {
+    await host.frame()
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const row = lines.findIndex((line) => line.includes(text))
+    assert(row >= 0, screen())
+    const column = lines[row]!.indexOf(text) + 1
+    await host.key(`\x1b[<0;${column};${row + 1}M`)
+    await host.key(`\x1b[<32;${column + text.length};${row + 1}M`)
+    await host.key(`\x1b[<0;${column + text.length};${row + 1}m`)
+    copied.length = 0
+    await host.key("\x18")
+    await t.waitFor(() => assert.equal(copied.at(-1), text))
+  }
+  await host.key("\x0f")
+  await clickItem(/Worked for .*▶/)
+  assert.match(screen(), /> Edited single\.ts/)
+  await clickItem(/> Edited single\.ts/)
+  assert.doesNotMatch(screen(), /patch-visible-needle/)
+  await clickItem(/^\s*single\.ts\s*$/)
+  assert.match(screen(), /patch-visible-needle/)
+  const multiple = {
+    ...singlePatch,
+    files: [
+      file,
+      {
+        ...file,
+        id: "second-file",
+        path: "other.ts",
+        output: "OTHER PATCH BODY",
+      },
+    ],
+  }
+  publish([multiple])
+  await host.frame()
+  assert.match(screen(), /> Edited files/)
+  assert.doesNotMatch(screen(), /Edited single\.ts|patch-visible-needle/)
+  await clickItem(/> Edited files/)
+  assert.match(
+    screen(),
+    /▼ Edited single\.ts[\s\S]*patch-visible-needle[\s\S]*> Edited other\.ts/,
+  )
+  await host.key("\x1b")
+  host.terminal.resize(110, 24)
+  await host.frame()
+  await host.key("\x1b[<64;3;10M")
+  await host.key("\x1b[<64;3;10M")
+  await host.frame()
+  const anchor = host
+    .screenLines()
+    .map(stripTerminalSequences)
+    .find((line) => /patch-row-\d/.test(line))
+    ?.match(/patch-row-\d+/)?.[0]
+  assert(anchor)
+  await select(anchor)
+  const anchorFrame = screen()
+  publish([singlePatch])
+  await host.frame()
+  assert.equal(
+    host
+      .screenLines()
+      .map(stripTerminalSequences)
+      .find((line) => /patch-row-\d/.test(line))
+      ?.match(/patch-row-\d+/)?.[0],
+    anchor,
+    `${anchorFrame}\nAFTER WRAPPER REMOVAL\n${screen()}`,
+  )
+  copied.length = 0
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied.at(-1), anchor))
+  host.terminal.resize(110, 140)
+  await host.frame()
+  assert.doesNotMatch(screen(), /Edited a file|Edited files/)
+  assert.match(screen(), /patch-visible-needle/)
+  publish([multiple])
+  await host.frame()
+  assert.match(screen(), /▼ Edited files[\s\S]*patch-visible-needle/)
+  await select("▼ Edited files")
+  publish([singlePatch])
+  await host.frame()
+  copied.length = 0
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied.at(-1), "Patch finished"))
+  publish([multiple])
+  await host.frame()
+  await clickItem(/▼ Edited files/)
+  publish([singlePatch])
+  await host.frame()
+  assert.match(screen(), /patch-visible-needle/)
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("patch-visible-needle")
+  await t.waitFor(async () => assert.match(await host.frame(), /1\/1/), {
+    timeout: 2000,
+  })
+  await host.key("\x1b")
+  publish([multiple])
+  await host.frame()
+  assert.match(screen(), /> Edited files/)
+  assert.doesNotMatch(screen(), /patch-visible-needle/)
+  assert.equal(JSON.stringify(host.session.messages), source)
+  assert.equal(host.requests.length, requests)
+
+  await host.runtime.newSession()
+  const earlierCommand = {
+    id: "running-command",
+    order: 0,
+    revision: 1,
+    kind: "command" as const,
+    commands: ["printf command-evidence"],
+    status: "running" as const,
+  }
+  initial = [earlierCommand]
+  host.queueResponse(...response("", "opaque_job"))
+  const later = response("Later activity")
+  host.queueResponse(later[0]!, { pause: true }, ...later.slice(1))
+  const running = host.session.prompt("Keep earlier running work grouped")
+  await t.waitFor(() => assert.equal(host.requests.length, requests + 2))
+  await host.frame()
+  assert.match(screen(), /> Running a command[\s\S]*Later activity/)
+  assert.doesNotMatch(screen(), /Running printf/)
+  publish([{ ...earlierCommand, status: "failed" }])
+  await host.frame()
+  assert.equal(host.session.isStreaming, true)
+  assert.match(
+    screen(),
+    /> Ran printf command-evidence \(failed\)[\s\S]*Later activity/,
+  )
+  assert.doesNotMatch(screen(), /Ran a command/)
+  publish([{ ...earlierCommand, status: "unknown" }])
+  await host.frame()
+  assert.match(screen(), /> Ran a command[\s\S]*Later activity/)
+  host.resumeResponse()
+  await running
+  await host.reload()
+  await host.frame()
+  const unknownWorkRow = host
+    .screenLines()
+    .findIndex((line) => /Worked for .*▶/.test(stripTerminalSequences(line)))
+  assert(unknownWorkRow >= 0)
+  await host.key(`\x1b[<0;2;${unknownWorkRow + 1}M`)
+  await host.key(`\x1b[<0;2;${unknownWorkRow + 1}m`)
+  assert.match(await host.frame(), /> Ran a command/)
+
+  /* oxlint-disable eslint/no-await-in-loop -- Native edit outcomes are observed in separate sessions in order. */
+  for (const operation of [
+    {
+      name: "write",
+      args: { path: "native.ts", content: "native file" },
+      label: /> Edited native\.ts/,
+    },
+    {
+      name: "edit",
+      args: {
+        path: "native.ts",
+        oldText: "missing old text",
+        newText: "new text",
+      },
+      label: /> Edit failed: native\.ts/,
+    },
+  ]) {
+    await host.runtime.newSession()
+    host.queueResponse(...response("", operation.name, operation.args))
+    host.queueResponse(...response("Native edit finished"))
+    await host.session.prompt("Inspect the native edit outcome")
+    await clickItem(/Worked for .*▶/)
+    assert.match(screen(), operation.label)
+    assert.doesNotMatch(screen(), /Edited a file/)
+  }
+  /* oxlint-enable eslint/no-await-in-loop */
 })
 
 for (const legacy of [false, true])

@@ -334,7 +334,27 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   })
   const later = "**Figuring out file processing**\n\nLater thought"
   host.queueResponse(
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: {
+          id: "read-item",
+          call_id: "read-before-thoughts",
+          type: "function_call",
+          name: "read",
+          arguments: '{"path":"missing-thought.txt"}',
+        },
+      },
+    },
+    done,
+    end,
+  )
+  host.queueResponse(
     start,
+    thoughtStart(8),
+    thoughtEnd(8, ""),
+    { pause: true },
     thoughtStart(0),
     thoughtDelta(0, "First adjacent block"),
     thoughtEnd(0, "First adjacent block"),
@@ -354,6 +374,9 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   await host.type("Keep thought positions")
   await host.key("\r")
   const screen = () => host.screenLines().map(stripTerminalSequences)
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  assert.match(await host.frame(), /> Read files/)
+  host.resumeResponse()
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Second adjacent block"))),
   )
@@ -362,6 +385,9 @@ test("adjacent thinking blocks share one body and every thought stays visible th
     screen().join("\n"),
     /First adjacent block[\s\S]*Second adjacent block/,
   )
+  await host.frame()
+  assert.match(screen().join("\n"), /> Read missing-thought\.txt \(failed\)/)
+  assert.doesNotMatch(screen().join("\n"), /Read files/)
   host.resumeResponse()
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Later thought"))),
