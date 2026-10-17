@@ -1,0 +1,35 @@
+{
+  "name": "pi-quote",
+  "version": "0.1.0",
+  "description": "Quote highlighted chat text into Pi's current draft",
+  "keywords": [
+    "pi",
+    "pi-extension",
+    "pi-package",
+    "quote"
+  ],
+  "files": [
+    "src/**/*.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@earendil-works/pi-tui": "1.1.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.1.0",
+    "@earendil-works/pi-tui": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  }
+}
