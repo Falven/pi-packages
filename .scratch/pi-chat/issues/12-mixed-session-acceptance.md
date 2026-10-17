@@ -4,17 +4,52 @@
 
 **Blocked by:** 03: Component-copy delta; 07: Final-response-copy delta.
 
-**Status:** ready-for-agent
+**Status:** verified and integrated into local main — task-created branch/worktree cleanup pending
 
 ## Copy acceptance delta — approved 2026-10-16
 
-- [ ] Establish exact command/output/diff/response payloads, including multiline commands, failures, output beyond preview/viewport, live updates, per-file results, multi-operation ownership, and older/split/mixed final answers.
-- [ ] Establish empty/omitted/partial behavior, clipboard rejection without actual clipboard writes, and in-flight disposal cleanup.
-- [ ] Establish mouse consumption, configured keyboard/focus behavior, unchanged global selection-copy, narrow/resize/ancestor behavior, source Find, and absence of actions on every excluded category.
-- [ ] Run the existing chat suite and required static checks on existing supported Pi 1.0.2 and 1.1.0 environments. Record commands, results, and unavailable coverage; do not upgrade dependencies or add test cases/files/seams.
+- [x] Establish exact command/output/diff/response payloads, including multiline commands, failures, output beyond preview/viewport, live updates, per-file results, multi-operation ownership, and older/split/mixed final answers.
+- [x] Establish empty/omitted/partial behavior, clipboard rejection without actual clipboard writes, and in-flight disposal cleanup.
+- [x] Establish mouse consumption, configured keyboard/focus behavior, unchanged global selection-copy, narrow/resize/ancestor behavior, source Find, and absence of actions on every excluded category.
+- [x] Run the existing chat suite and required static checks on existing supported Pi 1.0.2 and 1.1.0 environments. Record commands, results, and unavailable coverage; do not upgrade dependencies or add test cases/files/seams.
 - [ ] Review Standards and Spec independently, fix concrete findings, integrate only this delta into main, and remove task-created branches/worktrees while preserving unrelated work.
 
 These recording-terminal checks do not establish physical-terminal or OS clipboard behavior. Report physical acceptance only if performed. Earlier evidence below remains historical.
+
+### Copy revision evidence
+
+The copy delta was rebased onto local main `c94ffc1`, preserving its current-operation group headers, then integrated by fast-forward through `30fb1a85c313c88fa3bd51b181a1b65433cd7a06`. The final production revision is `7b72ac9b0f537a834caa828e8109eb3ae9fe41ad`; `30fb1a8` changes only the existing image-layout test. Independent Standards and Spec reviews of `c94ffc1..7b72ac9` found no remaining actionable findings. Integration is complete; removal of task-created branches and worktrees is still pending, so the combined checklist item above remains open.
+
+Existing real-Pi host and recording-terminal cases establish semantic command/edit eligibility, exact multiline commands, successful and failed retained output beyond preview and viewport, live snapshots, per-file diffs and text fallback, shared and separate operation payloads, and stable historical final-answer Markdown across split text parts and mixed content. They also cover empty/omitted/partial results, clipboard rejection, pending-copy disposal, mouse consumption, configured keyboard navigation, focus recovery, global selection-first copying, source Find, narrow widths, resize, ancestor choices, native images, settings reconstruction, reload, and session replacement. Controls remain absent from the excluded activity and message categories. No test cases, test files, test seams, dependencies, settings, or persistence schema were added.
+
+Clipboard writes were captured at the native transport used by the public clipboard helper. Test processes unset `SSH_CONNECTION`, `SSH_CLIENT`, and `MOSH_CONNECTION`; rejection checks isolated the macOS fallback with a failing `pbcopy` stub. These checks did not write to the developer's clipboard. Both environments used Node `v24.13.1`. The primary checkout at `/Users/fran/Source/pi-packages` resolved coding-agent and TUI `1.0.2` from its installed dependency tree. The validation worktree at `/Users/fran/.codex/worktrees/chat-copy-validation/pi-packages` linked the existing `/tmp/pi-activity-1.1.0.KajYAJ` environment; ESM identity checks confirmed coding-agent and TUI `1.1.0` for the host and all 11 declared extension imports, using one physical copy of each native package. No dependencies were installed or upgraded.
+
+All logs and identity/review records below are in `/tmp/pi-chat-copy.crVaXw`.
+
+| Environment / revision          | Command                                                                                                                                                                  | Result / evidence                                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Main, Pi 1.0.2, `30fb1a8`       | `node --test packages/pi-chat/test/*.test.ts`                                                                                                                            | **128/128**, no failures, skips, or cancellations; `primary-chat-final.log`.                                                                                         |
+| Main, Pi 1.0.2, `7b72ac9`       | `node --test packages/pi-codex-tools/test/workflow-presentation.test.ts`                                                                                                 | **13/13**, no failures, skips, or cancellations; `primary-workflow.log`.                                                                                             |
+| Validation, Pi 1.1.0, `30fb1a8` | `node --test packages/pi-chat/test/*.test.ts`                                                                                                                            | **128/128**, no failures, skips, or cancellations; `final-pi-1.1.0-chat-30fb1a8.log`.                                                                                |
+| Validation, Pi 1.1.0, `7b72ac9` | `node --test packages/pi-chat/test/*.test.ts packages/pi-codex-tools/test/workflow-presentation.test.ts`                                                                 | Core workflow **13/13**; chat **127/128**, with only the image expectation corrected below failing. `final-pi-1.1.0-chat-workflow.log` retains that initial result.  |
+| Main, Pi 1.0.2, `30fb1a8`       | `pnpm typecheck`                                                                                                                                                         | Passed; `primary-typecheck-final.log`.                                                                                                                               |
+| Validation, Pi 1.1.0, `7b72ac9` | `node_modules/.bin/tsc --noEmit -p tsconfig.json`                                                                                                                        | Passed; `final-pi-1.1.0-typecheck.log`. Production source is unchanged at `30fb1a8`.                                                                                 |
+| Main, `7b72ac9`                 | `pnpm lint`                                                                                                                                                              | Passed across the repository; `primary-lint.log`.                                                                                                                    |
+| Both environments, `30fb1a8`    | `node_modules/.bin/oxlint packages/pi-chat/test/bounded-render-groups.test.ts` and `node_modules/.bin/oxfmt --check packages/pi-chat/test/bounded-render-groups.test.ts` | Passed for the later test-only change; `primary-lint-final.log`, `primary-format-final.log`, `final-pi-1.1.0-image-lint.log`, and `final-pi-1.1.0-image-format.log`. |
+
+The primary commands used the existing pnpm `12.7.0` and Node 24 executables first in `PATH`. Initial Node 24 Corepack attempts returned a registry 404; their `primary-corepack-*.log` records remain, and switching to the already-installed pnpm required no install. Formatting passed for all 17 files changed at `7b72ac9` with this exact command:
+
+```sh
+git diff --name-only -z c94ffc1..7b72ac9 | xargs -0 env PATH="/Users/fran/Library/pnpm/bin:/Users/fran/.nvm/versions/node/v24.13.1/bin:$PATH" pnpm exec oxfmt --check > /tmp/pi-chat-copy.crVaXw/primary-format.log 2>&1
+```
+
+The later image-test check covers the eighteenth changed file. `git diff --check c94ffc1..30fb1a8` and working-tree `git diff --check` passed; the validation worktree also checked `HEAD^..HEAD`. Repository-wide formatting was not repeated, preserving the unrelated untracked comparison document. No broad suite was repeated after its relevant checks passed.
+
+Review repairs cover three concrete boundaries: one-sided unified hunks establish actual diff eligibility; native bash copies prefer retained structured output only while it agrees with the processed result, removing proven presentation omissions while preserving real failure text and literal lookalikes; historical disclosure removal disposes copy actions, and feedback resolves the current session UI context. Existing cases reproduced the payload and lifecycle gaps before passing with the repairs. Final independent reports are `review-standards-final.md` and `review-spec-final.md`.
+
+The first full chat run on each host exposed one outdated image-crop assertion: the new final-answer footer adds one conversation row, changing the end-clamped crop by 45 source pixels. A temporary probe removing that suffix row restored the old geometry. The test-only `30fb1a8` records the intended footer height, image identity/reservation, and single response action; its assertions were inspected and both full chat suites then passed. The earlier workflow and typecheck evidence remains applicable to the unchanged production source. Initial failures and probe results remain in the evidence directory.
+
+**Limits:** As [Chat 03](03-navigate-select-copy.md) records, persisted history drops structured output. Copying uses the retained text and proven truncation tail without fetching discarded bytes. Historical `(no output)` strings and timeout/abort omission notices can lack provenance; ambiguous retained strings and actual failure text are preserved. This revision received no physical-terminal, OS clipboard, live-model, or new full-repository test-suite check. Earlier physical and full-suite evidence below retains its original scope.
 
 ## Prior native-preview revision
 

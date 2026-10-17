@@ -2,7 +2,7 @@
 
 **Current revision:** Copy actions for semantic command and edit activity items and settled final responses. The existing native presentation, independent disclosures, current-operation group labels, stable reading positions, and [activity specification](tool-activity.md) remain in force.
 
-**Status:** approved copy delta, ready for implementation. Earlier revisions retain their recorded verification scope. Physical-terminal and OS clipboard acceptance are separate from recording-terminal checks with a captured clipboard boundary.
+**Status:** copy delta implemented and verified through existing real-Pi host/recording-terminal checks on Pi 1.0.2 and 1.1.0, integrated into local main at `30fb1a8`. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records exact revision boundaries, checks, and pending task-worktree cleanup. Earlier revisions retain their recorded verification scope. Physical-terminal and OS clipboard acceptance remain unperformed for this delta.
 
 **Tracker:** [Chat 03: Command and edit copying](../../.scratch/pi-chat/issues/03-navigate-select-copy.md), then [Chat 07: Final-response copying](../../.scratch/pi-chat/issues/07-settled-agent-activity-final.md), then [Chat 12: Combined verification](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md). Earlier [Chat 15: Current-operation group headers](../../.scratch/pi-chat/issues/15-current-operation-group-headers.md), [Chat 14: Stable reading position](../../.scratch/pi-chat/issues/14-stable-reading-position.md), and [Activity 13: Thought titles](../../.scratch/tool-activity/issues/13-thought-titles.md) retain their recorded scope and evidence.
 
@@ -409,6 +409,8 @@ Keep each displayed layout position distinct when preserving the reading positio
 - A new published UI framework, terminal-specific helper packages, speculative configuration, or performance claims unsupported by measurements.
 
 ## Further Notes
+
+**Copy actions (`30fb1a8`):** Existing chat cases pass 128/128 on each of Pi 1.0.2 and 1.1.0 with captured clipboard transport. The unchanged production revision `7b72ac9` also has 13/13 core workflow cases on both hosts, typecheck/static-check evidence, and independent Standards and Spec reviews without remaining findings. The later test-only change accounts for the final-answer footer's row in native image cropping. [Chat 12](../../.scratch/pi-chat/issues/12-mixed-session-acceptance.md) records commands, evidence, retained-history metadata limits, integration, and cleanup status. No physical-terminal or OS clipboard check was performed.
 
 **Current-operation header correction (2026-10-16, `d50bff8`):** The selected operation’s existing label now appears in its owning render-group header. Aggregate summaries, native working labels, and disclosure choices retain their existing roles. The existing real-Pi host cases passed 141/141 on each of Pi 1.0.2 and 1.1.0; both typechecks, lint, tracked-file formatting, and whitespace checks passed. Separate standards and specification reviews found no findings. [Chat 15](../../.scratch/pi-chat/issues/15-current-operation-group-headers.md) records exact revision boundaries, TDD evidence, compatibility setup, integration and cleanup, the pre-existing untracked formatting issue, and unperformed physical-terminal checks. Earlier evidence retains its original revision scope.
 
