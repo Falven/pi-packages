@@ -4,18 +4,34 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved — implemented at `d50bff8`, verified with the documentation at `2c80786`, and integrated into `main` at the identical tree `0050aa2`; both task branches and managed worktrees removed.
 
-- [ ] Reuse current-operation selection and wording for file/registered-skill reads, searches, listings, commands (including empty fallback), edits (`Editing files`), and other supported operations.
-- [ ] Associate the selected operation with the correct group through existing identities and current-activity context. Reuse continuation and exploration behavior; do not copy rendered native indicator text.
-- [ ] Preserve settled, historical, and otherwise appropriate aggregate summaries, including category wording, ordering, deduplication, and singular/plural rules. Remove stale operation labels on context changes even when item identities remain unchanged.
-- [ ] Preserve group, item, and native-output expansion choices, grouping, lifecycle, native previews, and scrolling. Keep native indicator text, visibility, thought-title fallback, and timing unchanged.
-- [ ] Retain full labels while existing terminal-width handling truncates only the displayed header.
-- [ ] Record the narrow decision in the existing ADRs, clarify aggregate terminology, and update the existing chat specification while preserving historical evidence.
-- [ ] Use TDD in existing real-Pi host cases. Assert headers separately from the indicator for paused reads/commands, active edits, mixed-group aggregate reversion, older groups, and retained disclosure choices; add no file or seam.
-- [ ] Run relevant existing cases, the chat and combined tool-presentation suites, required static checks, and supported Pi 1.1.0/1.0.2 checks without changing the installed runtime or lockfile. Record actual revisions, versions, commands, and limits.
-- [ ] Complete separate standards and specification reviews, resolve findings within this delta, integrate the verified change into local main, and remove only this task’s temporary branches and worktrees.
+- [x] Reuse current-operation selection and wording for file/registered-skill reads, searches, listings, commands (including empty fallback), edits (`Editing files`), and other supported operations.
+- [x] Associate the selected operation with the correct group through existing identities and current-activity context. Reuse continuation and exploration behavior; do not copy rendered native indicator text.
+- [x] Preserve settled, historical, and otherwise appropriate aggregate summaries, including category wording, ordering, deduplication, and singular/plural rules. Remove stale operation labels on context changes even when item identities remain unchanged.
+- [x] Preserve group, item, and native-output expansion choices, grouping, lifecycle, native previews, and scrolling. Keep native indicator text, visibility, thought-title fallback, and timing unchanged.
+- [x] Retain full labels while existing terminal-width handling truncates only the displayed header.
+- [x] Record the narrow decision in the existing ADRs, clarify aggregate terminology, and update the existing chat specification while preserving historical evidence.
+- [x] Use TDD in existing real-Pi host cases. Assert headers separately from the indicator for paused reads/commands, active edits, mixed-group aggregate reversion, older groups, and retained disclosure choices; add no file or seam.
+- [x] Run relevant existing cases, the chat and combined tool-presentation suites, required static checks, and supported Pi 1.1.0/1.0.2 checks without changing the installed runtime or lockfile. Record actual revisions, versions, commands, and limits.
+- [x] Complete separate standards and specification reviews, resolve findings within this delta, integrate the verified change into local main, and remove only this task’s temporary branches and worktrees.
 
 **Scope and authorization:** One complete implementation slice and the established real-Pi host seam are specified in the user’s handoff. The activity specification remains authoritative for operation selection; no new selection policy, lifecycle state machine, thought-heading policy, parser, configuration system, or provider contract is required. Singleton unwrapping, copy actions, native previews, scrolling, and broader Codex parity are separate work.
 
-**Revision evidence:** Pending implementation and verification. Earlier resolved tickets retain their original evidence.
+**Implementation:** `d50bff8` exposes the existing current-operation selection as its activity item and full normalized label. Host composition matches that item to its owning render group by shared identity and recomputes the header choice on each layout. The header uses the operation label or the unchanged aggregate summary. Native indicator fallback, visibility, timing, and truncation remain on their existing path. Only the working-label and native-host production files changed. Existing activity, native-chat, bounded-group, and combined-workflow cases were extended; no test file, case, seam, fixture, dependency, configuration, or provider contract was added.
+
+**Decision and specification:** `4ab0ed3` records the narrow decision, glossary distinction, specification acceptance, and this ticket. `0050aa2` aligns ADR 0019 with that decision while preserving its unrelated behavior. Earlier resolved tickets and revision evidence remain unchanged.
+
+**TDD evidence:** Before the production change, the existing unrelated-provider case failed its exact group-header assertion: the header was `> Running a command` while the native indicator already said `Running printf generic-evidence` (`/tmp/pi-chat-active-header-red.log`). The same case passed after the connection (`/tmp/pi-chat-active-header-green.log`). Six focused existing cases then passed. The first full run exposed one obsolete active aggregate expectation; updating it preserved the same case’s settled aggregate ordering and deduplication checks. The two affected focused cases passed before the final full run. Header assertions inspect disclosure lines separately from the native indicator.
+
+**Verification:** On Node `v26.8.1`, the requested command `node --test packages/pi-chat/test/*.test.ts packages/pi-codex-tools/test/workflow-presentation.test.ts` passed **141/141 on each of Pi 1.0.2 and Pi 1.1.0**, with zero failures, cancellations, or skips (`/tmp/pi-chat-active-header-suite-final.log`, `/tmp/pi-chat-active-header-1.1.0.log`). The Pi 1.0.2 run used existing workspace dependencies. The Pi 1.1.0 compatibility copy matched all 429 tracked files at `2c80786`; all 12 declared Pi/TUI imports resolved to the same physical 1.1.0 installation, and tree-sitter loaded. The installed runtime and dependency lockfile were not changed.
+
+Coverage includes current reads and commands, registered skills, search/list wording, empty-command fallback, generic tools, `Editing files`, mixed-group aggregate reversion, historical groups, context-only label changes, width recovery, continuation, late updates, and retained group/item/native-output choices. Existing lifecycle cases establish that the native indicator and thought fallback remain unchanged.
+
+Both host typechecks (`tsc --noEmit -p tsconfig.json`), worktree lint (`oxlint .`), worktree formatting (`oxfmt --check .`, 421 files), and whitespace checks passed. The temporary linked-dependency worktrees required direct installed binaries because pnpm attempted dependency setup there; no dependency files were changed. After integration, pnpm `12.7.0` ran `pnpm typecheck` and `pnpm lint` successfully on `main`. `pnpm format:check` flags only the pre-existing untracked `.scratch/pi-chat-codex-ux-comparison-2026-10-16.md`; that file remains unchanged. Final tracked-file formatting (`git ls-files -z | xargs -0 ./node_modules/.bin/oxfmt --check`) and `git diff --check` passed after this evidence update.
+
+**Review:** Separate standards and specification reviewers checked the complete change from `cbf6ffa` through `2c80786`. Both reported zero findings. The subsequently integrated `0050aa2` has the identical tree; only the documentation commit’s ancestry changed during rebase.
+
+**Integration and cleanup:** Rebased the task integration branch onto current `main`, then advanced `main` with `--ff-only`. Verified tree equality with `2c80786` and inclusion of `d50bff8`. Archived both managed worktrees through the app after confirming they were clean. Deleted `codex/pi-chat-active-label-integration` after checking ancestry and `codex/pi-chat-active-label-implementation` after checking tree equality and patch equivalence. Removed the temporary Pi 1.1.0 compatibility copy and task-owned dependency links. Other worktrees, branches, the untracked comparison report, and the lockfile were preserved. Nothing was pushed.
+
+**Limits:** No physical-terminal acceptance, live-model run, unrelated package suite, or performance benchmark was run. Recording-terminal evidence establishes emitted output and real native-host behavior, not physical-terminal pixels or input.
