@@ -4,15 +4,21 @@
 
 **Blocked by:** None for this delta; the established native activity presentation is already integrated.
 
-**Status:** in progress — native result footer placement correction; prior component-copy evidence remains below
+**Status:** implemented and verified — result-footer code integrated at `243faab`; documentation integration and task cleanup pending
 
 ## Native result footer correction — approved 2026-10-16
 
 The reported screenshot places Copy output on the conversation background outside the native result. Command Copy output and edit Copy diff/Copy output must sit after the native result text at the bottom inside that panel, sharing its background and padding. This clarifies the earlier “below the output” placement; final-response copying is unchanged.
 
-- [ ] Compose the footer inside the existing native result panel for running, successful, and failed command/edit items, in both preview and full-output states.
-- [ ] Preserve clipboard payloads, mouse consumption, keyboard focus, selection exclusions, narrow resizing, disclosure choices, and native image ownership.
+- [x] Compose the footer inside the existing native result panel for running, successful, and failed command/edit items, in both preview and full-output states.
+- [x] Preserve clipboard payloads, mouse consumption, keyboard focus, selection exclusions, narrow resizing, disclosure choices, and native image ownership.
 - [ ] Extend existing real-Pi recording-terminal cases to catch the reported background mismatch; pass relevant checks and independent review, then integrate and clean up the task branch/worktree.
+
+**Correction evidence (2026-10-17, `243faab`):** Result actions are composed inside Pi's existing panel, with its background and bottom padding. Native edit errors keep their original result component and appear before the footer. Focus and selection geometry use the completed native layout without another output render. Copy payloads, final-response actions, and native image ownership retain their existing behavior.
+
+The initial recording-terminal assertion reproduced the missing native panel background. The two extended existing activity cases check running updates, successful and failed commands, per-file edit diffs and result fallbacks, native edit errors, bottom padding, and narrow footer activation. Those cases and the existing global selection-copy case passed 3/3 with captured clipboard transport. No test case, test file, fixture seam, dependency, or installed Pi source was added or changed.
+
+`node --test packages/pi-chat/test/*.test.ts` passed 134/134 on both existing Pi 1.1.0 and Pi 1.0.2 environments, with no failures, cancellations, or skips. All fixture and extension imports resolved the same native version within each run. Workspace TypeScript, scoped lint and formatting, and whitespace checks passed; the primary checkout ran `pnpm typecheck`. Independent Standards and Spec reviews found no actionable issue at `1f9ec9b`. Subsequent rebases changed only the documentation base; the tested and reviewed source/test blobs are identical to the code integrated at `243faab`. Evidence is retained in `/tmp/pi-chat-copy-footer.fuWaoh`. These are real-Pi recording-terminal checks, not a physical-terminal or OS clipboard check.
 
 ## Component-copy delta — approved 2026-10-16
 
