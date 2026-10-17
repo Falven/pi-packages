@@ -145,47 +145,47 @@ This corrects the separate-package and nonempty-script-result decisions in the p
 The following TypeScript describes the wire data, not an importable package:
 
 ```ts
-type Status = "running" | "completed" | "failed" | "unknown" | "unattempted"
+type Status = "running" | "completed" | "failed" | "unknown" | "unattempted";
 type Body = {
-  args?: Record<string, unknown>
-  output?: string
-  outputOmitted?: boolean
-}
+  args?: Record<string, unknown>;
+  output?: string;
+  outputOmitted?: boolean;
+};
 type File = Body & {
-  id: string
-  path: string
-  status: Status
-  changes?: { added: number; removed: number }
-}
+  id: string;
+  path: string;
+  status: Status;
+  changes?: { added: number; removed: number };
+};
 type Operation = Body & {
-  id: string
-  order: number
-  revision: number
-  status: Status
-  cwd?: string
+  id: string;
+  order: number;
+  revision: number;
+  status: Status;
+  cwd?: string;
 } & (
     | { kind: "command"; commands: string[]; shell?: string[] }
     | { kind: "edit"; path?: string; files?: File[] }
     | { kind: "image"; path?: string }
     | { kind: "tool"; name: string }
     | { kind: "output" } // Version 1 retains this kind for execution errors and old results.
-  )
+  );
 type Update = {
-  version: 1
-  id: string
-  callId: string
-  sessionId: string
-  revision: number
-  operations: Operation[]
-}
+  version: 1;
+  id: string;
+  callId: string;
+  sessionId: string;
+  revision: number;
+  operations: Operation[];
+};
 type Details = {
   activity: {
-    update: Update
-    imageOwners: (string | null)[]
-    contentHash: string
-    activityHash: string
-  }
-}
+    update: Update;
+    imageOwners: (string | null)[];
+    contentHash: string;
+    activityHash: string;
+  };
+};
 ```
 
 IDs, file paths, and generic tool names are nonempty strings. Operation IDs are unique within an update; file IDs are unique within their operation. Orders, revisions, and change counts are nonnegative safe integers; a command has at least one command string. Every non-null image owner identifies an operation in the snapshot. `outputOmitted` describes retained body limits without deleting the operation or changing its outcome. For version 1, `kind: "output"` with failed status carries execution error facts; other text-only output facts have no normal row.

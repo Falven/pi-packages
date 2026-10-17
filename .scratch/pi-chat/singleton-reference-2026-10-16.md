@@ -42,7 +42,7 @@ The caller first optionally transforms/combines units, then computes `isLatestVi
 The caller bypass expression is:
 
 ```js
-e.kind === `standalone` || z || (n && a != null)
+e.kind === `standalone` || z || (n && a != null);
 ```
 
 Here `z` is the preservation override, `n` is whether this is the last projected unit, and `a` is the supplied completed header. A helper-only port omits the latter two exceptions.
@@ -52,18 +52,14 @@ Here `z` is the preservation override, `n` is whether this is the last projected
 [Effective progress selection](/tmp/pi-chat-codex-ux-20261016/sites-end-resource-1b9f3ba94deb.js:20741) uses the supplied header-progress flag when present; otherwise it uses turn progress:
 
 ```js
-B = m === void 0 ? p : m
+B = m === void 0 ? p : m;
 ```
 
 The caller supplies that effective value as the state helper's `isTurnInProgress` argument. [Summary selection](/tmp/pi-chat-codex-ux-20261016/inline-followup-markdown-abadf756a078.js:1062) is exactly:
 
 ```js
-if (!(
-  isLatestVisibleUnit &&
-  effectiveHeaderInProgress &&
-  !isActivitySliceClosed
-))
-  return { kind: `summary` }
+if (!(isLatestVisibleUnit && effectiveHeaderInProgress && !isActivitySliceClosed))
+  return { kind: `summary` };
 ```
 
 The latest open group remains active or thinking while effective header progress remains true, even after its sole operation finishes. An older group can already use summary state while later work continues. Closing the activity slice allows summary state without waiting for the whole turn to finish. An older group whose item is still running still fails the separate item lifecycle guard.
