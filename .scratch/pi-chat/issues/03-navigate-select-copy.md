@@ -1,5 +1,24 @@
 # 03: Navigate, select, and copy chat content
 
+**What to build:** Copy exact commands and retained command/edit results from their open native activity items without changing disclosure, selection, or reading position.
+
+**Blocked by:** None for this delta; the established native activity presentation is already integrated.
+
+**Status:** ready-for-agent
+
+## Component-copy delta — approved 2026-10-16
+
+- [ ] Only semantic commands and edits receive controls. Successful and failed commands have Copy command beside the native heading and Copy output below the result. Edits have Copy diff for an actual retained diff, otherwise Copy output for retained text.
+- [ ] Read authoritative arguments/operation payloads at activation, preserving exact multiline scripts and all retained output beyond preview and viewport. Keep per-operation/per-file ownership and intentional existing payload sharing; exclude presentation labels/escapes and never reread or execute anything.
+- [ ] Prefer actual raw patches over decorated diffs. Do not infer diffs from counts, arguments, speculative previews, or current files. Include actual failure text and distinguish unavailable/partial retained output.
+- [ ] Use the public clipboard helper, await completion, show fixed-geometry Copied feedback only on success, report errors natively, disable empty values, and clean up timers/in-flight callbacks across disposal and reconstruction.
+- [ ] Consume copy clicks; retain preview/full output, ancestor disclosure choices, reading position, images, padding, narrow layout, and native theme. Extend existing keyboard navigation and focus recovery without new shortcuts. Exclude controls from selection and source Find; preserve global selection-copy behavior.
+- [ ] Extend existing real-host cases only, with captured clipboard transport and isolated rejection fallbacks. No new test cases, test files, test seams, dependencies, settings, or persistence schema.
+
+The accepted spec and ADRs 0014, 0019, and 0022 govern this delta. Combined supported-host evidence belongs to Chat 12. Earlier completed evidence below remains historical.
+
+## Prior native-flow revision
+
 **What to build:** Scroll the conversation directly over its existing native side padding while preserving native child input, scrollbar behavior, selection, and copying.
 
 **Blocked by:** 05: Expand render groups and native activity bodies in conversation flow.

@@ -1,5 +1,23 @@
 # 07: Collapse settled agent activity while keeping the final response visible
 
+**What to build:** Copy a settled final response as original Markdown from one action below the entire answer, preserving historical answer identity and native presentation.
+
+**Blocked by:** 03: Component-copy delta, which supplies the shared local action and existing focus-path integration.
+
+**Status:** ready-for-agent
+
+## Final-response-copy delta — approved 2026-10-16
+
+- [ ] Reuse existing settlement, final-message/part recognition, and stable source identities. Show exactly one Copy response action for a settled turn with a recognized final answer; no action for an unfinished or unrecognized answer.
+- [ ] Place the action below the whole answer, left aligned and outside collapsible work. Preserve original Markdown and all selected final text parts in source order using the existing text joining convention; exclude thoughts, commentary, tool output, elapsed summaries, and controls.
+- [ ] An older answer continues copying itself after newer turns, source reveal, and native reconstruction. Do not call the global last-response handler or infer boundaries from prose.
+- [ ] Reuse command/edit action interaction, feedback, native clipboard/error behavior, focus, selection exclusion, narrow layout, and lifecycle cleanup. No new shortcut, framework, source content, or persisted metadata.
+- [ ] Extend existing real-Pi final/phase/history cases with a captured clipboard boundary. Preserve global selection-copy, Find, automatic/manual disclosure, user/notice ordering, cancellation, session replacement, and no-final behavior. Add no test case, file, or seam.
+
+The accepted spec and ADRs 0014, 0015, and 0022 govern this delta. Combined supported-host evidence belongs to Chat 12. Earlier completed evidence below remains historical.
+
+## Prior native-flow revision
+
 **What to build:** Include every available enclosing agent activity disclosure in native global expansion and closure while preserving final-response visibility and automatic-collapse eligibility.
 
 **Blocked by:** 04: Group and toggle consecutive activity items.

@@ -1,5 +1,23 @@
 # 12: Verify independent native output previews in mixed sessions
 
+**What to build:** Verify the combined command, edit, and final-response copy delta through the existing native host and safely captured clipboard boundary, then integrate the verified changes into main.
+
+**Blocked by:** 03: Component-copy delta; 07: Final-response-copy delta.
+
+**Status:** ready-for-agent
+
+## Copy acceptance delta — approved 2026-10-16
+
+- [ ] Establish exact command/output/diff/response payloads, including multiline commands, failures, output beyond preview/viewport, live updates, per-file results, multi-operation ownership, and older/split/mixed final answers.
+- [ ] Establish empty/omitted/partial behavior, clipboard rejection without actual clipboard writes, and in-flight disposal cleanup.
+- [ ] Establish mouse consumption, configured keyboard/focus behavior, unchanged global selection-copy, narrow/resize/ancestor behavior, source Find, and absence of actions on every excluded category.
+- [ ] Run the existing chat suite and required static checks on existing supported Pi 1.0.2 and 1.1.0 environments. Record commands, results, and unavailable coverage; do not upgrade dependencies or add test cases/files/seams.
+- [ ] Review Standards and Spec independently, fix concrete findings, integrate only this delta into main, and remove task-created branches/worktrees while preserving unrelated work.
+
+These recording-terminal checks do not establish physical-terminal or OS clipboard behavior. Report physical acceptance only if performed. Earlier evidence below remains historical.
+
+## Prior native-preview revision
+
 **What to build:** Verify independent native output previews in mixed sessions.
 
 **Blocked by:** Chat 04 and Chat 05 native preview correction.
