@@ -4,13 +4,13 @@
 
 **Blocked by:** 06: Configurable Codex command recognition; 07: Pending calls without premature activities; 08: Verbatim core tool guidance; 10: Process input without extra activities.
 
-**Status:** verification complete at `fbc8030` on `codex/generic-tool-activity`, from integration base `a6280f9`. Tickets 06–08 and 10 are implemented and verified. Only managed-worktree archival remains queued in the app.
+**Status:** verification complete at `fbc8030` on `codex/generic-tool-activity`, from integration base `a6280f9`. Tickets 06–08 and 10 are implemented and verified. All task commits through `0bc51c7` are on `main`; task branch and worktree cleanup is complete.
 
 - [x] All reference command cases and affected real-host workflows pass at the integration revision.
 - [x] Existing supported-host compatibility and required static checks pass, or actual limitations are recorded.
 - [x] Standards and specification reviews are completed and actionable findings resolved.
 - [x] Documents and ticket outcomes identify the delivered revision, exact evidence, and any unperformed physical-app checks.
-- [ ] Temporary implementer worktrees are cleaned up and user-owned changes remain intact.
+- [x] Temporary implementer worktrees are cleaned up and user-owned changes remain intact.
 
 **Resolution:** Tickets 06–08 and 10 are integrated in the existing two packages. Command recognition and the non-terminal Ctrl+C exception target Codex `0.162.0-alpha.17.2`, revision `740e5af33c71225640e0c1c1555c514c2c93ab74`, bundled with app `26.1007.71326`. Input/collection calls and raw script errors create no operation rows. Actual failed commands remain visible, and exact errors remain in model results and retained-source Find. No separate package or runtime knowledge between the extensions was added. Operator configuration affects presentation only; the scoped core declarations match their separate frozen reference.
 
@@ -35,6 +35,6 @@
 
 **Earlier evidence:** Tickets 06–08 passed 348/348 affected-package cases on Pi 1.0.2 and 139/139 compatibility cases on Pi 1.1.0 at `100316f`. Their logs remain `/tmp/pi-activity-parity-final-1.0.2.log` and `/tmp/pi-activity-parity-final-1.1.0.log`. Those counts predate Ticket 10 and are not its acceptance evidence.
 
-**Cleanup:** The task-owned Pi 1.1.0 fixture was removed after verification; logs remain in `/tmp`. The unused, clean worktree `/Users/fran/.codex/worktrees/verbatim-tool-guidance/pi-packages` was submitted to the app's archive tool. The response remains `queued`, and removal has not been verified. User-owned files were not changed. The cleanup checkbox remains open until the app finishes.
+**Cleanup:** The task-owned Pi 1.1.0 fixture was removed after verification; logs remain in `/tmp`. After the app's archive operation remained queued, the user requested hard deletion. The unused, clean worktree `/Users/fran/.codex/worktrees/verbatim-tool-guidance/pi-packages` was force-removed after confirming its commit was reachable from `main`. Its containing directory and the integrated `codex/generic-tool-activity` branch are deleted. Git lists only the primary checkout and local `main` branch. Unrelated worktrees and files were preserved.
 
 **Limits:** Both independent review helpers failed before execution with `invalid_request_body` and encrypted-output decoding errors; the reviews above were performed directly. Physical-terminal acceptance, a live app comparison, unrelated package suites, live-model prompt trials, performance trials, and Windows-native path behavior were not verified. Earlier tickets retain their original revision evidence.
