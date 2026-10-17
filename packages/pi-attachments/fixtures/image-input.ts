@@ -1,11 +1,11 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function imageInput(pi: ExtensionAPI): void {
   pi.on("input", (event, ctx) => {
-    if (!event.text.includes("[Attachment:")) return undefined
+    if (!event.text.includes("[Attachment:")) return undefined;
     if (event.text.startsWith("Handled here")) {
-      ctx.ui.notify("Earlier input handler handled the request", "info")
-      return { action: "handled" }
+      ctx.ui.notify("Earlier input handler handled the request", "info");
+      return { action: "handled" };
     }
     return {
       action: "transform",
@@ -18,6 +18,6 @@ export default function imageInput(pi: ExtensionAPI): void {
           data: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg==",
         },
       ],
-    }
-  })
+    };
+  });
 }

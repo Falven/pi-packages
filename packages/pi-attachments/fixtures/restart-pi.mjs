@@ -1,44 +1,39 @@
-import assert from "node:assert/strict"
-import { readFile } from "node:fs/promises"
-import test from "node:test"
-import { nativePi, waitFor } from "./native-pi.mjs"
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import { nativePi, waitFor } from "./native-pi.mjs";
 
-const expected = JSON.parse(process.argv[2])
+const expected = JSON.parse(process.argv[2]);
 
 test("restarted native Pi reads retained snapshots", async (t) => {
-  const host = await nativePi(t, [], expected)
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  if (expected.persisted) assert.equal(sessionId, expected.sessionId)
+  const host = await nativePi(t, [], expected);
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  if (expected.persisted) assert.equal(sessionId, expected.sessionId);
   else {
-    assert.notEqual(sessionId, expected.sessionId)
-    await assert.rejects(readFile(expected.sessionFile), { code: "ENOENT" })
+    assert.notEqual(sessionId, expected.sessionId);
+    await assert.rejects(readFile(expected.sessionFile), { code: "ENOENT" });
   }
-  assert.equal(host.ui.getEditorText(), "")
+  assert.equal(host.ui.getEditorText(), "");
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
-  })
+  });
   if (expected.cleanup) {
     assert.match(
       host.render(),
       new RegExp(
         `removed ${expected.cleanup.paths.length} files \\(${expected.cleanup.bytes} bytes\\); 0 failures`,
       ),
-    )
+    );
     await Promise.all(
-      expected.cleanup.paths.map((path) =>
-        assert.rejects(readFile(path), { code: "ENOENT" }),
-      ),
-    )
+      expected.cleanup.paths.map((path) => assert.rejects(readFile(path), { code: "ENOENT" })),
+    );
   }
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     expected.history,
-  )
-  assert.equal(
-    await readFile(expected.recovery.path, "utf8"),
-    expected.recovery.text,
-  )
-  assert.equal(await readFile(expected.snapshot, "utf8"), expected.contents)
+  );
+  assert.equal(await readFile(expected.recovery.path, "utf8"), expected.recovery.text);
+  assert.equal(await readFile(expected.snapshot, "utf8"), expected.contents);
 
   host.replies.push({
     index: 0,
@@ -57,16 +52,13 @@ test("restarted native Pi reads retained snapshots", async (t) => {
       ],
     },
     finish_reason: "tool_calls",
-  })
-  host.submit("Read the retained snapshot.")
-  await waitFor(() => assert.equal(host.requests.length, 2))
+  });
+  host.submit("Read the retained snapshot.");
+  await waitFor(() => assert.equal(host.requests.length, 2));
   assert.equal(
     host.requests[1].messages.find(({ role }) => role === "tool").content,
     expected.contents,
-  )
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  assert.equal(
-    await readFile(expected.recovery.path, "utf8"),
-    expected.recovery.text,
-  )
-})
+  );
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  assert.equal(await readFile(expected.recovery.path, "utf8"), expected.recovery.text);
+});

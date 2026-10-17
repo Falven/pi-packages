@@ -1,19 +1,12 @@
-import assert from "node:assert/strict"
-import { execFile } from "node:child_process"
-import fs, {
-  chmod,
-  mkdir,
-  readFile,
-  rm,
-  utimes,
-  writeFile,
-} from "node:fs/promises"
-import { syncBuiltinESMExports } from "node:module"
-import { join } from "node:path"
-import { test } from "node:test"
-import { fileURLToPath } from "node:url"
-import { promisify } from "node:util"
-import { getNativeClipboard } from "@earendil-works/pi-tui"
+import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
+import fs, { chmod, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+import { getNativeClipboard } from "@earendil-works/pi-tui";
 import {
   assertAttachments,
   holdFileRead,
@@ -21,10 +14,10 @@ import {
   retainedRequest,
   snapshotPath,
   waitFor,
-} from "../fixtures/native-pi.mjs"
+} from "../fixtures/native-pi.mjs";
 
 async function restart(host, expected) {
-  await host.close()
+  await host.close();
   await promisify(execFile)(
     process.execPath,
     [
@@ -32,24 +25,24 @@ async function restart(host, expected) {
       JSON.stringify({ directory: host.directory, ...expected }),
     ],
     { timeout: 15000 },
-  )
+  );
 }
 
 test("an unsaved native session keeps its captured attachment and requesting draft across a process restart", async (t) => {
-  const host = await nativePi(t)
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  host.ui.setEditorText("Unsent native draft")
-  await host.attachText("Captured before any reply")
-  const path = snapshotPath(host.ui.getEditorText())
+  const host = await nativePi(t);
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  host.ui.setEditorText("Unsent native draft");
+  await host.attachText("Captured before any reply");
+  const path = snapshotPath(host.ui.getEditorText());
 
-  await assert.rejects(readFile(sessionFile), { code: "ENOENT" })
-  const recovery = await retainedRequest(host)
-  assert.ok(recovery.text.includes(sessionId))
-  assert.ok(recovery.text.includes(sessionFile))
-  assert.match(recovery.text, /Unsent native draft/)
-  assert.equal(snapshotPath(recovery.text), path)
-  assert.equal(await readFile(path, "utf8"), "Captured before any reply")
+  await assert.rejects(readFile(sessionFile), { code: "ENOENT" });
+  const recovery = await retainedRequest(host);
+  assert.ok(recovery.text.includes(sessionId));
+  assert.ok(recovery.text.includes(sessionFile));
+  assert.match(recovery.text, /Unsent native draft/);
+  assert.equal(snapshotPath(recovery.text), path);
+  assert.equal(await readFile(path, "utf8"), "Captured before any reply");
   await restart(host, {
     sessionId,
     sessionFile,
@@ -58,62 +51,59 @@ test("an unsaved native session keeps its captured attachment and requesting dra
     snapshot: path,
     contents: "Captured before any reply",
     recovery,
-  })
-})
+  });
+});
 
 test("old submitted references survive draft removal, source loss, native resume, and process restart", async (t) => {
-  const host = await nativePi(t)
-  const source = join(host.directory, "retained.txt")
-  await writeFile(source, "Captured file contents.\n")
-  host.ui.setEditorText("Use the captured file")
-  await host.attachFile(source)
-  const draft = host.ui.getEditorText().trim()
-  const path = snapshotPath(draft)
-  const recovery = await retainedRequest(host)
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  assert.ok((await readFile(sessionFile, "utf8")).includes(path))
+  const host = await nativePi(t);
+  const source = join(host.directory, "retained.txt");
+  await writeFile(source, "Captured file contents.\n");
+  host.ui.setEditorText("Use the captured file");
+  await host.attachFile(source);
+  const draft = host.ui.getEditorText().trim();
+  const path = snapshotPath(draft);
+  const recovery = await retainedRequest(host);
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  host.submit();
+  await waitFor(() => assert.equal(host.requests.length, 1));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  assert.ok((await readFile(sessionFile, "utf8")).includes(path));
 
-  await writeFile(source, "Changed working file")
-  await rm(source)
-  const old = new Date("2000-01-01T00:00:00Z")
-  await utimes(path, old, old)
-  host.ui.setEditorText(draft)
-  host.ui.setEditorText("")
-  assert.doesNotMatch(host.render(), /Manage attachments/)
+  await writeFile(source, "Changed working file");
+  await rm(source);
+  const old = new Date("2000-01-01T00:00:00Z");
+  await utimes(path, old, old);
+  host.ui.setEditorText(draft);
+  host.ui.setEditorText("");
+  assert.doesNotMatch(host.render(), /Manage attachments/);
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
-  })
-  host.input("\x1b[45;5u")
-  assert.equal(host.ui.getEditorText(), draft)
-  assertAttachments(host.ui.getEditorText(), host.render(), ["retained.txt"])
-  assert.equal(await readFile(path, "utf8"), "Captured file contents.\n")
-  host.submit("A later request without attachments")
-  await waitFor(() => assert.equal(host.requests.length, 2))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
+  });
+  host.input("\x1b[45;5u");
+  assert.equal(host.ui.getEditorText(), draft);
+  assertAttachments(host.ui.getEditorText(), host.render(), ["retained.txt"]);
+  assert.equal(await readFile(path, "utf8"), "Captured file contents.\n");
+  host.submit("A later request without attachments");
+  await waitFor(() => assert.equal(host.requests.length, 2));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
 
-  host.submit("/new")
+  host.submit("/new");
   await waitFor(() =>
-    assert.notEqual(
-      host.runtime.session.sessionManager.getSessionId(),
-      sessionId,
-    ),
-  )
-  host.submit("/resume")
-  await waitFor(() => assert.match(host.render(), /Use the captured file/))
-  host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Resumed session/))
-  assert.equal(host.runtime.session.sessionManager.getSessionId(), sessionId)
-  assert.equal(host.ui.getEditorText(), "")
-  const history = [draft, "A later request without attachments"]
+    assert.notEqual(host.runtime.session.sessionManager.getSessionId(), sessionId),
+  );
+  host.submit("/resume");
+  await waitFor(() => assert.match(host.render(), /Use the captured file/));
+  host.input("\r");
+  await waitFor(() => assert.match(host.render(), /Resumed session/));
+  assert.equal(host.runtime.session.sessionManager.getSessionId(), sessionId);
+  assert.equal(host.ui.getEditorText(), "");
+  const history = [draft, "A later request without attachments"];
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     history,
-  )
-  assert.equal(await readFile(path, "utf8"), "Captured file contents.\n")
+  );
+  assert.equal(await readFile(path, "utf8"), "Captured file contents.\n");
   await restart(host, {
     sessionId,
     sessionFile,
@@ -122,57 +112,57 @@ test("old submitted references survive draft removal, source loss, native resume
     snapshot: path,
     contents: "Captured file contents.\n",
     recovery,
-  })
-})
+  });
+});
 
 test("native fork prefills the submitted reference and the child survives restart without its parent file", async (t) => {
-  const host = await nativePi(t)
-  host.submit("Earlier request")
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  const source = join(host.directory, "forked.txt")
-  await writeFile(source, "Captured for the fork.\n")
-  host.ui.setEditorText("Review the captured file")
-  await host.attachFile(source)
-  const draft = host.ui.getEditorText().trim()
-  const path = snapshotPath(draft)
-  const recovery = await retainedRequest(host)
-  const parentId = host.runtime.session.sessionManager.getSessionId()
-  const parentFile = host.runtime.session.sessionFile
-  host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 2))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  await writeFile(source, "Changed after submission")
-  await rm(source)
+  const host = await nativePi(t);
+  host.submit("Earlier request");
+  await waitFor(() => assert.equal(host.requests.length, 1));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  const source = join(host.directory, "forked.txt");
+  await writeFile(source, "Captured for the fork.\n");
+  host.ui.setEditorText("Review the captured file");
+  await host.attachFile(source);
+  const draft = host.ui.getEditorText().trim();
+  const path = snapshotPath(draft);
+  const recovery = await retainedRequest(host);
+  const parentId = host.runtime.session.sessionManager.getSessionId();
+  const parentFile = host.runtime.session.sessionFile;
+  host.submit();
+  await waitFor(() => assert.equal(host.requests.length, 2));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  await writeFile(source, "Changed after submission");
+  await rm(source);
 
-  host.ui.setEditorText("Later unsent parent draft")
-  host.submit("/fork")
-  await waitFor(() => assert.match(host.render(), /Fork from Message/))
-  host.input("\r")
-  await waitFor(() => assert.match(host.render(), /Forked to new session/))
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  assert.notEqual(sessionId, parentId)
+  host.ui.setEditorText("Later unsent parent draft");
+  host.submit("/fork");
+  await waitFor(() => assert.match(host.render(), /Fork from Message/));
+  host.input("\r");
+  await waitFor(() => assert.match(host.render(), /Forked to new session/));
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  assert.notEqual(sessionId, parentId);
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
-  })
-  assert.equal(host.ui.getEditorText(), draft)
-  assertAttachments(host.ui.getEditorText(), host.render(), ["forked.txt"])
-  assert.equal(await readFile(path, "utf8"), "Captured for the fork.\n")
+  });
+  assert.equal(host.ui.getEditorText(), draft);
+  assertAttachments(host.ui.getEditorText(), host.render(), ["forked.txt"]);
+  assert.equal(await readFile(path, "utf8"), "Captured for the fork.\n");
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     ["Earlier request"],
-  )
+  );
 
-  host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 3))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  const history = ["Earlier request", draft]
+  host.submit();
+  await waitFor(() => assert.equal(host.requests.length, 3));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  const history = ["Earlier request", draft];
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     history,
-  )
-  await rm(parentFile)
+  );
+  await rm(parentFile);
   await restart(host, {
     sessionId,
     sessionFile,
@@ -181,37 +171,37 @@ test("native fork prefills the submitted reference and the child survives restar
     snapshot: path,
     contents: "Captured for the fork.\n",
     recovery,
-  })
-})
+  });
+});
 
 test("native clone retains submitted references after its parent and original source are removed", async (t) => {
-  const host = await nativePi(t)
-  const source = join(host.directory, "cloned.txt")
-  await writeFile(source, "Captured for both sessions.\n")
-  await host.attachFile(source)
-  const draft = host.ui.getEditorText().trim()
-  const path = snapshotPath(draft)
-  const recovery = await retainedRequest(host)
-  const parentId = host.runtime.session.sessionManager.getSessionId()
-  const parentFile = host.runtime.session.sessionFile
-  host.submit()
-  await waitFor(() => assert.equal(host.requests.length, 1))
-  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false))
-  await rm(source)
+  const host = await nativePi(t);
+  const source = join(host.directory, "cloned.txt");
+  await writeFile(source, "Captured for both sessions.\n");
+  await host.attachFile(source);
+  const draft = host.ui.getEditorText().trim();
+  const path = snapshotPath(draft);
+  const recovery = await retainedRequest(host);
+  const parentId = host.runtime.session.sessionManager.getSessionId();
+  const parentFile = host.runtime.session.sessionFile;
+  host.submit();
+  await waitFor(() => assert.equal(host.requests.length, 1));
+  await waitFor(() => assert.equal(host.runtime.session.isStreaming, false));
+  await rm(source);
 
-  host.ui.setEditorText("Unsent parent draft")
-  host.submit("/clone")
-  await waitFor(() => assert.match(host.render(), /Cloned to new session/))
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  assert.notEqual(sessionId, parentId)
-  assert.equal(host.ui.getEditorText(), "")
+  host.ui.setEditorText("Unsent parent draft");
+  host.submit("/clone");
+  await waitFor(() => assert.match(host.render(), /Cloned to new session/));
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  assert.notEqual(sessionId, parentId);
+  assert.equal(host.ui.getEditorText(), "");
   assert.deepEqual(
     host.runtime.session.getUserMessagesForForking().map(({ text }) => text),
     [draft],
-  )
-  assert.equal(await readFile(path, "utf8"), "Captured for both sessions.\n")
-  await rm(parentFile)
+  );
+  assert.equal(await readFile(path, "utf8"), "Captured for both sessions.\n");
+  await rm(parentFile);
   await restart(host, {
     sessionId,
     sessionFile,
@@ -220,40 +210,37 @@ test("native clone retains submitted references after its parent and original so
     snapshot: path,
     contents: "Captured for both sessions.\n",
     recovery,
-  })
-})
+  });
+});
 
 test("a pending capture keeps its original unsaved draft association after session replacement and restart", async (t) => {
-  const host = await nativePi(t)
-  const source = join(host.directory, "pending.txt")
-  await writeFile(source, "Captured before replacement.\n")
-  host.ui.setEditorText("Requesting draft")
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  const held = holdFileRead(t, source)
-  const pending = host.attachFile(source)
-  await held.started()
-  await rm(source)
-  host.submit("/new")
+  const host = await nativePi(t);
+  const source = join(host.directory, "pending.txt");
+  await writeFile(source, "Captured before replacement.\n");
+  host.ui.setEditorText("Requesting draft");
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  const held = holdFileRead(t, source);
+  const pending = host.attachFile(source);
+  await held.started();
+  await rm(source);
+  host.submit("/new");
   await waitFor(() =>
-    assert.notEqual(
-      host.runtime.session.sessionManager.getSessionId(),
-      sessionId,
-    ),
-  )
-  host.ui.setEditorText("Unrelated replacement draft")
-  held.release()
-  await pending
+    assert.notEqual(host.runtime.session.sessionManager.getSessionId(), sessionId),
+  );
+  host.ui.setEditorText("Unrelated replacement draft");
+  held.release();
+  await pending;
 
-  assert.equal(host.ui.getEditorText(), "Unrelated replacement draft")
-  const recovery = await retainedRequest(host)
-  assert.ok(recovery.text.includes(sessionId))
-  assert.ok(recovery.text.includes(sessionFile))
-  assert.match(recovery.text, /Requesting draft/)
-  assert.doesNotMatch(recovery.text, /Unrelated replacement draft/)
-  await assert.rejects(readFile(sessionFile), { code: "ENOENT" })
-  const path = snapshotPath(recovery.text)
-  assert.equal(await readFile(path, "utf8"), "Captured before replacement.\n")
+  assert.equal(host.ui.getEditorText(), "Unrelated replacement draft");
+  const recovery = await retainedRequest(host);
+  assert.ok(recovery.text.includes(sessionId));
+  assert.ok(recovery.text.includes(sessionFile));
+  assert.match(recovery.text, /Requesting draft/);
+  assert.doesNotMatch(recovery.text, /Unrelated replacement draft/);
+  await assert.rejects(readFile(sessionFile), { code: "ENOENT" });
+  const path = snapshotPath(recovery.text);
+  assert.equal(await readFile(path, "utf8"), "Captured before replacement.\n");
   await restart(host, {
     sessionId,
     sessionFile,
@@ -262,173 +249,158 @@ test("a pending capture keeps its original unsaved draft association after sessi
     snapshot: path,
     contents: "Captured before replacement.\n",
     recovery,
-  })
-})
+  });
+});
 
 test("a late snapshot write error preserves saved bytes and their original draft association", async (t) => {
-  const host = await nativePi(t)
-  const source = join(host.directory, "uncertain-write.txt")
-  await writeFile(source, "Bytes saved before the write reported failure.\n")
-  host.ui.setEditorText("Draft before the failed write")
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  const write = fs.writeFile
-  const gate = Promise.withResolvers()
-  let started = false
+  const host = await nativePi(t);
+  const source = join(host.directory, "uncertain-write.txt");
+  await writeFile(source, "Bytes saved before the write reported failure.\n");
+  host.ui.setEditorText("Draft before the failed write");
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  const write = fs.writeFile;
+  const gate = Promise.withResolvers();
+  let started = false;
   const mocked = t.mock.method(fs, "writeFile", async (...args) => {
-    await write(...args)
+    await write(...args);
     if (
       typeof args[0] === "string" &&
       args[0].startsWith(host.agentDir) &&
       args[0].endsWith("/uncertain-write.txt")
     ) {
-      started = true
-      await gate.promise
+      started = true;
+      await gate.promise;
     }
-  })
-  syncBuiltinESMExports()
+  });
+  syncBuiltinESMExports();
   t.after(() => {
-    gate.resolve()
-    mocked.mock.restore()
-    syncBuiltinESMExports()
-  })
-  const pending = host.attachFile(source)
-  await waitFor(() => assert.ok(started))
-  await rm(source)
-  await host.runtime.newSession()
-  host.ui.setEditorText("Unrelated replacement draft")
-  gate.reject(new Error("Snapshot write failed after saving bytes"))
-  await pending
+    gate.resolve();
+    mocked.mock.restore();
+    syncBuiltinESMExports();
+  });
+  const pending = host.attachFile(source);
+  await waitFor(() => assert.ok(started));
+  await rm(source);
+  await host.runtime.newSession();
+  host.ui.setEditorText("Unrelated replacement draft");
+  gate.reject(new Error("Snapshot write failed after saving bytes"));
+  await pending;
 
-  assert.equal(host.ui.getEditorText(), "Unrelated replacement draft")
-  assert.match(host.render(), /Snapshot write failed/)
-  const recovery = await retainedRequest(host)
-  assert.ok(recovery.text.includes(sessionId))
-  assert.ok(recovery.text.includes(sessionFile))
-  assert.match(recovery.text, /Draft before the failed write/)
-  assert.doesNotMatch(recovery.text, /Unrelated replacement draft/)
-  const path = snapshotPath(recovery.text)
-  assert.equal(
-    await readFile(path, "utf8"),
-    "Bytes saved before the write reported failure.\n",
-  )
-})
+  assert.equal(host.ui.getEditorText(), "Unrelated replacement draft");
+  assert.match(host.render(), /Snapshot write failed/);
+  const recovery = await retainedRequest(host);
+  assert.ok(recovery.text.includes(sessionId));
+  assert.ok(recovery.text.includes(sessionFile));
+  assert.match(recovery.text, /Draft before the failed write/);
+  assert.doesNotMatch(recovery.text, /Unrelated replacement draft/);
+  const path = snapshotPath(recovery.text);
+  assert.equal(await readFile(path, "utf8"), "Bytes saved before the write reported failure.\n");
+});
 
 test("a captured file remains recoverable when all snapshot writes fail after shutdown", async (t) => {
   const host = await nativePi(t, [
     fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
-  ])
-  const source = join(host.directory, "late.bin")
-  const bytes = Buffer.from([0, 1, 255, 13, 10, 9, 128])
-  await writeFile(source, bytes)
-  const draft = "**Requesting draft** /skill:review @source.ts"
-  host.ui.setEditorText(draft)
-  host.input("\x1b[97;9u")
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  const storage = join(host.agentDir, "pi-attachments")
-  await mkdir(storage)
-  const held = holdFileRead(t, source)
-  const pending = host.attachFile(source)
-  await held.started()
-  await rm(source)
-  await host.runtime.newSession()
-  host.ui.setEditorText("Unrelated current draft")
-  await chmod(storage, 0o500)
+  ]);
+  const source = join(host.directory, "late.bin");
+  const bytes = Buffer.from([0, 1, 255, 13, 10, 9, 128]);
+  await writeFile(source, bytes);
+  const draft = "**Requesting draft** /skill:review @source.ts";
+  host.ui.setEditorText(draft);
+  host.input("\x1b[97;9u");
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  const storage = join(host.agentDir, "pi-attachments");
+  await mkdir(storage);
+  const held = holdFileRead(t, source);
+  const pending = host.attachFile(source);
+  await held.started();
+  await rm(source);
+  await host.runtime.newSession();
+  host.ui.setEditorText("Unrelated current draft");
+  await chmod(storage, 0o500);
   try {
-    held.release()
-    await pending
-    assert.equal(host.ui.getEditorText(), "Unrelated current draft")
-    await host.runtime.session.reload()
-    assert.equal(host.ui.getEditorText(), "Unrelated current draft")
+    held.release();
+    await pending;
+    assert.equal(host.ui.getEditorText(), "Unrelated current draft");
+    await host.runtime.session.reload();
+    assert.equal(host.ui.getEditorText(), "Unrelated current draft");
   } finally {
-    await chmod(storage, 0o700)
+    await chmod(storage, 0o700);
   }
 
-  host.input("\x1b[1;4D")
+  host.input("\x1b[1;4D");
   await host.runtime.session.sendUserMessage("/attachments-recover", {
     expandPromptTemplates: true,
-  })
-  const recovery = await retainedRequest(host, draft)
-  assert.ok(recovery.text.includes(sessionId))
-  assert.ok(recovery.text.includes(sessionFile))
-  assert.ok(recovery.text.includes(host.directory))
-  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes)
-  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
-  host.input("kept")
-  assert.equal(host.ui.getEditorText(), "Unrelated current kept")
-  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes)
-})
+  });
+  const recovery = await retainedRequest(host, draft);
+  assert.ok(recovery.text.includes(sessionId));
+  assert.ok(recovery.text.includes(sessionFile));
+  assert.ok(recovery.text.includes(host.directory));
+  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes);
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft");
+  host.input("kept");
+  assert.equal(host.ui.getEditorText(), "Unrelated current kept");
+  assert.deepEqual(await readFile(snapshotPath(recovery.text)), bytes);
+});
 
 test("a partial multi-file read retains captured members for recovery with the original group", async (t) => {
   const host = await nativePi(t, [
     fileURLToPath(new URL("../../pi-composer/src/index.ts", import.meta.url)),
-  ])
-  const first = join(host.directory, "first.txt")
-  const second = join(host.directory, "second.txt")
-  const contents = "Captured first member\r\n\t界\0\n"
-  await writeFile(first, contents)
-  await writeFile(second, "Second member after repair")
-  host.ui.setEditorText("**Original group draft** /skill:review @source.ts")
-  const original = host.ui.getEditorText()
-  const sessionId = host.runtime.session.sessionManager.getSessionId()
-  const sessionFile = host.runtime.session.sessionFile
-  await chmod(second, 0o000)
-  t.mock.method(getNativeClipboard(), "getFilePaths", async () => [
-    first,
-    second,
-  ])
-  host.input("\x16")
-  await waitFor(() => assert.match(host.render(), /EACCES/))
-  assert.equal(host.ui.getEditorText(), original)
-  assert.match(host.render(), /EACCES/)
-  const partial = await retainedRequest(host, original)
-  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
-  await rm(first)
+  ]);
+  const first = join(host.directory, "first.txt");
+  const second = join(host.directory, "second.txt");
+  const contents = "Captured first member\r\n\t界\0\n";
+  await writeFile(first, contents);
+  await writeFile(second, "Second member after repair");
+  host.ui.setEditorText("**Original group draft** /skill:review @source.ts");
+  const original = host.ui.getEditorText();
+  const sessionId = host.runtime.session.sessionManager.getSessionId();
+  const sessionFile = host.runtime.session.sessionFile;
+  await chmod(second, 0o000);
+  t.mock.method(getNativeClipboard(), "getFilePaths", async () => [first, second]);
+  host.input("\x16");
+  await waitFor(() => assert.match(host.render(), /EACCES/));
+  assert.equal(host.ui.getEditorText(), original);
+  assert.match(host.render(), /EACCES/);
+  const partial = await retainedRequest(host, original);
+  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents);
+  await rm(first);
   assert.ok(
     partial.text.includes(second),
     "The partial request must identify the missing group member",
-  )
-  await host.runtime.newSession()
-  await host.runtime.session.reload()
-  host.ui.setEditorText("Unrelated current draft")
-  await chmod(second, 0o600)
+  );
+  await host.runtime.newSession();
+  await host.runtime.session.reload();
+  host.ui.setEditorText("Unrelated current draft");
+  await chmod(second, 0o600);
   await host.runtime.session.sendUserMessage("/attachments-recover", {
     expandPromptTemplates: true,
-  })
-  assert.match(host.render(), /Request saved:/)
-  const recovery = await retainedRequest(host, "[Attachment: second.txt]")
-  assert.ok(recovery.text.includes(sessionId))
-  assert.ok(recovery.text.includes(sessionFile))
-  const references = recovery.text.match(/\[Attachment: [^\]]+\]\(<[^>]+>\)/g)
-  assert.equal(references?.length, 2)
-  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
-  assert.equal(
-    await readFile(snapshotPath(references[1]), "utf8"),
-    "Second member after repair",
-  )
-  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
-  host.ui.pasteToEditor(`\n${references.join("\n")}\n`)
-  assertAttachments(host.ui.getEditorText(), host.render(), [
-    "first.txt",
-    "second.txt",
-  ])
-  host.input("\x1b[122;9u")
-  assert.equal(host.ui.getEditorText(), "Unrelated current draft")
-  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
+  });
+  assert.match(host.render(), /Request saved:/);
+  const recovery = await retainedRequest(host, "[Attachment: second.txt]");
+  assert.ok(recovery.text.includes(sessionId));
+  assert.ok(recovery.text.includes(sessionFile));
+  const references = recovery.text.match(/\[Attachment: [^\]]+\]\(<[^>]+>\)/g);
+  assert.equal(references?.length, 2);
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents);
+  assert.equal(await readFile(snapshotPath(references[1]), "utf8"), "Second member after repair");
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft");
+  host.ui.pasteToEditor(`\n${references.join("\n")}\n`);
+  assertAttachments(host.ui.getEditorText(), host.render(), ["first.txt", "second.txt"]);
+  host.input("\x1b[122;9u");
+  assert.equal(host.ui.getEditorText(), "Unrelated current draft");
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents);
   await host.runtime.session.sendUserMessage("/attachments-recover", {
     expandPromptTemplates: true,
-  })
-  assert.match(host.render(), /No unsaved attachment requests/)
+  });
+  assert.match(host.render(), /No unsaved attachment requests/);
   await host.runtime.session.sendUserMessage("/attachments-cleanup", {
     expandPromptTemplates: true,
-  })
-  assert.equal(await readFile(partial.path, "utf8"), partial.text)
-  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents)
-  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents)
-  host.input("\x1b[122;10u")
-  assertAttachments(host.ui.getEditorText(), host.render(), [
-    "first.txt",
-    "second.txt",
-  ])
-})
+  });
+  assert.equal(await readFile(partial.path, "utf8"), partial.text);
+  assert.equal(await readFile(snapshotPath(partial.text), "utf8"), contents);
+  assert.equal(await readFile(snapshotPath(references[0]), "utf8"), contents);
+  host.input("\x1b[122;10u");
+  assertAttachments(host.ui.getEditorText(), host.render(), ["first.txt", "second.txt"]);
+});
