@@ -6,7 +6,7 @@
 
 **Current delta:** [13: Thought titles without body leakage](../../.scratch/tool-activity/issues/13-thought-titles.md). [11: Working labels from current activity](../../.scratch/tool-activity/issues/11-working-labels.md) and [12: Verify working label parity](../../.scratch/tool-activity/issues/12-verify-working-labels.md) are its completed prerequisites.
 
-**Chat placement revision:** [Chat 18](../../.scratch/pi-chat/issues/18-active-accordion-working-row.md) specifies one thinking row as the current render-group header or below the conversation, with trailing group/item chevrons. This changes placement only; the operation and thought-heading selection rules below remain authoritative. The new placement is implemented and verified at `5724ea6` on `codex/pi-chat-working-row-integration`; Chat 18 and the [chat specification](pi-chat.md) record its 147-case verification, completed reviews, and unavailable physical-terminal check.
+**Chat placement revision:** [Chat 18](../../.scratch/pi-chat/issues/18-active-accordion-working-row.md) specifies one thinking row as the current render-group header or below the conversation, with trailing group/item chevrons. This changes placement only; the operation and thought-heading selection rules below remain authoritative. The new placement is implemented and verified at `5724ea6`, then integrated into `main` at `72c77f6`; Chat 18 and the [chat specification](pi-chat.md) record its 147-case verification, completed reviews, and unavailable physical-terminal check.
 
 ## Problem Statement
 
