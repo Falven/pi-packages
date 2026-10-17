@@ -62,7 +62,7 @@ _Avoid_: Child operation, when referring to the execution's own outcome
 A concise description shown at a disclosure. Qualify it as a group summary or item summary when identifying what it describes.
 
 **Group summary**:
-An aggregate description of the operation types in a render group. Its header uses this summary when it is not showing the existing label of the current operation belonging to that group; item summaries remain separate.
+An aggregate description of the operation types in a render group. It describes the group as a whole; item summaries describe individual activity items.
 
 **Item summary**:
 A short description identifying the action and target of one activity item. Its wording can become less specific when the full output already shows the command or target.
@@ -98,7 +98,7 @@ A thought shown at its conversation position in ordinary chat flow, without its 
 A standalone bold paragraph that titles a thought section. It is omitted from displayed thought prose and can supply the working label. Its original text remains in the conversation source.
 
 **Working label**:
-The transient, single-line text in Pi's native working indicator, selected from current operations or the latest activity heading. It describes current work independently of thought visibility and activity disclosure state; thought body prose never supplies it.
+The transient, single-line text describing current work, selected from a current operation or the latest activity heading, with `Thinking` as the fallback. Its selection is independent of thought visibility and activity disclosure state; thought body prose never supplies it.
 
 ### Composition
 
