@@ -1,6 +1,6 @@
 # Use the thinking row as the active accordion header
 
-**Status:** Specified in the existing [chat specification](../specs/pi-chat.md) and published as [Chat 18](../../.scratch/pi-chat/issues/18-active-accordion-working-row.md), `ready-for-agent`, on 2026-10-17. The code inspection is based on `aa4afa1` and the user's accepted visualization. This plan covers two changes: trailing disclosure chevrons and a single thinking row that serves as the active render group's header. Runtime implementation has not started.
+**Status:** Implemented and verified at `5724ea6` on `codex/pi-chat-working-row-integration`; [Chat 18](../../.scratch/pi-chat/issues/18-active-accordion-working-row.md) is resolved. The original inspection was based on `aa4afa1` and the user's accepted visualization. Both planned presentation changes are complete. The existing 147 combined cases, static checks, and final Standards and Spec reviews pass on installed Pi 1.1.0. The ticket records exact evidence and the unavailable physical-terminal check; the [chat specification](../specs/pi-chat.md) remains the contract.
 
 ## Observable behavior
 
