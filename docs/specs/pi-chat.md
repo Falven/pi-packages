@@ -173,8 +173,8 @@ Offer an enclosing disclosure only for renderable activity with a qualifying fin
 122. As a Pi user, I want current registered skill reads, searches, and listings to retain their existing names and folder/query wording, so that the header describes the same selected operation as the native indicator.
 123. As a Pi user, I want current commands to use their existing command label and empty-command fallback, so that the header stays useful for every supported command.
 124. As a Pi user, I want current edits to retain `Editing files` and other supported operations to retain their existing labels, so that this change does not invent more specific wording.
-125. As a Pi user, I want older, settled, and otherwise aggregate-summary groups to keep their category summaries, so that current work does not overwrite descriptions of other work.
-126. As a Pi user, I want a group to return to its aggregate summary when current work ends or moves elsewhere, so that no stale operation remains in its header.
+125. As a Pi user, I want older, settled, and otherwise aggregate-summary groups that retain their wrappers to keep their category summaries, so that current work does not overwrite descriptions of other work.
+126. As a Pi user, I want a retained group header to return to its aggregate summary when current work ends or moves elsewhere, so that no stale operation remains in its header.
 127. As a Pi user, I want label changes to preserve group, item, and native-output disclosure choices, so that following progress does not change what I opened.
 128. As a Pi user, I want a narrow header to recover its full label when widened, so that terminal width does not discard the underlying text.
 129. As a Pi user, I want the native working indicator’s text, thought-title fallback, visibility, and timing preserved, so that improving the header does not change native progress presentation.
@@ -362,16 +362,16 @@ Offer an enclosing disclosure only for renderable activity with a qualifying fin
 
 - **Current-operation header acceptance (new revision).** Reuse the already selected real-Pi native-host and combined-workflow seam. Extend existing behavior cases with failing assertions before implementation; add no test file or seam. Assert the render-group header specifically in fresh frames, so matching native indicator text cannot satisfy the check. The user’s handoff confirms this seam and one complete implementation ticket. Existing operation-selection and lifecycle coverage remains authoritative.
 
-| Situation                                                 | Required header behavior                                                       |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Current file read                                         | Reuse `Reading <file>`.                                                        |
-| Current registered skill read                             | Reuse `Reading <name> skill`.                                                  |
-| Current search or listing                                 | Reuse existing folder/query selection and wording.                             |
-| Current command                                           | Reuse `Running <command>`, including the existing empty-command fallback.      |
-| Current edit                                              | Preserve `Editing files`.                                                      |
-| Other supported current operation                         | Reuse its existing supported label.                                            |
-| Settled, historical, or otherwise aggregate-summary group | Preserve category wording, ordering, deduplication, and singular/plural rules. |
-| Opening or closing a disclosure                           | Preserve existing choices; label updates must not toggle controls.             |
+| Situation                                                          | Required header behavior                                                       |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Current file read                                                  | Reuse `Reading <file>`.                                                        |
+| Current registered skill read                                      | Reuse `Reading <name> skill`.                                                  |
+| Current search or listing                                          | Reuse existing folder/query selection and wording.                             |
+| Current command                                                    | Reuse `Running <command>`, including the existing empty-command fallback.      |
+| Current edit                                                       | Preserve `Editing files`.                                                      |
+| Other supported current operation                                  | Reuse its existing supported label.                                            |
+| Retained settled, historical, or otherwise aggregate-summary group | Preserve category wording, ordering, deduplication, and singular/plural rules. |
+| Opening or closing a disclosure                                    | Preserve existing choices; label updates must not toggle controls.             |
 
 - **Header regression coverage.** Pause a read and a command, observe an active edit, and verify a mixed group returns to its aggregate summary when work settles or leaves the current slice. Keep an older group’s summary while another group owns the selected operation. Exercise context changes without replacing item identities, continuation updates, narrow/wide resize, and retained group/item/native-output choices in existing cases. Retain native indicator text, visibility, thought-title fallback, and timing assertions. Run the affected existing cases, the full chat and combined tool-presentation suites, repository typecheck/lint/format checks, and whitespace checks. Follow existing Pi 1.1.0 and 1.0.2 compatibility expectations without changing the installed runtime or lockfile. Record exact revisions, actual versions, and physical-terminal limits separately.
 

@@ -375,7 +375,7 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   await host.key("\r")
   const screen = () => host.screenLines().map(stripTerminalSequences)
   await t.waitFor(() => assert.equal(host.requests.length, 2))
-  assert.match(await host.frame(), /> Read files/)
+  assert.match(await host.frame(), /> Reading missing-thought\.txt/)
   host.resumeResponse()
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Second adjacent block"))),

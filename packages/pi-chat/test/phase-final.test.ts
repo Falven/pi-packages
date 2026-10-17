@@ -170,7 +170,7 @@ test("phase-bearing final text collapses identical commentary while it streams",
     assert.equal(host.requests.length, requestsBeforeRead + 2),
   )
   const open = await host.frame()
-  assert.match(open, /> Read files/)
+  assert.match(open, /> Reading phase\.txt/)
   assert.doesNotMatch(open, /Read phase\.txt/)
   host.resumeResponse()
   await t.waitFor(async () => assert.match(await host.frame(), /Read finished/))
