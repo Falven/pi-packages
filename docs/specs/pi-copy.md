@@ -93,6 +93,6 @@ Chat retains ownership of the conversation, semantic activity items, final-respo
 
 ## Further Notes
 
-[ADR 0028](../adr/0028-copy-as-an-independent-extension.md) records independent installation and ownership, superseding the library design in [ADR 0026](../adr/0026-copy-actions-in-a-dependent-package.md). [ADR 0027](../adr/0027-copy-retained-source-and-separate-presentation.md) records source fidelity and presentation isolation. The [chat spec](pi-chat.md) remains authoritative for chat's activity classification, final-response recognition, and host integration.
+[ADR 0029](../adr/0029-copy-as-an-independent-extension.md) records independent installation and ownership, superseding the library design in [ADR 0026](../adr/0026-copy-actions-in-a-dependent-package.md). [ADR 0027](../adr/0027-copy-retained-source-and-separate-presentation.md) records source fidelity and presentation isolation. The [chat spec](pi-chat.md) remains authoritative for chat's activity classification, final-response recognition, and host integration.
 
 This correction preserves the existing behavior and spacing while making both plugins independently installable and useful. The accepted discussion and instruction to continue settle source fidelity, final-response controls, independent installation, and the existing testing seam; ticket granularity is an implementation choice within that authorization. Local tracker publication uses `ready-for-agent`, then `claimed` and `resolved`. No remote issue or PR is required.

@@ -6,4 +6,4 @@
 
 Scope is visual presentation. Model verbosity, reasoning effort, model selection, and other model controls remain outside this package. Planning and todo workflows, subagent workflows, and pending-question/answer workflows also remain outside it; their existing native integrations must remain usable.
 
-[ADR 0028](0028-copy-as-an-independent-extension.md) assigns the existing scoped copy actions to the independently installed `pi-copy` extension. Chat supplies its authoritative sources and integrates optional controls with its layout, navigation, selection, and Find; chat installation does not include copy.
+[ADR 0029](0029-copy-as-an-independent-extension.md) assigns the existing scoped copy actions to the independently installed `pi-copy` extension. Chat supplies its authoritative sources and integrates optional controls with its layout, navigation, selection, and Find; chat installation does not include copy.

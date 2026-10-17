@@ -17,4 +17,4 @@ The canonical [pi-copy specification](../../docs/specs/pi-copy.md) contains the 
 
 Published on 2026-10-17 from the accepted discussion. The user authorized the documentation, extraction, implementation, integration into main, and cleanup. Preserve completed chat tickets as historical records.
 
-The user subsequently required independent plugins and confirmed that copying must remain available after final responses without losing current functionality. [ADR 0028](../../docs/adr/0028-copy-as-an-independent-extension.md) supersedes the dependent-library decision; tickets 03 and 04 implement that correction.
+The user subsequently required independent plugins and confirmed that copying must remain available after final responses without losing current functionality. [ADR 0029](../../docs/adr/0029-copy-as-an-independent-extension.md) supersedes the dependent-library decision; tickets 03 and 04 implement that correction.

@@ -13,7 +13,7 @@
 - [x] Chat alone remains functional and omits copy controls and their spacing.
 - [x] Existing affected behavior cases load the two plugins explicitly and pass; no new tests are added.
 
-Published on 2026-10-17 from the user's independent-plugin correction and instruction to preserve all current functionality and continue. The canonical [specification](../../../docs/specs/pi-copy.md) and [ADR 0028](../../../docs/adr/0028-copy-as-an-independent-extension.md) govern the delta.
+Published on 2026-10-17 from the user's independent-plugin correction and instruction to preserve all current functionality and continue. The canonical [specification](../../../docs/specs/pi-copy.md) and [ADR 0029](../../../docs/adr/0029-copy-as-an-independent-extension.md) govern the delta.
 
 ## Verification
 
