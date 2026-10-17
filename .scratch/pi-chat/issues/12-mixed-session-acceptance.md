@@ -4,7 +4,7 @@
 
 **Blocked by:** 03: Component-copy delta; 07: Final-response-copy delta.
 
-**Status:** verified and integrated into local main — task-created branch/worktree cleanup pending
+**Status:** resolved — verified and integrated into local main; task-created branches and worktrees removed
 
 ## Copy acceptance delta — approved 2026-10-16
 
@@ -12,13 +12,15 @@
 - [x] Establish empty/omitted/partial behavior, clipboard rejection without actual clipboard writes, and in-flight disposal cleanup.
 - [x] Establish mouse consumption, configured keyboard/focus behavior, unchanged global selection-copy, narrow/resize/ancestor behavior, source Find, and absence of actions on every excluded category.
 - [x] Run the existing chat suite and required static checks on existing supported Pi 1.0.2 and 1.1.0 environments. Record commands, results, and unavailable coverage; do not upgrade dependencies or add test cases/files/seams.
-- [ ] Review Standards and Spec independently, fix concrete findings, integrate only this delta into main, and remove task-created branches/worktrees while preserving unrelated work.
+- [x] Review Standards and Spec independently, fix concrete findings, integrate only this delta into main, and remove task-created branches/worktrees while preserving unrelated work.
 
 These recording-terminal checks do not establish physical-terminal or OS clipboard behavior. Report physical acceptance only if performed. Earlier evidence below remains historical.
 
 ### Copy revision evidence
 
-The copy delta was rebased onto local main `c94ffc1`, preserving its current-operation group headers, then integrated by fast-forward through `30fb1a85c313c88fa3bd51b181a1b65433cd7a06`. The final production revision is `7b72ac9b0f537a834caa828e8109eb3ae9fe41ad`; `30fb1a8` changes only the existing image-layout test. Independent Standards and Spec reviews of `c94ffc1..7b72ac9` found no remaining actionable findings. Integration is complete; removal of task-created branches and worktrees is still pending, so the combined checklist item above remains open.
+The copy delta was rebased onto local main `c94ffc1`, preserving its current-operation group headers, then integrated by fast-forward through `30fb1a85c313c88fa3bd51b181a1b65433cd7a06`; verification documentation followed at `df856004`. The copy production revision is `7b72ac9b0f537a834caa828e8109eb3ae9fe41ad`; `30fb1a8` changes only the existing image-layout test. Independent Standards and Spec reviews of `c94ffc1..7b72ac9` found no remaining actionable findings.
+
+The app's archive requests did not remove the checkouts. A complete four-branch Git bundle was saved and verified at `/tmp/pi-chat-copy.crVaXw/chat-copy-worktrees.bundle`, then Git removed the clean `chat-copy-integration`, `chat-copy-items`, `chat-copy-response`, and `chat-copy-validation` worktrees and their corresponding `codex/` branches. The pre-rebase response commit was confirmed patch-equivalent before branch deletion. Unrelated worktrees, concurrent main changes, and the untracked comparison document were preserved. Integration and task cleanup are complete; later unrelated main revisions retain their own verification scope.
 
 Existing real-Pi host and recording-terminal cases establish semantic command/edit eligibility, exact multiline commands, successful and failed retained output beyond preview and viewport, live snapshots, per-file diffs and text fallback, shared and separate operation payloads, and stable historical final-answer Markdown across split text parts and mixed content. They also cover empty/omitted/partial results, clipboard rejection, pending-copy disposal, mouse consumption, configured keyboard navigation, focus recovery, global selection-first copying, source Find, narrow widths, resize, ancestor choices, native images, settings reconstruction, reload, and session replacement. Controls remain absent from the excluded activity and message categories. No test cases, test files, test seams, dependencies, settings, or persistence schema were added.
 
