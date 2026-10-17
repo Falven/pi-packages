@@ -392,9 +392,9 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   await host.key(`\x1b[<0;2;${groupRow + 1}m`)
   await host.key("\x1bg")
   const expanded = await host.frame()
-  assert.match(expanded, /▼ Loaded a tool, called a tool, read files/)
-  assert.match(expanded, /> Read one\.txt/)
-  assert.match(expanded, /> Called mystery/)
+  assert.match(expanded, /Loaded a tool, called a tool, read files ▼/)
+  assert.match(expanded, /Read one\.txt >/)
+  assert.match(expanded, /Called mystery >/)
   assert.doesNotMatch(
     expanded,
     /CUSTOM CALL|CUSTOM RESULT|native result|hidden telescope/,
@@ -428,7 +428,7 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   assert.doesNotMatch(await host.frame(), /CUSTOM CALL|CUSTOM RESULT/)
   await host.key("\x1b")
   const revealed = await host.frame()
-  assert.match(revealed, /▼ Called mystery[\s\S]*hidden telescope/)
+  assert.match(revealed, /Called mystery ▼[\s\S]*hidden telescope/)
   assert.doesNotMatch(revealed, /CUSTOM CALL|CUSTOM RESULT/)
   const answerRow = host
     .screenLines()
@@ -528,7 +528,7 @@ test("revealed retained tool images follow native image settings", async (t) => 
   await host.key("\x06")
   await host.type("image-needle")
   assert.match(await host.frame(), /1\/1/)
-  assert.match(await host.frame(), /▼ Called read/)
+  assert.match(await host.frame(), /Called read ▼/)
   assert.doesNotMatch(await host.frame(), /Called a tool/)
   assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/)
   await host.key("\x1b")

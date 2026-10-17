@@ -116,8 +116,14 @@ type NativeMode = ThoughtEnvironment & {
   bashComponent?: Component
   pendingBashComponents: Component[]
   pendingTools: Map<string, Component>
-  activeStatusIndicator?: { kind: string; getRenderedIndicator(): string }
+  activeStatusIndicator?: Component & {
+    kind: string
+    getRenderedIndicator(): string
+    renderInBorder(width: number): string
+  }
   activeWorkingIndicatorEmbedded: boolean
+  statusContainer: Container
+  setEditorWorkingStatusIndicator(indicator?: Component): boolean
   settingsManager: {
     getHideThinkingBlock(): boolean
     getShowImages(): boolean
@@ -314,7 +320,6 @@ type ChatRow = {
 type RenderGroup = {
   items: ChatRow[]
   expanded: boolean
-  operationLabel?: string | undefined
   header?: RenderGroupHeader
 }
 
@@ -352,12 +357,25 @@ class RenderGroupHeader implements Component {
   invalidate() {}
 
   render(width: number) {
-    return new Text(
-      truncateToWidth(
-        `${this.group.expanded ? "▼" : ">"} ${this.group.operationLabel ?? this.adapter.groupSummaries.summary(this.group)}`,
-        Math.max(1, width - this.adapter.host.outputPad * 2),
-      ),
+    const padding = Math.min(
       this.adapter.host.outputPad,
+      Math.floor((width - 1) / 2),
+    )
+    const available = Math.max(1, width - padding * 2)
+    const chevron = this.group.expanded ? "▼" : ">"
+    const labelWidth = available > 2 ? available - 2 : available - 1
+    const label =
+      available === 1
+        ? ""
+        : this.adapter.workingGroup === this.group
+          ? this.adapter.workingLine(labelWidth)
+          : truncateToWidth(
+              this.adapter.groupSummaries.summary(this.group),
+              labelWidth,
+            )
+    return new Text(
+      `${label}${available > 2 ? " " : ""}${chevron}`,
+      padding,
       0,
       this.focused
         ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
@@ -777,12 +795,13 @@ class ActivityItemDisclosure extends Container {
 
   override render(width: number) {
     const pad = this.adapter.host.outputPad
+    const padding = Math.min(pad, Math.floor((width - 1) / 2))
+    const available = Math.max(1, width - padding * 2)
+    const chevron = this.expanded ? "▼" : ">"
+    const labelWidth = available > 2 ? available - 2 : available - 1
     this.header = new Text(
-      truncateToWidth(
-        `${this.expanded ? "▼" : ">"} ${itemSummary(this.item, this.expanded && this.bodyExpanded)}`,
-        Math.max(1, width - pad * 2),
-      ),
-      pad,
+      `${truncateToWidth(itemSummary(this.item, this.expanded && this.bodyExpanded), labelWidth)}${available > 2 ? " " : ""}${chevron}`,
+      padding,
       0,
       this.focused
         ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
@@ -972,6 +991,10 @@ export class NativeChatHost {
   private readonly bashMessages = new WeakMap<object, Component>()
   private readonly toolResults = new WeakMap<object, Component>()
   private readonly renderGroups = new Map<Occurrence, RenderGroup>()
+  workingGroup: RenderGroup | undefined
+  private borrowedWorking: NativeMode["activeStatusIndicator"]
+  private readonly standaloneWorking = new Text("", 0, 0)
+  private readonly standaloneWorkingSpacing = new Spacer(1)
   private readonly activityDisclosures = new Map<
     Occurrence,
     Map<string, ActivityItemDisclosure>
@@ -1076,6 +1099,10 @@ export class NativeChatHost {
       throw new Error("pi-chat chat root is already owned")
     const adapter = new NativeChatHost(mode, activityItems, working)
     try {
+      requireMethod(
+        mode.setEditorWorkingStatusIndicator,
+        "setEditorWorkingStatusIndicator",
+      )
       adapter.wrapNativeConstruction()
       adapter.forkCleanup = carryObservedFork(
         mode.runtimeHost,
@@ -1097,6 +1124,41 @@ export class NativeChatHost {
       adapter.dispose()
       throw error
     }
+  }
+
+  workingLine(width: number) {
+    return this.host.activeStatusIndicator?.kind === "working"
+      ? this.host.activeStatusIndicator.renderInBorder(Math.max(1, width))
+      : ""
+  }
+
+  private detachWorkingIndicator() {
+    const indicator = this.host.activeStatusIndicator
+    if (indicator?.kind !== "working") return
+    requireMethod(
+      indicator.renderInBorder,
+      "activeStatusIndicator.renderInBorder",
+    )
+    this.borrowedWorking = indicator
+    this.host.statusContainer.removeChild(indicator)
+    this.host.setEditorWorkingStatusIndicator(undefined)
+    this.host.activeWorkingIndicatorEmbedded = false
+  }
+
+  private restoreWorkingIndicator() {
+    const indicator = this.borrowedWorking
+    this.borrowedWorking = undefined
+    if (
+      !indicator ||
+      this.host.fullscreenLayoutRoot !== this.root ||
+      this.host.activeStatusIndicator !== indicator
+    )
+      return
+    this.host.statusContainer.removeChild(indicator)
+    this.host.activeWorkingIndicatorEmbedded =
+      this.host.setEditorWorkingStatusIndicator(indicator)
+    if (!this.host.activeWorkingIndicatorEmbedded)
+      this.host.statusContainer.addChild(indicator)
   }
 
   private layoutChat() {
@@ -1133,26 +1195,7 @@ export class NativeChatHost {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     const width = Math.max(1, renderer.terminal.columns)
     const height = Math.max(1, renderer.terminal.rows)
-    const indicator = this.host.activeStatusIndicator
-    if (indicator?.kind === "working") {
-      // Native editor borders reserve five cells; standalone loaders reserve two.
-      const padding = this.host.activeWorkingIndicatorEmbedded ? 5 : 2
-      this.working.refresh(
-        Math.max(
-          0,
-          width - padding - visibleWidth(indicator.getRenderedIndicator()) - 1,
-        ),
-      )
-    }
-    const { entries, gap } = this.oldRoot[LAYOUT_NODE]()
-    const [available] = allocateStackSizes(
-      entries,
-      entries.map(({ component }, index) =>
-        index === 0 ? 0 : component.render(width).length,
-      ),
-      height,
-      gap,
-    )
+    this.detachWorkingIndicator()
     const contentWidth = this.transcript.getContentWidth(width)
     const oldLeaves = this.leaves
     const oldAnchor = rendererSelection(renderer, "selectionAnchor")
@@ -1201,25 +1244,24 @@ export class NativeChatHost {
         components.push(...missing[nextMissing++]![1])
     }
     const chatRows = this.orderedChatRows(components)
-    const operation = this.working.currentOperation()
+    const current = this.agentActivity.currentActivity()
+    const hasVisibleContent = (row: ChatRow) => {
+      const occurrence = row.occurrence
+      const message = (occurrence?.parent ?? occurrence)?.message
+      if (row.tool || message?.role !== "assistant") return true
+      return message.content.some(
+        (part, index) =>
+          (occurrence?.contentIndex === undefined ||
+            (occurrence.contentIndices ?? [occurrence.contentIndex]).includes(
+              index,
+            )) &&
+          ((part.type === "text" && part.text.trim()) ||
+            (part.type === "thinking" && part.thinking.trim())),
+      )
+    }
     const latest = new Map<AgentActivity, ChatRow>()
     for (const chatRow of chatRows) {
-      const occurrence = chatRow.occurrence
-      const message = (occurrence?.parent ?? occurrence)?.message
-      if (
-        !chatRow.tool &&
-        message?.role === "assistant" &&
-        !message.content.some(
-          (part, index) =>
-            (occurrence?.contentIndex === undefined ||
-              (occurrence.contentIndices ?? [occurrence.contentIndex]).includes(
-                index,
-              )) &&
-            ((part.type === "text" && part.text.trim()) ||
-              (part.type === "thinking" && part.thinking.trim())),
-        )
-      )
-        continue
+      if (!hasVisibleContent(chatRow)) continue
       const activity = this.agentActivity.find(chatRow.occurrence)
       if (
         activity &&
@@ -1229,7 +1271,23 @@ export class NativeChatHost {
       )
         latest.set(activity, chatRow)
     }
+    const latestWorking =
+      current && !current.settled && !current.final
+        ? latest.get(current)
+        : undefined
+    const laterVisible =
+      latestWorking &&
+      chatRows
+        .slice(chatRows.indexOf(latestWorking) + 1)
+        .some(
+          (row) =>
+            !(row.component instanceof Spacer) &&
+            hasVisibleContent(row) &&
+            (row.agentActivity ??
+              this.agentActivity.find(row.occurrence ?? row.owner)) === current,
+        )
     const unwrapped = new Map<Component, Component>()
+    let currentGroup: RenderGroup | undefined
     let composed: ChatRow[] = []
     for (let index = 0; index < chatRows.length;) {
       const chatRow = chatRows[index]!
@@ -1264,10 +1322,8 @@ export class NativeChatHost {
         this.renderGroups.set(first, group)
       }
       group.items = items
-      group.operationLabel =
-        operation && items.some((row) => row.activityItem === operation.item)
-          ? operation.label
-          : undefined
+      if (latestWorking && !laterVisible && items.includes(latestWorking))
+        currentGroup = group
       const activity = this.agentActivity.find(first)
       const item = items.length === 1 ? items[0]!.activityItem : undefined
       const status =
@@ -1318,6 +1374,51 @@ export class NativeChatHost {
           ? [{ component: spacing, tool: false }, chatRow]
           : [chatRow]
       },
+    )
+    this.workingGroup =
+      currentGroup &&
+      composed.some((row) => row.component === currentGroup.header)
+        ? currentGroup
+        : undefined
+    const indicator = this.host.activeStatusIndicator
+    if (indicator?.kind === "working") {
+      this.working.refresh(
+        Math.max(
+          0,
+          contentWidth -
+            this.host.outputPad * 2 -
+            visibleWidth(indicator.getRenderedIndicator()) -
+            1 -
+            (this.workingGroup ? 2 : 0),
+        ),
+      )
+    }
+    this.detachWorkingIndicator()
+    if (this.host.activeStatusIndicator?.kind === "working") {
+      if (!this.workingGroup) {
+        if (!(composed.at(-1)?.component instanceof Spacer))
+          composed.push({
+            component: this.standaloneWorkingSpacing,
+            tool: false,
+          })
+        this.standaloneWorking.setPaddingX(this.host.outputPad)
+        this.standaloneWorking.setText(
+          this.workingLine(contentWidth - this.host.outputPad * 2),
+        )
+        composed.push({
+          component: this.standaloneWorking,
+          tool: false,
+        })
+      }
+    } else this.workingGroup = undefined
+    const { entries, gap } = this.oldRoot[LAYOUT_NODE]()
+    const [available] = allocateStackSizes(
+      entries,
+      entries.map(({ component }, index) =>
+        index === 0 ? 0 : component.render(width).length,
+      ),
+      height,
+      gap,
     )
     const leaves = composed.map(
       ({ component, occurrence, zoneStart, zoneEnd }) => {
@@ -2812,7 +2913,10 @@ export class NativeChatHost {
   }
 
   private bindRenderer() {
-    if (this.host.renderer.mode !== "fullscreen") return
+    if (this.host.renderer.mode !== "fullscreen") {
+      this.restoreWorkingIndicator()
+      return
+    }
     const renderer = this.host.renderer as unknown as TuiAltScreen
     if (this.boundRenderer === renderer) return
     this.unbindRenderer()
@@ -4078,6 +4182,7 @@ export class NativeChatHost {
 
   dispose() {
     if (!this.active) return
+    this.restoreWorkingIndicator()
     for (const items of this.activityDisclosures.values())
       for (const item of items.values()) item.dispose()
     for (const action of this.responseActions.values()) action.dispose()

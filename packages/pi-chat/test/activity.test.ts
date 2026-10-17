@@ -150,12 +150,12 @@ test("pending calls stay out of activity until dispatch and retain generic outco
   await t.waitFor(() => assert(started))
   await host.frame()
   assert.match(screen(), /Calling inspect_workspace/)
-  assert.equal(
+  assert.match(
     screen()
       .split("\n")
-      .find((line) => line.trimStart().startsWith("▼ "))
-      ?.trim(),
-    "▼ Calling inspect_workspace",
+      .find((line) => line.includes("Calling inspect_workspace"))
+      ?.trim() ?? "",
+    /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Calling inspect_workspace ▼$/,
   )
   gate.resolve()
   await work
@@ -202,7 +202,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   await host.frame()
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
-    /─+ [^\n]*Thinking/,
+    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Thinking/,
   )
   await host.session.abort()
   await work
@@ -213,7 +213,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   assert.match(screen(), /Called inspect_workspace \(failed\)/)
   assert.doesNotMatch(screen(), /Called a tool/)
   assert.match(screen(), /Operation aborted/)
-  assert.doesNotMatch(screen(), /─+ [^\n]*(Thinking|Working)/)
+  assert.doesNotMatch(screen(), /^[ \t]*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /m)
   await host.reload()
   await host.key("\x0f")
   await host.key("\x0f")
@@ -284,7 +284,10 @@ test("native reads and an unrelated command provider share skill labels and reta
     skillPaths: [catalog],
     rows: 110,
     persistSession: true,
-    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    keybindings: {
+      "tui.altScreen.search": "ctrl+f",
+      "app.thinking.toggle": "ctrl+t",
+    },
     extensionFactories: [
       (pi) =>
         pi.registerTool({
@@ -349,14 +352,15 @@ test("native reads and an unrelated command provider share skill labels and reta
     await host.frame()
     assert.match(
       host.screenLines().map(stripTerminalSequences).join("\n"),
-      /─+ [^\n]*Reading review skill/,
+      /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Reading review skill/,
     )
     assert(
       host
         .screenLines()
-        .some(
-          (line) =>
-            stripTerminalSequences(line).trim() === "> Reading review skill",
+        .some((line) =>
+          stripTerminalSequences(line)
+            .trim()
+            .endsWith("Reading review skill >"),
         ),
     )
     host.resumeResponse()
@@ -366,7 +370,7 @@ test("native reads and an unrelated command provider share skill labels and reta
   await host.key("\x0f")
   await host.frame()
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.equal((screen().match(/Read review skill ▼/g) ?? []).length, 3)
   await host.key("\x06")
   await host.type("opaque-source-needle")
   await host.frame()
@@ -375,13 +379,13 @@ test("native reads and an unrelated command provider share skill labels and reta
   await host.key("\x1b")
   await host.frame()
   assert.doesNotMatch(screen(), /opaque-source-needle|opaque_read/)
-  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.equal((screen().match(/Read review skill ▼/g) ?? []).length, 3)
   replaceReads = true
   await host.reload()
   await host.key("\x0f")
   await host.key("\x0f")
   await host.frame()
-  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.equal((screen().match(/Read review skill ▼/g) ?? []).length, 3)
   host.queueResponse(...response("", "read", { path }))
   host.queueResponse(...response("Finished"))
   await host.session.prompt("Use the replacement")
@@ -389,8 +393,8 @@ test("native reads and an unrelated command provider share skill labels and reta
   await host.key("\x0f")
   await host.key("\x0f")
   await host.frame()
-  assert.match(screen(), /▼ Called read/)
-  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.match(screen(), /Called read ▼/)
+  assert.equal((screen().match(/Read review skill ▼/g) ?? []).length, 3)
   const requests = host.requests.length
   const fork = await host.runtime.fork(
     host.session.sessionManager.getLeafId()!,
@@ -400,8 +404,8 @@ test("native reads and an unrelated command provider share skill labels and reta
   await host.key("\x0f")
   await host.key("\x0f")
   await host.frame()
-  assert.match(screen(), /▼ Called read/)
-  assert.equal((screen().match(/▼ Read review skill/g) ?? []).length, 3)
+  assert.match(screen(), /Called read ▼/)
+  assert.equal((screen().match(/Read review skill ▼/g) ?? []).length, 3)
   assert.equal(host.requests.length, requests)
   assert.equal(replacements, 1)
 })
@@ -443,7 +447,7 @@ test("an unrelated provider presents semantic operations and late updates withou
     rows: 140,
     columns: 110,
     persistSession: true,
-    settings: { fullscreenCopyOnSelect: false },
+    settings: { fullscreenCopyOnSelect: false, hideThinkingBlock: true },
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     extensionFactories: [
       (pi) => {
@@ -499,12 +503,56 @@ test("an unrelated provider presents semantic operations and late updates withou
     ],
   })
   host.queueResponse(...response("", "opaque_job"))
-  const final = response("Finished")
   host.queueResponse(
     { pause: true },
-    final[0]!,
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { role: "assistant", reasoning_content: "**Reviewing" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
     { pause: true },
-    ...final.slice(1),
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: { reasoning_content: " results**" },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    { pause: true },
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              reasoning_content:
+                "\n\nBody prose stays hidden.\n\n**Next partial",
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    { pause: true },
+    {
+      event: {
+        choices: [
+          { index: 0, delta: { content: "Finished" }, finish_reason: null },
+        ],
+      },
+    },
+    { pause: true },
+    ...response("").slice(1),
   )
   const work = host.session.prompt("Start work")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
@@ -512,12 +560,17 @@ test("an unrelated provider presents semantic operations and late updates withou
   const header = () =>
     screen()
       .split("\n")
-      .find((line) => line.trimStart().startsWith("> "))
+      .find(
+        (line) =>
+          line.includes("Running printf") && line.trimEnd().endsWith(">"),
+      )
       ?.trim()
-  const click = async (text: string, label?: string) => {
+  const click = async (text: string, label?: string, exactStart = false) => {
     await host.frame()
     const lines = host.screenLines().map(stripTerminalSequences)
-    const start = lines.findIndex((line) => line.includes(text))
+    const start = lines.findIndex((line) =>
+      exactStart ? line.trimStart().startsWith(text) : line.includes(text),
+    )
     assert(start >= 0, `Missing ${text}\n${lines.join("\n")}`)
     const row = label
       ? lines.findIndex(
@@ -530,35 +583,66 @@ test("an unrelated provider presents semantic operations and late updates withou
     const column = label
       ? lines[row]!.indexOf(lines[row]!.includes(label) ? label : "[Copied]") +
         1
-      : 3
+      : 5
     await host.key(`\x1b[<0;${column};${row + 1}M`)
     await host.key(`\x1b[<0;${column};${row + 1}m`)
     await host.frame()
   }
-  const status = async (label: string, groupLabel = label) => {
+  const status = async (label: string, groupLabel: string | null = label) => {
     await host.frame()
-    const indicator = host
-      .screenLines()
-      .map(stripTerminalSequences)
-      .findLast((line) => line.startsWith("── "))
-    assert(
-      indicator?.includes(label),
-      `Expected working label ${label}, got ${indicator}`,
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const activeRows = lines.filter((line) => /^[ \t]*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /.test(line))
+    assert.equal(
+      activeRows.length,
+      1,
+      `Expected one working row:\n${lines.join("\n")}`,
     )
-    assert(indicator)
-    assert.doesNotMatch(indicator, /Working|opaque_job/)
-    assert.equal(header(), `> ${groupLabel}`)
+    assert(
+      !lines.some((line) =>
+        /^── .*?(?:Thinking|Running|Reading|Editing)/.test(line),
+      ),
+    )
+    if (groupLabel === null) {
+      assert(activeRows[0]!.trim().endsWith(label), activeRows[0])
+      assert.doesNotMatch(activeRows[0]!, /[>▼]\s*$/)
+    } else {
+      assert(activeRows[0]!.trim().endsWith(`${groupLabel} >`))
+    }
   }
   await status("Running printf generic-evidence")
   host.terminal.resize(24, 140)
   await host.frame()
-  assert.match(header()!, /^> Running printf.*\.\.\.$/)
+  assert.match(header()!, /^\S+ Running printf.*… >$/)
   assert.doesNotMatch(header()!, /generic-evidence/)
+  for (const [width, expected] of [
+    [5, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] >$/],
+    [4, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]>$/],
+    [3, /^>$/],
+  ] as const) {
+    host.terminal.resize(width, 140)
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Each frame observes the preceding resize.
+    await host.frame()
+    const narrow =
+      host
+        .screenLines()
+        .map(stripTerminalSequences)
+        .find((line) => line.trim().endsWith(">"))
+        ?.trim() ?? ""
+    assert.match(narrow, expected)
+  }
   host.terminal.resize(110, 140)
   await status("Running printf generic-evidence")
   assert.doesNotMatch(screen(), /\[Copy (?:command|output)\]/)
-  await click("> Running printf generic-evidence")
-  await click("> Running printf generic-evidence")
+  await click("Running printf generic-evidence >")
+  if (
+    !screen()
+      .split("\n")
+      .some((line) =>
+        line.trimStart().startsWith("Running printf generic-evidence >"),
+      )
+  )
+    await click("Running printf generic-evidence >")
+  await click("Running printf generic-evidence >", undefined, true)
   assert.match(screen(), /\[Copy command\]/)
   assert.doesNotMatch(screen(), /generic-evidence 239/)
   assertPanelFooter(
@@ -569,7 +653,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   )
   await click("printf generic-evidence", "[Copy output]")
   await t.waitFor(() => assert.equal(copied.at(-1), longOutput))
-  assert.match(screen(), /▼ Running printf generic-evidence/)
+  assert.match(screen(), /Running printf generic-evidence ▼/)
   assert.doesNotMatch(screen(), /generic-evidence 239/)
   assert(publish)
   publish([
@@ -595,7 +679,7 @@ test("an unrelated provider presents semantic operations and late updates withou
     "[Copy output]",
     "toolPendingBg",
   )
-  await click("▼ Running printf generic-evidence")
+  await click("Running printf generic-evidence ▼")
   await host.key("\x14")
   await status("Running printf generic-evidence")
   await host.key("\x14")
@@ -659,9 +743,25 @@ test("an unrelated provider presents semantic operations and late updates withou
     // oxlint-disable-next-line eslint/no-await-in-loop -- Observe each published operation in source order.
     await status(label)
   }
+  publish([{ ...runningCommand, order: 10, status: "completed" }])
+  await status("Thinking")
+  host.resumeResponse()
+  await status("Thinking")
+  host.resumeResponse()
+  await status("Reviewing results")
+  host.resumeResponse()
+  await status("Reviewing results")
+  assert.doesNotMatch(screen(), /Body prose stays hidden|Next partial/)
+  await host.key("\x1b")
+  await host.key("\x14")
+  await status("Reviewing results", null)
+  assert.match(screen(), /Body prose stays hidden/)
+  assert.match(screen(), /Edited a file, read files, ran a command > /)
+  await host.key("\x14")
+  await status("Reviewing results")
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Finished/))
-  await status("Thinking", "Edited a file, read files, running a command")
+  await status("Reviewing results", null)
   host.resumeResponse()
   await work
   await host.frame()
@@ -678,8 +778,8 @@ test("an unrelated provider presents semantic operations and late updates withou
   const after = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(after, /late-generic-failure/)
   assert.match(after, /Ran command \(failed\)/)
-  assert.match(after, /^\s*▼ Edited a file, read files, ran a command\s*$/m)
-  assert.doesNotMatch(after, /─+ [^\n]*(Thinking|Working|Running)/)
+  assert.match(after, /^\s*Edited a file, read files, ran a command ▼\s*$/m)
+  assert.doesNotMatch(after, /^[ \t]*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /m)
   assert.equal((after.match(/late-generic-failure/g) ?? []).length, 1)
   assertPanelFooter(
     host,
@@ -923,8 +1023,8 @@ test("an unrelated provider presents semantic operations and late updates withou
   }
   await host.key("\x0f")
   await clickItem(/Worked for .*▶/)
-  assert.match(screen(), /> Edited single\.ts/)
-  await clickItem(/> Edited single\.ts/)
+  assert.match(screen(), /Edited single\.ts >/)
+  await clickItem(/Edited single\.ts >/)
   assert.doesNotMatch(screen(), /patch-visible-needle/)
   await clickItem(/^\s*single\.ts\s*$/)
   assert.match(screen(), /patch-visible-needle/)
@@ -942,12 +1042,12 @@ test("an unrelated provider presents semantic operations and late updates withou
   }
   publish([multiple])
   await host.frame()
-  assert.match(screen(), /> Edited files/)
+  assert.match(screen(), /Edited files >/)
   assert.doesNotMatch(screen(), /Edited single\.ts|patch-visible-needle/)
-  await clickItem(/> Edited files/)
+  await clickItem(/Edited files >/)
   assert.match(
     screen(),
-    /▼ Edited single\.ts[\s\S]*patch-visible-needle[\s\S]*> Edited other\.ts/,
+    /Edited single\.ts ▼[\s\S]*patch-visible-needle[\s\S]*Edited other\.ts >/,
   )
   await host.key("\x1b")
   host.terminal.resize(110, 24)
@@ -983,8 +1083,8 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert.match(screen(), /patch-visible-needle/)
   publish([multiple])
   await host.frame()
-  assert.match(screen(), /▼ Edited files[\s\S]*patch-visible-needle/)
-  await select("▼ Edited files")
+  assert.match(screen(), /Edited files ▼[\s\S]*patch-visible-needle/)
+  await select("Edited files ▼")
   publish([singlePatch])
   await host.frame()
   copied.length = 0
@@ -992,7 +1092,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   await t.waitFor(() => assert.equal(copied.at(-1), "Patch finished"))
   publish([multiple])
   await host.frame()
-  await clickItem(/▼ Edited files/)
+  await clickItem(/Edited files ▼/)
   publish([singlePatch])
   await host.frame()
   assert.match(screen(), /patch-visible-needle/)
@@ -1005,7 +1105,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   await host.key("\x1b")
   publish([multiple])
   await host.frame()
-  assert.match(screen(), /> Edited files/)
+  assert.match(screen(), /Edited files >/)
   assert.doesNotMatch(screen(), /patch-visible-needle/)
   assert.equal(JSON.stringify(host.session.messages), source)
   assert.equal(host.requests.length, requests)
@@ -1026,19 +1126,19 @@ test("an unrelated provider presents semantic operations and late updates withou
   const running = host.session.prompt("Keep earlier running work grouped")
   await t.waitFor(() => assert.equal(host.requests.length, requests + 2))
   await host.frame()
-  assert.match(screen(), /> Running a command[\s\S]*Later activity/)
+  assert.match(screen(), /Running a command >[\s\S]*Later activity/)
   assert.doesNotMatch(screen(), /Running printf/)
   publish([{ ...earlierCommand, status: "failed" }])
   await host.frame()
   assert.equal(host.session.isStreaming, true)
   assert.match(
     screen(),
-    /> Ran printf command-evidence \(failed\)[\s\S]*Later activity/,
+    /Ran printf command-evidence \(failed\) >[\s\S]*Later activity/,
   )
   assert.doesNotMatch(screen(), /Ran a command/)
   publish([{ ...earlierCommand, status: "unknown" }])
   await host.frame()
-  assert.match(screen(), /> Ran a command[\s\S]*Later activity/)
+  assert.match(screen(), /Ran a command >[\s\S]*Later activity/)
   host.resumeResponse()
   await running
   await host.reload()
@@ -1049,14 +1149,14 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert(unknownWorkRow >= 0)
   await host.key(`\x1b[<0;2;${unknownWorkRow + 1}M`)
   await host.key(`\x1b[<0;2;${unknownWorkRow + 1}m`)
-  assert.match(await host.frame(), /> Ran a command/)
+  assert.match(await host.frame(), /Ran a command >/)
 
   /* oxlint-disable eslint/no-await-in-loop -- Native edit outcomes are observed in separate sessions in order. */
   for (const operation of [
     {
       name: "write",
       args: { path: "native.ts", content: "native file" },
-      label: /> Edited native\.ts/,
+      label: /Edited native\.ts >/,
     },
     {
       name: "edit",
@@ -1065,7 +1165,7 @@ test("an unrelated provider presents semantic operations and late updates withou
         oldText: "missing old text",
         newText: "new text",
       },
-      label: /> Edit failed: native\.ts/,
+      label: /Edit failed: native\.ts >/,
     },
   ]) {
     await host.runtime.newSession()
@@ -1405,13 +1505,13 @@ test("declared command actions use the app parser and retain full command bodies
   await host.key("\x0f")
   await host.frame()
   const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /▼ Read guide\.md/)
-  assert.equal((screen.match(/▼ Read (?!files\b)/g) ?? []).length, 11)
+  assert.match(screen, /Read guide\.md ▼/)
+  assert.equal((screen.match(/Read (?!files\b)[^\n]* ▼/g) ?? []).length, 11)
   assert.equal(
-    (screen.match(/▼ Ran command\s/g) ?? []).length,
+    (screen.match(/Ran command(?: \(failed\))? ▼/g) ?? []).length,
     uncertain.length + 4,
   )
-  assert.equal((screen.match(/▼ Ran command \(failed\)/g) ?? []).length, 2)
+  assert.equal((screen.match(/Ran command \(failed\) ▼/g) ?? []).length, 2)
   assert.match(screen, /cd missing-native-directory/)
   assert.match(screen, /cd missing-declared-directory/)
   assert.match(screen, /Declared directory missing/)
@@ -1426,7 +1526,7 @@ test("declared command actions use the app parser and retain full command bodies
     "numbered.ts",
     "prefix",
   ])
-    assert(screen.includes(`▼ Read ${target}`), target)
+    assert(screen.includes(`Read ${target} ▼`), target)
   for (const command of uncertain.slice(0, -1))
     assert(screen.includes(command), command)
   assert.match(screen, /git status --short/)

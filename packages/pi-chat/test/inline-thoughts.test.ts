@@ -143,7 +143,7 @@ test("native Hide thinking controls prose while the working label retains a sing
   assert.doesNotMatch(screen(), /Original thought|Code sample|Thought/)
   host.terminal.resize(24, 36)
   await host.frame()
-  assert.match(screen(), /Analyzing the to…/)
+  assert.match(screen(), /Analyzing the tools…/)
   assert.doesNotMatch(screen(), /schema|Original thought|Code sample/)
   host.ui.setEditorComponent((tui, theme) => new Editor(tui, theme))
   await host.frame()
@@ -289,7 +289,6 @@ test("a full inline thought follows chat scrolling, preserves an anchor, and kee
       ?.match(/shown-\d+/)?.[0],
     anchor,
   )
-  assert(!screen().some((row) => row.includes("shown-40")))
   host.terminal.resize(52, 32)
   await host.output()
   assert.equal(
@@ -375,7 +374,7 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   await host.key("\r")
   const screen = () => host.screenLines().map(stripTerminalSequences)
   await t.waitFor(() => assert.equal(host.requests.length, 2))
-  assert.match(await host.frame(), /> Reading missing-thought\.txt/)
+  assert.match(await host.frame(), /Reading missing-thought\.txt >/)
   host.resumeResponse()
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Second adjacent block"))),
@@ -386,7 +385,7 @@ test("adjacent thinking blocks share one body and every thought stays visible th
     /First adjacent block[\s\S]*Second adjacent block/,
   )
   await host.frame()
-  assert.match(screen().join("\n"), /> Read missing-thought\.txt \(failed\)/)
+  assert.match(screen().join("\n"), /Read missing-thought\.txt \(failed\) >/)
   assert.doesNotMatch(screen().join("\n"), /Read files/)
   host.resumeResponse()
   await t.waitFor(() =>
@@ -397,8 +396,11 @@ test("adjacent thinking blocks share one body and every thought stays visible th
       .length,
     1,
   )
-  assert.match(screen().join("\n"), /─+ [^\n]*Figuring out file processing/)
-  assert.doesNotMatch(screen().join("\n"), /─+ [^\n]*Later thought/)
+  assert.match(
+    screen().join("\n"),
+    /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Figuring out file processing/,
+  )
+  assert.doesNotMatch(screen().join("\n"), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Later thought/)
   assert(!screen().some((row) => row.includes("Thought")))
   assert(screen().some((row) => row.includes("First adjacent block")))
   assert(screen().some((row) => row.includes("Second adjacent block")))
@@ -541,7 +543,7 @@ test("a live thought leaves the screen with its source row during chat scrollbac
   await host.key("\x1b[5~")
   await host.frame()
   assert.match(screen(), /later-row-0/)
-  assert.match(screen(), /─+ [^\n]*Thinking/)
+  assert.doesNotMatch(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Thinking/)
   assert.doesNotMatch(screen(), /Thought|Inline thought body/)
   await host.key("\x1b[6~")
   await host.key("\x1b[6~")

@@ -93,7 +93,7 @@ test("expanded groups expose all native output in conversation flow without inva
   await host.settled()
   await openWork(host)
   const collapsed = await host.frame()
-  assert.match(collapsed, /> Read files/)
+  assert.match(collapsed, /Read files >/)
   assert.doesNotMatch(collapsed, /first-row-0|second-row-19/)
   const groupRow = host
     .screenLines()
@@ -102,8 +102,8 @@ test("expanded groups expose all native output in conversation flow without inva
   await host.key(`\x1b[<0;2;${groupRow + 1}M`)
   await host.key(`\x1b[<0;2;${groupRow + 1}m`)
   const items = await host.frame()
-  assert.match(items, /> Read one\.txt/)
-  assert.match(items, /> Read two\.txt/)
+  assert.match(items, /Read one\.txt >/)
+  assert.match(items, /Read two\.txt >/)
   assert.doesNotMatch(items, /first-row-0|second-row-19/)
   const secondItemRow = host
     .screenLines()
@@ -142,7 +142,7 @@ test("expanded groups expose all native output in conversation flow without inva
   const scrolled = host.screenLines().map(stripTerminalSequences)
   assert.notDeepEqual(scrolled, before)
   await host.key("\x1b[H")
-  assert.match(await host.frame(), /▼ Read files/)
+  assert.match(await host.frame(), /Read files ▼/)
 })
 
 test("selection copies expanded native output across offscreen conversation rows", async (t) => {
@@ -197,7 +197,7 @@ test("selection copies expanded native output across offscreen conversation rows
   await t.waitFor(() => assert(copied))
   assert.match(copied, /^first-row-0 界$/m)
   assert.match(copied, /^  first-row-1 界$/m)
-  assert.match(copied, /^▼ Read files$/m)
+  assert.match(copied, /^Read files ▼$/m)
   assert.match(copied, /^Received\.$/m)
   assert.match(copied, /first-row-19 界/)
   assert.match(copied, /second-row-0/)
@@ -213,7 +213,7 @@ test("selection copies expanded native output across offscreen conversation rows
   await host.key("\u000f")
   assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   await openWork(host)
-  assert.match(await host.frame(), /> Read files/)
+  assert.match(await host.frame(), /Read files >/)
   // Native copy flashes briefly cover the right-aligned user text.
   await t.waitFor(
     () =>
@@ -237,7 +237,7 @@ test("selection copies expanded native output across offscreen conversation rows
   await host.key(`\x1b[<0;${lastColumn};${collapsedLast + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert(copied))
-  assert.match(copied, /^> Read files$/m)
+  assert.match(copied, /^Read files >$/m)
   assert.doesNotMatch(copied, /first-row|second-row/)
 })
 
@@ -281,7 +281,7 @@ test("group summaries combine native categories and distinct paths while executi
     await host.frame()
     assert.match(
       host.screenLines().map(stripTerminalSequences).join("\n"),
-      /^\s*> Running printf second-command\s*$/m,
+      /^\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Running printf second-command >\s*$/m,
     )
   } finally {
     gate.resolve()
@@ -294,11 +294,11 @@ test("group summaries combine native categories and distinct paths while executi
     .map(stripTerminalSequences)
     .find((line) => line.includes("Edited a file"))
   assert(header)
-  assert.match(header.trimEnd(), /> Edited a file, read files, ran commands$/)
+  assert.match(header.trimEnd(), /Edited a file, read files, ran commands >$/)
   host.terminal.resize(50, 24)
   await host.frame()
   host.terminal.resize(100, 24)
-  assert.match(await host.frame(), /> Edited a file, read files, ran commands/)
+  assert.match(await host.frame(), /Edited a file, read files, ran commands >/)
   host.terminal.resize(100, 44)
   await host.frame()
   await host.key("\x1bg")
@@ -312,17 +312,17 @@ test("group summaries combine native categories and distinct paths while executi
   }
   await host.frame()
   const itemRow = lines().findIndex((line) =>
-    line.includes("> Ran printf first-command"),
+    line.includes("Ran printf first-command >"),
   )
   await click(itemRow)
-  assert.match(lines()[itemRow] ?? "", /▼ Ran printf first-command/)
+  assert.match(lines()[itemRow] ?? "", /Ran printf first-command ▼/)
   await click(
     lines().findIndex((line) => line.includes("$ printf first-command")),
   )
-  assert.match(lines()[itemRow] ?? "", /▼ Ran command\s*$/)
+  assert.match(lines()[itemRow] ?? "", /Ran command ▼\s*$/)
   await click(lines().findIndex((line) => line.trim() === "first-command"))
-  assert.match(lines()[itemRow] ?? "", /▼ Ran printf first-command/)
-  assert.match(lines().join("\n"), /▼ Edited a file, read files, ran commands/)
+  assert.match(lines()[itemRow] ?? "", /Ran printf first-command ▼/)
+  assert.match(lines().join("\n"), /Edited a file, read files, ran commands ▼/)
 })
 
 test("default activity bodies and surrounding entries scroll together in the conversation", async (t) => {

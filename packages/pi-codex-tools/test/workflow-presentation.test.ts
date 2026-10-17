@@ -115,13 +115,13 @@ test("streaming exec arguments stay quiet until the command starts", async (t) =
   await t.waitFor(() => assert(commandStarted))
   await host.frame()
   assert.match(screen(), /Running (?:node|command)/)
-  assert.equal(
+  const header =
     screen()
       .split("\n")
-      .find((line) => line.trimStart().startsWith("▼ "))
-      ?.trim(),
-    `▼ Running ${command}`,
-  )
+      .find((line) => line.includes(`Running ${command}`))
+      ?.trim() ?? ""
+  assert.match(header, /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /)
+  assert(header.endsWith(`Running ${command} ▼`))
   assert.match(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Running node/)
   assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
   await work
@@ -175,7 +175,7 @@ test("forwarded and combined results stay out of activity while mixed source rem
   const firstCommand = host
     .screenLines()
     .findIndex(
-      (line) => stripVTControlCharacters(line).trim() === "▼ Ran command",
+      (line) => stripVTControlCharacters(line).trim() === "Ran command ▼",
     )
   assert(firstCommand >= 0)
   await host.key(`\x1b[<0;2;${firstCommand + 1}M`)
@@ -450,7 +450,7 @@ for (const order of ["first", "last"] as const) {
       .screenLines()
       .findIndex((line) =>
         stripVTControlCharacters(line).includes(
-          "> Loaded a tool, read files, ran a command",
+          "Loaded a tool, read files, ran a command >",
         ),
       )
     assert(groupRow >= 0)
@@ -458,11 +458,11 @@ for (const order of ["first", "last"] as const) {
     await host.key(`\x1b[<0;2;${groupRow + 1}m`)
     await host.frame()
     const screen = () => stripVTControlCharacters(host.screenLines().join("\n"))
-    assert.match(screen(), /> Read domain-modeling skill/)
-    assert.match(screen(), /> Read notes\.txt/)
-    assert.match(screen(), /> Read SKILL\.md/)
-    assert.match(screen(), /> Ran printf separate-action/)
-    assert.doesNotMatch(screen(), /> Ran true && cat/)
+    assert.match(screen(), /Read domain-modeling skill >/)
+    assert.match(screen(), /Read notes\.txt >/)
+    assert.match(screen(), /Read SKILL\.md >/)
+    assert.match(screen(), /Ran printf separate-action >/)
+    assert.doesNotMatch(screen(), /Ran true && cat >/)
     assert.doesNotMatch(screen(), /(?:>|▼) Output|> Ran printf '\\n---/)
     await host.key("\x0f")
     await host.frame()
@@ -472,7 +472,7 @@ for (const order of ["first", "last"] as const) {
     await host.reload()
     await openWork(host)
     assert.equal(
-      (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
+      (screen().match(/Read domain-modeling skill [>▼]/g) ?? []).length,
       2,
     )
     const fork = await host.runtime.fork(
@@ -482,7 +482,7 @@ for (const order of ["first", "last"] as const) {
     assert.equal(fork.cancelled, false)
     await openWork(host)
     assert.equal(
-      (screen().match(/(?:>|▼) Read domain-modeling skill/g) ?? []).length,
+      (screen().match(/Read domain-modeling skill [>▼]/g) ?? []).length,
       2,
     )
   })
@@ -645,7 +645,7 @@ for (const order of ["first", "last"] as const) {
       let screen = await openWork(host)
       assert.match(
         screen,
-        /> Edited files, read files, ran a command, viewed images/,
+        /Edited files, read files, ran a command, viewed images >/,
       )
       assert.doesNotMatch(screen, /validated-result|LATE-MIXED|, error/)
       const groupRow = host
@@ -654,32 +654,44 @@ for (const order of ["first", "last"] as const) {
           stripVTControlCharacters(line).includes("Edited files"),
         )
       assert(groupRow >= 0)
-      assert.equal(
-        stripVTControlCharacters(host.screenLines()[groupRow]!).indexOf(">"),
-        outputPad,
+      assert(
+        stripVTControlCharacters(host.screenLines()[groupRow]!)
+          .trimEnd()
+          .endsWith(">"),
+      )
+      assert(
+        stripVTControlCharacters(host.screenLines()[groupRow]!)
+          .slice(outputPad)
+          .startsWith("Edited files"),
       )
       await host.key(`\x1b[<0;2;${groupRow + 1}M`)
       await host.key(`\x1b[<0;2;${groupRow + 1}m`)
       host.terminal.resize(160, 260)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
-      assert.match(screen, /> Edited .*\/changed\.txt \+1 -0/)
-      assert.match(screen, /> Edited .*\/extra-one\.txt \+1 -0/)
-      assert.match(screen, /> Edited .*\/extra-two\.txt \+1 -0/)
-      assert.match(screen, /> Ran printf inspect-project/)
-      assert.match(screen, /> Read changed\.txt/)
-      assert.match(screen, /> Viewed image .*local\.png/)
-      assert.match(screen, /> Viewed image .*late\.png/)
-      assert.doesNotMatch(screen, /> Error|validated-result|LATE-MIXED/)
+      assert.match(screen, /Edited .*\/changed\.txt \+1 -0 >/)
+      assert.match(screen, /Edited .*\/extra-one\.txt \+1 -0 >/)
+      assert.match(screen, /Edited .*\/extra-two\.txt \+1 -0 >/)
+      assert.match(screen, /Ran printf inspect-project >/)
+      assert.match(screen, /Read changed\.txt >/)
+      assert.match(screen, /Viewed image .*local\.png >/)
+      assert.match(screen, /Viewed image .*late\.png >/)
+      assert.doesNotMatch(screen, /Error >|validated-result|LATE-MIXED/)
       const commandRow = host
         .screenLines()
         .findIndex((line) =>
           stripVTControlCharacters(line).includes("Read changed.txt"),
         )
       assert(commandRow >= 0)
-      assert.equal(
-        stripVTControlCharacters(host.screenLines()[commandRow]!).indexOf(">"),
-        outputPad,
+      assert(
+        stripVTControlCharacters(host.screenLines()[commandRow]!)
+          .trimEnd()
+          .endsWith(">"),
+      )
+      assert(
+        stripVTControlCharacters(host.screenLines()[commandRow]!)
+          .slice(outputPad)
+          .startsWith("Read changed.txt"),
       )
       await host.key(`\x1b[<0;2;${commandRow + 1}M`)
       await host.key(`\x1b[<0;2;${commandRow + 1}m`)
@@ -704,8 +716,8 @@ for (const order of ["first", "last"] as const) {
         (screen.match(/^\s*validated-line-\d+\s*$/gm) ?? []).length,
         40,
       )
-      assert.match(screen, /> Ran printf inspect-project/)
-      assert.doesNotMatch(screen, /> Error|LATE-MIXED/)
+      assert.match(screen, /Ran printf inspect-project >/)
+      assert.doesNotMatch(screen, /Error >|LATE-MIXED/)
       await host.key(`\x1b[<0;2;${groupRow + 1}M`)
       await host.key(`\x1b[<0;2;${groupRow + 1}m`)
       assert.doesNotMatch(await host.frame(), /validated-result/)
@@ -714,13 +726,16 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /validated-line-39/)
-      assert.match(screen, /> Ran printf inspect-project/)
+      assert.match(screen, /Ran printf inspect-project >/)
       await host.key(`\x1b[<0;2;${nativeOutputRow + 1}M`)
       await host.key(`\x1b[<0;2;${nativeOutputRow + 1}m`)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
-      assert.match(screen, /▼ Edited files/)
-      assert.match(screen, /▼ Read changed\.txt/)
+      assert.match(
+        screen,
+        /Edited files, read files, ran a command, viewed images ▼/,
+      )
+      assert.match(screen, /Read changed\.txt ▼/)
       assert.match(screen, /more lines/)
       assert.doesNotMatch(screen, /validated-line-39/)
       const activityRow = host
@@ -740,10 +755,20 @@ for (const order of ["first", "last"] as const) {
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
       assert.match(screen, /Worked for \d+m \d+s ▼/)
-      assert.match(screen, /▼ Edited files/)
-      assert.match(screen, /▼ Ran command/)
-      assert.doesNotMatch(screen, /▼ Error/)
-      assert.equal((screen.match(/^ *▼ /gm) ?? []).length, 9)
+      assert.match(
+        screen,
+        /Edited files, read files, ran a command, viewed images ▼/,
+      )
+      assert.match(screen, /Ran command ▼/)
+      assert.doesNotMatch(screen, /Error ▼/)
+      assert.equal(
+        screen
+          .split("\n")
+          .filter(
+            (line) => line.trim().endsWith("▼") && !line.includes("Worked for"),
+          ).length,
+        9,
+      )
       assert.match(screen, /inspect-project/)
       assert.match(screen, /validated-result/)
       assert.match(screen, /validated-line-39/)
@@ -770,8 +795,11 @@ for (const order of ["first", "last"] as const) {
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-RESULT/)
       assert.match(output(host, "collect-mixed"), /LATE-MIXED-FAILURE/)
       screen = await openWork(host)
-      assert.match(screen, /> Edited files/)
-      assert.match(screen, /▼ Viewed image/)
+      assert.match(
+        screen,
+        /Edited files, read files, ran a command, viewed images >/,
+      )
+      assert.match(screen, /Viewed image ▼/)
       assert.doesNotMatch(
         screen,
         /Collected output|cell_status|Execution completed/,
@@ -790,7 +818,7 @@ for (const order of ["first", "last"] as const) {
       assert.equal((screen.match(/Received\./g) ?? []).length, 2)
       await host.reload()
       screen = await openWork(host)
-      assert.match(screen, /> Viewed image/)
+      assert.match(screen, /Viewed image >/)
       assert.doesNotMatch(screen, /Viewed an image/)
       const retainedGroup = host
         .screenLines()
@@ -803,16 +831,16 @@ for (const order of ["first", "last"] as const) {
       host.terminal.resize(160, 260)
       await host.frame()
       screen = stripVTControlCharacters(host.screenLines().join("\n"))
-      assert.equal((screen.match(/> Read changed\.txt/g) ?? []).length, 1)
+      assert.equal((screen.match(/Read changed\.txt >/g) ?? []).length, 1)
       assert.equal(
-        (screen.match(/> Edited .*\/.*\.txt \+1 -0/g) ?? []).length,
+        (screen.match(/Edited .*\/.*\.txt \+1 -0 >/g) ?? []).length,
         3,
       )
-      assert.doesNotMatch(screen, /> Error|LATE-MIXED/)
+      assert.doesNotMatch(screen, /Error >|LATE-MIXED/)
       const originImageRow = host
         .screenLines()
         .findIndex(
-          (line) => stripVTControlCharacters(line).trim() === "> Viewed image",
+          (line) => stripVTControlCharacters(line).trim() === "Viewed image >",
         )
       assert(originImageRow >= 0)
       await host.key(`\x1b[<0;2;${originImageRow + 1}M`)
@@ -823,7 +851,7 @@ for (const order of ["first", "last"] as const) {
         .findIndex(
           (line, index) =>
             index > originImageRow &&
-            stripVTControlCharacters(line).trim() === "> Viewed image",
+            stripVTControlCharacters(line).trim() === "Viewed image >",
         )
       assert(collectionRow >= 0)
       await host.key(`\x1b[<0;2;${collectionRow + 1}M`)

@@ -142,7 +142,7 @@ test("settled agent activity hides the earlier identical text and retains the fi
     /Done[\s\S]*Read one\.txt[\s\S]*Native intervening notice[\s\S]*Done/,
   )
   assert.equal((expanded.match(/Native intervening notice/g) ?? []).length, 1)
-  assert.match(expanded, /> Read one\.txt/)
+  assert.match(expanded, /Read one\.txt >/)
   assert.doesNotMatch(expanded, /Read files|read one\.txt/)
 
   await host.reload()
@@ -570,7 +570,7 @@ test("individual activity toggles preserve bodies and configured global expansio
   await host.key("\r")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const items = await host.frame()
-  assert.match(items, /> Read one\.txt/)
+  assert.match(items, /Read one\.txt >/)
   assert.doesNotMatch(items, /Read files|INSPECTED BODY/)
   const call = host
     .screenLines()
@@ -615,7 +615,7 @@ test("individual activity toggles preserve bodies and configured global expansio
   await host.key("\r")
   const parentOnly = await host.frame()
   assert.match(parentOnly, /Worked for \d+m \d+s ▼/)
-  assert.match(parentOnly, /> Read one\.txt/)
+  assert.match(parentOnly, /Read one\.txt >/)
   assert.doesNotMatch(parentOnly, /Read files|INSPECTED BODY/)
   await host.key("\x1b")
   await host.key("\x05")
@@ -819,7 +819,7 @@ test("a terminal response without answer text leaves agent activity expanded", a
   await host.settled()
   const frame = await host.frame()
   assert.match(frame, /Visible work without answer/)
-  assert.match(frame, /> Read one\.txt/)
+  assert.match(frame, /Read one\.txt >/)
   assert.doesNotMatch(frame, /Read files|read one\.txt/)
   assert.doesNotMatch(frame, /Worked/)
 })

@@ -115,6 +115,10 @@ export class AgentActivityIndex {
     )
   }
 
+  currentActivity() {
+    return this.current
+  }
+
   notePhase(occurrence: Occurrence, contentIndex: number, phase: MessagePhase) {
     const phases = new Map(this.phases.get(occurrence))
     phases.set(contentIndex, phase)
