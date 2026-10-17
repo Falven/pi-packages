@@ -1,6 +1,6 @@
 # pi-copy specification
 
-**Status:** ready-for-agent
+**Status:** implemented and verified on installed Pi/TUI 1.1.0 at `a83094c`, integrated into local `main`. The affected suite passes 147/147; [ticket 02](../../.scratch/pi-copy/issues/02-separate-response-copy-footer.md) records the checks, review limits, and cleanup evidence.
 
 **Accepted scope:** Extract the current chat copy functionality into a dependency package and guarantee one blank display row before Copy response. The user accepted the package dependency, unchanged copied text, existing host testing seam, and implementation on 2026-10-17.
 
