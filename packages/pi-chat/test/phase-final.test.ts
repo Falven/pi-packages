@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
@@ -122,6 +122,21 @@ test("phase-bearing final text collapses identical commentary while it streams",
     assistant.content.map((part) => (part.type === "text" ? part.text : "")),
     ["Done", "Done"],
   )
+  await host.session.abort()
+  const afterIdleAbort = await host.frame()
+  assert.match(afterIdleAbort, /Worked for \d+m \d+s ▶/)
+  assert.equal((afterIdleAbort.match(/Done/g) ?? []).length, 1)
+  host.queueResponse(
+    added(0, "next", "final_answer"),
+    delta(0, "Next answer"),
+    ended(0, "next", "final_answer", "Next answer"),
+    completed,
+  )
+  await submit(host, "Next request")
+  await host.settled()
+  const nextInput = JSON.stringify(host.requests[1])
+  assert.equal((nextInput.match(/"text":"Done"/g) ?? []).length, 2)
+  assert.doesNotMatch(nextInput, /Worked/)
 })
 
 test("the subscription Responses API carries the same explicit final phase over SSE", async (t) => {
@@ -200,11 +215,12 @@ test("a failed stream keeps an established partial final and Pi's native error n
   assert.doesNotMatch(replay, /Prior work/)
 })
 
-test("a phase correction revokes the final while preserving explicit activity closure", async (t) => {
+test("a phase correction removes an explicitly closed activity disclosure and restores composer focus", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
+    keybindings: { "app.tools.expand": "ctrl+e" },
   })
   host.queueResponse(
     added(0, "progress", "commentary"),
@@ -227,14 +243,18 @@ test("a phase correction revokes the final while preserving explicit activity cl
   host.resumeResponse()
   await host.settled()
   const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(frame, /Prior work|Provisional answer|Copy response/)
-  await host.key("\r")
-  const reopened = await host.frame()
-  assert.match(reopened, /Worked for \d+m \d+s ▼/)
-  assert.match(reopened, /Prior work/)
-  assert.match(reopened, /Provisional answer/)
-  assert.match(reopened, /Error:/)
+  assert.doesNotMatch(frame, /Worked|Copy response/)
+  assert.match(frame, /Prior work/)
+  assert.match(frame, /Provisional answer/)
+  assert.match(frame, /Error:/)
+  await host.type("Draft after correction")
+  assert.match(await host.frame(), /Draft after correction/)
+  await host.key("\x05")
+  await host.key("\x05")
+  const globallyClosed = await host.frame()
+  assert.doesNotMatch(globallyClosed, /Worked|Copy response/)
+  assert.match(globallyClosed, /Prior work/)
+  assert.match(globallyClosed, /Provisional answer/)
   await host.reload()
   const reloaded = await host.frame()
   assert.doesNotMatch(reloaded, /Worked|Copy response/)
@@ -242,11 +262,12 @@ test("a phase correction revokes the final while preserving explicit activity cl
   assert.match(reloaded, /Provisional answer/)
 })
 
-test("cancellation opens unchosen activity and preserves explicit disclosure choices", async (t) => {
+test("cancellation removes an explicitly closed activity disclosure and restores composer focus", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
     rows: 36,
+    keybindings: { "app.tools.expand": "ctrl+e" },
   })
   host.queueResponse(
     added(0, "progress", "commentary"),
@@ -259,23 +280,32 @@ test("cancellation opens unchosen activity and preserves explicit disclosure cho
   await submit(host)
   await t.waitFor(() => assert.equal(host.requests.length, 1))
   assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.key("\r")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   await host.session.abort()
   const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▼/)
+  assert.doesNotMatch(frame, /Worked/)
   assert.match(frame, /Prior work/)
   assert.match(frame, /Partial answer/)
   assert.match(frame, /Operation aborted/)
-  await host.key("\x1bg")
-  await host.key("\r")
-  const explicitlyCollapsed = await host.frame()
-  assert.match(explicitlyCollapsed, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(explicitlyCollapsed, /Prior work/)
-  assert.match(explicitlyCollapsed, /Partial answer/)
-  assert.match(explicitlyCollapsed, /Operation aborted/)
+  await host.type("Draft after cancellation")
+  assert.match(await host.frame(), /Draft after cancellation/)
+  await host.key("\x05")
+  await host.key("\x05")
+  const globallyClosed = await host.frame()
+  assert.doesNotMatch(globallyClosed, /Worked/)
+  assert.match(globallyClosed, /Prior work/)
+  assert.match(globallyClosed, /Partial answer/)
+  assert.match(globallyClosed, /Operation aborted/)
   host.terminal.resize(65, 36)
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  assert.doesNotMatch(await host.frame(), /Worked/)
   await host.reload()
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+  const reloaded = await host.frame()
+  assert.doesNotMatch(reloaded, /Worked/)
+  assert.match(reloaded, /Prior work/)
+  assert.match(reloaded, /Partial answer/)
 })
 
 test("a Responses message without phase does not collapse early", async (t) => {
@@ -521,6 +551,359 @@ test("individual and configured global choices persist during a final stream and
   assert.match(settled, /Visible answer grows/)
 })
 
+for (const expanded of [false, true])
+  test(`requalification restores an explicitly ${expanded ? "open" : "closed"} parent without changing descendant choices`, async (t) => {
+    const host = await openNativeHost(t, {
+      extensionPaths: [chat],
+      providerApi: "openai-responses",
+      rows: 44,
+      keybindings: { "app.tools.expand": "ctrl+e" },
+    })
+    await writeFile(join(host.directory, "one.txt"), "RETAINED NATIVE BODY")
+    await writeFile(join(host.directory, "two.txt"), "SECOND NATIVE BODY")
+    const calls = ["one.txt", "two.txt"].map((path, index) => ({
+      type: "function_call",
+      id: `fc_read_${index}`,
+      call_id: `read-${index}`,
+      name: "read",
+      arguments: JSON.stringify({ path }),
+    }))
+    host.queueResponse(
+      added(0, "progress", "commentary"),
+      delta(0, "Earlier commentary"),
+      ended(0, "progress", "commentary", "Earlier commentary"),
+      ...calls.flatMap((call, index) => [
+        {
+          event: {
+            type: "response.output_item.added",
+            output_index: index + 1,
+            item: call,
+          },
+        },
+        {
+          event: {
+            type: "response.output_item.done",
+            output_index: index + 1,
+            item: call,
+          },
+        },
+      ]),
+      completed,
+    )
+    host.queueResponse(
+      added(0, "provisional", "final_answer"),
+      { pause: true },
+      delta(0, "Provisional answer"),
+      { pause: true },
+      ended(0, "provisional", "commentary", "Provisional answer"),
+      { pause: true },
+      added(1, "answer", "final_answer"),
+      delta(1, "Final answer"),
+      { pause: true },
+      ended(1, "answer", "final_answer", "Final answer"),
+      completed,
+    )
+    await submit(host)
+    await t.waitFor(() => assert.equal(host.requests.length, 2))
+    assert.doesNotMatch(await host.frame(), /Worked/)
+    await host.key("\x05")
+    assert.match(await host.frame(), /RETAINED NATIVE BODY/)
+    host.resumeResponse()
+    await t.waitFor(async () =>
+      assert.match(await host.frame(), /Worked for \d+m \d+s ▶/),
+    )
+    await host.key("\x1bg")
+    await host.key("\r")
+    assert.match(await host.frame(), /RETAINED NATIVE BODY/)
+    if (!expanded) await host.key("\r")
+    host.resumeResponse()
+    await t.waitFor(async () => {
+      const revoked = await host.frame()
+      assert.doesNotMatch(revoked, /Worked/)
+      assert.match(revoked, /Earlier commentary/)
+      assert.match(revoked, /Provisional answer/)
+      assert.match(revoked, /RETAINED NATIVE BODY/)
+    })
+    await host.key("\x05")
+    const closedChildren = await host.frame()
+    assert.doesNotMatch(closedChildren, /Worked|RETAINED NATIVE BODY/)
+    assert.match(closedChildren, /> Read files/)
+    if (!expanded) {
+      await host.key("\x05")
+      assert.match(await host.frame(), /RETAINED NATIVE BODY/)
+    }
+    host.resumeResponse()
+    const preferred = expanded
+      ? /Worked for \d+m \d+s ▼/
+      : /Worked for \d+m \d+s ▶/
+    await t.waitFor(async () => assert.match(await host.frame(), preferred))
+    host.resumeResponse()
+    await host.settled()
+    const settled = await host.frame()
+    assert.match(settled, preferred)
+    assert.match(settled, /Final answer/)
+    assert.doesNotMatch(settled, /RETAINED NATIVE BODY/)
+    if (expanded) {
+      assert.match(settled, /Earlier commentary/)
+      assert.match(settled, /> Read files/)
+    } else {
+      assert.doesNotMatch(settled, /Earlier commentary|Provisional answer/)
+      await host.key("\x1bg")
+      await host.key("\r")
+      assert.match(await host.frame(), /RETAINED NATIVE BODY/)
+    }
+    const canonical = JSON.stringify(host.session.messages)
+    assert.match(canonical, /Earlier commentary/)
+    assert.match(canonical, /RETAINED NATIVE BODY/)
+    assert.match(canonical, /Provisional answer/)
+    assert.doesNotMatch(canonical, /Worked/)
+    await host.reload()
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  })
+
+test("Find during final revocation replaces a dormant closure and permits later manual closure", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 36,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+  })
+  host.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Searched telescope"),
+    ended(0, "progress", "commentary", "Searched telescope"),
+    added(1, "provisional", "final_answer"),
+    delta(1, "Provisional answer"),
+    { pause: true },
+    ended(1, "provisional", "commentary", "Provisional answer"),
+    { pause: true },
+    added(2, "answer", "final_answer"),
+    delta(2, "Visible answer"),
+    { pause: true },
+    delta(2, " grows"),
+    ended(2, "answer", "final_answer", "Visible answer grows"),
+    completed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  await host.key("\r")
+  host.resumeResponse()
+  await t.waitFor(async () => {
+    const corrected = await host.frame()
+    assert.doesNotMatch(corrected, /Worked/)
+    assert.match(corrected, /Searched telescope/)
+    assert.match(corrected, /Provisional answer/)
+  })
+  await host.key("\x06")
+  await host.type("telescope")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  host.resumeResponse()
+  await t.waitFor(async () => {
+    const requalified = await host.frame()
+    assert.match(requalified, /Worked for \d+m \d+s ▼/)
+    assert.match(requalified, /Searched telescope/)
+    assert.match(requalified, /Visible answer/)
+  })
+  await host.key("\x1bg")
+  await host.key("\r")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  host.resumeResponse()
+  await host.settled()
+  const settled = await host.frame()
+  assert.match(settled, /Worked for \d+m \d+s ▶/)
+  assert.doesNotMatch(settled, /Searched telescope|Provisional answer/)
+  assert.match(settled, /Visible answer grows/)
+})
+
+test("an exactly completed blank final collapses prior activity and preserves native errors on replay", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 36,
+  })
+  host.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Prior work"),
+    ended(0, "progress", "commentary", "Prior work"),
+    added(6, "blank", "final_answer"),
+    { pause: true },
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 6,
+        item: { ...message("blank", "final_answer"), status: "completed" },
+      },
+    },
+    { pause: true },
+    failed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  const unfinished = await host.frame()
+  assert.doesNotMatch(unfinished, /Worked/)
+  assert.match(unfinished, /Prior work/)
+  host.resumeResponse()
+  await t.waitFor(async () => {
+    const streaming = await host.frame()
+    assert.match(streaming, /Worked for \d+m \d+s ▶/)
+    assert.doesNotMatch(streaming, /Prior work/)
+  })
+  host.resumeResponse()
+  await host.settled()
+  const settled = await host.frame()
+  assert.match(settled, /Worked for \d+m \d+s ▶/)
+  assert.match(settled, /Error:.*Controlled failure/)
+  assert.doesNotMatch(settled, /Prior work/)
+  const assistant = host.session.messages.at(-1)
+  assert.equal(assistant?.role, "assistant")
+  assert.deepEqual(
+    assistant.content.map((part) => (part.type === "text" ? part.text : "")),
+    ["Prior work", ""],
+  )
+  await host.reload()
+  const replayed = await host.frame()
+  assert.match(replayed, /Worked for \d+m \d+s ▶/)
+  assert.match(replayed, /Error:.*Controlled failure/)
+  assert.doesNotMatch(replayed, /Prior work/)
+})
+
+test("phase-only blank history leaves activity visible without settled qualification evidence", async (t) => {
+  const source = await openNativeHost(t, {
+    providerApi: "openai-responses",
+    persistSession: true,
+    rows: 32,
+  })
+  source.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Uncertain earlier work"),
+    ended(0, "progress", "commentary", "Uncertain earlier work"),
+    added(1, "blank", "final_answer"),
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 1,
+        item: { ...message("blank", "final_answer"), status: "completed" },
+      },
+    },
+    completed,
+  )
+  await submit(source)
+  await source.settled()
+  const manager = source.session.sessionManager
+  const branch = manager.getBranch()
+  const request = branch.find(
+    (entry) => entry.type === "message" && entry.message.role === "user",
+  )
+  const assistant = branch.find(
+    (entry) => entry.type === "message" && entry.message.role === "assistant",
+  )
+  assert(request && assistant)
+  for (const fact of [
+    {
+      kind: "member",
+      sourceId: request.id,
+      delivery: "initial",
+    },
+    { kind: "member", sourceId: assistant.id },
+    {
+      kind: "phase",
+      sourceId: assistant.id,
+      contentIndex: 1,
+      phase: "final_answer",
+    },
+  ])
+    manager.appendCustomEntry("pi-chat.relationship", {
+      version: 1,
+      requestId: request.id,
+      ...fact,
+    })
+  const sessionFile = source.session.sessionFile
+  assert(sessionFile)
+  await source.close()
+  const restored = await openNativeHost(t, {
+    extensionPaths: [chat],
+    sessionFile,
+    directory: source.directory,
+    rows: 32,
+    keybindings: { "app.tools.expand": "ctrl+e" },
+  })
+  const frame = await restored.frame()
+  assert.doesNotMatch(frame, /Worked/)
+  assert.match(frame, /Uncertain earlier work/)
+  await restored.key("\x05")
+  await restored.key("\x05")
+  const globallyClosed = await restored.frame()
+  assert.doesNotMatch(globallyClosed, /Worked/)
+  assert.match(globallyClosed, /Uncertain earlier work/)
+})
+
+test("a completed blank final cannot collapse across an unidentified native boundary", async (t) => {
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat],
+    providerApi: "openai-responses",
+    rows: 38,
+  })
+  await writeFile(join(host.directory, "one.txt"), "Native result")
+  const call = {
+    type: "function_call",
+    id: "fc_read",
+    call_id: "read-one",
+    name: "read",
+    arguments: JSON.stringify({ path: "one.txt" }),
+  }
+  host.queueResponse(
+    added(0, "progress", "commentary"),
+    delta(0, "Work before unidentified notice"),
+    ended(0, "progress", "commentary", "Work before unidentified notice"),
+    {
+      event: {
+        type: "response.output_item.added",
+        output_index: 1,
+        item: call,
+      },
+    },
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 1,
+        item: call,
+      },
+    },
+    completed,
+  )
+  host.queueResponse(
+    { pause: true },
+    added(0, "blank", "final_answer"),
+    {
+      event: {
+        type: "response.output_item.done",
+        output_index: 0,
+        item: { ...message("blank", "final_answer"), status: "completed" },
+      },
+    },
+    failed,
+  )
+  await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 2))
+  host.ui.notify("Boundary without a session occurrence", "warning")
+  host.resumeResponse()
+  await host.settled()
+  const frame = await host.frame()
+  assert.doesNotMatch(frame, /Worked/)
+  assert.match(
+    frame,
+    /Work before unidentified notice[\s\S]*Boundary without a session occurrence[\s\S]*Error:[\s\S]*\/bug sends a report/,
+  )
+  assert.doesNotMatch(
+    JSON.stringify(host.session.messages),
+    /Boundary without a session occurrence|Worked/,
+  )
+})
+
 test("a blank replacement revokes a provisional final", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -653,7 +1036,7 @@ test("a new same-text block without native signature cannot inherit final phase"
   assert.doesNotMatch(await host.frame(), /Worked/)
 })
 
-test("an agent retry starts a fresh provider phase index", async (t) => {
+test("an agent retry discards stale phase evidence and retains the enclosing choice", async (t) => {
   let turns = 0
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -676,8 +1059,12 @@ test("an agent retry starts a fresh provider phase index", async (t) => {
     ],
   })
   host.queueResponse(
-    added(0, "failed", "final_answer"),
-    delta(0, "Failed candidate"),
+    added(0, "progress", "commentary"),
+    delta(0, "Retry progress"),
+    ended(0, "progress", "commentary", "Retry progress"),
+    added(1, "failed", "final_answer"),
+    delta(1, "Failed candidate"),
+    { pause: true },
     {
       event: {
         type: "response.failed",
@@ -691,15 +1078,29 @@ test("an agent retry starts a fresh provider phase index", async (t) => {
   host.queueResponse(
     added(0, "retry"),
     delta(0, "Retry answer"),
+    { pause: true },
     ended(0, "retry", undefined, "Retry answer"),
     completed,
   )
   await submit(host)
+  await t.waitFor(() => assert.equal(host.requests.length, 1))
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1bg")
+  await host.key("\r")
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
+  host.resumeResponse()
   await t.waitFor(() => assert.equal(host.requests.length, 2))
+  const retrying = await host.frame()
+  assert.doesNotMatch(retrying, /Worked/)
+  assert.match(retrying, /Retry progress/)
+  assert.match(retrying, /Failed candidate/)
+  assert.match(retrying, /Retry answer/)
+  host.resumeResponse()
   await host.settled()
   assert.equal(turns, 2)
   const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
+  assert.match(frame, /Worked for \d+m \d+s ▼/)
   assert.match(frame, /Retry answer/)
-  assert.doesNotMatch(frame, /Failed candidate/)
+  assert.match(frame, /Failed candidate/)
+  assert.match(frame, /Retry progress/)
 })

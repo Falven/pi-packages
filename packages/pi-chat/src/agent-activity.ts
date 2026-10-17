@@ -125,6 +125,7 @@ export class AgentActivityIndex {
     occurrence: Occurrence,
     phases: Map<number, MessagePhase>,
     hasEvidence: boolean,
+    completed: ReadonlySet<number> = new Set(),
   ) {
     const agentActivity = this.find(occurrence)
     const message = occurrence.message
@@ -136,7 +137,7 @@ export class AgentActivityIndex {
         ([index, value]) =>
           value === "final_answer" &&
           message.content[index]?.type === "text" &&
-          message.content[index].text.trim(),
+          (message.content[index].text.trim() || completed.has(index)),
       )
       .map(([index]) => index)
     if (finalParts.length) {
@@ -291,10 +292,9 @@ export class AgentActivityIndex {
 
   expanded(agentActivity: AgentActivity) {
     return (
-      agentActivity.manualExpanded ??
-      (!agentActivity.final ||
-        agentActivity.cancelled ||
-        agentActivity.keepOpen)
+      !agentActivity.final ||
+      agentActivity.cancelled ||
+      (agentActivity.manualExpanded ?? agentActivity.keepOpen)
     )
   }
 

@@ -1593,6 +1593,19 @@ export class NativeChatHost {
                   : undefined,
               })
         } else if (occurrence?.contentIndex === index && occurrence.component) {
+          if (part.type === "text" && !part.text.trim()) {
+            const agentActivity = this.agentActivity.find(owner)
+            if (
+              agentActivity &&
+              this.agentActivity.isFinal(occurrence, agentActivity)
+            )
+              chatRows.push({
+                component: occurrence.component,
+                occurrence,
+                tool: false,
+              })
+            continue
+          }
           flush()
           if (children[position] === occurrence.component) position++
           const thought = this.thoughts.get(occurrence)
@@ -1793,6 +1806,7 @@ export class NativeChatHost {
   }
 
   toggleAgentActivity(agentActivity: AgentActivity) {
+    if (!agentActivity.final || agentActivity.cancelled) return
     agentActivity.manualExpanded = !this.agentActivity.expanded(agentActivity)
     this.clearChatSelection()
     ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
@@ -1809,14 +1823,10 @@ export class NativeChatHost {
       const chatRow = chatRows[index]!
       const agentActivity =
         chatRow.agentActivity ?? this.agentActivity.find(chatRow.occurrence)
-      const explicitDisclosure = Boolean(
-        agentActivity?.header &&
-        agentActivity.manualExpanded !== undefined &&
-        !agentActivity.final,
-      )
       if (
         !agentActivity ||
-        (!agentActivity.final && !explicitDisclosure) ||
+        !agentActivity.final ||
+        agentActivity.cancelled ||
         this.agentActivity.isRequest(chatRow.occurrence, agentActivity)
       ) {
         result.push(chatRow)
@@ -1846,7 +1856,11 @@ export class NativeChatHost {
           )
         )
           break
-        if (this.agentActivity.isFinal(next.occurrence, agentActivity))
+        if (
+          this.agentActivity.isFinal(next.occurrence, agentActivity) ||
+          // Native notices appended after the final stay outside its activity.
+          (final.length && next.occurrence?.contentIndex === undefined)
+        )
           final.push(next)
         else body.push(next)
       }
@@ -1854,7 +1868,7 @@ export class NativeChatHost {
         body.some(
           (item) => !retained(item) && !(item.component instanceof Spacer),
         ) &&
-        (final.length || explicitDisclosure)
+        final.length
       ) {
         agentActivity.header ??= new AgentActivityHeader(this, agentActivity)
         result.push({ component: agentActivity.header, tool: false })
@@ -2346,9 +2360,8 @@ export class NativeChatHost {
     const owner = hit.field.owner
     let changed = this.materializeSearchHit(hit)
     const agentActivity = this.agentActivity.find(owner)
-    if (agentActivity && !this.agentActivity.expanded(agentActivity)) {
+    if (agentActivity && agentActivity.manualExpanded !== true) {
       agentActivity.manualExpanded = true
-      agentActivity.keepOpen = true
       changed = true
     }
     if (changed) this.layoutChat()
@@ -2973,16 +2986,19 @@ export class NativeChatHost {
   private applyProviderPhases(owner: Occurrence) {
     if (owner.message?.role !== "assistant") return
     const phases = new Map<number, "commentary" | "final_answer">()
+    const completed = new Set<number>()
     for (let index = 0; index < owner.message.content.length; index++) {
       const part = owner.message.content[index]
       if (part?.type !== "text") continue
-      const phase = this.providerPhases.phaseFor(index, part)
-      if (phase) phases.set(index, phase)
+      const evidence = this.providerPhases.evidenceFor(index, part)
+      if (evidence?.phase) phases.set(index, evidence.phase)
+      if (evidence?.completed) completed.add(index)
     }
     this.agentActivity.reconcilePhases(
       owner,
       phases,
       this.providerPhases.hasPhaseEvidence(),
+      completed,
     )
   }
 
@@ -3304,13 +3320,14 @@ export class NativeChatHost {
         : 0
       for (let index = 0; index < content.length; index++) {
         const part = content[index]!
-        if (part.type === "text" && part.text.trim()) {
-          if (children[child]) {
-            this.bindPart(owner, index, children[child]!)
-            bound.add(children[child]!)
+        if (part.type === "text") {
+          // A blank final still has a source boundary, but no native text rows.
+          const text = part.text.trim() ? children[child++] : new Container()
+          if (text) {
+            this.bindPart(owner, index, text)
+            bound.add(text)
             boundIndices.add(index)
           }
-          child++
         } else if (part.type === "thinking") {
           const start = index
           let visible = false
@@ -3559,7 +3576,11 @@ export class NativeChatHost {
         }
       for (const group of this.renderGroups.values()) group.expanded = expanded
       for (const disclosure of this.visibleDisclosures)
-        if (disclosure instanceof AgentActivityHeader)
+        if (
+          disclosure instanceof AgentActivityHeader &&
+          disclosure.agentActivity.final &&
+          !disclosure.agentActivity.cancelled
+        )
           disclosure.agentActivity.manualExpanded = expanded
       this.clearSelection(host.renderer as unknown as TuiAltScreen)
       ;(host.renderer as unknown as TuiAltScreen).requestRender()
@@ -3910,7 +3931,7 @@ export class NativeChatHost {
           for (let index = 0; index < message.content.length; index++) {
             const part = message.content[index]
             if (part?.type !== "text") continue
-            const phase = this.providerPhases.phaseFor(index, part)
+            const phase = this.providerPhases.evidenceFor(index, part)?.phase
             if (phase)
               this.recordRelationship({
                 version: 1,

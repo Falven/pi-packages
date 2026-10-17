@@ -5,6 +5,7 @@ type ProviderItem = {
   type?: unknown
   id?: unknown
   phase?: unknown
+  status?: unknown
 }
 type ProviderEvent = {
   type?: unknown
@@ -21,6 +22,7 @@ type Evidence = {
   creation: Creation
   phase?: MessagePhase
   phaseSeen?: boolean
+  completed?: boolean
   doneId?: string
 }
 type NativeText = { type: "text"; textSignature?: string }
@@ -77,6 +79,8 @@ export class ProviderPhaseIndex {
         delete evidence.phase
         evidence.phaseSeen = true
       }
+      if (item.status !== undefined)
+        evidence.completed = item.status === "completed"
       if (
         event.type === "response.output_item.done" &&
         typeof item.id === "string"
@@ -106,7 +110,10 @@ export class ProviderPhaseIndex {
     return [...this.evidence.values()].some((item) => item.phaseSeen)
   }
 
-  phaseFor(contentIndex: number, part: NativeText): MessagePhase | undefined {
+  evidenceFor(
+    contentIndex: number,
+    part: NativeText,
+  ): Pick<Evidence, "phase" | "completed"> | undefined {
     const evidence = this.evidence.get(contentIndex)
     if (
       evidence?.creation.kind !== "message" ||
@@ -131,7 +138,7 @@ export class ProviderPhaseIndex {
             return
           const nativePhase = phaseOf(native.phase)
           if (nativePhase && nativePhase !== evidence.phase) return
-          return evidence.phase
+          return evidence
         }
       } catch {
         return
@@ -139,7 +146,7 @@ export class ProviderPhaseIndex {
       return
     }
     if (evidence.doneId || this.normalized.get(contentIndex) !== part) return
-    return evidence.phase
+    return evidence
   }
 
   private create(
