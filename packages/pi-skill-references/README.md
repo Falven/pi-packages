@@ -1,29 +1,51 @@
-# pi-skill-references
+<h1 align="center">pi-skill-references</h1>
 
-Complete and invoke configured [Pi](https://pi.dev) skills with ordinary `/skill:name` references in prose.
+<p align="center">Choose Pi skills while writing a prompt and include their instructions when you send it.</p>
 
-Use `$` or `/` completion within prose to choose a skill from Pi's effective picker and insert its canonical reference. Inline `/` opens with Tab in the native editor and automatically in `pi-composer`. Native commands, file completion, provider updates, and custom pickers retain their existing contracts. A custom picker can insert canonical reference text through Pi's native text interfaces.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#reference-a-skill">Reference a skill</a> ·
+  <a href="#when-you-send-a-prompt">When you send a prompt</a>
+</p>
 
-Type, paste, or insert a canonical reference through Pi's native text APIs:
+Pi's built-in `/skill:name` command works only at the start of a prompt. This extension lets you reference skills anywhere in your prompt's prose and combine several skills in one request.
+
+![Skill completion inside a prompt](screenshots/completion.png)
+
+Shown with [pi-composer](../pi-composer).
+
+## Install
+
+Use Node.js 24+ with Pi and `@earendil-works/pi-tui` 1.1.0+ (1.x). Install from the repository root:
+
+```bash
+pi install ./packages/pi-skill-references
+```
+
+Run `/reload` in an open Pi session. The extension works with Pi's native editor and [pi-composer](../pi-composer).
+
+## Reference a skill
+
+Type `$` or `/` in prose and choose a configured skill. Completion inserts its `/skill:name` reference. Inline `/` completion opens with Tab in the native editor and automatically in `pi-composer`.
+
+For a configured skill named `review`, you can also type or paste the reference:
 
 ```text
 Please apply /skill:review to this change.
 ```
 
-Submission includes each resolved skill's instructions once, in first-reference order, with its native resource directory. Repeated references and catalog aliases pointing to the same skill file share that instruction block. References remain editable text in the editor and its history. Resolution follows Pi's effective catalog, including resource discovery, precedence, and reloads.
+![A completed skill reference in the draft](screenshots/reference.png)
 
-Markdown code, escaped references, link destinations, URLs, paths, and shorthand stay literal. Unknown references keep their text. Read failures use Pi's error reporting and preserve the request for recovery. Leading native commands retain their dispatch and argument handling.
+References remain editable text in your draft and prompt history. Shorthand such as `$review` stays literal until you select a completion.
 
-Pi's native editor trims leading whitespace before the input event. Use fenced code for examples at the start of a prompt; first-line indentation alone does not survive that boundary.
+## When you send a prompt
 
-See the [specification](../../docs/specs/pi-skill-references.md), its [architecture decisions](../../docs/specs/pi-skill-references.md#architecture-decisions), and the [package overview](../../README.md#packages).
+The agent receives each resolved skill's instructions once per prompt, in order of first mention. Repeated references and aliases for the same skill file share one instruction block. Each block tells the agent which directory to use for the skill's relative paths. Resolution uses Pi's configured skill catalog.
 
-## Install
+Code, escaped references, URLs, paths, and link destinations stay literal. Unknown references remain unchanged. Leading slash commands keep Pi's normal dispatch.
 
-Requires Pi and `@earendil-works/pi-tui` `^1.0.2`.
+Pi trims leading whitespace before processing input, so use fenced code for literal examples at the start of a prompt.
 
-From the repository root:
+If Pi cannot read a skill file, it reports the error and omits that skill's instructions. Your reference stays in the prompt.
 
-```bash
-pi install ./packages/pi-skill-references
-```
+See the [specification](../../docs/specs/pi-skill-references.md) for completion and resolution rules.

@@ -12,7 +12,8 @@
   "files": [
     "src/**/*.ts",
     "!src/**/*.test.ts",
-    "README.md"
+    "README.md",
+    "screenshots/*.png"
   ],
   "type": "module",
   "publishConfig": {

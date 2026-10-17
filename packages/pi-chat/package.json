@@ -5,7 +5,8 @@
   "files": [
     "src/**/*.ts",
     "NOTICE",
-    "LICENSE-APACHE-2.0"
+    "LICENSE-APACHE-2.0",
+    "screenshots/*.png"
   ],
   "type": "module",
   "publishConfig": {

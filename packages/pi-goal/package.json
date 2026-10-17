@@ -4,7 +4,8 @@
   "private": true,
   "description": "Persistent, explicitly authorized goals for Pi",
   "files": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "screenshots/*.png"
   ],
   "type": "module",
   "devDependencies": {

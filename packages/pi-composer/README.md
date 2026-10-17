@@ -1,91 +1,119 @@
-# pi-composer
+<h1 align="center">pi-composer</h1>
 
-A Markdown composer for the [pi coding agent](https://pi.dev).
+<p align="center">The text editing you expect from a desktop app, inside Pi.</p>
 
-Edit paragraphs, headings, emphasis, strikethrough, links, quotes, lists, tasks, rules, and inline or fenced code with Pi's native styles and highlighting. Cmd+Shift+M switches between formatted and source views of the same Markdown draft, preserving selection and grouped undo/redo. Native text replacement and insertion reach that draft and history. Movement and deletion preserve graphemes, including combining characters, emoji, and wide text across wrapped lines.
+<p align="center">
+  <a href="#mouse-and-keyboard">Mouse and keyboard</a> ·
+  <a href="#edit-markdown">Live Markdown</a> ·
+  <a href="#saved-drafts">Saved drafts</a> ·
+  <a href="#works-with-pi">Pi integrations</a> ·
+  <a href="#install">Install</a> ·
+  <a href="#shortcuts">Shortcuts</a> ·
+  <a href="#ghostty-keybindings">Ghostty keybindings</a>
+</p>
 
-Deletion uses the underlying Markdown in both views, including hidden syntax. Backspace after `**bold**` leaves `**bold*`; word deletion follows Pi's ordinary punctuation and word boundaries. The remaining source renders immediately through Pi's Markdown parser, and repairing valid syntax restores its formatting. Undo and yank retain the actual source text.
+Click into the middle of a prompt and keep typing. Select a sentence with the mouse, paste its replacement, and undo the change with `Cmd+Z`. Your Markdown formats as you write, and each session keeps its own draft.
 
-In fullscreen mode, mouse dragging and keyboard selection address the same Markdown text. Wheel scrolling preserves the selection; editing brings the caret back into view. Resizing keeps the selection usable, and native widgets, overlays, and completion pickers retain their focus and mouse routing.
+![Formatted Markdown in the composer](screenshots/markdown.png)
 
-For a blinking caret, enable **Show hardware cursor** in Pi's `/settings`. The composer then uses the terminal cursor in both views, following the terminal's shape and blinking preferences. Disabling the setting restores the drawn caret. Selection highlighting remains visible in either mode.
+## Mouse and keyboard
 
-Recognized URLs and Markdown link labels use Pi's native terminal hyperlinks. Formatted links open their destinations while source view retains literal Markdown. In fullscreen Ghostty on macOS, use **Shift+Cmd+click** to open a link; ordinary clicks and dragging still position the caret and select text. Hover feedback follows Ghostty's mouse-capture behavior. Copying and submitting preserve the Markdown text.
+Mouse and keyboard editing work on the same text and selection, in both formatted and source views. Start a selection by dragging, then extend it with the keyboard. Type or paste to replace it.
 
-Absolute file links, including image attachment references, open in the system's associated application. Spaces, Unicode, and URL punctuation in captured filenames are encoded only for display links; the draft keeps its original path. Attachment links open the retained full-resolution file. Saving changes from the external application can modify that retained attachment.
+| Editing                    | What you can do                                                                                                                                                                                             |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Click to edit              | Place the caret with a click and insert text there. Shift+click extends the selection from its anchor.                                                                                                      |
+| Select across a long draft | Drag in either direction across wrapped lines. Drag above or below the visible rows to scroll while selecting, or hold Shift while moving by character, word, line, or page.                                |
+| Move through your text     | Jump by word, reach either end of a line or the whole draft, and move a visible page at a time. Moving up and down preserves your column across short and wrapped lines.                                    |
+| Copy, cut, and paste       | Use the system clipboard at the caret or over a selection. Copy and cut retain the Markdown source. A cut removes the selection only after copying succeeds.                                                |
+| Delete and restore         | Delete characters or whole words in either direction, delete to a line boundary, and join adjacent lines. Yank restores text removed by word and line deletion; yank-pop cycles through retained deletions. |
+| Undo and redo              | Undo a run of typing as one edit. Replacements, pastes, completions, and external-editor changes share that history. Undo restores the text and selection.                                                  |
+| Keep your place            | Scroll without losing the selection. Resize the terminal or switch views and keep editing that range. Typing brings the caret back into view.                                                               |
+| Edit Unicode text          | Movement and deletion keep emoji and combining accents whole. Wrapping and vertical movement account for tabs and wide characters.                                                                          |
 
-The composer uses Pi's application actions, commands, input transformations, and submission path. Undo retains source cleared during submission, including failed submissions.
+Enable Show hardware cursor in `/settings` to use your terminal's cursor shape and blinking preferences. Selection highlighting stays visible with either the terminal cursor or the composer's drawn caret.
 
-Native `@` path completion, command completion, provider updates, and custom pickers continue through Pi's existing interfaces. File and skill references remain editable text.
+## Edit Markdown
 
-Each native session autosaves its Markdown draft, including file, skill, and attachment references. Edits save after 150 ms of idle time and flush before switching sessions or shutting down. Reopening a saved session restores its draft, including an explicitly cleared draft. Undo/redo stays in memory, isolated by session, across working-directory changes and resource reloads. Restarting Pi begins with fresh history.
+Read your prompt as a formatted document while you edit it. Headings, bold, italic, strikethrough, links, quotes, nested lists, checklists, and horizontal rules use Pi's Markdown styles. Inline code keeps its literal contents, and fenced code blocks have syntax highlighting.
 
-Recovery files live in `pi-composer/drafts` inside Pi's agent directory. `/composer-recover` offers cleared drafts, drafts from unsaved sessions, and drafts retained after failed saves. It restores the selected text as an undoable edit in the current session and keeps the draft it replaces recoverable. Text autosave respects `--no-session` and keeps those drafts in memory.
+You can select a word inside bold text and replace it while keeping the surrounding formatting. Press `Cmd+Shift+M` to inspect or edit the Markdown source. Both views share the draft, caret, selection, and undo history, so you can switch in the middle of an edit.
 
-Save failures report an error and preserve the current text and the last usable checkpoint. A failed save cancels a session switch or fork. Complete replacement files remain available for recovery if their final rename fails. If shutdown cannot save either copy, the pending draft stays with its process-lifetime history and is retried on resume. `/composer-recover` can also retrieve and save it from another session. Contents held only in memory are lost if Pi exits before a write succeeds.
+![The same draft in Markdown source view](screenshots/source.png)
 
-## Keys
+Enter continues lists and fenced code at the caret. Numbered lists get the next number, new checklist items start unchecked, and code keeps its indentation. On an empty list item, Enter removes the list marker. In ordinary prose, Enter submits. Use `Shift+Enter` or `Ctrl+J` for a newline and `Cmd+Enter` to submit from prose, lists, or code. An open completion picker handles its acceptance keys first.
 
-Keyboard editing follows Pi's effective bindings and native dispatch. Physical delivery depends on the terminal's bindings; the [terminal acceptance ticket](../../.scratch/composer-keybinds/issues/03-verify-keybindings-in-ghostty.md) records automated checks, successful user-reported keyboard tests, and remaining physical checks.
+Backspace and Delete edit the Markdown source, including hidden punctuation. For example, Backspace after `**bold**` leaves `**bold*`. Copying and submitting preserve the Markdown source.
 
-| Native action               | Default or useful delivered input               | Behavior                                                                                                            |
-| --------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Character and word movement | Arrows; Option+Left/Right                       | Move by grapheme or word.                                                                                           |
-| Line boundaries             | Home/Ctrl+A; End/Ctrl+E                         | Reach the current logical line's beginning/end.                                                                     |
-| Vertical movement           | Up/Down                                         | Move by visual row; an extra press at the first/last row reaches its beginning/end. Preserve native prompt history. |
-| Character deletion          | Backspace; forward Delete/Ctrl+D                | Remove the selection or a grapheme; retain native empty-editor exit.                                                |
-| Word deletion               | Ctrl+W/Option+Backspace; Option+D/Option+Delete | Remove the selection or word in the requested direction.                                                            |
-| Line deletion               | Ctrl+U/Ctrl+K                                   | Delete toward the logical line boundary; join lines when already at that boundary.                                  |
-| Retained-text recovery      | Ctrl+Y; Option+Y                                | Yank the retained deletion; rotate the preceding yank.                                                              |
-| Character jump              | Ctrl+]; Ctrl+Alt+]                              | Await a printable target and move to its next/previous occurrence.                                                  |
-| Editor paging               | PageUp/PageDown when delivered to the editor    | Move by the visible editor page; preserve host-owned fullscreen viewport keys.                                      |
-| Page selection              | Shift+PageUp/PageDown                           | Extend or contract the selection by one visible composer page.                                                      |
-| Undo                        | Ctrl+-                                          | Undo the prior coherent edit.                                                                                       |
-| Clipboard paste             | Ctrl+V                                          | Use the effective native clipboard handler.                                                                         |
-| Submit/newline              | Enter; Shift+Enter/Ctrl+J                       | Submit prose or continue a list/code block; insert a newline.                                                       |
-| Application actions         | Option+Enter; Option+Up/Down                    | Preserve native follow-up and other effective Pi behavior.                                                          |
+In fullscreen Ghostty, `Shift+Cmd+click` opens a link. Absolute file links open in the system's associated application. Opening an attachment uses its saved copy; external edits can change that copy.
 
-On a Mac keyboard, Delete means backward deletion, named `backspace` in bindings. Ghostty's Cmd+Delete translation to Ctrl+U and Cmd+Left/Right translations to Ctrl+A/E can use native actions without new terminal rules. Pi's effective bindings control the received input.
+## Saved drafts
 
-| Composer shortcut                      | Configuration contract                                            |
-| -------------------------------------- | ----------------------------------------------------------------- |
-| Cmd+Left/Right                         | Line-start/end aliases, including Shift selection.                |
-| Cmd+Up/Down                            | Fixed draft-start/end movement, including Shift selection.        |
-| Cmd+C, Cmd+V, Cmd+Z, Cmd+Enter         | Copy, clipboard paste, undo, and explicit-submit aliases.         |
-| Cmd+A, Cmd+X, Cmd+Shift+Z, Cmd+Shift+M | Fixed select-all, cut, redo, and formatted/source-view shortcuts. |
+Leave a prompt unfinished, switch sessions, and pick it up when you return. Each saved session restores its own draft, including file, skill, and attachment references. Edits autosave after 150 ms of idle time and save before a session switch or shutdown.
 
-Any explicit Pi override, including an empty binding list, suppresses the aliases for that native action. Fixed composer actions have no configurable native action IDs. Both kinds of shortcut yield to effective native bindings and accepted extension shortcuts. Shift movement keeps the selection anchored. Native undo precedes in-editor completion; the picker handles its acceptance keys before ordinary contextual submission. `/hotkeys` lists native actions and registered extension shortcuts; direct composer aliases are documented here. These bindings do not import macOS text-field settings.
+Undo and redo history stays with its session across switches, working-directory changes, and `/reload`. Restarting Pi restores the saved draft with fresh undo history.
 
-Page selection adds Shift to the effective `tui.editor.pageUp` and `tui.editor.pageDown` bindings. With the defaults, use Shift+Fn+Up/Down on a Mac keyboard. Remapping or clearing a page action changes its selection gestures; an action explicitly bound to the full shifted chord keeps its ordinary behavior. Selection retains its anchor and preferred display column across wrapped rows, redraws, and view changes. After a resize or preview refresh, the next gesture uses the current visible composer height.
+Run `/composer-recover` to recover cleared drafts or text retained after a failed save. Recovery replaces the current draft as an undoable edit and keeps the previous text recoverable. Files live under `pi-composer/drafts` in Pi's agent directory.
 
-Ghostty can consume Cmd+A, Cmd+Enter, and Cmd+Up/Down before Pi receives them. Cmd+C and Cmd+Z/Cmd+Shift+Z delivery can depend on terminal selection and undo state. Cmd+V may generate text paste instead of a raw key. The [testing contract](../../docs/specs/pi-composer.md#testing-decisions) distinguishes terminal delivery from editor behavior. Terminal settings change only through explicit, confirmed setup.
+![Choosing a saved draft to recover](screenshots/recovery.png)
 
-Continuous typing and character deletion group until movement, another kind of edit, or a pause of more than 500 ms. Word/line deletion, yank, yank-pop, native replacement, and paste each form one undoable edit. A fresh edit after undo discards the old redo branch.
+With `--no-session`, drafts stay in memory. Pi reports save errors; a failed save cancels a session switch or fork. Content held only in memory is lost when Pi exits.
 
-Copy and cut use Pi's clipboard support. A cut deletes only after copying succeeds and its original selection is still current. Command+V invokes the same supplied handler as the effective native clipboard action. With `pi-attachments` loaded, that handler classifies copied files, images, and text before insertion. A text paste resolving to one readable file also becomes an attachment, regardless of caret position; use Paste Inline for literal text. A custom handler retains its chosen insertion route. Terminal and public extension paste carry only their supplied text; suppressing the raw Cmd+V alias does not disable those routes.
+If a clipboard result arrives after the draft or selection changes, the composer saves the delivered text under `pi-composer/clipboard-recovery` in Pi's agent directory and reports the path. `/composer-recover` retries failed clipboard saves without inserting their text into the current draft.
 
-If a clipboard result reaches the composer after its draft or selection changes, the original session, cwd, draft, selection offsets, and delivered text are saved as JSON under `pi-composer/clipboard-recovery/<session-hash>/` in Pi's agent directory. The session ID stays in the recovery record; its hash names the directory. This also covers delivery to a replacement composer after a session switch or reload. The recovery path is reported in Pi, or on stderr after that session closes. Failed writes retain the payload in process memory. Starting a session or running `/composer-recover` retries those writes without inserting into the current draft.
+## Works with Pi
 
-Pi's default clipboard handler returns text-read failures as empty results and delivers copied-file paths or temporary image paths as text. The composer cannot report errors or retain bytes that this handler does not expose, or guard delivery to an unrelated replacement editor. `pi-attachments` supplies metadata classification, read-error reporting, captured-content recovery, and stable snapshots.
+Use Pi's native `@` file and directory completion, slash commands, prompt history, and external editor. Custom completion providers and pickers can insert into the same draft and undo history. Browse an earlier prompt and return to your unfinished draft, or queue a follow-up while the agent is responding. Pi's steering and submission controls keep working.
 
-## Ghostty keybinding setup
+Add [pi-attachments](../pi-attachments) for saved files and image previews, [pi-quote](../pi-quote) to bring selected conversation text into your draft, or [pi-skill-references](../pi-skill-references) for inline skill completion. Removing or restoring an attachment reference shares the draft's undo history.
 
-`/setup-keybinds <terminal> [remove]` reviews, installs, or removes persistent terminal keybindings. Ghostty is the supported terminal. Run `/setup-keybinds ghostty` from Pi inside Ghostty to review and install forwarding for Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z/Shift+Z, and Shift+Fn+Up/Down. The command shows the target file and asks for confirmation after verification. It appends one marked block, leaving other settings and Pi keybindings intact. The forwarding stays active in other programs and after Pi exits.
+For copied files and images, use Pi's clipboard action (`Ctrl+V` by default) with [pi-attachments](../pi-attachments). `Cmd+V` can arrive as a terminal text paste.
 
-Reload Ghostty configuration after installation or removal through its **Reload Configuration** action; the default shortcut is Cmd+Shift+Comma. `/setup-keybinds ghostty remove` reviews and removes the unmodified block while preserving unrelated later edits. Repeating either operation makes no write. An edited or incomplete block requires manual resolution. No backups are created.
+## Install
 
-Setup supports Ghostty 1.3.1 on local macOS with one regular, user-owned Application Support configuration (`config` or `config.ghostty`), no other default configuration files, no includes, and no extra Ghostty launch arguments. It requires `/usr/bin/python3` to verify that Pi and its same-user Ghostty ancestor use the same configuration context; macOS's root-owned `login` intermediary is supported. The macOS process query is an unstable platform interface; unavailable or mismatched verification leaves settings unchanged.
-
-Installation and repeat verification require the native U.S. keyboard input source and layout (`com.apple.keylayout.US`), no modifier remapping, and no higher-priority physical bindings for the three letter shortcuts. Other or unknown layouts require manual setup. Removal remains available after layout, remap, or physical-binding changes. Files with ACL permissions are refused; ordinary owner, group, mode, and surrounding contents are preserved. Configuration verification does not observe the GUI's loaded state or physical shortcut delivery.
-
-## Load
-
-Requires Pi and `@earendil-works/pi-tui` `^1.0.2`.
-
-From the repository root:
+Requires Node.js 24+ and Pi/TUI 1.1.0+ (1.x). From the repository root:
 
 ```bash
 pi install ./packages/pi-composer
 ```
 
-See the [specification](../../docs/specs/pi-composer.md), its [architecture decisions](../../docs/specs/pi-composer.md#architecture-decisions), and the [package overview](../../README.md#packages).
+Load this before [pi-attachments](../pi-attachments), then run `/reload`. The supported terminal setup is fullscreen Pi in Ghostty on local macOS.
+
+## Shortcuts
+
+| Action                                              | Shortcut                                              |
+| --------------------------------------------------- | ----------------------------------------------------- |
+| Move by character                                   | `Left/Right`                                          |
+| Move by word                                        | `Option+Left/Right`                                   |
+| Move to line start/end                              | `Cmd+Left/Right`                                      |
+| Move to draft start/end                             | `Cmd+Up/Down`                                         |
+| Extend a selection                                  | Hold Shift with a movement shortcut, or Shift+click   |
+| Move by a visible page                              | `PageUp/PageDown` when delivered to the editor        |
+| Extend selection by a page                          | `Shift+PageUp/PageDown` (`Shift+Fn+Up/Down` on a Mac) |
+| Select all                                          | `Cmd+A`                                               |
+| Copy selection                                      | `Cmd+C`                                               |
+| Cut selection                                       | `Cmd+X`                                               |
+| Paste                                               | `Ctrl+V` or `Cmd+V`                                   |
+| Delete backward/forward                             | `Backspace`; forward `Delete` or `Ctrl+D`             |
+| Delete the previous word                            | `Ctrl+W` or `Option+Backspace`                        |
+| Delete the next word                                | `Option+D` or `Option+Delete`                         |
+| Delete to line start/end                            | `Ctrl+U` / `Ctrl+K`                                   |
+| Restore a word or line deletion                     | `Ctrl+Y`; `Option+Y` cycles retained deletions        |
+| Jump to the next/previous occurrence of a character | `Ctrl+]` / `Ctrl+Alt+]`, then type the character      |
+| Undo                                                | `Ctrl+-` or `Cmd+Z`                                   |
+| Redo                                                | `Cmd+Shift+Z`                                         |
+| Toggle formatted/source view                        | `Cmd+Shift+M`                                         |
+| Insert a newline                                    | `Shift+Enter` or `Ctrl+J`                             |
+| Submit from prose, lists, or code                   | `Cmd+Enter`                                           |
+
+Cmd shortcuts require the terminal to forward them and yield to Pi bindings and extension shortcuts. Remapping or disabling a native action also disables its Cmd alias. Use `/hotkeys` for Pi's native shortcuts. On a Mac keyboard, the key labeled Delete sends Backspace; forward Delete is a separate action.
+
+## Ghostty keybindings
+
+Run `/setup-keybinds ghostty` inside Ghostty to review and install forwarding for Cmd+A, Cmd+Enter, Cmd+Up/Down, Cmd+Z, Cmd+Shift+Z, and Shift+Fn+Up/Down. Setup shows the target file and asks for confirmation before adding one marked block.
+
+Setup requires Ghostty 1.3.1 on local macOS, the native U.S. keyboard layout, and a single Application Support configuration. Includes, modifier remapping, and extra Ghostty launch arguments require manual setup.
+
+The bindings also affect other programs and stay installed after Pi exits. Use Ghostty's Reload Configuration action after installation or removal. Run `/setup-keybinds ghostty remove` to remove the unchanged managed block. An edited or incomplete block needs manual resolution.
+
+See the [setup requirements](../../docs/specs/pi-composer.md#ghostty-keybinding-setup) and [full specification](../../docs/specs/pi-composer.md).

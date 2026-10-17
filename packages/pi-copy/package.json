@@ -4,7 +4,8 @@
   "description": "Copy controls for native Pi output and assistant responses",
   "files": [
     "src/**/*.ts",
-    "README.md"
+    "README.md",
+    "screenshots/*.png"
   ],
   "type": "module",
   "exports": "./src/index.ts",

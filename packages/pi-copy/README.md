@@ -1,27 +1,44 @@
-# pi-copy
+<h1 align="center">pi-copy</h1>
 
-Copy command, Copy output, Copy diff, and Copy response for Pi. This is an independently installed plugin. It decorates native command/edit boxes and adds a control after the completed final assistant response. It also supplies the existing copy controls when `pi-chat` presents the conversation.
+<p align="center">Copy commands, output, diffs, and final responses from Pi in one click, preserving the original Markdown and whitespace.</p>
 
-One blank display row separates the final response from Copy response. Existing separation is reused, and copied text keeps its original whitespace.
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#copy-text">Copy text</a> ·
+  <a href="#what-gets-copied">What gets copied</a>
+</p>
 
-From the repository root:
+![Copy controls for a diff, command, output, and final response](screenshots/controls.png)
+
+Shown with [pi-chat](../pi-chat) and [pi-codex-tools](../pi-codex-tools).
+
+## Install
+
+Requires Node.js 24+ and Pi/TUI 1.1.0+ (1.x). From the repository root:
 
 ```bash
 pi install ./packages/pi-copy
 ```
 
-To also use chat presentation, install it separately:
+Run `/reload` in an open Pi session. `pi-copy` works with native Pi and [pi-chat](../pi-chat). Install chat separately if you want grouped activity; either load order works.
 
-```bash
-pi install ./packages/pi-chat
-```
+## Copy text
 
-Neither plugin depends on or installs the other. Both load orders work. Local paths are editable installations; `/reload` applies changes in a running Pi session.
+Click a copy control in a command or edit panel, or below a completed final response. With `pi-chat`, expand the group and item to see command and result controls.
 
-Controls copy the owning command, edit, or final response from its current retained source. They preserve original Markdown, whitespace, native panel placement, configured keyboard navigation, and pointer behavior. Empty payloads do not replace the clipboard. Successful writes show Copied briefly; failures and partial retained output use Pi's status display. Disposing controls prevents late writes from updating a replaced view.
+| Control       | Copies                                                    |
+| ------------- | --------------------------------------------------------- |
+| Copy command  | The command text.                                         |
+| Copy output   | The text output Pi still has for that command or edit.    |
+| Copy diff     | The edit's retained patch or diff, when one is available. |
+| Copy response | The final response's original Markdown.                   |
 
-Click a control to copy its owning source. `Alt+G` focuses a nearby control in native Pi; configured selector keys move between enabled controls, confirm copying, or return to the editor. With chat installed, controls participate in chat's existing disclosure navigation. Native selection and message copying remain available, and controls stay out of selected text and Find results.
+In native Pi, `Alt+G` focuses a nearby control. Use Up/Down to move between controls, Enter to copy, and Escape to return to the editor. Your configured selector keys take priority. With `pi-chat`, copy controls share the group and item navigation.
 
-Native mode uses Pi's existing assistant and built-in bash/edit/write components. Chat supplies its authoritative activity items and selected final-response parts through an optional Pi event agreement, preserving operation-level copying, final recognition, grouping, and source Find. Copy owns panel decoration, payloads, clipboard work, feedback, and cleanup. It restores its native component hooks on reload, session replacement, or shutdown.
+## What gets copied
 
-See the [specification](../../docs/specs/pi-copy.md), [independent extension decision](../../docs/adr/0029-copy-as-an-independent-extension.md), and [source fidelity decision](../../docs/adr/0027-copy-retained-source-and-separate-presentation.md). Behavior is verified against Pi/TUI 1.1.0 through the existing real-Pi chat and combined-workflow checks and native-only probes.
+Controls use the retained source, preserving its Markdown and whitespace. Terminal styling and the controls themselves stay out of copied text. Copy response excludes thoughts, commentary, and tool activity.
+
+Empty results leave the clipboard unchanged. A successful copy briefly shows Copied. Pi reports clipboard failures in its status display and warns when the copied output is incomplete. Copying does not recover discarded output.
+
+See the [specification](../../docs/specs/pi-copy.md) for source and placement rules.

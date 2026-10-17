@@ -5,7 +5,8 @@
   "files": [
     "src/**/*.ts",
     "src/**/*.json",
-    "src/**/*.mjs"
+    "src/**/*.mjs",
+    "screenshots/*.png"
   ],
   "type": "module",
   "publishConfig": {
