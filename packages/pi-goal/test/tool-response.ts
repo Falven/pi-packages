@@ -1,9 +1,4 @@
-export function toolResponse(
-  name: string,
-  args: unknown,
-  id: string,
-  usage: unknown,
-) {
+export function toolResponse(name: string, args: unknown, id: string, usage: unknown) {
   return [
     {
       event: {
@@ -34,5 +29,5 @@ export function toolResponse(
     },
     { event: "[DONE]" },
     { end: true } as const,
-  ]
+  ];
 }

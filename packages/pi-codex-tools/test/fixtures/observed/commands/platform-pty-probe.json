@@ -6,13 +6,7 @@
       "id": "node-spawn-socket-stdio",
       "provenance": "Actual prior public command observation",
       "launcher": "Node child_process.spawn",
-      "arguments": [
-        "-q",
-        "/dev/null",
-        "/bin/sh",
-        "-c",
-        "printf \"HELLO\\n\"; exit 7"
-      ],
+      "arguments": ["-q", "/dev/null", "/bin/sh", "-c", "printf \"HELLO\\n\"; exit 7"],
       "exit_code": 1,
       "stdout": "",
       "stderr": "script: tcgetattr/ioctl: Operation not supported on socket\n",

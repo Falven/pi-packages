@@ -1,41 +1,41 @@
-import { parentPort, workerData } from "node:worker_threads"
-import { createContext, runInContext, SourceTextModule } from "node:vm"
+import { parentPort, workerData } from "node:worker_threads";
+import { createContext, runInContext, SourceTextModule } from "node:vm";
 
-const port = parentPort
-const { source, tools, values, credits } = workerData
-const capacity = new Int32Array(credits)
-const timers = new Map()
+const port = parentPort;
+const { source, tools, values, credits } = workerData;
+const capacity = new Int32Array(credits);
+const timers = new Map();
 const send = Object.setPrototypeOf((message) => {
-  const bytes = Buffer.byteLength(message)
-  if (bytes > 8 * 1024 * 1024) return "Worker message exceeds 8 MiB"
+  const bytes = Buffer.byteLength(message);
+  if (bytes > 8 * 1024 * 1024) return "Worker message exceeds 8 MiB";
   for (;;) {
-    const available = Atomics.load(capacity, 0)
-    if (available >= bytes) break
-    Atomics.wait(capacity, 0, available)
+    const available = Atomics.load(capacity, 0);
+    if (available >= bytes) break;
+    Atomics.wait(capacity, 0, available);
   }
-  Atomics.sub(capacity, 0, bytes)
+  Atomics.sub(capacity, 0, bytes);
   try {
-    port.postMessage(message)
-    return undefined
+    port.postMessage(message);
+    return undefined;
   } catch {
-    Atomics.add(capacity, 0, bytes)
-    return "Execution host is unavailable"
+    Atomics.add(capacity, 0, bytes);
+    return "Execution host is unavailable";
   }
-}, null)
+}, null);
 const schedule = Object.setPrototypeOf((id, delay) => {
   timers.set(
     id,
     setTimeout(() => {
-      timers.delete(id)
-      bridge.fire(id)
+      timers.delete(id);
+      bridge.fire(id);
     }, delay),
-  )
-}, null)
+  );
+}, null);
 const cancel = Object.setPrototypeOf((id) => {
-  clearTimeout(timers.get(id))
-  timers.delete(id)
-}, null)
-const context = createContext(Object.create(null))
+  clearTimeout(timers.get(id));
+  timers.delete(id);
+}, null);
+const context = createContext(Object.create(null));
 const createBridge = runInContext(
   `((send, schedule, cancel, definitions, stored) => {
     "use strict";
@@ -168,27 +168,21 @@ const createBridge = runInContext(
     };
   })`,
   context,
-)
-const bridge = createBridge(
-  send,
-  schedule,
-  cancel,
-  JSON.stringify(tools),
-  JSON.stringify(values),
-)
-port.on("message", (message) => bridge.receive(message))
+);
+const bridge = createBridge(send, schedule, cancel, JSON.stringify(tools), JSON.stringify(values));
+port.on("message", (message) => bridge.receive(message));
 try {
   const module = new SourceTextModule(source, {
     context,
     importModuleDynamically() {
-      throw bridge.error("Module imports are not available")
+      throw bridge.error("Module imports are not available");
     },
-  })
+  });
   await module.link(() => {
-    throw bridge.error("Module imports are not available")
-  })
-  await module.evaluate()
-  bridge.completed()
+    throw bridge.error("Module imports are not available");
+  });
+  await module.evaluate();
+  bridge.completed();
 } catch (error) {
-  bridge.failed(error)
+  bridge.failed(error);
 }

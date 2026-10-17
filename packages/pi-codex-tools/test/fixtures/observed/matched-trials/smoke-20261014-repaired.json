@@ -314,12 +314,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -531,12 +526,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {

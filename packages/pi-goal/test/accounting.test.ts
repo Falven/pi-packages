@@ -1,14 +1,14 @@
-import assert from "node:assert/strict"
-import fs from "node:fs"
-import { syncBuiltinESMExports } from "node:module"
-import test, { type TestContext } from "node:test"
-import { setTimeout } from "node:timers/promises"
-import piGoal from "../src/index.ts"
-import { openNativeHost } from "../../../fixtures/native-host.ts"
-import { toolResponse } from "./tool-response.ts"
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import test, { type TestContext } from "node:test";
+import { setTimeout } from "node:timers/promises";
+import piGoal from "../src/index.ts";
+import { openNativeHost } from "../../../fixtures/native-host.ts";
+import { toolResponse } from "./tool-response.ts";
 
-const extension = new URL("../src/index.ts", import.meta.url).pathname
-type Host = Awaited<ReturnType<typeof openNativeHost>>
+const extension = new URL("../src/index.ts", import.meta.url).pathname;
+type Host = Awaited<ReturnType<typeof openNativeHost>>;
 
 const reported = {
   prompt_tokens: 100,
@@ -16,15 +16,10 @@ const reported = {
   total_tokens: 112,
   prompt_tokens_details: { cached_tokens: 20 },
   completion_tokens_details: { reasoning_tokens: 4 },
-}
+};
 
-function response(
-  name: string,
-  args: unknown,
-  id: string,
-  usage: unknown = reported,
-) {
-  return toolResponse(name, args, id, usage)
+function response(name: string, args: unknown, id: string, usage: unknown = reported) {
+  return toolResponse(name, args, id, usage);
 }
 
 function answer(usage: unknown = reported) {
@@ -46,18 +41,18 @@ function answer(usage: unknown = reported) {
     },
     { event: "[DONE]" },
     { end: true } as const,
-  ]
+  ];
 }
 
 function result(host: Host, id: string) {
   const message = host.session.messages.find(
     (item) => item.role === "toolResult" && item.toolCallId === id,
-  )
-  assert(message?.role === "toolResult")
-  assert.equal(message.isError, false, JSON.stringify(message.content))
-  const content = message.content[0]
-  assert(content?.type === "text")
-  return JSON.parse(content.text)
+  );
+  assert(message?.role === "toolResult");
+  assert.equal(message.isError, false, JSON.stringify(message.content));
+  const content = message.content[0];
+  assert(content?.type === "text");
+  return JSON.parse(content.text);
 }
 
 function ownUsage(tokens: number) {
@@ -68,35 +63,35 @@ function ownUsage(tokens: number) {
     cacheWrite: 0,
     totalTokens: tokens,
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-  }
+  };
 }
 
 function failNextCheckpoint(t: TestContext, host: Host) {
-  const path = host.session.sessionManager.getSessionFile()
-  assert(path)
-  const original = fs.appendFileSync
-  let pending = true
+  const path = host.session.sessionManager.getSessionFile();
+  assert(path);
+  const original = fs.appendFileSync;
+  let pending = true;
   const reject: typeof fs.appendFileSync = (file, data, options) => {
     if (pending && file === path && typeof data === "string") {
-      const entry = JSON.parse(data)
+      const entry = JSON.parse(data);
       if (
         entry.type === "custom" &&
         entry.customType === "pi-goal.state" &&
         typeof entry.data?.tokensUsed === "string" &&
         entry.data?.tokensUsed !== "0"
       ) {
-        pending = false
-        throw new Error("Controlled accounting append failure")
+        pending = false;
+        throw new Error("Controlled accounting append failure");
       }
     }
-    return original(file, data, options)
-  }
-  const append = t.mock.method(fs, "appendFileSync", reject)
-  syncBuiltinESMExports()
+    return original(file, data, options);
+  };
+  const append = t.mock.method(fs, "appendFileSync", reject);
+  syncBuiltinESMExports();
   t.after(() => {
-    append.mock.restore()
-    syncBuiltinESMExports()
-  })
+    append.mock.restore();
+    syncBuiltinESMExports();
+  });
 }
 
 const noUsage = {
@@ -106,48 +101,42 @@ const noUsage = {
   total_tokens: 0,
   prompt_tokens_details: { cached_tokens: 0 },
   completion_tokens_details: { reasoning_tokens: 0 },
-}
+};
 
 test("provider usage stays pending until checkpoints and creation excludes earlier reports", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
-  host.queueResponse(
-    ...response("create_goal", { objective: "Count reported work" }, "create"),
-  )
-  host.queueResponse(...response("get_goal", {}, "first-read"))
-  host.queueResponse(...response("get_goal", {}, "second-read"))
-  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
-  host.queueResponse(...answer())
-  await host.session.prompt(
-    "Create the requested goal, inspect it twice, then pause it.",
-  )
+  });
+  host.queueResponse(...response("create_goal", { objective: "Count reported work" }, "create"));
+  host.queueResponse(...response("get_goal", {}, "first-read"));
+  host.queueResponse(...response("get_goal", {}, "second-read"));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Create the requested goal, inspect it twice, then pause it.");
 
-  assert.equal(result(host, "create").goal.tokensUsed, 0)
-  assert.equal(result(host, "first-read").goal.tokensUsed, 0)
-  assert.equal(result(host, "second-read").goal.tokensUsed, 92)
-  assert.equal(result(host, "pause").goal.tokensUsed, 276)
-  assert.equal(result(host, "pause").goal.status, "paused")
-  const assistant = host.session.messages.find(
-    (message) => message.role === "assistant",
-  )
-  assert(assistant?.role === "assistant")
-  assert.equal(assistant.usage.input, 80)
-  assert.equal(assistant.usage.cacheRead, 20)
-  assert.equal(assistant.usage.output, 12)
-  assert.equal(assistant.usage.reasoning, 4)
+  assert.equal(result(host, "create").goal.tokensUsed, 0);
+  assert.equal(result(host, "first-read").goal.tokensUsed, 0);
+  assert.equal(result(host, "second-read").goal.tokensUsed, 92);
+  assert.equal(result(host, "pause").goal.tokensUsed, 276);
+  assert.equal(result(host, "pause").goal.status, "paused");
+  const assistant = host.session.messages.find((message) => message.role === "assistant");
+  assert(assistant?.role === "assistant");
+  assert.equal(assistant.usage.input, 80);
+  assert.equal(assistant.usage.cacheRead, 20);
+  assert.equal(assistant.usage.output, 12);
+  assert.equal(assistant.usage.reasoning, 4);
 
-  host.queueResponse(...response("get_goal", {}, "after-pause"))
-  host.queueResponse(...answer())
-  await host.session.prompt("Inspect the paused snapshot.")
-  assert.equal(result(host, "after-pause").goal.tokensUsed, 276)
-})
+  host.queueResponse(...response("get_goal", {}, "after-pause"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Inspect the paused snapshot.");
+  assert.equal(result(host, "after-pause").goal.tokensUsed, 276);
+});
 
 for (const completeEarly of [false, true]) {
   test(`nested own reports preserve the ${completeEarly ? "completion" : "creation"} cutoff without charging the later root aggregate`, async (t) => {
-    let completion: unknown
+    let completion: unknown;
     const host = await openNativeHost(t, {
       extensionPaths: [extension],
       noTools: "builtin",
@@ -159,7 +148,7 @@ for (const completeEarly of [false, true]) {
             type: "object",
             properties: {},
             required: [],
-          } as const
+          } as const;
           for (const [name, tokens] of [
             ["early", 10],
             ["grandchild", 7],
@@ -174,7 +163,7 @@ for (const completeEarly of [false, true]) {
                 usage: ownUsage(tokens),
                 details: undefined,
               }),
-            })
+            });
           }
           pi.registerTool({
             name: "parent",
@@ -182,82 +171,69 @@ for (const completeEarly of [false, true]) {
             description: "Run measured child work",
             parameters,
             execute: async (_id, _args, _signal, _update, ctx) => {
-              const child = await ctx.executeTool("grandchild", {})
-              assert.equal(child.isError, false)
+              const child = await ctx.executeTool("grandchild", {});
+              assert.equal(child.isError, false);
               if (completeEarly) {
                 const completed = await ctx.executeTool("update_goal", {
                   status: "complete",
-                })
-                assert.equal(completed.isError, false)
-                const text = completed.result.content[0]
-                assert(text?.type === "text")
-                completion = JSON.parse(text.text)
+                });
+                assert.equal(completed.isError, false);
+                const text = completed.result.content[0];
+                assert(text?.type === "text");
+                completion = JSON.parse(text.text);
               }
               return {
                 content: [{ type: "text", text: "Parent finished" }],
                 usage: ownUsage(3),
                 details: undefined,
-              }
+              };
             },
-          })
+          });
           pi.registerTool({
             name: "exercise",
             label: "Exercise",
             description: "Run nested measured work",
             parameters,
             execute: async (_id, _args, _signal, _update, ctx) => {
-              const early = await ctx.executeTool("early", {})
-              assert.equal(early.isError, false)
+              const early = await ctx.executeTool("early", {});
+              assert.equal(early.isError, false);
               const created = await ctx.executeTool("create_goal", {
                 objective: "Count only newly reported work",
                 token_budget: 100,
-              })
-              assert.equal(created.isError, false)
-              const parent = await ctx.executeTool("parent", {})
-              assert.equal(parent.isError, false)
+              });
+              assert.equal(created.isError, false);
+              const parent = await ctx.executeTool("parent", {});
+              assert.equal(parent.isError, false);
               return {
                 content: [{ type: "text", text: "Nested work finished" }],
                 usage: ownUsage(2),
                 details: undefined,
-              }
+              };
             },
-          })
+          });
         },
       ],
-    })
-    host.queueResponse(...response("exercise", {}, "root"))
-    host.queueResponse(...response("get_goal", {}, "read-nested", noUsage))
+    });
+    host.queueResponse(...response("exercise", {}, "root"));
+    host.queueResponse(...response("get_goal", {}, "read-nested", noUsage));
     if (!completeEarly)
-      host.queueResponse(
-        ...response(
-          "update_goal",
-          { status: "paused" },
-          "pause-nested",
-          noUsage,
-        ),
-      )
-    host.queueResponse(...answer(noUsage))
-    await host.session.prompt(
-      "Run the requested nested goal accounting scenario, then pause.",
-    )
-    assert.equal(
-      result(host, "read-nested").goal.tokensUsed,
-      completeEarly ? 7 : 12,
-    )
+      host.queueResponse(...response("update_goal", { status: "paused" }, "pause-nested", noUsage));
+    host.queueResponse(...answer(noUsage));
+    await host.session.prompt("Run the requested nested goal accounting scenario, then pause.");
+    assert.equal(result(host, "read-nested").goal.tokensUsed, completeEarly ? 7 : 12);
     if (completeEarly) {
       assert.deepEqual(completion, {
         ...result(host, "read-nested"),
         completionBudgetReport:
           "Report completion using the usage in this result. When goal.tokenBudget is present, report goal.tokensUsed against that allowance. When goal.timeUsedSeconds is positive, express the elapsed time briefly in the response language.",
-      })
-    } else assert.equal(result(host, "pause-nested").goal.tokensUsed, 12)
+      });
+    } else assert.equal(result(host, "pause-nested").goal.tokensUsed, 12);
     const root = host.session.messages.find(
-      (message) =>
-        message.role === "toolResult" && message.toolCallId === "root",
-    )
-    assert(root?.role === "toolResult")
-    assert.equal(root.usage?.output, 22)
-  })
+      (message) => message.role === "toolResult" && message.toolCallId === "root",
+    );
+    assert(root?.role === "toolResult");
+    assert.equal(root.usage?.output, 22);
+  });
 }
 
 test("accounting observes assistant usage after the native message replacement pipeline", async (t) => {
@@ -267,177 +243,150 @@ test("accounting observes assistant usage after the native message replacement p
       (pi) => {
         pi.on("message_end", (event) => {
           if (event.message.role === "assistant")
-            return { message: { ...event.message, usage: ownUsage(7) } }
-          return undefined
-        })
+            return { message: { ...event.message, usage: ownUsage(7) } };
+          return undefined;
+        });
       },
     ],
     noTools: "builtin",
     persistSession: true,
-  })
+  });
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Use final reported values" },
-      "create",
-    ),
-  )
-  host.queueResponse(...response("get_goal", {}, "read"))
-  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
-  host.queueResponse(...answer())
-  await host.session.prompt("Create the requested goal, inspect it and pause.")
-  assert.equal(result(host, "pause").goal.tokensUsed, 14)
-})
+    ...response("create_goal", { objective: "Use final reported values" }, "create"),
+  );
+  host.queueResponse(...response("get_goal", {}, "read"));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Create the requested goal, inspect it and pause.");
+  assert.equal(result(host, "pause").goal.tokensUsed, 14);
+});
 
 test("a tool checkpoint emits one hidden budget notice and model pause ends the exhausted ledger", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
+  });
   host.queueResponse(
     ...response(
       "create_goal",
       { objective: "Review <scope> & finish", token_budget: 100 },
       "create",
     ),
-  )
-  host.queueResponse(...response("get_goal", {}, "read-one"))
-  host.queueResponse(...response("get_goal", {}, "read-two"))
-  host.queueResponse(...response("get_goal", {}, "read-three"))
-  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
-  host.queueResponse(...response("get_goal", {}, "after-pause"))
-  host.queueResponse(...answer())
+  );
+  host.queueResponse(...response("get_goal", {}, "read-one"));
+  host.queueResponse(...response("get_goal", {}, "read-two"));
+  host.queueResponse(...response("get_goal", {}, "read-three"));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"));
+  host.queueResponse(...response("get_goal", {}, "after-pause"));
+  host.queueResponse(...answer());
   await host.session.prompt(
     "Create the requested budgeted goal, inspect usage, then pause at the requested boundary.",
-  )
-  assert.equal(result(host, "read-three").goal.status, "budgetLimited")
-  assert.equal(result(host, "read-three").goal.tokensUsed, 184)
-  assert.equal(result(host, "read-three").remainingTokens, 0)
-  assert.equal(result(host, "pause").goal.status, "budgetLimited")
-  assert.equal(result(host, "pause").goal.tokensUsed, 368)
-  assert.equal(result(host, "after-pause").goal.tokensUsed, 368)
-  assert.equal(host.requests.length, 7)
-  const contexts = host.session.messages.filter(
-    (message) => message.role === "custom",
-  )
-  assert.equal(contexts.length, 1)
-  const context = contexts[0]
-  assert(context?.role === "custom")
-  assert.equal(context.customType, "goal.internal_context")
-  assert.equal(context.display, false)
+  );
+  assert.equal(result(host, "read-three").goal.status, "budgetLimited");
+  assert.equal(result(host, "read-three").goal.tokensUsed, 184);
+  assert.equal(result(host, "read-three").remainingTokens, 0);
+  assert.equal(result(host, "pause").goal.status, "budgetLimited");
+  assert.equal(result(host, "pause").goal.tokensUsed, 368);
+  assert.equal(result(host, "after-pause").goal.tokensUsed, 368);
+  assert.equal(host.requests.length, 7);
+  const contexts = host.session.messages.filter((message) => message.role === "custom");
+  assert.equal(contexts.length, 1);
+  const context = contexts[0];
+  assert(context?.role === "custom");
+  assert.equal(context.customType, "goal.internal_context");
+  assert.equal(context.display, false);
   assert.deepEqual(context.details, {
     source: "goal",
     kind: "goal.internal_context",
-  })
-  assert.equal(typeof context.content, "string")
+  });
+  assert.equal(typeof context.content, "string");
   assert.match(
     String(context.content),
     /<objective>\nReview &lt;scope&gt; &amp; finish\n<\/objective>/,
-  )
-  assert.match(String(context.content), /budget_limited/)
-  assert.match(String(context.content), /Tokens used: 184\n- Token budget: 100/)
-  assert.match(String(context.content), /Elapsed pursuit: 0 seconds/)
-  assert.match(String(context.content), /remaining work/)
-  assert.match(String(context.content), /<\/goal_internal_context>\n$/)
+  );
+  assert.match(String(context.content), /budget_limited/);
+  assert.match(String(context.content), /Tokens used: 184\n- Token budget: 100/);
+  assert.match(String(context.content), /Elapsed pursuit: 0 seconds/);
+  assert.match(String(context.content), /remaining work/);
+  assert.match(String(context.content), /<\/goal_internal_context>\n$/);
   const delivered = host.requests[3]?.messages.find((message) =>
     JSON.stringify(message.content).includes("budget_limited"),
-  )
-  assert.equal(delivered?.role, "user")
-})
+  );
+  assert.equal(delivered?.role, "user");
+});
 
 test("an external edit preserves an exhausted ledger only when its checkpoint is empty", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
+  });
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Retain the cutoff", token_budget: 100 },
-      "create",
-    ),
-  )
-  host.queueResponse(...response("get_goal", {}, "read-one"))
-  host.queueResponse(...response("get_goal", {}, "read-two"))
-  host.queueResponse(
-    { pause: true },
-    ...response("get_goal", {}, "after-empty-edit"),
-  )
-  host.queueResponse(
-    { pause: true },
-    ...response("get_goal", {}, "after-timed-edit"),
-  )
-  host.queueResponse(...response("get_goal", {}, "final-read"))
-  host.queueResponse(...answer())
+    ...response("create_goal", { objective: "Retain the cutoff", token_budget: 100 }, "create"),
+  );
+  host.queueResponse(...response("get_goal", {}, "read-one"));
+  host.queueResponse(...response("get_goal", {}, "read-two"));
+  host.queueResponse({ pause: true }, ...response("get_goal", {}, "after-empty-edit"));
+  host.queueResponse({ pause: true }, ...response("get_goal", {}, "after-timed-edit"));
+  host.queueResponse(...response("get_goal", {}, "final-read"));
+  host.queueResponse(...answer());
   const run = host.session.prompt(
     "Create the requested budgeted goal and inspect the controlled checkpoints.",
-  )
-  await t.waitFor(() => assert.equal(host.requests.length, 4))
-  await host.session.prompt(
-    "/goal edit Updated objective at an empty checkpoint",
-  )
-  host.resumeResponse()
-  await t.waitFor(() => assert.equal(host.requests.length, 5))
-  assert.equal(result(host, "after-empty-edit").goal.tokensUsed, 184)
-  assert.equal(result(host, "after-empty-edit").goal.timeUsedSeconds, 0)
-  await setTimeout(1100)
-  await host.session.prompt(
-    "/goal edit Updated objective at a timed checkpoint",
-  )
-  host.resumeResponse()
-  await run
-  const timed = result(host, "after-timed-edit")
-  assert.equal(timed.goal.status, "budgetLimited")
-  assert.equal(timed.goal.tokensUsed, 276)
-  assert(timed.goal.timeUsedSeconds >= 1)
-  assert.equal(timed.goal.objective, "Updated objective at a timed checkpoint")
-  assert.deepEqual(result(host, "final-read"), timed)
-  assert.equal(host.requests.length, 7)
-})
+  );
+  await t.waitFor(() => assert.equal(host.requests.length, 4));
+  await host.session.prompt("/goal edit Updated objective at an empty checkpoint");
+  host.resumeResponse();
+  await t.waitFor(() => assert.equal(host.requests.length, 5));
+  assert.equal(result(host, "after-empty-edit").goal.tokensUsed, 184);
+  assert.equal(result(host, "after-empty-edit").goal.timeUsedSeconds, 0);
+  await setTimeout(1100);
+  await host.session.prompt("/goal edit Updated objective at a timed checkpoint");
+  host.resumeResponse();
+  await run;
+  const timed = result(host, "after-timed-edit");
+  assert.equal(timed.goal.status, "budgetLimited");
+  assert.equal(timed.goal.tokensUsed, 276);
+  assert(timed.goal.timeUsedSeconds >= 1);
+  assert.equal(timed.goal.objective, "Updated objective at a timed checkpoint");
+  assert.deepEqual(result(host, "final-read"), timed);
+  assert.equal(host.requests.length, 7);
+});
 
 test("cache writes are charged while cache reads and the reasoning subset are not charged twice", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
+  });
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Measure cache variants" },
-      "create",
-      noUsage,
-    ),
-  )
+    ...response("create_goal", { objective: "Measure cache variants" }, "create", noUsage),
+  );
   host.queueResponse(
     ...response("get_goal", {}, "cache", {
       ...reported,
       prompt_tokens_details: { cached_tokens: 20, cache_write_tokens: 30 },
     }),
-  )
-  host.queueResponse(
-    ...response("update_goal", { status: "paused" }, "pause", noUsage),
-  )
-  host.queueResponse(...answer(noUsage))
+  );
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause", noUsage));
+  host.queueResponse(...answer(noUsage));
   await host.session.prompt(
     "Create the requested goal and inspect the reported cache usage, then pause.",
-  )
-  assert.equal(result(host, "pause").goal.tokensUsed, 92)
+  );
+  assert.equal(result(host, "pause").goal.tokensUsed, 92);
   const message = host.session.messages.find(
     (item) => item.role === "assistant" && item.usage.cacheWrite > 0,
-  )
-  assert(message?.role === "assistant")
-  assert.equal(message.usage.input, 50)
-  assert.equal(message.usage.cacheWrite, 30)
-  assert.equal(message.usage.cacheRead, 20)
-  assert.equal(message.usage.output, 12)
-  assert.equal(message.usage.reasoning, 4)
-})
+  );
+  assert(message?.role === "assistant");
+  assert.equal(message.usage.input, 50);
+  assert.equal(message.usage.cacheWrite, 30);
+  assert.equal(message.usage.cacheRead, 20);
+  assert.equal(message.usage.output, 12);
+  assert.equal(message.usage.reasoning, 4);
+});
 
 test("a native retry preserves pending reports across repeated start events in one outer run", async (t) => {
-  const boundaries: string[] = []
+  const boundaries: string[] = [];
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -448,46 +397,37 @@ test("a native retry preserves pending reports across repeated start events in o
     extensionFactories: [
       (pi) => {
         pi.on("agent_start", () => {
-          boundaries.push("start")
-        })
+          boundaries.push("start");
+        });
         pi.on("agent_settled", () => {
-          boundaries.push("settled")
-        })
+          boundaries.push("settled");
+        });
         pi.on("message_end", (event) => {
-          if (
-            event.message.role === "assistant" &&
-            event.message.stopReason === "error"
-          )
-            return { message: { ...event.message, usage: ownUsage(17) } }
-          return undefined
-        })
+          if (event.message.role === "assistant" && event.message.stopReason === "error")
+            return { message: { ...event.message, usage: ownUsage(17) } };
+          return undefined;
+        });
       },
     ],
-  })
+  });
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Retain the retry baseline" },
-      "create",
-    ),
-  )
-  host.queueResponse(...response("get_goal", {}, "read-one"))
-  host.queueResponse({ status: 503 })
-  host.queueResponse(...response("get_goal", {}, "read-retried"))
-  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
-  host.queueResponse(...answer())
-  await host.session.prompt(
-    "Create the requested goal and pause after the controlled retry.",
-  )
-  assert.deepEqual(boundaries, ["start", "start", "settled"])
-  assert.equal(result(host, "read-retried").goal.tokensUsed, 92)
-  assert.equal(result(host, "pause").goal.tokensUsed, 293)
-})
+    ...response("create_goal", { objective: "Retain the retry baseline" }, "create"),
+  );
+  host.queueResponse(...response("get_goal", {}, "read-one"));
+  host.queueResponse({ status: 503 });
+  host.queueResponse(...response("get_goal", {}, "read-retried"));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Create the requested goal and pause after the controlled retry.");
+  assert.deepEqual(boundaries, ["start", "start", "settled"]);
+  assert.equal(result(host, "read-retried").goal.tokensUsed, 92);
+  assert.equal(result(host, "pause").goal.tokensUsed, 293);
+});
 
 test("concurrent child reports are charged once and a late earlier child can contribute after replacement", async (t) => {
-  const started = Promise.withResolvers<void>()
-  const finishLate = Promise.withResolvers<void>()
-  let oldSnapshot: unknown
+  const started = Promise.withResolvers<void>();
+  const finishLate = Promise.withResolvers<void>();
+  let oldSnapshot: unknown;
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
@@ -498,22 +438,22 @@ test("concurrent child reports are charged once and a late earlier child can con
           type: "object",
           properties: {},
           required: [],
-        } as const
+        } as const;
         pi.registerTool({
           name: "late",
           label: "Late",
           description: "Report work after the controlled release",
           parameters,
           execute: async () => {
-            started.resolve()
-            await finishLate.promise
+            started.resolve();
+            await finishLate.promise;
             return {
               content: [{ type: "text", text: "Late report" }],
               details: undefined,
               usage: ownUsage(5),
-            }
+            };
           },
-        })
+        });
         pi.registerTool({
           name: "measured",
           label: "Measured",
@@ -528,7 +468,7 @@ test("concurrent child reports are charged once and a late earlier child can con
             details: undefined,
             usage: ownUsage(args.tokens),
           }),
-        })
+        });
         pi.registerTool({
           name: "exercise",
           label: "Exercise",
@@ -537,160 +477,139 @@ test("concurrent child reports are charged once and a late earlier child can con
           execute: async (_id, _args, _signal, _update, ctx) => {
             const create = await ctx.executeTool("create_goal", {
               objective: "First objective",
-            })
-            assert.equal(create.isError, false)
-            await ctx.executeTool("measured", { tokens: 20 })
-            const late = ctx.executeTool("late", {})
-            await started.promise
+            });
+            assert.equal(create.isError, false);
+            await ctx.executeTool("measured", { tokens: 20 });
+            const late = ctx.executeTool("late", {});
+            await started.promise;
             const complete = await ctx.executeTool("update_goal", {
               status: "complete",
-            })
-            assert.equal(complete.isError, false)
-            const text = complete.result.content[0]
-            assert(text?.type === "text")
-            oldSnapshot = JSON.parse(text.text)
+            });
+            assert.equal(complete.isError, false);
+            const text = complete.result.content[0];
+            assert(text?.type === "text");
+            oldSnapshot = JSON.parse(text.text);
             const replacement = await ctx.executeTool("create_goal", {
               objective: "Replacement objective",
-            })
-            assert.equal(replacement.isError, false)
-            finishLate.resolve()
+            });
+            assert.equal(replacement.isError, false);
+            finishLate.resolve();
             const outcomes = await Promise.all([
               late,
               ctx.executeTool("measured", { tokens: 7 }),
               ctx.executeTool("measured", { tokens: 3 }),
-            ])
-            assert(outcomes.every((outcome) => !outcome.isError))
+            ]);
+            assert(outcomes.every((outcome) => !outcome.isError));
             return {
               content: [{ type: "text", text: "Concurrent reports finished" }],
               details: undefined,
               usage: ownUsage(2),
-            }
+            };
           },
-        })
+        });
       },
     ],
-  })
-  host.queueResponse(...response("exercise", {}, "root"))
-  host.queueResponse(...response("get_goal", {}, "read-new", noUsage))
-  host.queueResponse(
-    ...response("update_goal", { status: "paused" }, "pause", noUsage),
-  )
-  host.queueResponse(...answer(noUsage))
+  });
+  host.queueResponse(...response("exercise", {}, "root"));
+  host.queueResponse(...response("get_goal", {}, "read-new", noUsage));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause", noUsage));
+  host.queueResponse(...answer(noUsage));
   await host.session.prompt(
     "Run the requested replacement scenario and pause the replacement goal.",
-  )
-  assert.equal(
-    (oldSnapshot as { goal: { tokensUsed: number } }).goal.tokensUsed,
-    20,
-  )
-  assert.equal(result(host, "read-new").goal.objective, "Replacement objective")
-  assert.equal(result(host, "read-new").goal.tokensUsed, 17)
-  assert.equal(result(host, "pause").goal.tokensUsed, 17)
+  );
+  assert.equal((oldSnapshot as { goal: { tokensUsed: number } }).goal.tokensUsed, 20);
+  assert.equal(result(host, "read-new").goal.objective, "Replacement objective");
+  assert.equal(result(host, "read-new").goal.tokensUsed, 17);
+  assert.equal(result(host, "pause").goal.tokensUsed, 17);
   const root = host.session.messages.find(
     (message) => message.role === "toolResult" && message.toolCallId === "root",
-  )
-  assert(root?.role === "toolResult")
-  assert.equal(root.usage?.output, 37)
-})
+  );
+  assert(root?.role === "toolResult");
+  assert.equal(root.usage?.output, 37);
+});
 
 test("final-response exhaustion has no tool notice and completion retains its snapshot after interactive cleanup", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
+  });
   host.queueResponse(
     ...response(
       "create_goal",
       { objective: "Finish the requested work", token_budget: 100 },
       "create",
     ),
-  )
-  host.queueResponse(
-    ...answer({ ...reported, prompt_tokens: 192, total_tokens: 204 }),
-  )
+  );
+  host.queueResponse(...answer({ ...reported, prompt_tokens: 192, total_tokens: 204 }));
   await host.session.prompt(
     "Create the requested budgeted goal and finish the current work attempt.",
-  )
-  assert.equal(host.requests.length, 2)
-  assert.equal(
-    host.session.messages.filter((message) => message.role === "custom").length,
-    0,
-  )
-  host.queueResponse(
-    ...response("update_goal", { status: "complete" }, "complete"),
-  )
-  host.queueResponse(...answer())
-  await host.session.prompt(
-    "The whole objective is verified complete; record completion.",
-  )
-  const completed = result(host, "complete")
-  assert.equal(completed.goal.status, "complete")
-  assert.equal(completed.goal.tokensUsed, 184)
-  assert.equal(completed.remainingTokens, 0)
-  assert.equal(typeof completed.completionBudgetReport, "string")
-  host.queueResponse(...response("get_goal", {}, "after-cleanup"))
-  host.queueResponse(...answer())
-  await host.session.prompt("Inspect the current goal after completion.")
-  assert.equal(result(host, "after-cleanup").goal, null)
-  assert.equal(result(host, "complete").goal.tokensUsed, 184)
-})
+  );
+  assert.equal(host.requests.length, 2);
+  assert.equal(host.session.messages.filter((message) => message.role === "custom").length, 0);
+  host.queueResponse(...response("update_goal", { status: "complete" }, "complete"));
+  host.queueResponse(...answer());
+  await host.session.prompt("The whole objective is verified complete; record completion.");
+  const completed = result(host, "complete");
+  assert.equal(completed.goal.status, "complete");
+  assert.equal(completed.goal.tokensUsed, 184);
+  assert.equal(completed.remainingTokens, 0);
+  assert.equal(typeof completed.completionBudgetReport, "string");
+  host.queueResponse(...response("get_goal", {}, "after-cleanup"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Inspect the current goal after completion.");
+  assert.equal(result(host, "after-cleanup").goal, null);
+  assert.equal(result(host, "complete").goal.tokensUsed, 184);
+});
 
 test("a failed native tool checkpoint stops retries and reopening restores the saved counters", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     noTools: "builtin",
     persistSession: true,
-  })
-  failNextCheckpoint(t, host)
+  });
+  failNextCheckpoint(t, host);
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Retain uncommitted usage" },
-      "create",
-    ),
-  )
-  host.queueResponse(...response("get_goal", {}, "failed-read"))
-  host.queueResponse(...response("get_goal", {}, "retry-read"))
-  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"))
-  host.queueResponse(...answer())
+    ...response("create_goal", { objective: "Retain uncommitted usage" }, "create"),
+  );
+  host.queueResponse(...response("get_goal", {}, "failed-read"));
+  host.queueResponse(...response("get_goal", {}, "retry-read"));
+  host.queueResponse(...response("update_goal", { status: "paused" }, "pause"));
+  host.queueResponse(...answer());
   await host.session.prompt(
     "Create the requested goal and pause after the controlled storage failure.",
-  )
-  assert.equal(result(host, "failed-read").goal.tokensUsed, 0)
+  );
+  assert.equal(result(host, "failed-read").goal.tokensUsed, 0);
   for (const id of ["retry-read", "pause"]) {
     const message = host.session.messages.find(
       (item) => item.role === "toolResult" && item.toolCallId === id,
-    )
-    assert(message?.role === "toolResult")
-    assert.equal(message.isError, true)
-    const content = message.content[0]
-    assert(content?.type === "text")
-    assert.match(content.text, /Reopen the saved session/)
+    );
+    assert(message?.role === "toolResult");
+    assert.equal(message.isError, true);
+    const content = message.content[0];
+    assert(content?.type === "text");
+    assert.match(content.text, /Reopen the saved session/);
   }
-  assert.equal(host.requests.length, 5)
-  assert.equal(
-    host.session.messages.filter((message) => message.role === "custom").length,
-    0,
-  )
-  const sessionFile = host.session.sessionManager.getSessionFile()
-  assert(sessionFile)
-  await host.close()
+  assert.equal(host.requests.length, 5);
+  assert.equal(host.session.messages.filter((message) => message.role === "custom").length, 0);
+  const sessionFile = host.session.sessionManager.getSessionFile();
+  assert(sessionFile);
+  await host.close();
   const reopened = await openNativeHost(t, {
     directory: host.directory,
     sessionFile,
     extensionPaths: [extension],
     noTools: "builtin",
     holdResponses: true,
-  })
-  await reopened.session.prompt("/goal pause")
-  await reopened.session.abort()
-  reopened.queueResponse(...response("get_goal", {}, "restored", noUsage))
-  reopened.queueResponse(...answer(noUsage))
-  await reopened.session.prompt("Inspect the saved counters after reopening.")
-  assert.equal(result(reopened, "restored").goal.tokensUsed, 0)
-  assert.equal(result(reopened, "restored").goal.status, "paused")
-})
+  });
+  await reopened.session.prompt("/goal pause");
+  await reopened.session.abort();
+  reopened.queueResponse(...response("get_goal", {}, "restored", noUsage));
+  reopened.queueResponse(...answer(noUsage));
+  await reopened.session.prompt("Inspect the saved counters after reopening.");
+  assert.equal(result(reopened, "restored").goal.tokensUsed, 0);
+  assert.equal(result(reopened, "restored").goal.status, "paused");
+});
 
 test("an unaccountable tool report prevents automatic admission even after later valid checkpoints", async (t) => {
   const host = await openNativeHost(t, {
@@ -710,86 +629,67 @@ test("an unaccountable tool report prevents automatic admission even after later
             details: undefined,
             usage: ownUsage(Number.MAX_SAFE_INTEGER + 1),
           }),
-        })
+        });
       },
     ],
-  })
+  });
   host.queueResponse(
-    ...response(
-      "create_goal",
-      { objective: "Require exact measured usage" },
-      "create",
-    ),
-  )
-  host.queueResponse(...response("invalid_report", {}, "invalid"))
-  host.queueResponse(...response("get_goal", {}, "read"))
-  host.queueResponse(...answer())
-  await host.session.prompt(
-    "Create the requested goal and exercise the invalid report boundary.",
-  )
-  await new Promise<void>((resolve) => setImmediate(resolve))
-  await new Promise<void>((resolve) => setImmediate(resolve))
-  assert.equal(
-    host.session.messages.filter((message) => message.role === "custom").length,
-    0,
-  )
-  assert.equal(host.requests.length, 4)
-  await host.session.prompt("/goal pause")
-  host.queueResponse(...response("get_goal", {}, "paused", noUsage))
-  host.queueResponse(...answer(noUsage))
-  await host.session.prompt("Inspect the known paused usage.")
-  assert.equal(result(host, "paused").goal.tokensUsed, 276)
-})
+    ...response("create_goal", { objective: "Require exact measured usage" }, "create"),
+  );
+  host.queueResponse(...response("invalid_report", {}, "invalid"));
+  host.queueResponse(...response("get_goal", {}, "read"));
+  host.queueResponse(...answer());
+  await host.session.prompt("Create the requested goal and exercise the invalid report boundary.");
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(host.session.messages.filter((message) => message.role === "custom").length, 0);
+  assert.equal(host.requests.length, 4);
+  await host.session.prompt("/goal pause");
+  host.queueResponse(...response("get_goal", {}, "paused", noUsage));
+  host.queueResponse(...answer(noUsage));
+  await host.session.prompt("Inspect the known paused usage.");
+  assert.equal(result(host, "paused").goal.tokensUsed, 276);
+});
 
 for (const shutdown of [false, true]) {
   test(`failed settlement accounting suppresses continuation and ${shutdown ? "shutdown still disposes the extension" : "external pause cannot retry unconfirmed usage"}`, async (t) => {
-    let shutdownObserved = false
+    let shutdownObserved = false;
     const host = await openNativeHost(t, {
       extensionPaths: [extension],
       extensionFactories: [
         (pi) => {
           pi.on("session_shutdown", () => {
-            shutdownObserved = true
-          })
+            shutdownObserved = true;
+          });
         },
       ],
       noTools: "builtin",
       persistSession: true,
       holdResponses: true,
-    })
-    failNextCheckpoint(t, host)
+    });
+    failNextCheckpoint(t, host);
     host.queueResponse(
-      ...response(
-        "create_goal",
-        { objective: "Preserve the failed checkpoint" },
-        "create",
-      ),
-    )
-    host.queueResponse(...answer())
-    await host.session.prompt(
-      "Create the requested goal and finish the controlled attempt.",
-    )
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    assert.equal(host.requests.length, 2)
-    assert.equal(
-      host.session.messages.filter((message) => message.role === "custom")
-        .length,
-      0,
-    )
+      ...response("create_goal", { objective: "Preserve the failed checkpoint" }, "create"),
+    );
+    host.queueResponse(...answer());
+    await host.session.prompt("Create the requested goal and finish the controlled attempt.");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(host.requests.length, 2);
+    assert.equal(host.session.messages.filter((message) => message.role === "custom").length, 0);
     if (shutdown) {
-      await host.close()
-      assert(shutdownObserved)
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      assert.equal(host.requests.length, 2)
+      await host.close();
+      assert(shutdownObserved);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      assert.equal(host.requests.length, 2);
     } else {
-      await host.session.prompt("/goal pause")
-      assert.match(await host.frame(), /Reopen the saved session/)
-      await host.session.prompt("/goal inspect")
-      assert.match(await host.frame(), /Reopen the saved session/)
-      assert.equal(host.requests.length, 2)
+      await host.session.prompt("/goal pause");
+      assert.match(await host.frame(), /Reopen the saved session/);
+      await host.session.prompt("/goal inspect");
+      assert.match(await host.frame(), /Reopen the saved session/);
+      assert.equal(host.requests.length, 2);
     }
-  })
+  });
 }
 
 test("raw interruption keeps the live clock while idle inspection leaves the stored snapshot unchanged", async (t) => {
@@ -798,22 +698,22 @@ test("raw interruption keeps the live clock while idle inspection leaves the sto
     noTools: "builtin",
     persistSession: true,
     holdResponses: true,
-  })
-  await host.session.prompt("/goal create Measure active idle time")
-  await t.waitFor(() => assert.equal(host.requests.length, 1))
-  await host.session.abort()
-  await setTimeout(1100)
-  await host.session.prompt("/goal inspect")
-  assert.match(await host.frame(), /Elapsed pursuit:\s+0 seconds/)
-  assert.equal(host.requests.length, 1)
-  await host.session.prompt("/goal pause")
-  host.queueResponse(...response("get_goal", {}, "paused", noUsage))
-  host.queueResponse(...answer(noUsage))
-  await host.session.prompt("Inspect the paused elapsed-time snapshot.")
-  assert.equal(result(host, "paused").goal.status, "paused")
-  assert.equal(result(host, "paused").goal.tokensUsed, 0)
-  assert(result(host, "paused").goal.timeUsedSeconds >= 1)
-})
+  });
+  await host.session.prompt("/goal create Measure active idle time");
+  await t.waitFor(() => assert.equal(host.requests.length, 1));
+  await host.session.abort();
+  await setTimeout(1100);
+  await host.session.prompt("/goal inspect");
+  assert.match(await host.frame(), /Elapsed pursuit:\s+0 seconds/);
+  assert.equal(host.requests.length, 1);
+  await host.session.prompt("/goal pause");
+  host.queueResponse(...response("get_goal", {}, "paused", noUsage));
+  host.queueResponse(...answer(noUsage));
+  await host.session.prompt("Inspect the paused elapsed-time snapshot.");
+  assert.equal(result(host, "paused").goal.status, "paused");
+  assert.equal(result(host, "paused").goal.tokensUsed, 0);
+  assert(result(host, "paused").goal.timeUsedSeconds >= 1);
+});
 
 for (const outcome of ["invalid", "unsuccessful", "handler-failure"] as const) {
   test(`tool-finish accounting respects native execution provenance for ${outcome}`, async (t) => {
@@ -834,55 +734,41 @@ for (const outcome of ["invalid", "unsuccessful", "handler-failure"] as const) {
               additionalProperties: false,
             },
             execute: async () => {
-              if (outcome === "handler-failure")
-                throw new Error("Controlled executed failure")
+              if (outcome === "handler-failure") throw new Error("Controlled executed failure");
               return {
                 content: [{ type: "text", text: "Work did not succeed" }],
                 details: undefined,
-              }
+              };
             },
-          })
+          });
           pi.on("tool_result", (event) => {
             if (event.toolName === "work" && outcome === "unsuccessful")
-              return { isError: true, usage: ownUsage(17) }
-            return undefined
-          })
+              return { isError: true, usage: ownUsage(17) };
+            return undefined;
+          });
         },
       ],
-    })
+    });
     host.queueResponse(
-      ...response(
-        "create_goal",
-        { objective: "Count executed work", token_budget: 50 },
-        "create",
-      ),
-    )
+      ...response("create_goal", { objective: "Count executed work", token_budget: 50 }, "create"),
+    );
     host.queueResponse(
-      ...response(
-        "work",
-        outcome === "invalid" ? { unexpected: true } : {},
-        "attempt",
-      ),
-    )
-    host.queueResponse(...response("get_goal", {}, "read"))
-    host.queueResponse(...answer())
+      ...response("work", outcome === "invalid" ? { unexpected: true } : {}, "attempt"),
+    );
+    host.queueResponse(...response("get_goal", {}, "read"));
+    host.queueResponse(...answer());
     await host.session.prompt(
       "Create the requested budgeted goal and observe the controlled tool outcome.",
-    )
+    );
     const attempt = host.session.messages.find(
-      (message) =>
-        message.role === "toolResult" && message.toolCallId === "attempt",
-    )
-    assert(attempt?.role === "toolResult" && attempt.isError)
+      (message) => message.role === "toolResult" && message.toolCallId === "attempt",
+    );
+    assert(attempt?.role === "toolResult" && attempt.isError);
     assert.equal(
       result(host, "read").goal.tokensUsed,
       outcome === "invalid" ? 0 : outcome === "unsuccessful" ? 109 : 92,
-    )
-    assert.equal(
-      host.session.messages.filter((message) => message.role === "custom")
-        .length,
-      1,
-    )
-    assert.equal(host.requests.length, 4)
-  })
+    );
+    assert.equal(host.session.messages.filter((message) => message.role === "custom").length, 1);
+    assert.equal(host.requests.length, 4);
+  });
 }

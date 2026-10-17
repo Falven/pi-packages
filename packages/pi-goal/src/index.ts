@@ -1,57 +1,51 @@
-import { randomUUID } from "node:crypto"
-import { stripVTControlCharacters } from "node:util"
+import { randomUUID } from "node:crypto";
+import { stripVTControlCharacters } from "node:util";
 import {
   type ExtensionAPI,
   type ExtensionContext,
   type MessageEndEvent,
-} from "@earendil-works/pi-coding-agent"
-import { GoalStore, goalResult, type Goal, type StoredGoal } from "./state.ts"
-import { createGoalStop } from "./stop.ts"
-import { GoalGuards } from "./guards.ts"
+} from "@earendil-works/pi-coding-agent";
+import { GoalStore, goalResult, type Goal, type StoredGoal } from "./state.ts";
+import { createGoalStop } from "./stop.ts";
+import { GoalGuards } from "./guards.ts";
 import {
   GoalAccounting,
   reportedTokens,
   type AccountingMode,
   type GoalIdentity,
-} from "./accounting.ts"
+} from "./accounting.ts";
 
 function displayObjective(objective: string): string {
-  return stripVTControlCharacters(objective).replace(/\p{Cc}/gu, " ")
+  return stripVTControlCharacters(objective).replace(/\p{Cc}/gu, " ");
 }
 
 function validateObjective(value: string): string {
-  const objective = value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "")
-  if (!objective) throw new Error("goal objective must not be empty")
+  const objective = value.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, "");
+  if (!objective) throw new Error("goal objective must not be empty");
   if (!objective.isWellFormed())
-    throw new Error("goal objective must contain only Unicode scalar values")
+    throw new Error("goal objective must contain only Unicode scalar values");
   if ([...objective].length > 4000)
-    throw new Error("goal objective must be at most 4000 characters")
-  return objective
+    throw new Error("goal objective must be at most 4000 characters");
+  return objective;
 }
 
 function eligible(goal: StoredGoal | null): goal is StoredGoal {
   return (
     goal?.status === "active" &&
     (goal.tokenBudget === undefined || goal.tokensUsed < goal.tokenBudget)
-  )
+  );
 }
 
 function identity(goal: GoalIdentity): string {
-  return JSON.stringify([goal.threadId, goal.generation])
+  return JSON.stringify([goal.threadId, goal.generation]);
 }
 
-function callKey(event: {
-  toolCallId: string
-  parentToolCallId?: string
-}): string {
-  return JSON.stringify([event.parentToolCallId ?? null, event.toolCallId])
+function callKey(event: { toolCallId: string; parentToolCallId?: string }): string {
+  return JSON.stringify([event.parentToolCallId ?? null, event.toolCallId]);
 }
 
 function escapeObjective(objective: string): string {
-  return objective
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
+  return objective.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function budgetContext(goal: Goal): string {
@@ -72,12 +66,12 @@ The goal is budget_limited. Start no new substantive goal work. Wrap up this tur
 Call update_goal only when the whole objective is achieved or the user explicitly requests a pause. Budget exhaustion takes precedence over pause and does not establish completion.
 
 </goal_internal_context>
-`
+`;
 }
 
 function editContext(goal: Goal): string {
-  const objective = escapeObjective(goal.objective)
-  const remaining = goalResult(goal).structuredContent.remainingTokens
+  const objective = escapeObjective(goal.objective);
+  const remaining = goalResult(goal).structuredContent.remainingTokens;
   return `<goal_internal_context source="goal">
 The user changed the active goal objective.
 
@@ -96,11 +90,11 @@ Redirect this turn toward the updated objective. Continue earlier work only when
 
 Call update_goal only when the updated objective is fully achieved or the user explicitly requests a pause.
 
-</goal_internal_context>`
+</goal_internal_context>`;
 }
 
 function continuationContext(goal: Goal, hasPlan: boolean): string {
-  const objective = escapeObjective(goal.objective)
+  const objective = escapeObjective(goal.objective);
   return `<goal_internal_context source="goal">
 Continue pursuing the active goal. This internal context is not a new human request.
 
@@ -133,33 +127,33 @@ Set blocked only when the same actual impediment persists for at least three con
 
 Pause only on an explicit user request; report the returned status and stop goal work. An ending turn or a nearly exhausted budget does not establish completion.
 
-</goal_internal_context>`
+</goal_internal_context>`;
 }
 
 export default function piGoal(pi: ExtensionAPI): void {
-  const lifetime = new AbortController()
-  let revision = 0
-  let running = false
-  let runSignal: AbortSignal | undefined
-  let manualCompaction: { signal: AbortSignal; complete: boolean } | undefined
-  const accounting = new GoalAccounting()
-  const guards = new GoalGuards()
-  const seenMessages = new Set<string>()
-  let pendingAssistant = false
-  let accountingFailed = false
-  const usageFailures = new Set<string>()
-  let budgetNotice: string | undefined
-  const calls = new Map<string, { executed: boolean; current: boolean }>()
+  const lifetime = new AbortController();
+  let revision = 0;
+  let running = false;
+  let runSignal: AbortSignal | undefined;
+  let manualCompaction: { signal: AbortSignal; complete: boolean } | undefined;
+  const accounting = new GoalAccounting();
+  const guards = new GoalGuards();
+  const seenMessages = new Set<string>();
+  let pendingAssistant = false;
+  let accountingFailed = false;
+  const usageFailures = new Set<string>();
+  let budgetNotice: string | undefined;
+  const calls = new Map<string, { executed: boolean; current: boolean }>();
   let pending:
     | {
-        nonce: string
-        threadId: string
-        generation: string
-        revision: number
-        compactionSignal: AbortSignal | undefined
+        nonce: string;
+        threadId: string;
+        generation: string;
+        revision: number;
+        compactionSignal: AbortSignal | undefined;
       }
-    | undefined
-  let scheduled: NodeJS.Immediate | undefined
+    | undefined;
+  let scheduled: NodeJS.Immediate | undefined;
   const parameters = {
     get_goal: {
       type: "object",
@@ -201,70 +195,63 @@ export default function piGoal(pi: ExtensionAPI): void {
       required: ["status"],
       additionalProperties: false,
     },
-  } as const
+  } as const;
   const owns = (name: string) =>
     Object.hasOwn(parameters, name) &&
     pi
       .getAllTools()
       .some(
         (tool) =>
-          tool.name === name &&
-          tool.parameters === parameters[name as keyof typeof parameters],
-      )
+          tool.name === name && tool.parameters === parameters[name as keyof typeof parameters],
+      );
   const checkTools = () => {
-    if (lifetime.signal.aborted)
-      throw new Error("The goal extension is no longer active.")
+    if (lifetime.signal.aborted) throw new Error("The goal extension is no longer active.");
     const collision = pi
       .getAllTools()
-      .find((tool) => Object.hasOwn(parameters, tool.name) && !owns(tool.name))
+      .find((tool) => Object.hasOwn(parameters, tool.name) && !owns(tool.name));
     if (collision)
       throw new Error(
         `Goal tool name collision: ${collision.name}. Remove the duplicate goal extension.`,
-      )
-  }
+      );
+  };
   const storage = (ctx: ExtensionContext) =>
-    new GoalStore(pi, ctx.sessionManager, cancelContinuation)
+    new GoalStore(pi, ctx.sessionManager, cancelContinuation);
   const present = (ctx: ExtensionContext, goal: StoredGoal | null) => {
     ctx.ui.setStatus(
       "pi-goal",
-      goal
-        ? `Goal: ${goal.status} · ${displayObjective(goal.objective)}`
-        : undefined,
-    )
+      goal ? `Goal: ${goal.status} · ${displayObjective(goal.objective)}` : undefined,
+    );
     if (goal?.status === "complete" && ctx.mode === "tui") {
       try {
-        storage(ctx).clear(goal)
+        storage(ctx).clear(goal);
       } catch (error) {
         ctx.ui.notify(
           `Could not clear the completed goal: ${error instanceof Error ? error.message : String(error)}`,
           "error",
-        )
+        );
       }
     }
-  }
+  };
   const read = (ctx: ExtensionContext) => {
-    checkTools()
+    checkTools();
     if (!ctx.sessionManager.getSessionFile()) {
-      throw new Error("Goal tools require a persistent thread.")
+      throw new Error("Goal tools require a persistent thread.");
     }
     try {
-      return storage(ctx).read(ctx.sessionManager.getSessionId())
+      return storage(ctx).read(ctx.sessionManager.getSessionId());
     } catch (error) {
       throw new Error(
         `failed to read goal: ${error instanceof Error ? error.message : String(error)}`,
         { cause: error },
-      )
+      );
     }
-  }
+  };
   const cancelContinuation = () => {
-    if (scheduled) clearImmediate(scheduled)
-    scheduled = undefined
-    pending = undefined
-  }
-  const requestContinuation = (
-    ctx: ExtensionContext,
-    compactionSignal?: AbortSignal,
-  ) => {
+    if (scheduled) clearImmediate(scheduled);
+    scheduled = undefined;
+    pending = undefined;
+  };
+  const requestContinuation = (ctx: ExtensionContext, compactionSignal?: AbortSignal) => {
     if (
       lifetime.signal.aborted ||
       accountingFailed ||
@@ -276,92 +263,85 @@ export default function piGoal(pi: ExtensionAPI): void {
       ctx.hasPendingMessages() ||
       !ctx.sessionManager.getSessionFile()
     )
-      return
+      return;
     try {
-      const goal = read(ctx)
-      if (!eligible(goal) || usageFailures.has(identity(goal))) return
-      stop.install(ctx)
+      const goal = read(ctx);
+      if (!eligible(goal) || usageFailures.has(identity(goal))) return;
+      stop.install(ctx);
       const candidate = {
         nonce: randomUUID(),
         threadId: goal.threadId,
         generation: goal.generation,
         revision,
         compactionSignal,
-      }
-      pending = candidate
+      };
+      pending = candidate;
       scheduled = setImmediate(() => {
-        scheduled = undefined
-        if (lifetime.signal.aborted || pending !== candidate) return
+        scheduled = undefined;
+        if (lifetime.signal.aborted || pending !== candidate) return;
         if (accountingFailed || storage(ctx).failed) {
-          cancelContinuation()
-          return
+          cancelContinuation();
+          return;
         }
         pi.sendUserMessage(`/goal --continue ${candidate.nonce}`, {
           expandPromptTemplates: true,
-        })
-      })
-      scheduled.unref()
+        });
+      });
+      scheduled.unref();
     } catch (error) {
       ctx.ui.notify(
         `Could not continue the goal: ${error instanceof Error ? error.message : String(error)}`,
         "error",
-      )
+      );
     }
-  }
+  };
   const changed = (ctx: ExtensionContext, goal: StoredGoal | null) => {
-    revision++
-    cancelContinuation()
-    present(ctx, goal)
+    revision++;
+    cancelContinuation();
+    present(ctx, goal);
     if (eligible(goal)) {
-      stop.install(ctx)
-      requestContinuation(
-        ctx,
-        manualCompaction?.complete ? manualCompaction.signal : undefined,
-      )
+      stop.install(ctx);
+      requestContinuation(ctx, manualCompaction?.complete ? manualCompaction.signal : undefined);
     }
-  }
+  };
   const checkpoint = (
     ctx: ExtensionContext,
     mode: AccountingMode = "active",
     keepBudgetLimited = false,
   ) => {
-    if (
-      lifetime.signal.aborted ||
-      !ctx.sessionManager.getSessionFile() ||
-      storage(ctx).failed
-    )
-      return null
+    if (lifetime.signal.aborted || !ctx.sessionManager.getSessionFile() || storage(ctx).failed)
+      return null;
     try {
-      const previous = accounting.activeGoal
+      const previous = accounting.activeGoal;
       const goal = accounting.checkpoint(
         storage(ctx),
         ctx.sessionManager.getSessionId(),
         mode,
         keepBudgetLimited,
-      )
-      if (previous && !accounting.activeGoal) guards.reset()
+      );
+      if (previous && !accounting.activeGoal) guards.reset();
       if (goal) {
-        accountingFailed = false
-        present(ctx, goal)
+        accountingFailed = false;
+        present(ctx, goal);
       }
-      return goal
+      return goal;
     } catch (error) {
-      accountingFailed = true
-      cancelContinuation()
-      throw error
+      accountingFailed = true;
+      cancelContinuation();
+      throw error;
     }
-  }
+  };
   const stop = createGoalStop((ctx) => {
-    if (lifetime.signal.aborted) return
-    const goal = read(ctx)
+    if (lifetime.signal.aborted) return;
+    const goal = read(ctx);
     if (goal?.status === "active") {
-      guards.reset()
-      checkpoint(ctx)
-      const updated = storage(ctx).update(goal, "paused")
-      accounting.applyExternal(updated)
-      changed(ctx, updated)
+      guards.reset();
+      checkpoint(ctx);
+      const updated = storage(ctx).update(goal, "paused");
+      accounting.applyExternal(updated);
+      changed(ctx, updated);
     }
-  })
+  });
 
   pi.registerTool({
     name: "get_goal",
@@ -372,7 +352,7 @@ export default function piGoal(pi: ExtensionAPI): void {
     outputSchema: {},
     executionMode: "sequential",
     execute: async (_id, _args, _signal, _update, ctx) => goalResult(read(ctx)),
-  })
+  });
 
   pi.registerTool({
     name: "create_goal",
@@ -383,46 +363,33 @@ export default function piGoal(pi: ExtensionAPI): void {
     outputSchema: {},
     executionMode: "sequential",
     execute: async (_id, args, _signal, _update, ctx) => {
-      checkTools()
+      checkTools();
       if (!ctx.sessionManager.getSessionFile()) {
-        throw new Error("Goal tools require a persistent thread.")
+        throw new Error("Goal tools require a persistent thread.");
       }
-      const objective = validateObjective(args.objective)
-      if (
-        typeof args.token_budget === "number" &&
-        !Number.isSafeInteger(args.token_budget)
-      ) {
+      const objective = validateObjective(args.objective);
+      if (typeof args.token_budget === "number" && !Number.isSafeInteger(args.token_budget)) {
         throw new Error(
           "token_budget must be a safe integer; use an exact decimal string for larger values",
-        )
+        );
       }
-      const budget =
-        args.token_budget === undefined ? undefined : BigInt(args.token_budget)
-      if (
-        budget !== undefined &&
-        (budget <= 0n || budget > 9223372036854775807n)
-      )
-        throw new Error(
-          "goal budgets must be between 1 and 9223372036854775807",
-        )
-      let goal: StoredGoal
+      const budget = args.token_budget === undefined ? undefined : BigInt(args.token_budget);
+      if (budget !== undefined && (budget <= 0n || budget > 9223372036854775807n))
+        throw new Error("goal budgets must be between 1 and 9223372036854775807");
+      let goal: StoredGoal;
       try {
-        goal = storage(ctx).create(
-          ctx.sessionManager.getSessionId(),
-          objective,
-          budget,
-        )
+        goal = storage(ctx).create(ctx.sessionManager.getSessionId(), objective, budget);
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (message.startsWith("cannot create a new goal")) throw error
-        throw new Error(`failed to create goal: ${message}`, { cause: error })
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.startsWith("cannot create a new goal")) throw error;
+        throw new Error(`failed to create goal: ${message}`, { cause: error });
       }
-      guards.reset()
-      accounting.activate(goal)
-      changed(ctx, goal)
-      return goalResult(goal)
+      guards.reset();
+      accounting.activate(goal);
+      changed(ctx, goal);
+      return goalResult(goal);
     },
-  })
+  });
 
   pi.registerTool({
     name: "update_goal",
@@ -433,36 +400,32 @@ export default function piGoal(pi: ExtensionAPI): void {
     outputSchema: {},
     executionMode: "sequential",
     execute: async (_id, args, _signal, _update, ctx) => {
-      const goal = read(ctx)
-      if (!goal) throw new Error("no goal exists for this thread")
-      checkpoint(ctx, args.status === "complete" ? "complete" : "stopped")
-      const updated = storage(ctx).update(goal, args.status)
-      accounting.clear()
-      guards.reset()
-      changed(ctx, updated)
-      return goalResult(updated, args.status === "complete")
+      const goal = read(ctx);
+      if (!goal) throw new Error("no goal exists for this thread");
+      checkpoint(ctx, args.status === "complete" ? "complete" : "stopped");
+      const updated = storage(ctx).update(goal, args.status);
+      accounting.clear();
+      guards.reset();
+      changed(ctx, updated);
+      return goalResult(updated, args.status === "complete");
     },
-  })
+  });
 
   pi.registerCommand("goal", {
     description:
       "Manage the goal: inspect, create <objective>, edit <objective>, pause, resume, or clear",
     handler: async (args, ctx) => {
-      if (lifetime.signal.aborted) return
+      if (lifetime.signal.aborted) return;
       if (args.startsWith("--continue ")) {
-        const candidate = pending
-        if (!candidate || args !== `--continue ${candidate.nonce}`) return
-        if (candidate.compactionSignal) await ctx.waitForIdle()
-        if (lifetime.signal.aborted || pending !== candidate) return
-        if (
-          accountingFailed ||
-          storage(ctx).failed ||
-          candidate.compactionSignal?.aborted
-        ) {
-          cancelContinuation()
-          return
+        const candidate = pending;
+        if (!candidate || args !== `--continue ${candidate.nonce}`) return;
+        if (candidate.compactionSignal) await ctx.waitForIdle();
+        if (lifetime.signal.aborted || pending !== candidate) return;
+        if (accountingFailed || storage(ctx).failed || candidate.compactionSignal?.aborted) {
+          cancelContinuation();
+          return;
         }
-        pending = undefined
+        pending = undefined;
         if (
           candidate.revision !== revision ||
           running ||
@@ -470,16 +433,16 @@ export default function piGoal(pi: ExtensionAPI): void {
           ctx.hasPendingMessages() ||
           candidate.threadId !== ctx.sessionManager.getSessionId()
         )
-          return
-        const goal = read(ctx)
+          return;
+        const goal = read(ctx);
         if (
           !eligible(goal) ||
           goal.generation !== candidate.generation ||
           usageFailures.has(identity(goal))
         )
-          return
-        stop.install(ctx)
-        const activeTools = pi.getActiveTools()
+          return;
+        stop.install(ctx);
+        const activeTools = pi.getActiveTools();
         const hasPlan = pi
           .getAllTools()
           .some(
@@ -488,8 +451,8 @@ export default function piGoal(pi: ExtensionAPI): void {
               (activeTools.includes(tool.name) ||
                 tool.exposure === "codemode" ||
                 tool.exposure === "deferred"),
-          )
-        guards.expectContinuation(candidate.nonce)
+          );
+        guards.expectContinuation(candidate.nonce);
         pi.sendMessage(
           {
             customType: "goal.internal_context",
@@ -502,76 +465,63 @@ export default function piGoal(pi: ExtensionAPI): void {
             display: false,
           },
           { triggerTurn: true },
-        )
-        return
+        );
+        return;
       }
-      const goal = read(ctx)
-      const threadId = ctx.sessionManager.getSessionId()
-      const openedRevision = revision
+      const goal = read(ctx);
+      const threadId = ctx.sessionManager.getSessionId();
+      const openedRevision = revision;
       const current = () => {
-        if (lifetime.signal.aborted) return false
+        if (lifetime.signal.aborted) return false;
         if (
           openedRevision === revision &&
           threadId === ctx.sessionManager.getSessionId() &&
           goal?.generation === read(ctx)?.generation
         )
-          return true
-        ctx.ui.notify(
-          "The goal changed while this control was open. Reopen /goal.",
-          "warning",
-        )
-        return false
-      }
-      const match =
-        /^\p{White_Space}*(\S+)(?:\p{White_Space}+([\s\S]*))?$/u.exec(args)
-      let action = match?.[1]
-      let objective = match?.[2]
+          return true;
+        ctx.ui.notify("The goal changed while this control was open. Reopen /goal.", "warning");
+        return false;
+      };
+      const match = /^\p{White_Space}*(\S+)(?:\p{White_Space}+([\s\S]*))?$/u.exec(args);
+      let action = match?.[1];
+      let objective = match?.[2];
       if (!action && ctx.hasUI) {
         const actions = [
           { action: "inspect", label: "Inspect" },
           goal
             ? { action: "edit", label: "Edit objective" }
             : { action: "create", label: "Create goal" },
-          ...(goal?.status === "active"
-            ? [{ action: "pause", label: "Pause" }]
-            : []),
-          ...(goal &&
-          ["paused", "blocked", "usageLimited"].includes(goal.status)
+          ...(goal?.status === "active" ? [{ action: "pause", label: "Pause" }] : []),
+          ...(goal && ["paused", "blocked", "usageLimited"].includes(goal.status)
             ? [{ action: "resume", label: "Resume" }]
             : []),
           { action: "clear", label: "Clear" },
-        ]
+        ];
         const selected = await ctx.ui.select(
           "Goal controls",
           actions.map((item) => item.label),
           {
             signal: lifetime.signal,
           },
-        )
-        if (selected === undefined || !current()) return
-        action = actions.find((item) => item.label === selected)?.action
+        );
+        if (selected === undefined || !current()) return;
+        action = actions.find((item) => item.label === selected)?.action;
       }
-      action ??= "inspect"
-      if (
-        (action === "create" || action === "edit") &&
-        objective === undefined
-      ) {
-        if (!ctx.hasUI) throw new Error(`Use /goal ${action} <objective>`)
-        const closed = Promise.withResolvers<undefined>()
-        const closeEditor = () => closed.resolve(undefined)
-        lifetime.signal.addEventListener("abort", closeEditor, { once: true })
+      action ??= "inspect";
+      if ((action === "create" || action === "edit") && objective === undefined) {
+        if (!ctx.hasUI) throw new Error(`Use /goal ${action} <objective>`);
+        const closed = Promise.withResolvers<undefined>();
+        const closeEditor = () => closed.resolve(undefined);
+        lifetime.signal.addEventListener("abort", closeEditor, { once: true });
         try {
           objective = await Promise.race([
-            ctx.ui.editor(
-              "Goal objective",
-              action === "edit" ? goal?.objective : undefined,
-            ),
+            ctx.ui.editor("Goal objective", action === "edit" ? goal?.objective : undefined),
             closed.promise,
-          ])
+          ]);
         } finally {
-          lifetime.signal.removeEventListener("abort", closeEditor)
+          lifetime.signal.removeEventListener("abort", closeEditor);
         }
-        if (objective === undefined || !current()) return
+        if (objective === undefined || !current()) return;
       }
       if (action === "inspect") {
         ctx.ui.notify(
@@ -579,46 +529,34 @@ export default function piGoal(pi: ExtensionAPI): void {
             ? `${goal.status}: ${displayObjective(goal.objective)}\nTokens used: ${goal.tokensUsed}\nToken budget: ${goal.tokenBudget ?? "none"}\nRemaining tokens: ${goalResult(goal).structuredContent.remainingTokens ?? "unbounded"}\nElapsed pursuit: ${goal.timeUsedSeconds} seconds`
             : "No current goal.",
           "info",
-        )
+        );
       } else if (action === "create") {
-        guards.reset()
-        checkpoint(ctx)
-        const created = storage(ctx).create(
-          threadId,
-          validateObjective(objective ?? ""),
-        )
-        accounting.applyExternal(created)
-        changed(ctx, created)
+        guards.reset();
+        checkpoint(ctx);
+        const created = storage(ctx).create(threadId, validateObjective(objective ?? ""));
+        accounting.applyExternal(created);
+        changed(ctx, created);
       } else if (action === "clear") {
-        guards.reset()
-        checkpoint(ctx)
-        if (goal) storage(ctx).clear(goal)
-        accounting.clear()
-        changed(ctx, null)
-      } else if (
-        action === "edit" ||
-        action === "pause" ||
-        action === "resume"
-      ) {
-        if (!goal) throw new Error("no goal exists for this thread")
+        guards.reset();
+        checkpoint(ctx);
+        if (goal) storage(ctx).clear(goal);
+        accounting.clear();
+        changed(ctx, null);
+      } else if (action === "edit" || action === "pause" || action === "resume") {
+        if (!goal) throw new Error("no goal exists for this thread");
         if (action === "pause" && goal.status !== "active")
-          throw new Error("pause is available only for an active goal")
-        if (
-          action === "resume" &&
-          !["paused", "blocked", "usageLimited"].includes(goal.status)
-        )
-          throw new Error(
-            "resume is available only for a paused, blocked, or usage-limited goal",
-          )
-        guards.reset()
-        checkpoint(ctx)
+          throw new Error("pause is available only for an active goal");
+        if (action === "resume" && !["paused", "blocked", "usageLimited"].includes(goal.status))
+          throw new Error("resume is available only for a paused, blocked, or usage-limited goal");
+        guards.reset();
+        checkpoint(ctx);
         const updated = storage(ctx).update(
           goal,
           action === "pause" ? "paused" : "active",
           action === "edit" ? validateObjective(objective ?? "") : undefined,
-        )
-        accounting.applyExternal(updated)
-        changed(ctx, updated)
+        );
+        accounting.applyExternal(updated);
+        changed(ctx, updated);
         if (
           action === "edit" &&
           running &&
@@ -634,176 +572,160 @@ export default function piGoal(pi: ExtensionAPI): void {
               display: false,
             },
             { triggerTurn: false },
-          )
+          );
         }
       } else {
         throw new Error(
           "Use /goal inspect, create <objective>, edit <objective>, pause, resume, or clear",
-        )
+        );
       }
     },
-  })
+  });
 
   pi.on("session_before_compact", (event) => {
     if (event.reason === "manual") {
-      cancelContinuation()
-      manualCompaction = { signal: event.signal, complete: false }
+      cancelContinuation();
+      manualCompaction = { signal: event.signal, complete: false };
     }
-  })
+  });
 
   pi.on("session_start", (_event, ctx) => {
-    if (lifetime.signal.aborted) return
+    if (lifetime.signal.aborted) return;
     if (ctx.sessionManager.getSessionFile()) {
       try {
-        const goal = read(ctx)
-        accounting.applyExternal(goal)
-        present(ctx, goal)
+        const goal = read(ctx);
+        accounting.applyExternal(goal);
+        present(ctx, goal);
       } catch (error) {
-        ctx.ui.notify(
-          error instanceof Error ? error.message : String(error),
-          "error",
-        )
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
     }
-  })
+  });
 
   pi.on("resources_discover", (_event, ctx) => {
-    requestContinuation(ctx)
-  })
+    requestContinuation(ctx);
+  });
 
   pi.on("session_shutdown", (_event, ctx) => {
     try {
-      checkpoint(ctx)
+      checkpoint(ctx);
     } finally {
-      lifetime.abort()
-      cancelContinuation()
-      accounting.clear()
-      accounting.finish()
-      guards.reset()
-      running = false
-      runSignal = undefined
-      calls.clear()
-      stop.dispose()
-      ctx.ui.setStatus("pi-goal", undefined)
+      lifetime.abort();
+      cancelContinuation();
+      accounting.clear();
+      accounting.finish();
+      guards.reset();
+      running = false;
+      runSignal = undefined;
+      calls.clear();
+      stop.dispose();
+      ctx.ui.setStatus("pi-goal", undefined);
     }
-  })
+  });
 
   pi.on("before_agent_start", (_event, ctx) => {
-    if (lifetime.signal.aborted) return
-    if (
-      ctx.sessionManager.getSessionFile() &&
-      !storage(ctx).failed &&
-      eligible(read(ctx))
-    )
-      stop.install(ctx)
-  })
+    if (lifetime.signal.aborted) return;
+    if (ctx.sessionManager.getSessionFile() && !storage(ctx).failed && eligible(read(ctx)))
+      stop.install(ctx);
+  });
 
   pi.on("agent_start", (_event, ctx) => {
-    if (lifetime.signal.aborted) return
-    cancelContinuation()
+    if (lifetime.signal.aborted) return;
+    cancelContinuation();
     if (!running) {
-      guards.start(ctx.sessionManager.getEntries())
-      if (ctx.sessionManager.getSessionFile() && !storage(ctx).failed)
-        accounting.start(read(ctx))
+      guards.start(ctx.sessionManager.getEntries());
+      if (ctx.sessionManager.getSessionFile() && !storage(ctx).failed) accounting.start(read(ctx));
     }
-    running = true
-    runSignal = ctx.signal
-  })
+    running = true;
+    runSignal = ctx.signal;
+  });
   pi.on("input", () => {
-    cancelContinuation()
-    guards.cancelContinuation()
-  })
+    cancelContinuation();
+    guards.cancelContinuation();
+  });
   const recordUsage = (usage: Parameters<typeof reportedTokens>[0]) => {
     try {
-      accounting.record(reportedTokens(usage))
+      accounting.record(reportedTokens(usage));
     } catch (error) {
-      const goal = accounting.activeGoal
-      if (goal) usageFailures.add(identity(goal))
-      cancelContinuation()
+      const goal = accounting.activeGoal;
+      if (goal) usageFailures.add(identity(goal));
+      cancelContinuation();
       throw new Error(
         "Could not account goal usage. Automatic goal continuation is suspended: " +
           (error instanceof Error ? error.message : String(error)),
         { cause: error },
-      )
+      );
     }
-  }
+  };
   const recordAssistant = (id: string, message: MessageEndEvent["message"]) => {
-    if (
-      lifetime.signal.aborted ||
-      message.role !== "assistant" ||
-      seenMessages.has(id)
-    )
-      return
+    if (lifetime.signal.aborted || message.role !== "assistant" || seenMessages.has(id)) return;
     try {
-      recordUsage(message.usage)
+      recordUsage(message.usage);
     } finally {
-      seenMessages.add(id)
+      seenMessages.add(id);
     }
-  }
+  };
   pi.on("session_compact", (event, ctx) => {
-    if (lifetime.signal.aborted) return
-    guards.committed(ctx.sessionManager.getEntries())
-    const entry = event.compactionEntry
+    if (lifetime.signal.aborted) return;
+    guards.committed(ctx.sessionManager.getEntries());
+    const entry = event.compactionEntry;
     if (entry.usage && !seenMessages.has(entry.id)) {
       try {
-        recordUsage(entry.usage)
+        recordUsage(entry.usage);
       } finally {
-        seenMessages.add(entry.id)
+        seenMessages.add(entry.id);
       }
     }
-    if (!running) checkpoint(ctx)
+    if (!running) checkpoint(ctx);
     if (event.reason === "manual" && manualCompaction) {
-      manualCompaction.complete = true
-      requestContinuation(ctx, manualCompaction.signal)
+      manualCompaction.complete = true;
+      requestContinuation(ctx, manualCompaction.signal);
     }
-  })
+  });
   pi.on("message_end", (event) => {
-    if (running) guards.message(event.message)
-    if (event.message.role === "assistant") pendingAssistant = true
-  })
+    if (running) guards.message(event.message);
+    if (event.message.role === "assistant") pendingAssistant = true;
+  });
   pi.on("message_update", (event) => {
-    if (running) guards.update(event)
-  })
+    if (running) guards.update(event);
+  });
   pi.on("provider_stream_event", (event) => {
-    if (running) guards.provider(event)
-  })
+    if (running) guards.provider(event);
+  });
   pi.on("tool_execution_start", (event, ctx) => {
-    calls.set(callKey(event), { executed: false, current: running })
+    calls.set(callKey(event), { executed: false, current: running });
     // The message hook pipeline can replace usage. Its persisted entry is final.
     if (pendingAssistant) {
-      pendingAssistant = false
+      pendingAssistant = false;
       const entry = ctx.sessionManager
         .getBranch()
-        .findLast(
-          (item) =>
-            item.type === "message" && item.message.role === "assistant",
-        )
-      if (entry?.type === "message") recordAssistant(entry.id, entry.message)
+        .findLast((item) => item.type === "message" && item.message.role === "assistant");
+      if (entry?.type === "message") recordAssistant(entry.id, entry.message);
     }
-  })
+  });
   pi.on("turn_end", (event) => {
-    if (running) guards.turn(event.message)
-    recordAssistant(event.messageEntryId, event.message)
-    pendingAssistant = false
-  })
+    if (running) guards.turn(event.message);
+    recordAssistant(event.messageEntryId, event.message);
+    pendingAssistant = false;
+  });
   pi.on("tool_result", (event) => {
-    const call = calls.get(callKey(event))
+    const call = calls.get(callKey(event));
     // Execution ran. Public events still conflate child aborts and handler failures.
-    if (call) call.executed = true
-  })
+    if (call) call.executed = true;
+  });
   pi.on("tool_execution_end", (event, ctx) => {
-    if (lifetime.signal.aborted) return
-    const key = callKey(event)
-    const call = calls.get(key)
-    guards.tool(running && call?.current === true)
-    if (!call) return
-    calls.delete(key)
-    if (event.result.usage) recordUsage(event.result.usage)
+    if (lifetime.signal.aborted) return;
+    const key = callKey(event);
+    const call = calls.get(key);
+    guards.tool(running && call?.current === true);
+    if (!call) return;
+    calls.delete(key);
+    if (event.result.usage) recordUsage(event.result.usage);
     if (call.executed && event.toolName !== "update_goal") {
-      const goal = checkpoint(ctx, "active", true)
+      const goal = checkpoint(ctx, "active", true);
       if (goal?.status === "budgetLimited") {
-        const noticeIdentity = identity(goal)
-        if (budgetNotice === noticeIdentity) return
+        const noticeIdentity = identity(goal);
+        if (budgetNotice === noticeIdentity) return;
         pi.sendMessage(
           {
             customType: "goal.internal_context",
@@ -812,42 +734,37 @@ export default function piGoal(pi: ExtensionAPI): void {
             display: false,
           },
           { triggerTurn: false },
-        )
-        budgetNotice = noticeIdentity
+        );
+        budgetNotice = noticeIdentity;
       }
     }
-  })
+  });
   pi.on("agent_settled", (event, ctx) => {
-    if (lifetime.signal.aborted) return
-    const aborted =
-      runSignal?.aborted || ("aborted" in event && event.aborted === true)
-    if (aborted) guards.reset()
+    if (lifetime.signal.aborted) return;
+    const aborted = runSignal?.aborted || ("aborted" in event && event.aborted === true);
+    if (aborted) guards.reset();
     try {
-      guards.committed(ctx.sessionManager.getEntries())
-      const owner = accounting.currentGoal
-      const reason = aborted ? undefined : guards.finish()
-      checkpoint(ctx)
-      if (
-        reason &&
-        owner?.threadId === ctx.sessionManager.getSessionId() &&
-        !storage(ctx).failed
-      ) {
-        const stopped = storage(ctx).stop(owner, reason)
-        accounting.clear()
-        guards.reset()
-        if (stopped) changed(ctx, stopped)
+      guards.committed(ctx.sessionManager.getEntries());
+      const owner = accounting.currentGoal;
+      const reason = aborted ? undefined : guards.finish();
+      checkpoint(ctx);
+      if (reason && owner?.threadId === ctx.sessionManager.getSessionId() && !storage(ctx).failed) {
+        const stopped = storage(ctx).stop(owner, reason);
+        accounting.clear();
+        guards.reset();
+        if (stopped) changed(ctx, stopped);
       }
     } finally {
-      accounting.finish()
-      running = false
-      for (const call of calls.values()) call.current = false
+      accounting.finish();
+      running = false;
+      for (const call of calls.values()) call.current = false;
     }
-    if (aborted) cancelContinuation()
-    else requestContinuation(ctx)
-    runSignal = undefined
-  })
+    if (aborted) cancelContinuation();
+    else requestContinuation(ctx);
+    runSignal = undefined;
+  });
 
   pi.on("agent_before_settle", (event) => {
-    if (running) guards.beforeSettle(event)
-  })
+    if (running) guards.beforeSettle(event);
+  });
 }

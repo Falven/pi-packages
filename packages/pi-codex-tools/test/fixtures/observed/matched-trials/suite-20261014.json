@@ -136,9 +136,7 @@
       "imageMode": "RGBA",
       "rgbPixelSha256": "4808df625b60cc551e232337b01cdc83e22aac3a63116185e41d36acaa1ec44f",
       "imageUrlSha256": "f5d7f8f84d9ecf1a78ebeb845288b6c8e13cbfeaa1b16bb3ed16643f47f4a963",
-      "trailingTextHashes": [
-        "599d3128f7590325f6f6a28c9f36a63f5e5190ea15b221780c49b179cc54524a"
-      ]
+      "trailingTextHashes": ["599d3128f7590325f6f6a28c9f36a63f5e5190ea15b221780c49b179cc54524a"]
     },
     {
       "actor": "pi",
@@ -153,9 +151,7 @@
       "imageMode": "RGBA",
       "rgbPixelSha256": "4808df625b60cc551e232337b01cdc83e22aac3a63116185e41d36acaa1ec44f",
       "imageUrlSha256": "f5d7f8f84d9ecf1a78ebeb845288b6c8e13cbfeaa1b16bb3ed16643f47f4a963",
-      "trailingTextHashes": [
-        "599d3128f7590325f6f6a28c9f36a63f5e5190ea15b221780c49b179cc54524a"
-      ]
+      "trailingTextHashes": ["599d3128f7590325f6f6a28c9f36a63f5e5190ea15b221780c49b179cc54524a"]
     },
     {
       "actor": "reference",
@@ -394,12 +390,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -611,12 +602,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -875,12 +861,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -1194,12 +1175,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -1567,12 +1543,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -1994,12 +1965,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -2392,12 +2358,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -2609,12 +2570,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -2873,12 +2829,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -3192,12 +3143,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -3565,12 +3511,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -3992,12 +3933,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -4390,12 +4326,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -4607,12 +4538,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -4885,12 +4811,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -5102,12 +5023,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -5380,12 +5296,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -5597,12 +5508,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -5869,12 +5775,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -6195,12 +6096,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -6532,12 +6428,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [],
           "gatewayOnlyChangedField": "/tools/4/description",
@@ -6749,12 +6640,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -7021,12 +6907,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {
@@ -7347,12 +7228,7 @@
             "execCanonicalFormatSha256": "587da60f9cf63690567063ad9ab7dbb6e2ce30eeba7257876097156fb276fe98",
             "fullExecDescriptionCharacters": 7002,
             "fullExecDescriptionSha256": "08b759f3652780ce882d483fce3731ec3901a2a31b675a18db6a25e88c9ff35d",
-            "fullNestedApiInventory": [
-              "apply_patch",
-              "exec_command",
-              "view_image",
-              "write_stdin"
-            ]
+            "fullNestedApiInventory": ["apply_patch", "exec_command", "view_image", "write_stdin"]
           },
           "callAndResultShapes": [
             {

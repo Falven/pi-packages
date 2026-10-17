@@ -1,73 +1,67 @@
-import { createHash } from "node:crypto"
-import { fileURLToPath } from "node:url"
-import type { OperationPresentation } from "./presentation.ts"
+import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import type { OperationPresentation } from "./presentation.ts";
 
-export const activityType = "pi.activity"
+export const activityType = "pi.activity";
 
-export type ActivityStatus =
-  | "running"
-  | "completed"
-  | "failed"
-  | "unknown"
-  | "unattempted"
+export type ActivityStatus = "running" | "completed" | "failed" | "unknown" | "unattempted";
 
 export type ActivityFile = {
-  id: string
-  path: string
-  status: ActivityStatus
-  args?: Record<string, unknown>
-  changes?: { added: number; removed: number }
-  output?: string
-  outputOmitted?: boolean
-}
+  id: string;
+  path: string;
+  status: ActivityStatus;
+  args?: Record<string, unknown>;
+  changes?: { added: number; removed: number };
+  output?: string;
+  outputOmitted?: boolean;
+};
 
 export type ActivityOperation = {
-  id: string
-  order: number
-  revision: number
-  status: ActivityStatus
-  cwd?: string
-  args?: Record<string, unknown>
-  output?: string
-  outputOmitted?: boolean
+  id: string;
+  order: number;
+  revision: number;
+  status: ActivityStatus;
+  cwd?: string;
+  args?: Record<string, unknown>;
+  output?: string;
+  outputOmitted?: boolean;
 } & (
   | { kind: "command"; commands: string[]; shell?: string[] }
   | { kind: "edit"; path?: string; files?: ActivityFile[] }
   | { kind: "image"; path?: string }
   | { kind: "tool"; name: string }
   | { kind: "output" }
-)
+);
 
 export type ActivityUpdate = {
-  version: 1
-  id: string
-  callId: string
-  sessionId: string
-  revision: number
-  operations: ActivityOperation[]
-}
+  version: 1;
+  id: string;
+  callId: string;
+  sessionId: string;
+  revision: number;
+  operations: ActivityOperation[];
+};
 
 type Content = readonly (
   | { type: "text"; text: string }
   | { type: "image"; data: string; mimeType: string }
-)[]
+)[];
 
 export type ActivityDetails = {
   activity: {
-    update: ActivityUpdate
-    imageOwners: (string | null)[]
-    contentHash: string
-    activityHash: string
-  }
-}
+    update: ActivityUpdate;
+    imageOwners: (string | null)[];
+    contentHash: string;
+    activityHash: string;
+  };
+};
 
-const hash = (value: unknown) =>
-  createHash("sha256").update(JSON.stringify(value)).digest("hex")
+const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
 
 export function contentHash(content: Content, nativeHints = false): string {
   return hash(
     content.flatMap((part, index) => {
-      if (part.type === "image") return [{ type: "image" }]
+      if (part.type === "image") return [{ type: "image" }];
       // Pi may append conversion/resize hints immediately after a processed image.
       if (
         nativeHints &&
@@ -76,18 +70,16 @@ export function contentHash(content: Content, nativeHints = false): string {
           part.text,
         )
       )
-        return []
-      return [part]
+        return [];
+      return [part];
     }),
-  )
+  );
 }
 
 export function activityDetails(
   update: ActivityUpdate,
   content: Content,
-  imageOwners: (string | null)[] = content
-    .filter((part) => part.type === "image")
-    .map(() => null),
+  imageOwners: (string | null)[] = content.filter((part) => part.type === "image").map(() => null),
 ): ActivityDetails {
   return {
     activity: {
@@ -96,16 +88,14 @@ export function activityDetails(
       contentHash: contentHash(content),
       activityHash: hash({ update, imageOwners }),
     },
-  }
+  };
 }
 
-const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url))
+const sourcePath = fileURLToPath(new URL("./index.ts", import.meta.url));
 const status = (value: OperationPresentation["status"]): ActivityStatus =>
-  value === "interrupted or unknown" ? "unknown" : value
+  value === "interrupted or unknown" ? "unknown" : value;
 
-export function operationActivity(
-  operation: OperationPresentation,
-): ActivityOperation | undefined {
+export function operationActivity(operation: OperationPresentation): ActivityOperation | undefined {
   const common = {
     id: operation.id,
     order: operation.order,
@@ -119,16 +109,14 @@ export function operationActivity(
       : {
           output: operation.output ?? operation.resultText,
         }),
-  }
-  const tool = { ...common, kind: "tool" as const, name: operation.name }
-  if (operation.toolSource === "builtin" || operation.toolPath !== sourcePath)
-    return tool
+  };
+  const tool = { ...common, kind: "tool" as const, name: operation.name };
+  if (operation.toolSource === "builtin" || operation.toolPath !== sourcePath) return tool;
   switch (operation.name) {
     case "exec_command": {
-      if (operation.command === undefined)
-        return operation.status === "failed" ? tool : undefined
-      const shell = operation.effectiveArgs?.["shell"]
-      const login = operation.effectiveArgs?.["login"]
+      if (operation.command === undefined) return operation.status === "failed" ? tool : undefined;
+      const shell = operation.effectiveArgs?.["shell"];
+      const login = operation.effectiveArgs?.["login"];
       return {
         ...common,
         kind: "command",
@@ -136,10 +124,10 @@ export function operationActivity(
         ...(typeof shell === "string" && typeof login === "boolean"
           ? { shell: [shell, login ? "-lc" : "-c"] }
           : {}),
-      }
+      };
     }
     case "write_stdin":
-      return
+      return;
     case "apply_patch":
       return {
         ...common,
@@ -154,9 +142,7 @@ export function operationActivity(
                 args: {
                   action: change.action,
                   path: change.path,
-                  ...(change.destination
-                    ? { destination: change.destination }
-                    : {}),
+                  ...(change.destination ? { destination: change.destination } : {}),
                 },
                 ...(change.status === "completed" &&
                 change.added !== undefined &&
@@ -165,21 +151,19 @@ export function operationActivity(
                       changes: { added: change.added, removed: change.removed },
                     }
                   : {}),
-                ...(change.output === undefined
-                  ? {}
-                  : { output: change.output }),
+                ...(change.output === undefined ? {} : { output: change.output }),
                 ...(change.outputOmitted ? { outputOmitted: true } : {}),
               })),
             }
           : {}),
-      }
+      };
     case "view_image":
       return {
         ...common,
         kind: "image",
         ...(operation.path ? { path: operation.path } : {}),
-      }
+      };
     default:
-      return tool
+      return tool;
   }
 }

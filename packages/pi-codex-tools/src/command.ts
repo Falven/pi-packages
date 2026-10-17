@@ -1,16 +1,16 @@
-import { userInfo } from "node:os"
-import { delimiter, join, resolve } from "node:path"
+import { userInfo } from "node:os";
+import { delimiter, join, resolve } from "node:path";
 import {
   getAgentDir,
   type ExtensionAPI,
   type ToolDefinition,
-} from "@earendil-works/pi-coding-agent"
-import { Type } from "typebox"
-import { boundedPreview, contentHash } from "./presentation.ts"
-import type { ProcessPresentation, ProcessSessions } from "./process.ts"
+} from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { boundedPreview, contentHash } from "./presentation.ts";
+import type { ProcessPresentation, ProcessSessions } from "./process.ts";
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
-const nonnegativeInteger = Type.Number({ minimum: 0, multipleOf: 1 })
+const nonnegativeInteger = Type.Number({ minimum: 0, multipleOf: 1 });
 const parameters = Type.Object(
   {
     cmd: Type.String(),
@@ -19,10 +19,7 @@ const parameters = Type.Object(
     max_output_tokens: Type.Optional(nonnegativeInteger),
     prefix_rule: Type.Optional(Type.Array(Type.String())),
     sandbox_permissions: Type.Optional(
-      Type.Union([
-        Type.Literal("use_default"),
-        Type.Literal("require_escalated"),
-      ]),
+      Type.Union([Type.Literal("use_default"), Type.Literal("require_escalated")]),
     ),
     shell: Type.Optional(Type.String()),
     tty: Type.Optional(Type.Boolean()),
@@ -30,7 +27,7 @@ const parameters = Type.Object(
     yield_time_ms: Type.Optional(nonnegativeInteger),
   },
   { additionalProperties: false },
-)
+);
 
 export function createCommand(
   pi: ExtensionAPI,
@@ -40,11 +37,11 @@ export function createCommand(
 ): ToolDefinition<
   typeof parameters,
   {
-    command: string
-    cwd: string
-    effectiveArgs: Record<string, unknown>
-    process?: ProcessPresentation
-    outputHash?: string
+    command: string;
+    cwd: string;
+    effectiveArgs: Record<string, unknown>;
+    process?: ProcessPresentation;
+    outputHash?: string;
   }
 > {
   return {
@@ -55,21 +52,19 @@ export function createCommand(
     parameters,
     exposure: "codemode",
     async execute(_id, args, signal, onUpdate, ctx) {
-      signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime
-      signal.throwIfAborted()
+      signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime;
+      signal.throwIfAborted();
       if (!available())
-        throw new Error(
-          "Command execution is not available in the active tool scope",
-        )
+        throw new Error("Command execution is not available in the active tool scope");
       if (args.sandbox_permissions === "require_escalated")
-        throw new Error("Elevated execution is not available from this host")
-      const settings = pi.getSettings()
-      const shell = args.shell ?? settings.shellPath ?? userInfo().shell
-      if (!shell) throw new Error("The user has no configured shell")
+        throw new Error("Elevated execution is not available from this host");
+      const settings = pi.getSettings();
+      const shell = args.shell ?? settings.shellPath ?? userInfo().shell;
+      if (!shell) throw new Error("The user has no configured shell");
       const command = settings.shellCommandPrefix
         ? `${settings.shellCommandPrefix}\n${args.cmd}`
-        : args.cmd
-      const env = { ...process.env }
+        : args.cmd;
+      const env = { ...process.env };
       for (const key of [
         "PI_SESSION_ID",
         "PI_SESSION_FILE",
@@ -77,27 +72,23 @@ export function createCommand(
         "PI_MODEL",
         "PI_REASONING_LEVEL",
       ])
-        delete env[key]
-      const managed = join(getAgentDir(), "bin")
-      const path = env["PATH"] ?? ""
+        delete env[key];
+      const managed = join(getAgentDir(), "bin");
+      const path = env["PATH"] ?? "";
       env["PATH"] = path.split(delimiter).includes(managed)
         ? path
-        : [managed, path].filter(Boolean).join(delimiter)
-      env["PI_SESSION_ID"] = ctx.sessionManager.getSessionId()
-      const sessionFile = ctx.sessionManager.getSessionFile()
-      if (sessionFile) env["PI_SESSION_FILE"] = sessionFile
+        : [managed, path].filter(Boolean).join(delimiter);
+      env["PI_SESSION_ID"] = ctx.sessionManager.getSessionId();
+      const sessionFile = ctx.sessionManager.getSessionFile();
+      if (sessionFile) env["PI_SESSION_FILE"] = sessionFile;
       if (ctx.model) {
-        env["PI_PROVIDER"] = ctx.model.provider
-        env["PI_MODEL"] = ctx.model.id
+        env["PI_PROVIDER"] = ctx.model.provider;
+        env["PI_MODEL"] = ctx.model.id;
       }
-      if (ctx.thinkingLevel) env["PI_REASONING_LEVEL"] = ctx.thinkingLevel
-      const cwd =
-        args.workdir === undefined ? ctx.cwd : resolve(ctx.cwd, args.workdir)
-      const yieldTime = Math.min(
-        30000,
-        Math.max(250, args.yield_time_ms ?? 10000),
-      )
-      const maxTokens = args.max_output_tokens ?? 10000
+      if (ctx.thinkingLevel) env["PI_REASONING_LEVEL"] = ctx.thinkingLevel;
+      const cwd = args.workdir === undefined ? ctx.cwd : resolve(ctx.cwd, args.workdir);
+      const yieldTime = Math.min(30000, Math.max(250, args.yield_time_ms ?? 10000));
+      const maxTokens = args.max_output_tokens ?? 10000;
       const effectiveArgs = {
         cmd: boundedPreview(command),
         workdir: boundedPreview(cwd),
@@ -106,8 +97,8 @@ export function createCommand(
         tty: args.tty ?? false,
         yield_time_ms: yieldTime,
         max_output_tokens: maxTokens,
-      }
-      onUpdate?.({ content: [], details: { command, cwd, effectiveArgs } })
+      };
+      onUpdate?.({ content: [], details: { command, cwd, effectiveArgs } });
       const result = await processes.start(
         {
           shell,
@@ -125,7 +116,7 @@ export function createCommand(
             content: [],
             details: { command, cwd, effectiveArgs, process: snapshot },
           }),
-      )
+      );
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
@@ -135,9 +126,9 @@ export function createCommand(
           effectiveArgs,
           outputHash: contentHash([{ type: "text", text: result.output }]),
         },
-      }
+      };
     },
-  }
+  };
 }
 
 const inputParameters = Type.Object(
@@ -152,56 +143,43 @@ const inputParameters = Type.Object(
     yield_time_ms: Type.Optional(nonnegativeInteger),
   },
   { additionalProperties: false },
-)
+);
 
 export function createStdin(
   available: () => boolean,
   lifetime: AbortSignal,
   processes: ProcessSessions,
-): ToolDefinition<
-  typeof inputParameters,
-  { effectiveArgs: Record<string, unknown> }
-> {
+): ToolDefinition<typeof inputParameters, { effectiveArgs: Record<string, unknown> }> {
   return {
     name: "write_stdin",
     label: "Input",
-    description:
-      "Writes characters to an existing unified exec session and returns recent output.",
+    description: "Writes characters to an existing unified exec session and returns recent output.",
     parameters: inputParameters,
     exposure: "codemode",
     async execute(_id, args, signal, onUpdate) {
-      signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime
-      signal.throwIfAborted()
-      if (!available())
-        throw new Error(
-          "Process input is not available in the active tool scope",
-        )
-      const chars = args.chars ?? ""
-      const minimum = chars ? 250 : 5000
+      signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime;
+      signal.throwIfAborted();
+      if (!available()) throw new Error("Process input is not available in the active tool scope");
+      const chars = args.chars ?? "";
+      const minimum = chars ? 250 : 5000;
       const yieldTime = Math.min(
         chars ? 30000 : 300000,
         Math.max(minimum, args.yield_time_ms ?? minimum),
-      )
-      const maxTokens = args.max_output_tokens ?? 10000
+      );
+      const maxTokens = args.max_output_tokens ?? 10000;
       const effectiveArgs = {
         session_id: args.session_id,
         chars: boundedPreview(chars),
         yield_time_ms: yieldTime,
         max_output_tokens: maxTokens,
-      }
-      onUpdate?.({ content: [], details: { effectiveArgs } })
-      const result = await processes.write(
-        args.session_id,
-        chars,
-        yieldTime,
-        maxTokens,
-        signal,
-      )
+      };
+      onUpdate?.({ content: [], details: { effectiveArgs } });
+      const result = await processes.write(args.session_id, chars, yieldTime, maxTokens, signal);
       return {
         content: [{ type: "text", text: JSON.stringify(result) }],
         structuredContent: result,
         details: { effectiveArgs },
-      }
+      };
     },
-  }
+  };
 }

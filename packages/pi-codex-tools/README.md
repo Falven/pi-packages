@@ -47,8 +47,8 @@ Press `Ctrl+O` to expand or collapse tool output (the default binding).
 The command, patch, and image helpers run inside `exec`. For example, the agent can check the working tree with:
 
 ```js
-const result = await tools.exec_command({ cmd: "git status --short" })
-text(result)
+const result = await tools.exec_command({ cmd: "git status --short" });
+text(result);
 ```
 
 Helper availability follows Pi's active tool configuration. With Pi's built-in tools, `bash` enables the command helpers, `edit` and `write` together enable patches, and `read` enables images. Each helper can also be enabled by name. Enabled helpers replace the corresponding built-in tools in the model's tool list.

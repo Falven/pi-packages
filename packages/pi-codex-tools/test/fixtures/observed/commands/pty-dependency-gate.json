@@ -22,8 +22,5 @@
     }
   },
   "cleanup": "Native terminal reached its final exit event. Deadline timer cleared.",
-  "unverified": [
-    "Source-build fallback",
-    "Other platforms and runtime versions"
-  ]
+  "unverified": ["Source-build fallback", "Other platforms and runtime versions"]
 }

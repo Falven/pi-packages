@@ -281,9 +281,7 @@
       "sha256": "b3feeb566c8712a415ab87a0f41de73e85330aaf772989a0177a57f7f29fe2e0",
       "tool": "apply_patch",
       "outcome_kind": "returned",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"]
     },
     {
       "case_id": "patch-02-update",
@@ -291,9 +289,7 @@
       "sha256": "487cd250e0fcdf3fe9749b45aed4027fcbf27a5da9baca132ca18452e0664cf7",
       "tool": "apply_patch",
       "outcome_kind": "returned",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/created/nested/alpha.txt"]
     },
     {
       "case_id": "patch-03-move-update",
@@ -312,9 +308,7 @@
       "sha256": "607358c052af1b63e777cf3cb4431a06e41f38ffbe41d436c3bd7cd57c8e84ae",
       "tool": "apply_patch",
       "outcome_kind": "returned",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/created/moved/renamed.txt"]
     },
     {
       "case_id": "patch-05-add-existing",
@@ -377,9 +371,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/no-final-newline.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/no-final-newline.txt"]
     },
     {
       "case_id": "patch-12-whitespace-match",
@@ -475,9 +467,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/multi.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/multi.txt"]
     },
     {
       "case_id": "patch-22-multiple-hunks-new-content",
@@ -526,9 +516,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-exact.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/priority-exact.txt"]
     },
     {
       "case_id": "patch-27-trailing-space-priority",
@@ -537,9 +525,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/priority-trailing.txt"]
     },
     {
       "case_id": "patch-28-unicode-normalization",
@@ -548,9 +534,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/priority-unicode.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/priority-unicode.txt"]
     },
     {
       "case_id": "patch-29-mixed-newlines-first-crlf",
@@ -559,9 +543,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-crlf.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-crlf.txt"]
     },
     {
       "case_id": "patch-30-mixed-newlines-first-lf",
@@ -570,9 +552,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-lf.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-first-lf.txt"]
     },
     {
       "case_id": "patch-31-invalid-utf8-update",
@@ -613,9 +593,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-crlf.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-crlf.txt"]
     },
     {
       "case_id": "patch-35-mixed-first-lf-minority",
@@ -624,9 +602,7 @@
       "tool": "apply_patch",
       "outcome_kind": "returned",
       "outcome_type": "object",
-      "changed_paths": [
-        "/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-lf.txt"
-      ]
+      "changed_paths": ["/tmp/core-tools-file-evidence/fixtures/patch-more/mixed-minority-lf.txt"]
     },
     {
       "case_id": "patch-36-mixed-context-unrelated-eof",
