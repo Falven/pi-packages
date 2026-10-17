@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import {
+  Editor,
   getNativeClipboard,
   stripTerminalSequences,
   Text,
@@ -84,7 +85,7 @@ function writableClipboard(
   assert(clipboard?.setText)
 }
 
-test("native Hide thinking controls prose while the working label follows streamed reasoning", async (t) => {
+test("native Hide thinking controls prose while the working label retains a single thought title", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -92,13 +93,13 @@ test("native Hide thinking controls prose while the working label follows stream
     settings: { hideThinkingBlock: true },
     keybindings: { "app.thinking.toggle": "ctrl+t" },
   })
-  const plain = "Determining valid header extraction"
+  const plain = "Unheaded reasoning must remain hidden."
   const partial = `${plain}\n\n**Analyzing the `
   const initial =
     partial +
-    "`tools` schema**\n\nOriginal thought with **inline emphasis**.\n\n```text\n**Code sample**\n```\n\n**Analyzing the `tools` schema**\n<!-- retained metadata -->"
-  const continuation =
-    "\n\nMore thought prose.\n\n**Considering documentation needs**\n\n<!"
+    "`tools` schema**\n\nOriginal thought with **inline emphasis**. This is a long reasoning paragraph that must remain in the thought body while its short title stays in the progress indicator. More detail must not replace that title or expand the indicator into several rows.\n\n```text\n**Code sample**\n```\n<!-- retained metadata -->"
+  const nextHeading = "\n\nMore thought prose.\n\n**Considering documentation "
+  const continuation = nextHeading + "needs**\n\n<!"
   const full = initial + continuation
   host.queueResponse(
     start,
@@ -109,7 +110,9 @@ test("native Hide thinking controls prose while the working label follows stream
     { pause: true },
     thoughtDelta(0, initial.slice(partial.length)),
     { pause: true },
-    thoughtDelta(0, continuation),
+    thoughtDelta(0, nextHeading),
+    { pause: true },
+    thoughtDelta(0, continuation.slice(nextHeading.length)),
     { pause: true },
     thoughtEnd(0, full),
     thoughtStart(1),
@@ -128,15 +131,28 @@ test("native Hide thinking controls prose while the working label follows stream
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
   await t.waitFor(() => assert.equal(host.requests.length, 1))
   await host.frame()
-  assert.match(screen(), /Determining valid header extraction/)
-  assert.doesNotMatch(screen(), /Working/)
+  assert.match(screen(), /Thinking/)
+  assert.doesNotMatch(screen(), /Working|Unheaded reasoning/)
   assert.doesNotMatch(screen(), /Analyzing the|Thought|thinking hidden/)
   host.resumeResponse()
-  await t.waitFor(() => assert.match(screen(), /\*\*Analyzing the/))
-  assert.doesNotMatch(screen(), /Working|Determining valid header extraction/)
+  await host.frame()
+  assert.match(screen(), /Thinking/)
+  assert.doesNotMatch(screen(), /Working|Unheaded reasoning|Analyzing the/)
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Analyzing the tools schema/))
   assert.doesNotMatch(screen(), /Original thought|Code sample|Thought/)
+  host.terminal.resize(24, 36)
+  await host.frame()
+  assert.match(screen(), /Analyzing the to…/)
+  assert.doesNotMatch(screen(), /schema|Original thought|Code sample/)
+  host.ui.setEditorComponent((tui, theme) => new Editor(tui, theme))
+  await host.frame()
+  assert.match(screen(), /Analyzing the tools…/)
+  assert.doesNotMatch(screen(), /schema|Original thought|Code sample/)
+  host.terminal.resize(60, 36)
+  await host.frame()
+  assert.match(screen(), /Analyzing the tools schema/)
+  host.ui.setEditorComponent(undefined)
   await host.key("\x14")
   await host.frame()
   assert.match(
@@ -148,6 +164,11 @@ test("native Hide thinking controls prose while the working label follows stream
   assert.doesNotMatch(screen(), /Thought/)
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /More thought prose/))
+  assert.match(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Analyzing the tools schema/)
+  host.resumeResponse()
+  await t.waitFor(() =>
+    assert.match(screen(), /Considering documentation needs/),
+  )
   assert.doesNotMatch(screen(), /Analyzing the tools schema/)
   assert.equal(screen().match(/Considering documentation needs/g)?.length, 1)
   await host.key("\x14")
@@ -345,8 +366,13 @@ test("adjacent thinking blocks share one body and every thought stays visible th
   await t.waitFor(() =>
     assert(screen().some((row) => row.includes("Later thought"))),
   )
-  assert(!screen().some((row) => row.includes("Figuring out file processing")))
-  assert.match(screen().join("\n"), /─+ [^\n]*Later thought/)
+  assert.equal(
+    screen().filter((row) => row.includes("Figuring out file processing"))
+      .length,
+    1,
+  )
+  assert.match(screen().join("\n"), /─+ [^\n]*Figuring out file processing/)
+  assert.doesNotMatch(screen().join("\n"), /─+ [^\n]*Later thought/)
   assert(!screen().some((row) => row.includes("Thought")))
   assert(screen().some((row) => row.includes("First adjacent block")))
   assert(screen().some((row) => row.includes("Second adjacent block")))
@@ -489,15 +515,8 @@ test("a live thought leaves the screen with its source row during chat scrollbac
   await host.key("\x1b[5~")
   await host.frame()
   assert.match(screen(), /later-row-0/)
-  assert.match(screen(), /─+ [^\n]*Inline thought body/)
-  assert.doesNotMatch(
-    host
-      .screenLines()
-      .map(stripTerminalSequences)
-      .filter((line) => !line.startsWith("── "))
-      .join("\n"),
-    /Thought|Inline thought body/,
-  )
+  assert.match(screen(), /─+ [^\n]*Thinking/)
+  assert.doesNotMatch(screen(), /Thought|Inline thought body/)
   await host.key("\x1b[6~")
   await host.key("\x1b[6~")
   await host.key("\x1b[6~")

@@ -2,9 +2,9 @@ import type {
   ExtensionUIContext,
   MessageUpdateEvent,
 } from "@earendil-works/pi-coding-agent"
-import { fromMarkdown } from "mdast-util-from-markdown"
-import { toString } from "mdast-util-to-string"
+import { truncateToWidth } from "@earendil-works/pi-tui"
 import { activityConfig } from "./config.ts"
+import { thoughtPresentation } from "./thought.ts"
 import type { ActivityItem } from "./tool-adapters/types.ts"
 
 type Assistant = Extract<MessageUpdateEvent["message"], { role: "assistant" }>
@@ -16,47 +16,6 @@ type Step =
   | { kind: "reasoning"; label: string | undefined }
   | { kind: "text" }
   | { kind: "call"; id: string }
-
-// Desktop source and selection boundaries: docs/plans/working-label-parity.md.
-export function reasoningLabel(markdown: string): string | undefined {
-  const line = markdown
-    .trimEnd()
-    .split(/\r?\n/)
-    .map((value) => value.trim())
-    .findLast((value) => value && !commentOnly(value))
-  if (!line) return
-  if (
-    /^[\p{L}\p{M}\p{N} .,!?'"’()-]+$/u.test(line) &&
-    !line.startsWith("-") &&
-    !/^\d+[.)](?: |$)/.test(line)
-  )
-    return line
-  try {
-    const tree = fromMarkdown(line)
-    const first = tree.children[0]
-    if (
-      first?.type === "paragraph" &&
-      first.children.length === 1 &&
-      first.children[0]?.type === "strong"
-    ) {
-      const text = toString(first.children[0]).trim()
-      return reasoningLabel(text) ?? (text || undefined)
-    }
-    return toString(tree).trim() || undefined
-  } catch {
-    // The reference treats an unparseable reasoning line as having no label.
-    return undefined
-  }
-}
-
-function commentOnly(line: string) {
-  while (line.startsWith("<!--")) {
-    const end = line.indexOf("-->")
-    if (end === -1) return true
-    line = line.slice(end + 3).trimStart()
-  }
-  return !line || "<!--".startsWith(line)
-}
 
 const exploration = (item: ActivityItem) =>
   item.kind === "read" || item.kind === "loaded"
@@ -110,6 +69,7 @@ export class WorkingLabel {
   private readonly message = new Map<number, Step>()
   private ui: WorkingUI | undefined
   private selected: string | undefined
+  private width: number | undefined
   private hidden = false
 
   constructor(
@@ -150,7 +110,7 @@ export class WorkingLabel {
         this.steps.push(step)
       }
       if (step.kind === "reasoning" && part.type === "thinking")
-        step.label = reasoningLabel(part.thinking)
+        step.label = thoughtPresentation(part.thinking).heading
     }
     this.refresh()
   }
@@ -165,7 +125,8 @@ export class WorkingLabel {
     this.refresh()
   }
 
-  refresh() {
+  refresh(width = this.width) {
+    this.width = width
     if (!this.ui) return
     const boundary = this.steps.findLastIndex((step) => step.kind === "text")
     const items = this.steps
@@ -191,13 +152,18 @@ export class WorkingLabel {
     const thought = this.steps.findLast(
       (step) => step.kind === "reasoning" && step.label,
     )
-    const label =
+    const label = (
       (active && operationLabel(active)) ??
       (thought?.kind === "reasoning" ? thought.label : undefined) ??
       activityConfig.working.thinking
-    if (label === this.selected) return
-    this.selected = label
-    this.ui.setWorkingMessage(label)
+    )
+      .replace(/\s+/gu, " ")
+      .trim()
+    const displayed =
+      width === undefined ? label : truncateToWidth(label, width, "…")
+    if (displayed === this.selected) return
+    this.selected = displayed
+    this.ui.setWorkingMessage(displayed)
   }
 
   stop() {
@@ -205,6 +171,7 @@ export class WorkingLabel {
     if (this.hidden) this.ui?.setWorkingVisible(true)
     this.ui = undefined
     this.selected = undefined
+    this.width = undefined
     this.hidden = false
     this.steps.length = 0
     this.message.clear()

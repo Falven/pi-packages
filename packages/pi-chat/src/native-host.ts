@@ -109,6 +109,8 @@ type NativeMode = ThoughtEnvironment & {
   bashComponent?: Component
   pendingBashComponents: Component[]
   pendingTools: Map<string, Component>
+  activeStatusIndicator?: { kind: string; getRenderedIndicator(): string }
+  activeWorkingIndicatorEmbedded: boolean
   settingsManager: {
     getHideThinkingBlock(): boolean
     getShowImages(): boolean
@@ -741,6 +743,17 @@ export class NativeChatHost {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     const width = Math.max(1, renderer.terminal.columns)
     const height = Math.max(1, renderer.terminal.rows)
+    const indicator = this.host.activeStatusIndicator
+    if (indicator?.kind === "working") {
+      // Native editor borders reserve five cells; standalone loaders reserve two.
+      const padding = this.host.activeWorkingIndicatorEmbedded ? 5 : 2
+      this.working.refresh(
+        Math.max(
+          0,
+          width - padding - visibleWidth(indicator.getRenderedIndicator()) - 1,
+        ),
+      )
+    }
     const { entries, gap } = this.oldRoot[LAYOUT_NODE]()
     const [available] = allocateStackSizes(
       entries,

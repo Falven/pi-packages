@@ -14,6 +14,7 @@ const plainText = new parser.TextRenderer()
 
 export function thoughtPresentation(markdown: string): {
   body: string
+  heading?: string
 } {
   if (!markdown.includes("**") && !markdown.includes("__"))
     return { body: markdown }
@@ -45,6 +46,7 @@ export function thoughtPresentation(markdown: string): {
   return heading
     ? {
         body: (body + source.slice(kept)).replace(/^\n+|\n+$/g, ""),
+        heading,
       }
     : { body: markdown }
 }

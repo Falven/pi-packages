@@ -6,6 +6,8 @@
 
 **Status:** implemented and verified at `4e27987` on `codex/generic-tool-activity`. Ticket 12 records the checks and limits.
 
+**Correction:** [Ticket 13](13-thought-titles.md) supersedes the last-reasoning-line requirement below with actual thought titles and a single-line indicator. The original helper comparison missed the input mapping from a whole Pi thought. This ticket retains the historical acceptance record.
+
 - [x] Plain, partial, and formatted reasoning produce the reference's latest usable line and remain available across thinking/message completion.
 - [x] Native and independently declared operations update the same indicator with reference labels, including registered skills, source ordering, completion, and late updates after the parent call returns.
 - [x] A current trailing read/search/list exploration selects its latest running operation, otherwise its latest operation; other slices select their latest running operation before reasoning/default fallback.

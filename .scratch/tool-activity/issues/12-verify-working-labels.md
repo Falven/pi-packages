@@ -6,6 +6,8 @@
 
 **Status:** complete at implementation revision `4e27987` on `codex/generic-tool-activity`, from `bf30b7a`.
 
+**Later gap:** The screenshot supplied after integration shows a thought body paragraph in the indicator. The checks below established helper equivalence but did not verify its input mapping or single-line rendering. [Ticket 13](13-thought-titles.md) corrects those gaps; the earlier review conclusions apply only to the former specification.
+
 - [x] Existing chat and combined-workflow suites pass against both established Pi host versions.
 - [x] The reference's reasoning-line extraction, current-operation priority, fallback, and confirmed-final suppression match observable native indicator text.
 - [x] Typecheck, lint, formatting, and diff checks pass; operator wording and package independence remain intact.
