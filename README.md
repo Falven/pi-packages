@@ -16,7 +16,7 @@ Tool providers and chat consumers can independently implement the [generic activ
 
 ## Install
 
-Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.0.2 or later. These packages are not published to npm yet. Install them from the repository root, loading `pi-composer` before editor decorators such as `pi-attachments`:
+Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.1.0 or later. These packages are not published to npm yet. Install them from the repository root, loading `pi-composer` before editor decorators such as `pi-attachments`:
 
 ```bash
 pi install ./packages/pi-composer

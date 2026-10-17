@@ -17,11 +17,11 @@
     "tree-sitter-bash": "0.25.1"
   },
   "devDependencies": {
-    "@earendil-works/pi-tui": "1.0.2"
+    "@earendil-works/pi-tui": "1.1.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "^1.0.2",
-    "@earendil-works/pi-tui": "^1.0.2"
+    "@earendil-works/pi-coding-agent": "^1.1.0",
+    "@earendil-works/pi-tui": "^1.1.0"
   },
   "engines": {
     "node": ">=24"

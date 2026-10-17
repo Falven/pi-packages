@@ -99,7 +99,7 @@ Verify through real Pi sessions with controlled provider responses, terminal int
 ### Package and ownership
 
 - Keep `pi-goal` independent of companion packages. They are compatibility targets, not required runtime dependencies. Use the repository's TypeScript extension packaging, public Pi services, native UI components, and standard library facilities.
-- Target the installed released Pi 1.1.0 runtime with the existing `^1.1.0` peer requirement. The workspace currently resolves Pi 1.0.2; primary migration verification must explicitly select the released 1.1.0 runtime. Earlier checks found missing retry-cancellation metadata in 1.0.2 and 1.0.4, so those versions remain insufficient for the complete package. Do not depend on the former source checkout or inherit another package's private-integration exception.
+- Target the installed released Pi 1.1.0 runtime with the existing `^1.1.0` peer requirement. The workspace and CI pin Pi 1.1.0 for primary verification. Earlier checks found missing retry-cancellation metadata in 1.0.2 and 1.0.4, so those versions remain insufficient for the complete package. Do not depend on the former source checkout or inherit another package's private-integration exception.
 - Keep a small internal boundary between durable goal state and accounting, session orchestration and model tools, and native user presentation. Do not create a public adapter framework, scheduler service, or provider-integration platform.
 - Preserve current effective tools, message processing, provider configuration, permissions, editor ownership, keybindings, and rendering. Capture observers and goal transformations must compose with other extensions rather than reset their state.
 - Use neutral Pi terminology in all authored names, descriptions, prompts, source, fixtures, documentation, trace labels, and release material. Do not reproduce branded reference names or URLs. Independently authored wording remains subject to semantic and message-placement comparison.
@@ -291,9 +291,9 @@ The previously approved real-session seam remains the primary boundary; no new p
 
 ### Released runtime validation
 
-The former source checkout is unavailable and ordinary workspace imports currently resolve Pi 1.0.2. Primary verification must use the installed released Pi 1.1.0 with the supported Node baseline. Use a temporary Node module-resolution preload for test execution to resolve the public Pi and terminal-UI package imports consistently to that release; Pi's own extension loader continues to load the package through its normal public lifecycle. This does not require changes to companion manifests or the shared native-host fixture.
+Workspace imports and CI resolve released Pi and terminal-UI 1.1.0. Run primary verification with the committed lockfile and the supported Node baseline. Pi's own extension loader continues to load the package through its normal public lifecycle.
 
-Verify actual package versions and resolutions in the test process, workers, and companion module-resolution paths before accepting results. Keep the release's internal imports intact and the temporary resolver out of the production extension. Run the relevant goal and companion integration checks, then scoped formatting, lint, and type checks. A test pass against the workspace's older runtime is secondary evidence and cannot satisfy migration acceptance.
+Verify actual package versions and resolutions in the test process, workers, and companion module-resolution paths before accepting results. Keep the release's internal imports intact. Run the relevant goal and companion integration checks, then scoped formatting, lint, and type checks. A test pass against an older runtime is secondary evidence and cannot satisfy migration acceptance.
 
 ### Scenario coverage
 
@@ -379,7 +379,7 @@ These broader gates remain in force for claims about the complete goal feature. 
 
 The 2026-10-15 storage decision is accepted in [ADR 0025](../adr/0025-store-goals-in-native-session-entries.md). It preserves the goal behavior and native agent interface while replacing the independent SQLite store with session custom entries. The user explicitly accepted native first-save timing, one process managing each session's goal, and stopping automatic pursuit after storage failure with recovery limited to native saved state. The failure stop must survive retaining extension reload; a fresh reopen is the recovery boundary.
 
-Read-only inspection of the current installation found zero goal rows in the old store. That observation supports an initial cutover without an importer, subject to a fresh check immediately before activation. The installed released host is Pi 1.1.0; the workspace's 1.0.2 dependency and the unavailable former source checkout must not determine primary migration validation.
+Read-only inspection of the current installation found zero goal rows in the old store. That observation supports an initial cutover without an importer, subject to a fresh check immediately before activation. The installed released host is Pi 1.1.0; the workspace's former 1.0.2 dependency and the unavailable former source checkout must not determine primary migration validation.
 
 The native storage implementation is integrated at `1cf53dd5bf7c2afcc5c1f65979092204f43288db`. Tickets 01–06 verify public session snapshots and explicit clears, exact values, first-save behavior, all six restored statuses, ordinary fork and full-history clone isolation, failed-write suppression across retaining reload, fresh saved-session recovery, accounting, and native Stop. Storage uses only `pi.appendEntry()` and the public read-only session manager. No storage dependency, persistent fallback, private adapter, host patch, manifest upgrade, or shared-fixture change was introduced.
 
