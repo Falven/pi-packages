@@ -1,6 +1,6 @@
 # pi-copy specification
 
-**Status:** independent-plugin correction ready for implementation. The preceding library extraction and response spacing were verified at `a83094c` and integrated into local `main`; [ticket 02](../../.scratch/pi-copy/issues/02-separate-response-copy-footer.md) retains that evidence, which does not verify this correction.
+**Status:** independent-plugin correction in progress. Independent chat integration is implemented at `8902b5f`; native decoration and distribution verification are tracked in [ticket 04](../../.scratch/pi-copy/issues/04-native-pi-decoration.md). The preceding library extraction and response spacing were verified at `a83094c` and integrated into local `main`; [ticket 02](../../.scratch/pi-copy/issues/02-separate-response-copy-footer.md) retains that historical evidence.
 
 **Accepted scope:** Independently install `pi-copy` and `pi-chat`, with no dependency between them and no loss of current functionality. Copy also decorates stock Pi's output boxes and final assistant responses. Preserve one blank display row before Copy response and exact copied text. The user's correction and instruction to continue on 2026-10-17 replace the earlier library design.
 
@@ -93,6 +93,6 @@ Chat retains ownership of the conversation, semantic activity items, final-respo
 
 ## Further Notes
 
-[ADR 0026](../adr/0026-copy-actions-in-a-dependent-package.md) records the dependency and ownership decision. [ADR 0027](../adr/0027-copy-retained-source-and-separate-presentation.md) records source fidelity and presentation isolation. The [chat spec](pi-chat.md) remains authoritative for activity classification, final-response recognition, and host integration.
+[ADR 0028](../adr/0028-copy-as-an-independent-extension.md) records independent installation and ownership, superseding the library design in [ADR 0026](../adr/0026-copy-actions-in-a-dependent-package.md). [ADR 0027](../adr/0027-copy-retained-source-and-separate-presentation.md) records source fidelity and presentation isolation. The [chat spec](pi-chat.md) remains authoritative for chat's activity classification, final-response recognition, and host integration.
 
 This correction preserves the existing behavior and spacing while making both plugins independently installable and useful. The accepted discussion and instruction to continue settle source fidelity, final-response controls, independent installation, and the existing testing seam; ticket granularity is an implementation choice within that authorization. Local tracker publication uses `ready-for-agent`, then `claimed` and `resolved`. No remote issue or PR is required.
