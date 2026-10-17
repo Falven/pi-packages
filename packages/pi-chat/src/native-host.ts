@@ -442,7 +442,7 @@ class CopyAction implements Component {
       if (payload.partial)
         this.adapter.copyStatus(
           this,
-          "Only retained output copied; earlier output was omitted.",
+          "Only retained output copied; some output was omitted.",
         )
     } catch (error) {
       if (!this.active) return
@@ -560,8 +560,10 @@ class ActivityItemDisclosure extends Container {
     const hasChanges =
       (lines.some((line) => line.startsWith("+")) &&
         lines.some((line) => line.startsWith("-"))) ||
-      (this.item.status === "completed" &&
-        this.item.changes &&
+      (((this.item.status === "completed" && this.item.changes) ||
+        lines.some((line) =>
+          /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line),
+        )) &&
         lines.some((line) => /^[+-]/.test(line)))
     const diff =
       this.item.kind === "edit" &&
@@ -580,8 +582,8 @@ class ActivityItemDisclosure extends Container {
       text: diff || output,
       partial:
         availability === "omitted" ||
-        copyOmitted ||
-        argumentsOf(details["truncation"])["truncated"] === true,
+        (copyOmitted ??
+          argumentsOf(details["truncation"])["truncated"] === true),
     }
   }
 
@@ -829,7 +831,9 @@ class ActivityItemDisclosure extends Container {
 
 export class NativeChatHost {
   readonly host: NativeMode
-  readonly extensionUI: ExtensionContext["ui"]
+  get extensionUI(): ExtensionContext["ui"] {
+    return this.host.runtimeHost.session.extensionRunner.getUIContext()
+  }
   readonly agentActivity = new AgentActivityIndex()
   readonly groupSummaries = new GroupSummaries()
   private readonly providerPhases = new ProviderPhaseIndex()
@@ -954,7 +958,6 @@ export class NativeChatHost {
     private readonly working: WorkingLabel,
   ) {
     this.host = host
-    this.extensionUI = host.runtimeHost.session.extensionRunner.getUIContext()
     this.outputPad = host.outputPad
     this.imageSettings = {
       show: host.settingsManager.getShowImages(),
@@ -1432,10 +1435,20 @@ export class NativeChatHost {
     const nativeResult = (
       source.component as (Component & { result?: ActivityResult }) | undefined
     )?.result
-    const result =
+    const messageResult =
       source.resultMessage?.role === "toolResult"
         ? source.resultMessage
-        : nativeResult
+        : undefined
+    // Native execution retains structured output that history omits. Reuse it only
+    // while it shares the processed message's content, details, and error state.
+    const result =
+      !messageResult ||
+      (nativeResult?.structuredContent !== undefined &&
+        nativeResult.content === messageResult.content &&
+        nativeResult.details === messageResult.details &&
+        nativeResult.isError === messageResult.isError)
+        ? (nativeResult ?? messageResult)
+        : messageResult
     let items = this.activityItems.items(source, result)
     const hit = this.searchState?.hits[this.searchState.selected]
     if (revealSource && hit?.field.owner === source && this.sourceHit(hit))
@@ -3010,8 +3023,10 @@ export class NativeChatHost {
         const source = this.byComponent.get(component)
         const disclosures = source && this.activityDisclosures.get(source)
         if (disclosures) {
-          for (const disclosure of disclosures.values())
+          for (const disclosure of disclosures.values()) {
+            disclosure.dispose()
             this.byComponent.delete(disclosure)
+          }
           this.activityDisclosures.delete(source)
         }
         this.byComponent.delete(component)

@@ -5,7 +5,10 @@ import type {
 import type { ActivityStatus } from "./activity-contract.ts"
 export type { ActivityStatus } from "./activity-contract.ts"
 
-export type ActivityResult = Pick<AgentToolResult<unknown>, "content"> & {
+export type ActivityResult = Pick<
+  AgentToolResult<unknown>,
+  "content" | "structuredContent"
+> & {
   details?: unknown
   isError: boolean
 }

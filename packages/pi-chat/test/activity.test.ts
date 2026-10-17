@@ -654,8 +654,7 @@ test("an unrelated provider presents semantic operations and late updates withou
     },
   ])
   await host.frame()
-  const patch =
-    "--- a/first.ts\n+++ b/first.ts\n@@ -1,2 +1,2 @@\n context\n-before\n+after\n"
+  const patch = "@@ -1 +1,2 @@\n context\n+added\n"
   publish([
     {
       ...edit,
@@ -1227,5 +1226,162 @@ test("declared command actions use the app parser and retain full command bodies
   assert.doesNotMatch(
     await host.frame(),
     /\[Copied\]|Copy failed:|\[Copy diff\]/,
+  )
+  clipboardWrite = undefined
+  let processing: "tool" | "message" | undefined
+  const native = await openNativeHost(t, {
+    extensionPaths: [chat],
+    rows: 60,
+    columns: 120,
+    persistSession: true,
+    keybindings: { "tui.altScreen.search": "ctrl+f" },
+    extensionFactories: [
+      (pi) => {
+        pi.on("tool_result", (event) =>
+          processing === "tool" && event.toolName === "bash"
+            ? { content: [{ type: "text", text: "sanitized-native-only" }] }
+            : undefined,
+        )
+        pi.on("message_end", (event) =>
+          processing === "message" && event.message.role === "toolResult"
+            ? {
+                message: {
+                  ...event.message,
+                  content: [{ type: "text", text: "processed-message-only" }],
+                },
+              }
+            : undefined,
+        )
+      },
+    ],
+  })
+  const run = async (command: string) => {
+    await native.key("\x1b")
+    native.queueResponse(...response("", "bash", { command }))
+    native.queueResponse(...response("Finished native output"))
+    await native.type("Inspect native command output")
+    await native.key("\r")
+    await native.settled()
+    await native.frame()
+    await native.key("\x1bg")
+    await native.key("\r")
+    await native.frame()
+    await native.key("\x1b[B")
+    await native.key("\r")
+    await native.frame()
+    await native.key("\x1b[B")
+    await native.key("\r")
+    await native.frame()
+    await native.key("\x1b")
+  }
+  const copyNative = async () => {
+    await native.frame()
+    const lines = native.screenLines().map(stripTerminalSequences)
+    const row = lines.findLastIndex(
+      (line) => line.includes("[Copy output]") || line.includes("[Copied]"),
+    )
+    assert(row >= 0, lines.join("\n"))
+    const label = lines[row]!.includes("[Copy output]")
+      ? "[Copy output]"
+      : "[Copied]"
+    const column = lines[row]!.indexOf(label) + 1
+    await native.key(`\x1b[<0;${column};${row + 1}M`)
+    await native.key(`\x1b[<0;${column};${row + 1}m`)
+    await native.frame()
+  }
+  const long =
+    Array.from({ length: 2105 }, (_, index) => `  native output ${index}`).join(
+      "\n",
+    ) + "\n"
+  await run(
+    'i=0; while [ "$i" -lt 2105 ]; do printf \'  native output %s\\n\' "$i"; i=$((i+1)); done; exit 7',
+  )
+  await copyNative()
+  assert.equal(copied.at(-1), `${long}\n\nCommand exited with code 7`)
+  assert.doesNotMatch(copied.at(-1)!, /Showing lines|Full output:/)
+  assert.doesNotMatch(await native.frame(), /Only retained output copied/)
+  await native.key("\x1b")
+  await native.key("\x06")
+  await native.type("native output 2104")
+  assert.match(await native.frame(), /1\/1/)
+  await native.key("\x1b")
+  const beforeFindCopy = copied.length
+  await copyNative()
+  assert.equal(copied.length, beforeFindCopy + 1)
+  assert.equal(copied.at(-1), `${long}\n\nCommand exited with code 7`)
+  await run("printf ''")
+  const beforeEmptyCopy = copied.length
+  await copyNative()
+  assert.equal(copied.length, beforeEmptyCopy)
+  assert.doesNotMatch(await native.frame(), /Only retained output copied/)
+  const large =
+    "[... 7 bytes omitted ...]\n" + "x".repeat(1_200_000) + "\nretained-end\n"
+  await run(
+    "printf '[... 7 bytes omitted ...]\\n'; printf '%1200000s' '' | tr ' ' x; printf '\\nretained-end\\n'",
+  )
+  await copyNative()
+  assert.equal(copied.at(-1), large.slice(0, 524_288) + large.slice(-524_288))
+  assert.match(await native.frame(), /Only retained output copied/)
+  processing = "tool"
+  await run("printf '%1200000s' '' | tr ' ' y")
+  await copyNative()
+  assert.equal(copied.at(-1), "sanitized-native-only")
+  processing = "message"
+  await run("printf 'original-private-native-output'")
+  await native.key("\x06")
+  await native.type("processed-message-only")
+  assert.match(await native.frame(), /1\/1/)
+  await native.key("\x1b")
+  await copyNative()
+  assert.equal(copied.at(-1), "processed-message-only")
+  processing = undefined
+  const sessionFile = native.session.sessionFile!
+  native.session.sessionManager.appendCompaction(
+    "Compressed native output",
+    null,
+    100,
+  )
+  await native.runtime.newSession()
+  await native.runtime.switchSession(sessionFile)
+  assert.doesNotMatch(await native.frame(), /native output 2104/)
+  await native.key("\x06")
+  await native.type("native output 2104")
+  assert.match(await native.frame(), /1\/1/)
+  await native.key("\x1b")
+  await copyNative()
+  assert.equal(
+    copied.at(-1),
+    long.slice(long.indexOf("  native output 105\n"), -1) +
+      "\n\nCommand exited with code 7",
+  )
+  assert.doesNotMatch(copied.at(-1)!, /Showing lines|Full output:/)
+  await t.waitFor(async () =>
+    assert.match(await native.frame(), /Only retained output copied/),
+  )
+  if (process.platform === "darwin") {
+    clipboardWrite = async () => {
+      throw new Error("Controlled historical clipboard failure")
+    }
+    await copyNative()
+    await t.waitFor(async () =>
+      assert.match(await native.frame(), /Copy failed:/),
+    )
+  }
+  const pendingCopy = Promise.withResolvers<void>()
+  t.after(() => pendingCopy.resolve())
+  clipboardWrite = () => pendingCopy.promise
+  await copyNative()
+  await native.key("\x1b")
+  await native.type("/settings")
+  await native.key("\r")
+  await native.type("Cache miss notices")
+  await native.key("\r")
+  await native.key("\x1b")
+  assert.doesNotMatch(await native.frame(), /native output 2104/)
+  pendingCopy.resolve()
+  clipboardWrite = undefined
+  assert.doesNotMatch(
+    await native.frame(),
+    /Only retained output copied|Copy failed:/,
   )
 })
