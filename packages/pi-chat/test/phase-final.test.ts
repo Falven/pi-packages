@@ -4,10 +4,20 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import { ModelRuntime } from "@earendil-works/pi-coding-agent"
-import { stripTerminalSequences } from "@earendil-works/pi-tui"
+import {
+  getNativeClipboard,
+  stripTerminalSequences,
+  type NativeClipboard,
+} from "@earendil-works/pi-tui"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+function writableClipboard(
+  clipboard: NativeClipboard | undefined,
+): asserts clipboard is NativeClipboard &
+  Required<Pick<NativeClipboard, "setText">> {
+  assert(clipboard?.setText)
+}
 
 function message(id: string, phase?: "commentary" | "final_answer", text = "") {
   return {
@@ -218,7 +228,7 @@ test("a phase correction revokes the final while preserving explicit activity cl
   await host.settled()
   const frame = await host.frame()
   assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(frame, /Prior work|Provisional answer/)
+  assert.doesNotMatch(frame, /Prior work|Provisional answer|Copy response/)
   await host.key("\r")
   const reopened = await host.frame()
   assert.match(reopened, /Worked for \d+m \d+s ▼/)
@@ -227,7 +237,7 @@ test("a phase correction revokes the final while preserving explicit activity cl
   assert.match(reopened, /Error:/)
   await host.reload()
   const reloaded = await host.frame()
-  assert.doesNotMatch(reloaded, /Worked/)
+  assert.doesNotMatch(reloaded, /Worked|Copy response/)
   assert.match(reloaded, /Prior work/)
   assert.match(reloaded, /Provisional answer/)
 })
@@ -290,6 +300,23 @@ test("a Responses message without phase does not collapse early", async (t) => {
 })
 
 test("reused sparse provider slots and a reasoning slot select the exact final part", async (t) => {
+  const clipboard = getNativeClipboard()
+  writableClipboard(clipboard)
+  let copied = ""
+  let pending: Promise<void> | undefined
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+    await pending
+  })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     providerApi: "openai-responses",
@@ -332,23 +359,56 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
   assert.match(streaming, /Worked for \d+m \d+s ▶/)
   assert.match(streaming, /Visible answer/)
   assert.doesNotMatch(streaming, /Prior work|Hidden thought/)
+  assert.doesNotMatch(streaming, /\[Copy response\]/)
   host.resumeResponse()
   await host.settled()
   const settled = await host.frame()
   assert.match(settled, /Worked for \d+m \d+s ▶/)
   assert.match(settled, /Visible answer/)
   assert.doesNotMatch(settled, /Prior work|Late commentary|Hidden thought/)
+  assert.equal((settled.match(/\[Copy response\]/g) ?? []).length, 1)
+  const copy = async () => {
+    await host.frame()
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const row = lines.findIndex((line) => line.includes("[Copy response]"))
+    assert(row >= 0)
+    const column = lines[row]!.indexOf("[") + 1
+    await host.key(`\x1b[<0;${column};${row + 1}M`)
+    await host.key(`\x1b[<0;${column};${row + 1}m`)
+  }
+  await copy()
+  await t.waitFor(() => assert.equal(copied, "Visible answer"))
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   const assistant = host.session.messages.at(-1)
   assert.equal(assistant?.role, "assistant")
   assert.deepEqual(
     assistant.content.map((part) => part.type),
     ["thinking", "text", "text", "text"],
   )
+  const reloading = Promise.withResolvers<void>()
+  pending = reloading.promise
+  await host.key("\r")
+  assert.doesNotMatch(await host.frame(), /\[Copied\]/)
   await host.reload()
+  reloading.resolve()
+  pending = undefined
   const replay = await host.frame()
   assert.match(replay, /Worked for \d+m \d+s ▶/)
   assert.match(replay, /Visible answer/)
   assert.doesNotMatch(replay, /Prior work|Late commentary|Hidden thought/)
+  assert.equal((replay.match(/\[Copy response\]/g) ?? []).length, 1)
+  assert.doesNotMatch(replay, /\[Copied\]/)
+  const replacing = Promise.withResolvers<void>()
+  pending = replacing.promise
+  await copy()
+  assert.doesNotMatch(await host.frame(), /\[Copied\]/)
+  await host.runtime.newSession()
+  replacing.resolve()
+  pending = undefined
+  assert.doesNotMatch(
+    await host.frame(),
+    /\[Copied\]|\[Copy response\]|Visible answer/,
+  )
 })
 
 test("commentary-only phase evidence prevents settled-message fallback", async (t) => {
@@ -366,10 +426,10 @@ test("commentary-only phase evidence prevents settled-message fallback", async (
   await submit(host)
   await host.settled()
   const frame = await host.frame()
-  assert.doesNotMatch(frame, /Worked/)
+  assert.doesNotMatch(frame, /Worked|\[Copy response\]/)
   assert.match(frame, /Only commentary/)
   await host.reload()
-  assert.doesNotMatch(await host.frame(), /Worked/)
+  assert.doesNotMatch(await host.frame(), /Worked|\[Copy response\]/)
 })
 
 test("an explicit final remains selected when the response is incomplete", async (t) => {
@@ -483,7 +543,7 @@ test("a blank replacement revokes a provisional final", async (t) => {
   host.resumeResponse()
   await host.settled()
   const frame = await host.frame()
-  assert.doesNotMatch(frame, /Worked|Temporary answer/)
+  assert.doesNotMatch(frame, /Worked|Temporary answer|Copy response/)
   assert.match(frame, /Prior work/)
 })
 

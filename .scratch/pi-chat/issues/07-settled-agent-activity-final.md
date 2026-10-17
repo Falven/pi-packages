@@ -2,19 +2,32 @@
 
 **What to build:** Copy a settled final response as original Markdown from one action below the entire answer, preserving historical answer identity and native presentation.
 
-**Blocked by:** 03: Component-copy delta, which supplies the shared local action and existing focus-path integration.
+**Blocked by:** none; Chat 03 supplies the shared local action and existing focus-path integration.
 
-**Status:** ready-for-agent
+**Status:** resolved — final-response-copy delta implemented; combined supported-host evidence belongs to Chat 12.
 
 ## Final-response-copy delta — approved 2026-10-16
 
-- [ ] Reuse existing settlement, final-message/part recognition, and stable source identities. Show exactly one Copy response action for a settled turn with a recognized final answer; no action for an unfinished or unrecognized answer.
-- [ ] Place the action below the whole answer, left aligned and outside collapsible work. Preserve original Markdown and all selected final text parts in source order using the existing text joining convention; exclude thoughts, commentary, tool output, elapsed summaries, and controls.
-- [ ] An older answer continues copying itself after newer turns, source reveal, and native reconstruction. Do not call the global last-response handler or infer boundaries from prose.
-- [ ] Reuse command/edit action interaction, feedback, native clipboard/error behavior, focus, selection exclusion, narrow layout, and lifecycle cleanup. No new shortcut, framework, source content, or persisted metadata.
-- [ ] Extend existing real-Pi final/phase/history cases with a captured clipboard boundary. Preserve global selection-copy, Find, automatic/manual disclosure, user/notice ordering, cancellation, session replacement, and no-final behavior. Add no test case, file, or seam.
+- [x] Reuse existing settlement, final-message/part recognition, and stable source identities. Show exactly one Copy response action for a settled turn with a recognized final answer; no action for an unfinished or unrecognized answer.
+- [x] Place the action below the whole answer, left aligned and outside collapsible work. Preserve original Markdown and all selected final text parts in source order using the existing text joining convention; exclude thoughts, commentary, tool output, elapsed summaries, and controls.
+- [x] An older answer continues copying itself after newer turns, source reveal, and native reconstruction. Do not call the global last-response handler or infer boundaries from prose.
+- [x] Reuse command/edit action interaction, feedback, native clipboard/error behavior, focus, selection exclusion, narrow layout, and lifecycle cleanup. No new shortcut, framework, source content, or persisted metadata.
+- [x] Extend existing real-Pi final/phase/history cases with a captured clipboard boundary. Preserve global selection-copy, Find, automatic/manual disclosure, user/notice ordering, cancellation, session replacement, and no-final behavior. Add no test case, file, or seam.
 
 The accepted spec and ADRs 0014, 0015, and 0022 govern this delta. Combined supported-host evidence belongs to Chat 12. Earlier completed evidence below remains historical.
+
+**Revision evidence (2026-10-16):** `composeAgentActivity` places one shared `CopyAction` after all final rows only when `AgentActivityIndex` recognizes a settled final. Its source occurrence stays stable while the payload is read on activation. Selected original text parts are concatenated without a separator. The footer uses native output padding and focus styling, is masked from text selection, and is disposed on removal, reconstruction, or host disposal. Alt+G still chooses a visible disclosure header first and can enter a visible copy action when no header is visible.
+
+The existing split-final case failed on the absent footer before implementation, then passed with exact Markdown capture. Seven affected existing cases pass on coherent Pi 1.0.2 using the recording terminal and a mocked native clipboard boundary: split final parts with interleaved thoughts; sparse final phase with later commentary; pending copy across reload and session replacement; revoked and blank finals; historical answers after newer turns and reload; transformed display versus source; Find excluding labels; keyboard focus and return to the composer; selection-preferred global copy; drag selection through the footer; ancestor collapse/reopen; and a 32-column resize. No physical terminal or OS clipboard check was performed, and this evidence does not claim Pi 1.1.0 coverage.
+
+Checks run:
+
+- `/Users/fran/.nvm/versions/node/v24.13.1/bin/node --test --test-name-pattern='all terminal text parts share|native chat right-aligns user|reused sparse provider|commentary-only phase evidence|phase correction revokes|blank replacement revokes|mixed live agent activity' packages/pi-chat/test/agent-activity.test.ts packages/pi-chat/test/native-chat.test.ts packages/pi-chat/test/phase-final.test.ts packages/pi-chat/test/mixed-session.test.ts` — 7/7 passed.
+- `node_modules/.bin/tsc --noEmit -p tsconfig.json` — passed.
+- Scoped `node_modules/.bin/oxlint` and `node_modules/.bin/oxfmt --check` on the five changed TypeScript files, plus formatting of this ticket — passed.
+- `git diff --check` — passed.
+
+No test case, fixture, file, dependency, final-answer detector, or persisted metadata was added. Combined package and supported-host validation remains Chat 12.
 
 ## Prior native-flow revision
 

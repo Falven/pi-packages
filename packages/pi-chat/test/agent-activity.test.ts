@@ -456,9 +456,26 @@ test("a settled terminal assistant keeps its native thoughts in agent activity a
 })
 
 test("all terminal text parts share one answer when a native extension interleaves thought blocks", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  let copied = ""
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied = text
+  })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
+  const first = "First answer part\n\n```ts\n  const one = 1\n```\n"
+  const last = "\n- Last answer part\n- [Link](https://example.com)\n"
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 32,
+    rows: 40,
     settings: { hideThinkingBlock: false },
     extensionFactories: [
       (pi) => {
@@ -469,9 +486,9 @@ test("all terminal text parts share one answer when a native extension interleav
             message: {
               ...message,
               content: [
-                { type: "text", text: "First answer part" },
+                { type: "text", text: first },
                 { type: "thinking", thinking: "Interleaved native thought" },
-                { type: "text", text: "Last answer part" },
+                { type: "text", text: last },
               ],
             },
           }
@@ -490,6 +507,27 @@ test("all terminal text parts share one answer when a native extension interleav
     /Worked for \d+m \d+s ▶[\s\S]*First answer part[\s\S]*Last answer part/,
   )
   assert.doesNotMatch(frame, /Interleaved native thought/)
+  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 1)
+  const lines = host.screenLines().map(stripTerminalSequences)
+  const actionRow = lines.findIndex((line) => line.includes("[Copy response]"))
+  const firstRow = lines.findIndex((line) => line.includes("First answer part"))
+  const lastRow = lines.findIndex((line) => line.includes("Last answer part"))
+  assert(actionRow > lastRow)
+  assert.equal(
+    lines[actionRow]!.indexOf("["),
+    lines[firstRow]!.indexOf("First"),
+  )
+  const column = lines[actionRow]!.indexOf("[") + 1
+  await host.key(`\x1b[<0;${column};${actionRow + 1}M`)
+  await host.key(`\x1b[<0;${column};${actionRow + 1}m`)
+  await t.waitFor(() =>
+    assert.equal(
+      copied,
+      "First answer part\n\n```ts\n  const one = 1\n```\n\n- Last answer part\n- [Link](https://example.com)\n",
+    ),
+  )
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  await host.key("\x1b")
   await host.key("\x1bg")
   await host.key("\r")
   const expanded = await host.frame()
@@ -498,12 +536,20 @@ test("all terminal text parts share one answer when a native extension interleav
     expanded,
     /Interleaved native thought[\s\S]*First answer part[\s\S]*Last answer part/,
   )
+  assert.equal(
+    (expanded.match(/\[(?:Copy response|Copied)\]/g) ?? []).length,
+    1,
+  )
+  await host.key("\r")
+  const closed = await host.frame()
+  assert.doesNotMatch(closed, /Interleaved native thought/)
+  assert.equal((closed.match(/\[(?:Copy response|Copied)\]/g) ?? []).length, 1)
   const final = host.session.messages.at(-1)
   assert.equal(final?.role, "assistant")
   assert.deepEqual(final?.content, [
-    { type: "text", text: "First answer part" },
+    { type: "text", text: first },
     { type: "thinking", thinking: "Interleaved native thought" },
-    { type: "text", text: "Last answer part" },
+    { type: "text", text: last },
   ])
 })
 

@@ -396,7 +396,7 @@ class CopyAction implements Component {
     const available = Math.max(1, width - padding * 2)
     const original = `[${label}]`
     this.width = Math.min(available, original.length)
-    this.column = padding + available - this.width
+    this.column = padding + (this.owner ? available - this.width : 0)
     const plain = new Text(original, 0, 0).render(this.width)
     const value = this.copied ? "[Copied]".padEnd(original.length) : original
     const theme = this.adapter.extensionUI.theme
@@ -915,6 +915,7 @@ export class NativeChatHost {
   >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
+  private readonly responseActions = new Map<Occurrence, CopyAction>()
   private visibleDisclosures: (
     | RenderGroupHeader
     | ActivityItemDisclosure
@@ -1253,7 +1254,9 @@ export class NativeChatHost {
           top: 0,
           ...(component instanceof ActivityItemDisclosure
             ? { copyColumns: component.copyColumns }
-            : {}),
+            : component instanceof CopyAction
+              ? { copyColumns: new Map(rows.map((_, row) => [row, 0])) }
+              : {}),
         }
         start += rows.length
         return leaf
@@ -1277,7 +1280,8 @@ export class NativeChatHost {
         return controls
       }
       return component instanceof AgentActivityHeader ||
-        component instanceof RenderGroupHeader
+        component instanceof RenderGroupHeader ||
+        (component instanceof CopyAction && component.enabled)
         ? [component]
         : []
     })
@@ -1696,11 +1700,24 @@ export class NativeChatHost {
       ).isOverlayFocused()
     )
       return
-    const nearest = this.visibleDisclosures.findLast((disclosure) => {
-      if (disclosure instanceof CopyAction) return false
-      const leaf = this.leaves.find((item) => item.component === disclosure)
-      return leaf && this.visibleInterval(leaf)?.start === 0
-    })
+    const nearest =
+      this.visibleDisclosures.findLast((disclosure) => {
+        if (disclosure instanceof CopyAction) return false
+        const leaf = this.leaves.find((item) => item.component === disclosure)
+        return leaf && this.visibleInterval(leaf)?.start === 0
+      }) ??
+      this.visibleDisclosures.findLast((disclosure) => {
+        if (!(disclosure instanceof CopyAction)) return false
+        const leaf = this.leaves.find(
+          (item) => item.component === (disclosure.owner ?? disclosure),
+        )
+        if (!leaf) return false
+        const top = leaf.top + disclosure.row
+        return (
+          top + disclosure.height > this.transcript.scrollTop &&
+          top < this.transcript.scrollTop + this.viewportHeight
+        )
+      })
     if (!nearest) return
     renderer.setFocus(nearest)
     this.revealDisclosure(nearest)
@@ -1774,6 +1791,7 @@ export class NativeChatHost {
 
   private composeAgentActivity(chatRows: ChatRow[]): ChatRow[] {
     const result: ChatRow[] = []
+    const answers = new Set<Occurrence>()
     for (let index = 0; index < chatRows.length;) {
       const chatRow = chatRows[index]!
       const agentActivity =
@@ -1843,7 +1861,51 @@ export class NativeChatHost {
         }
       } else result.push(...body)
       result.push(...final)
+      const source = agentActivity.final
+      if (
+        final.length &&
+        agentActivity.settled &&
+        source &&
+        !answers.has(source)
+      ) {
+        answers.add(source)
+        let action = this.responseActions.get(source)
+        if (!action) {
+          action = new CopyAction(
+            this,
+            () => {
+              const activity = this.agentActivity.find(source)
+              const message = source.message
+              return {
+                label: "Copy response",
+                text:
+                  activity?.settled &&
+                  this.agentActivity.isFinalMessage(source, activity) &&
+                  message?.role === "assistant"
+                    ? message.content
+                        .flatMap((part, contentIndex) =>
+                          part.type === "text" &&
+                          (!activity.finalParts ||
+                            activity.finalParts.includes(contentIndex))
+                            ? [part.text]
+                            : [],
+                        )
+                        .join("")
+                    : "",
+              }
+            },
+            true,
+          )
+          this.responseActions.set(source, action)
+        }
+        result.push({ component: action, tool: false })
+      }
     }
+    for (const [source, action] of this.responseActions)
+      if (!answers.has(source)) {
+        action.dispose()
+        this.responseActions.delete(source)
+      }
     return result
   }
 
@@ -3419,6 +3481,8 @@ export class NativeChatHost {
             for (const items of this.activityDisclosures.values())
               for (const item of items.values()) item.dispose()
             this.activityDisclosures.clear()
+            for (const action of this.responseActions.values()) action.dispose()
+            this.responseActions.clear()
             this.visibleDisclosures = []
             this.streaming = undefined
           } else {
@@ -3859,6 +3923,7 @@ export class NativeChatHost {
     if (!this.active) return
     for (const items of this.activityDisclosures.values())
       for (const item of items.values()) item.dispose()
+    for (const action of this.responseActions.values()) action.dispose()
     if (this.host.fullscreenLayoutRoot === this.root)
       this.transcript.setScrollbar("hidden")
     this.active = false
@@ -3923,6 +3988,7 @@ export class NativeChatHost {
     this.thoughts.clear()
     this.renderGroups.clear()
     this.activityDisclosures.clear()
+    this.responseActions.clear()
     this.visibleDisclosures = []
     this.projections.clear()
     this.indexedIds = []

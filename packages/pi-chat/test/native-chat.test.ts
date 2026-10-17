@@ -115,6 +115,15 @@ test("native chat right-aligns user messages and keeps the answer, composer, and
   t.mock.method(clipboard, "setText", async (text: string) => {
     copied = text
   })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     settings: { fullscreenCopyOnSelect: false, outputPad: 0 },
@@ -149,6 +158,48 @@ test("native chat right-aligns user messages and keeps the answer, composer, and
   await host.key(`\x1b[<0;${column + 5};${row + 1}m`)
   await host.key("\x18")
   await t.waitFor(() => assert.equal(copied, "Hello"))
+  assert.equal(
+    lines.find((line) => line.includes("[Copy response]"))?.indexOf("["),
+    0,
+  )
+  await host.key("\x1bg")
+  await host.frame()
+  const action = host
+    .screenLines()
+    .find((line) => line.includes("[Copy response]"))
+  assert(action?.includes(host.ui.theme.getBgAnsi("selectedBg").slice(2, -1)))
+  await host.key("\r")
+  await t.waitFor(() => assert.equal(copied, "Received."))
+  await host.frame()
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "Hello"))
+  await host.key("\x1b")
+  const answerLines = host.screenLines().map(stripTerminalSequences)
+  const answerRow = answerLines.findIndex((line) => line.includes("Received."))
+  const footer = answerLines.findIndex((line) =>
+    /\[(?:Copied|Copy response)\]/.test(line),
+  )
+  assert(answerRow >= 0 && footer > answerRow)
+  await host.key(`\x1b[<0;1;${answerRow + 1}M`)
+  await host.key(`\x1b[<32;16;${footer + 1}M`)
+  await host.key(`\x1b[<0;16;${footer + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied.trimEnd(), "Received."))
+  assert.doesNotMatch(copied, /Copied|Copy response/)
+  host.terminal.resize(32, 24)
+  await host.frame()
+  const narrow = host.screenLines().map(stripTerminalSequences)
+  assert.equal(
+    narrow
+      .find((line) => /\[(?:Copied|Copy response)\]/.test(line))
+      ?.indexOf("["),
+    0,
+  )
+  assert(narrow.every((line) => visibleWidth(line) <= 32))
+  await host.key("\x1bg")
+  await host.key("\x1b")
+  await host.type("Back in composer")
+  assert.match(await host.frame(), /Back in composer/)
 })
 
 test("native Markdown transforms still apply without changing stored or requested text", async (t) => {

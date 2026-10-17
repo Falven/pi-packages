@@ -246,6 +246,15 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   t.mock.method(clipboard, "setText", async (text: string) => {
     copied = text
   })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
   const catalog = await skillCatalog(t)
   const host = await openNativeHost(t, {
     extensionPaths: [composer, attachments, skills, acceptance, chat],
@@ -329,6 +338,7 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   assert.match(frame, /First answer/)
   assert.match(frame, /Second answer/)
   assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
+  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 2)
   assert.equal((frame.match(/Same queued text/g) ?? []).length, 2)
   assert.doesNotMatch(frame, /Before steering|After steering|Followup work/)
   assert.equal(
@@ -336,6 +346,29 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
       .length,
     1,
   )
+  const copyAnswer = async (answer: string, expected: string) => {
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const answerRow = lines.findIndex((line) => line.includes(answer))
+    const footerRow = lines.findIndex(
+      (line, index) =>
+        index > answerRow && /\[(?:Copy response|Copied)\]/.test(line),
+    )
+    assert(answerRow >= 0 && footerRow > answerRow)
+    const column = lines[footerRow]!.indexOf("[") + 1
+    copied = ""
+    await host.key(`\x1b[<0;${column};${footerRow + 1}M`)
+    await host.key(`\x1b[<0;${column};${footerRow + 1}m`)
+    await t.waitFor(() => assert.equal(copied, expected))
+    await host.frame()
+  }
+  await copyAnswer("First answer", "First answer")
+  await copyAnswer("Second answer", "Second answer")
+  await copyAnswer("First answer", "First answer")
+  assert.equal(
+    ((await host.frame()).match(/Worked for \d+m \d+s ▶/g) ?? []).length,
+    2,
+  )
+  await host.key("\x1b")
 
   const row = host
     .screenLines()
@@ -433,6 +466,20 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   await host.settled()
   assert.match(await host.frame(), /Shown answer/)
   assert.match(JSON.stringify(host.session.messages.at(-1)), /Recovered answer/)
+  await copyAnswer("Shown answer", "Recovered answer")
+  await host.reload()
+  await host.frame()
+  await host.key("\x06")
+  await host.type("Copy response")
+  assert.match(await host.frame(), /No matches/)
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("First answer")
+  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x1b")
+  await host.frame()
+  await copyAnswer("First answer", "First answer")
+  assert.doesNotMatch(JSON.stringify(host.requests), /Copy response|\[Copied\]/)
 })
 
 test("revealed retained tool images follow native image settings", async (t) => {
