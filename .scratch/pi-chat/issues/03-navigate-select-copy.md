@@ -4,18 +4,22 @@
 
 **Blocked by:** None for this delta; the established native activity presentation is already integrated.
 
-**Status:** ready-for-agent
+**Status:** resolved — component-copy implementation; combined supported-host validation remains in Chat 12
 
 ## Component-copy delta — approved 2026-10-16
 
-- [ ] Only semantic commands and edits receive controls. Successful and failed commands have Copy command beside the native heading and Copy output below the result. Edits have Copy diff for an actual retained diff, otherwise Copy output for retained text.
-- [ ] Read authoritative arguments/operation payloads at activation, preserving exact multiline scripts and all retained output beyond preview and viewport. Keep per-operation/per-file ownership and intentional existing payload sharing; exclude presentation labels/escapes and never reread or execute anything.
-- [ ] Prefer actual raw patches over decorated diffs. Do not infer diffs from counts, arguments, speculative previews, or current files. Include actual failure text and distinguish unavailable/partial retained output.
-- [ ] Use the public clipboard helper, await completion, show fixed-geometry Copied feedback only on success, report errors natively, disable empty values, and clean up timers/in-flight callbacks across disposal and reconstruction.
-- [ ] Consume copy clicks; retain preview/full output, ancestor disclosure choices, reading position, images, padding, narrow layout, and native theme. Extend existing keyboard navigation and focus recovery without new shortcuts. Exclude controls from selection and source Find; preserve global selection-copy behavior.
-- [ ] Extend existing real-host cases only, with captured clipboard transport and isolated rejection fallbacks. No new test cases, test files, test seams, dependencies, settings, or persistence schema.
+- [x] Only semantic commands and edits receive controls. Successful and failed commands have Copy command beside the native heading and Copy output below the result. Edits have Copy diff for an actual retained diff, otherwise Copy output for retained text.
+- [x] Read authoritative arguments/operation payloads at activation, preserving exact multiline scripts and all retained output beyond preview and viewport. Keep per-operation/per-file ownership and intentional existing payload sharing; exclude presentation labels/escapes and never reread or execute anything.
+- [x] Prefer actual raw patches over decorated diffs. Do not infer diffs from counts, arguments, speculative previews, or current files. Include actual failure text and distinguish unavailable/partial retained output.
+- [x] Use the public clipboard helper, await completion, show fixed-geometry Copied feedback only on success, report errors natively, disable empty values, and clean up timers/in-flight callbacks across disposal and reconstruction.
+- [x] Consume copy clicks; retain preview/full output, ancestor disclosure choices, reading position, images, padding, narrow layout, and native theme. Extend existing keyboard navigation and focus recovery without new shortcuts. Exclude controls from selection and source Find; preserve global selection-copy behavior.
+- [x] Extend existing real-host cases only, with captured clipboard transport and isolated rejection fallbacks. No new test cases, test files, test seams, dependencies, settings, or persistence schema.
 
 The accepted spec and ADRs 0014, 0019, and 0022 govern this delta. Combined supported-host evidence belongs to Chat 12. Earlier completed evidence below remains historical.
+
+**Revision evidence (2026-10-16):** A local copy action composes the native command heading and command/edit result footer. It reads the current semantic item's retained payload at activation, preserves native preview/full output, and uses the public clipboard helper. The adapter retains original merged error content before adding presentation labels. Native raw patches take precedence; retained headerless file patches use their existing successful edit metadata to distinguish actual changes from plain error text. Keyboard traversal includes enabled controls, and source Find and selection exclude control spans. Native status reports errors and partial retention; disposal makes pending copy completion inert.
+
+Three existing Pi 1.0.2 recording-terminal cases cover exact multiline scripts, successful/failed commands, 240-line output beyond the preview and viewport, streaming updates, raw native patch preference, per-file and shared operation ownership, output fallback, omitted/partial results, native clipboard rejection, reload/session replacement during pending copies, 18-column layout, collapse/reopen, keyboard focus and confirmation, selection across controls, and global selection-first copying. Clipboard writes were captured at the native transport; the macOS rejection fallback used an isolated failing `pbcopy` stub. Scoped formatting, lint, TypeScript, and whitespace checks passed. No physical terminal or OS clipboard check was performed; final-answer actions are Chat 07's delta.
 
 ## Prior native-flow revision
 

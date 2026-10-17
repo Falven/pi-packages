@@ -4,7 +4,12 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import test from "node:test"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
-import { stripTerminalSequences } from "@earendil-works/pi-tui"
+import {
+  getNativeClipboard,
+  stripTerminalSequences,
+  type NativeClipboard,
+  visibleWidth,
+} from "@earendil-works/pi-tui"
 import {
   activityType,
   type ActivityUpdate,
@@ -13,6 +18,12 @@ import { activityDetails } from "../../../fixtures/activity.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+function assertWritableClipboard(
+  clipboard: NativeClipboard | undefined,
+): asserts clipboard is NativeClipboard &
+  Required<Pick<NativeClipboard, "setText">> {
+  assert(clipboard?.setText)
+}
 const response = (
   content: string,
   name?: string,
@@ -340,6 +351,26 @@ test("native reads and an unrelated command provider share skill labels and reta
 })
 
 test("an unrelated provider presents semantic operations and late updates without tool-name mappings", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  const copied: string[] = []
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied.push(text)
+  })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
+  const longOutput =
+    Array.from(
+      { length: 240 },
+      (_, index) => `  generic-evidence ${index}`,
+    ).join("\n") + "\n"
   let publish: ((operations?: ActivityUpdate["operations"]) => void) | undefined
   const runningCommand = {
     id: "job-command",
@@ -348,7 +379,7 @@ test("an unrelated provider presents semantic operations and late updates withou
     kind: "command" as const,
     commands: ["printf generic-evidence"],
     status: "running" as const,
-    output: "generic-evidence",
+    output: `\x1b[31m${longOutput}\x1b[0m`,
   }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -420,6 +451,27 @@ test("an unrelated provider presents semantic operations and late updates withou
       .split("\n")
       .find((line) => line.trimStart().startsWith("> "))
       ?.trim()
+  const click = async (text: string, label?: string) => {
+    await host.frame()
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const start = lines.findIndex((line) => line.includes(text))
+    assert(start >= 0, `Missing ${text}\n${lines.join("\n")}`)
+    const row = label
+      ? lines.findIndex(
+          (line, index) =>
+            index >= start &&
+            (line.includes(label) || line.trim() === "[Copied]"),
+        )
+      : start
+    assert(row >= 0, `Missing ${label}`)
+    const column = label
+      ? lines[row]!.indexOf(lines[row]!.includes(label) ? label : "[Copied]") +
+        1
+      : 3
+    await host.key(`\x1b[<0;${column};${row + 1}M`)
+    await host.key(`\x1b[<0;${column};${row + 1}m`)
+    await host.frame()
+  }
   const status = async (label: string, groupLabel = label) => {
     await host.frame()
     const indicator = host
@@ -441,6 +493,33 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert.doesNotMatch(header()!, /generic-evidence/)
   host.terminal.resize(110, 140)
   await status("Running printf generic-evidence")
+  assert.doesNotMatch(screen(), /\[Copy (?:command|output)\]/)
+  await click("> Running printf generic-evidence")
+  await click("> Running printf generic-evidence")
+  assert.match(screen(), /\[Copy command\]/)
+  assert.doesNotMatch(screen(), /generic-evidence 239/)
+  await click("printf generic-evidence", "[Copy output]")
+  await t.waitFor(() => assert.equal(copied.at(-1), longOutput))
+  assert.match(screen(), /▼ Running printf generic-evidence/)
+  assert.doesNotMatch(screen(), /generic-evidence 239/)
+  assert(publish)
+  publish([
+    {
+      id: "job-command",
+      order: 0,
+      revision: 1,
+      kind: "command",
+      commands: ["printf generic-evidence"],
+      status: "running",
+      output: "  updated output\nsecond line\n",
+    },
+  ])
+  await host.frame()
+  await host.key("\r")
+  await t.waitFor(() =>
+    assert.equal(copied.at(-1), "  updated output\nsecond line\n"),
+  )
+  await click("▼ Running printf generic-evidence")
   await host.key("\x14")
   await status("Running printf generic-evidence")
   await host.key("\x14")
@@ -526,6 +605,120 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert.match(after, /^\s*▼ Edited a file, read files, ran a command\s*$/m)
   assert.doesNotMatch(after, /─+ [^\n]*(Thinking|Working|Running)/)
   assert.equal((after.match(/late-generic-failure/g) ?? []).length, 1)
+  await click("printf generic-evidence", "[Copy output]")
+  await t.waitFor(() => assert.equal(copied.at(-1), "late-generic-failure"))
+  publish([
+    {
+      id: "job-command",
+      order: 0,
+      revision: 1,
+      kind: "command",
+      commands: ["printf generic-evidence"],
+      status: "failed",
+      output: "  retained failure\n",
+      outputOmitted: true,
+    },
+    {
+      id: "call-error",
+      order: 10,
+      revision: 1,
+      kind: "output",
+      status: "failed",
+      output: "actual call error\n",
+      outputOmitted: true,
+    },
+  ])
+  await host.frame()
+  await host.key("\r")
+  await t.waitFor(() =>
+    assert.equal(copied.at(-1), "  retained failure\n\nactual call error\n"),
+  )
+  assert.match(await host.frame(), /Only retained output copied/)
+  assert.doesNotMatch(copied.at(-1)!, /Earlier|omitted|Call error/)
+  publish([
+    {
+      id: "job-command",
+      order: 0,
+      revision: 1,
+      kind: "command",
+      commands: ["printf generic-evidence"],
+      status: "failed",
+      output: "late-generic-failure",
+    },
+    {
+      id: "call-error",
+      order: 10,
+      revision: 1,
+      kind: "output",
+      status: "completed",
+    },
+  ])
+  await host.frame()
+  const patch =
+    "--- a/first.ts\n+++ b/first.ts\n@@ -1,2 +1,2 @@\n context\n-before\n+after\n"
+  publish([
+    {
+      ...edit,
+      status: "failed",
+      files: [
+        { id: "first", path: "first.ts", status: "completed", output: patch },
+        {
+          id: "second",
+          path: "second.ts",
+          status: "completed",
+          changes: { added: 2, removed: 0 },
+          output: "+beta\n+  delta\n",
+        },
+        {
+          id: "failure",
+          path: "failure.ts",
+          status: "failed",
+          output: "- permission denied\n",
+        },
+        {
+          id: "counted",
+          path: "counted.ts",
+          status: "completed",
+          changes: { added: 7, removed: 2 },
+          output: "Saved without retained diff",
+        },
+        {
+          id: "omitted",
+          path: "omitted.ts",
+          status: "completed",
+          outputOmitted: true,
+        },
+      ],
+    },
+    {
+      id: "shared-command",
+      order: 11,
+      revision: 1,
+      kind: "command",
+      status: "completed",
+      commands: ["printf first-operation", "printf second-operation"],
+      output: "shared operation output\n",
+    },
+  ])
+  await host.frame()
+  assert.equal((screen().match(/\[Copy diff\]/g) ?? []).length, 2)
+  await click("Edited first.ts", "[Copy diff]")
+  assert.equal(copied.at(-1), patch)
+  await click("Edited second.ts", "[Copy diff]")
+  assert.equal(copied.at(-1), "+beta\n+  delta\n")
+  await click("failure.ts", "[Copy output]")
+  assert.equal(copied.at(-1), "- permission denied\n")
+  await click("Edited counted.ts", "[Copy output]")
+  assert.equal(copied.at(-1), "Saved without retained diff")
+  const writes = copied.length
+  await click("Edited omitted.ts", "[Copy output]")
+  assert.equal(copied.length, writes)
+  await click("printf first-operation", "[Copy output]")
+  assert.equal(copied.at(-1), "shared operation output\n")
+  await click("printf second-operation", "[Copy output]")
+  assert.equal(copied.at(-1), "shared operation output\n")
+  await click("printf second-operation", "[Copy command]")
+  assert.equal(copied.at(-1), "printf second-operation")
   const fork = await host.runtime.fork(
     host.session.sessionManager.getLeafId()!,
     { position: "at" },
@@ -537,6 +730,10 @@ test("an unrelated provider presents semantic operations and late updates withou
   const inherited = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(inherited, /1\/1/)
   assert.match(inherited, /late-generic-failure/)
+  await host.key("\x1b")
+  await host.key("\x06")
+  await host.type("Copy command")
+  assert.match(await host.frame(), /No matches/)
 })
 
 for (const legacy of [false, true])
@@ -738,6 +935,24 @@ test("processed output invalidates metadata and cannot regain an earlier live bo
 })
 
 test("declared command actions use the app parser and retain full command bodies", async (t) => {
+  const clipboard = getNativeClipboard()
+  assertWritableClipboard(clipboard)
+  const copied: string[] = []
+  let clipboardWrite: (() => Promise<void>) | undefined
+  t.mock.method(clipboard, "setText", async (text: string) => {
+    copied.push(text)
+    await clipboardWrite?.()
+  })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
+  const multiline = "printf 'first\\n'\n  printf \"second  value\\n\"\n"
   const uncertain = [
     "false || cat SKILL.md",
     "cat SKILL.md > result.txt",
@@ -751,6 +966,7 @@ test("declared command actions use the app parser and retain full command bodies
     "unknown_command; cat SKILL.md",
     "cat one.md;; cat two.md",
     'for file in *.md; do cat "$file"; done',
+    multiline,
   ]
   const commands = [
     "printf '\\n--- files ---\\n'; cat 'one file.md'; cat \"two.md\"",
@@ -769,8 +985,9 @@ test("declared command actions use the app parser and retain full command bodies
   ]
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 200,
+    rows: 300,
     columns: 160,
+    persistSession: true,
     extensionFactories: [
       (pi) =>
         pi.registerTool({
@@ -820,9 +1037,16 @@ test("declared command actions use the app parser and retain full command bodies
         }),
     ],
   })
+  await writeFile(join(host.directory, "native-edit.txt"), "context\nbefore\n")
   host.queueResponse(...response("", "command_report"))
   host.queueResponse(
     ...response("", "bash", { command: "cd missing-native-directory" }),
+  )
+  host.queueResponse(
+    ...response("", "edit", {
+      path: "native-edit.txt",
+      edits: [{ oldText: "before", newText: "after" }],
+    }),
   )
   host.queueResponse(...response("Finished"))
   await host.type("Inspect the command report")
@@ -854,10 +1078,154 @@ test("declared command actions use the app parser and retain full command bodies
     "prefix",
   ])
     assert(screen.includes(`▼ Read ${target}`), target)
-  for (const command of uncertain) assert(screen.includes(command), command)
+  for (const command of uncertain.slice(0, -1))
+    assert(screen.includes(command), command)
   assert.match(screen, /git status --short/)
   assert.match(screen, /printf useful-output/)
   assert.match(screen, /Listed files in project/)
   assert.match(screen, /Searched for Needle in app/)
   assert.match(screen, /nl -ba src\/numbered\.ts \| sed -n '1,20p'/)
+  assert.equal(
+    (screen.match(/\[Copy command\]/g) ?? []).length,
+    uncertain.length + 4,
+  )
+  assert.equal(
+    (screen.match(/\[Copy output\]/g) ?? []).length,
+    uncertain.length + 4,
+  )
+  const commandLines = host.screenLines().map(stripTerminalSequences)
+  const commandRow = commandLines.findIndex((line) =>
+    line.includes("printf 'first\\n'"),
+  )
+  assert(commandRow >= 0)
+  const actionRow = commandLines.findIndex(
+    (line, index) => index >= commandRow && line.includes("[Copy command]"),
+  )
+  const commandColumn = commandLines[actionRow]!.indexOf("[Copy command]") + 1
+  await host.key(`\x1b[<0;${commandColumn};${actionRow + 1}M`)
+  await host.key(`\x1b[<0;${commandColumn};${actionRow + 1}m`)
+  await t.waitFor(() => assert.equal(copied.at(-1), multiline))
+  assert.match(await host.frame(), /\[Copied\]/)
+  const click = async (target: string, label: string) => {
+    await host.frame()
+    const lines = host.screenLines().map(stripTerminalSequences)
+    const start = lines.findIndex((line) => line.includes(target))
+    const row = lines.findIndex(
+      (line, index) =>
+        index >= start && (line.includes(label) || line.trim() === "[Copied]"),
+    )
+    assert(
+      start >= 0 && row >= 0,
+      `Missing ${target} ${label}\n${lines.filter((line) => line.trim()).join("\n")}`,
+    )
+    const column =
+      lines[row]!.indexOf(lines[row]!.includes(label) ? label : "[Copied]") + 1
+    await host.key(`\x1b[<0;${column};${row + 1}M`)
+    await host.key(`\x1b[<0;${column};${row + 1}m`)
+    await host.frame()
+    return row
+  }
+  await click("cd missing-native-directory", "[Copy output]")
+  assert.match(
+    copied.at(-1)!,
+    /cd: missing-native-directory: No such file or directory/,
+  )
+  assert.doesNotMatch(copied.at(-1)!, /Copy output|Ran command/)
+  await click("Edited native-edit.txt", "[Copy diff]")
+  assert.equal(
+    copied.at(-1),
+    "--- native-edit.txt\n+++ native-edit.txt\n@@ -1,2 +1,2 @@\n context\n-before\n+after\n",
+  )
+  assert.equal(
+    (
+      host
+        .screenLines()
+        .join("\n")
+        .match(/\[Copy diff\]/g) ?? []
+    ).length,
+    0,
+  )
+  host.terminal.resize(18, 300)
+  await host.frame()
+  const narrow = host.screenLines().map(stripTerminalSequences)
+  assert(narrow.every((line) => visibleWidth(line) <= 18))
+  const narrowRow = narrow.findLastIndex((line) =>
+    line.includes("[Copy command]"),
+  )
+  assert(narrowRow >= 0)
+  const narrowColumn = narrow[narrowRow]!.indexOf("[Copy command]") + 1
+  await host.key(`\x1b[<0;${narrowColumn};${narrowRow + 1}M`)
+  await host.key(`\x1b[<0;${narrowColumn};${narrowRow + 1}m`)
+  assert.equal(copied.at(-1), "cd missing-native-directory")
+  await host.frame()
+  assert.match(
+    stripTerminalSequences(host.screenLines()[narrowRow]!),
+    /\[Copied\]/,
+  )
+  host.terminal.resize(160, 300)
+  await host.frame()
+  const workRow = host
+    .screenLines()
+    .findIndex((line) => stripTerminalSequences(line).includes("Worked for"))
+  assert(workRow >= 0)
+  await host.key(`\x1b[<0;3;${workRow + 1}M`)
+  await host.key(`\x1b[<0;3;${workRow + 1}m`)
+  assert.doesNotMatch(
+    await host.frame(),
+    /\[Copy (?:command|output|diff)\]|\[Copied\]/,
+  )
+  await host.key("\r")
+  assert.match(await host.frame(), /\[Copy output\]/)
+  if (process.platform === "darwin") {
+    const safeCommands = join(host.directory, "clipboard-commands")
+    await mkdir(safeCommands)
+    await writeFile(join(safeCommands, "pbcopy"), "#!/bin/sh\nexit 1\n", {
+      mode: 0o700,
+    })
+    const originalPath = process.env["PATH"]
+    t.after(() => {
+      if (originalPath === undefined) delete process.env["PATH"]
+      else process.env["PATH"] = originalPath
+    })
+    process.env["PATH"] = `${safeCommands}:${originalPath}`
+    clipboardWrite = async () => {
+      throw new Error("Controlled clipboard failure")
+    }
+    const failedRow = await click(
+      "cd missing-declared-directory",
+      "[Copy output]",
+    )
+    await t.waitFor(async () =>
+      assert.match(await host.frame(), /Copy failed:/),
+    )
+    assert.match(
+      stripTerminalSequences(host.screenLines()[failedRow]!),
+      /\[Copy output\]/,
+    )
+  }
+  let complete: (() => void) | undefined
+  clipboardWrite = () =>
+    new Promise<void>((resolve) => {
+      complete = resolve
+    })
+  await click("Edited native-edit.txt", "[Copy diff]")
+  assert(complete)
+  assert.match(
+    host.screenLines().map(stripTerminalSequences).join("\n"),
+    /\[Copy diff\]/,
+  )
+  await host.reload()
+  complete()
+  assert.doesNotMatch(await host.frame(), /\[Copied\]|Copy failed:/)
+  await host.key("\x0f")
+  await host.key("\x0f")
+  await host.frame()
+  await click("Edited native-edit.txt", "[Copy diff]")
+  assert(complete)
+  await host.runtime.newSession()
+  complete()
+  assert.doesNotMatch(
+    await host.frame(),
+    /\[Copied\]|Copy failed:|\[Copy diff\]/,
+  )
 })

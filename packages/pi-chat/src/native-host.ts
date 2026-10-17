@@ -2,6 +2,7 @@ import {
   InteractiveMode,
   ToolExecutionComponent,
   UserMessageComponent,
+  copyToClipboard,
   sessionEntryToContextMessages,
   type AgentSession,
   type AgentSessionRuntime,
@@ -34,7 +35,11 @@ import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js
 import { GroupSummaries } from "./group-summaries.ts"
 import { ActivityItems } from "./activity-items.ts"
 import { itemSummary } from "./item-summary.ts"
-import type { ActivityItem, ActivityResult } from "./tool-adapters/types.ts"
+import {
+  argumentsOf,
+  type ActivityItem,
+  type ActivityResult,
+} from "./tool-adapters/types.ts"
 import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
 import type { RelationshipFact } from "./relationships.ts"
 import { Thought, type ThoughtEnvironment } from "./thought.ts"
@@ -205,6 +210,7 @@ type Leaf = {
   left: number
   start: number
   top: number
+  copyColumns?: ReadonlyMap<number, number>
 }
 
 type VisibleInterval = {
@@ -352,6 +358,173 @@ class RenderGroupHeader implements Component {
   }
 }
 
+type CopyPayload = {
+  label: "Copy command" | "Copy output" | "Copy diff" | "Copy response"
+  text: string
+  partial?: boolean
+}
+
+class CopyAction implements Component {
+  focused = false
+  row = 0
+  column = 0
+  height = 1
+  width = 0
+  private active = true
+  private pending = false
+  private copied = false
+  private timer: NodeJS.Timeout | undefined
+
+  constructor(
+    private readonly adapter: NativeChatHost,
+    private readonly payload: () => CopyPayload,
+    private readonly inset: boolean,
+    readonly owner?: ActivityItemDisclosure,
+  ) {}
+
+  get enabled() {
+    return Boolean(this.payload().text)
+  }
+
+  invalidate() {}
+
+  render(width: number) {
+    const { label, text } = this.payload()
+    const padding = this.inset
+      ? Math.min(this.adapter.host.outputPad, Math.floor((width - 1) / 2))
+      : 0
+    const available = Math.max(1, width - padding * 2)
+    const original = `[${label}]`
+    this.width = Math.min(available, original.length)
+    this.column = padding + available - this.width
+    const plain = new Text(original, 0, 0).render(this.width)
+    const value = this.copied ? "[Copied]".padEnd(original.length) : original
+    const theme = this.adapter.extensionUI.theme
+    const styled = theme.fg(text ? "muted" : "dim", value)
+    const rows = new Text(
+      this.focused ? theme.bg("selectedBg", styled) : styled,
+      0,
+      0,
+    ).render(this.width)
+    this.height = plain.length
+    return plain.map((_, row) => " ".repeat(this.column) + (rows[row] ?? ""))
+  }
+
+  handleInput(data: string) {
+    this.adapter.handleDisclosureInput(data, () => void this.copy())
+  }
+
+  handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
+    // Pi captures a handled press through release. Drags from text selection pass through.
+    if (
+      event.button !== "left" ||
+      (event.type !== "press" && event.type !== "click") ||
+      event.x < this.column ||
+      event.x >= this.column + this.width
+    )
+      return undefined
+    if (event.type === "click") void this.copy()
+    return { handled: true, focus: this.enabled }
+  }
+
+  private async copy() {
+    if (!this.active || this.pending) return
+    const payload = this.payload()
+    if (!payload.text) return
+    this.pending = true
+    clearTimeout(this.timer)
+    this.copied = false
+    this.adapter.copyStatus(this)
+    try {
+      await copyToClipboard(payload.text)
+      if (!this.active) return
+      this.copied = true
+      if (payload.partial)
+        this.adapter.copyStatus(
+          this,
+          "Only retained output copied; earlier output was omitted.",
+        )
+    } catch (error) {
+      if (!this.active) return
+      this.adapter.copyStatus(this, `Copy failed: ${String(error)}`, true)
+    } finally {
+      this.pending = false
+      if (this.active) {
+        this.adapter.host.ui.requestRender()
+        this.timer = setTimeout(() => {
+          this.copied = false
+          this.adapter.copyStatus(this)
+          this.adapter.host.ui.requestRender()
+        }, 1_500)
+        this.timer.unref()
+      }
+    }
+  }
+
+  dispose() {
+    this.active = false
+    clearTimeout(this.timer)
+    this.adapter.copyStatus(this)
+  }
+}
+
+class CopyHeading implements Component {
+  actionRow = 0
+
+  constructor(
+    readonly component: Component,
+    readonly action: CopyAction,
+  ) {}
+
+  invalidate() {
+    this.component.invalidate()
+  }
+
+  render(width: number) {
+    const rows = this.component.render(width)
+    const action = this.action.render(width)
+    if (
+      action.length === 1 &&
+      visibleWidth(stripTerminalSequences(rows[0] ?? "").trimEnd()) <
+        this.action.column
+    ) {
+      this.actionRow = 0
+      return [
+        compositeTuiLine(
+          rows[0] ?? "",
+          sliceByColumn(
+            action[0]!,
+            this.action.column,
+            this.action.width,
+            true,
+          ),
+          this.action.column,
+          this.action.width,
+          width,
+        ),
+        ...rows.slice(1),
+      ]
+    }
+    this.actionRow = rows.length
+    return [...rows, ...action]
+  }
+
+  handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
+    if (
+      event.y >= this.actionRow &&
+      event.y < this.actionRow + this.action.height
+    ) {
+      const result = dispatchMouseEvent(this.action, {
+        ...event,
+        y: event.y - this.actionRow,
+        height: this.action.height,
+      })
+      if (result) return result
+    }
+    return dispatchMouseEvent(this.component, event)
+  }
+}
+
 class ActivityItemDisclosure extends Container {
   focused = false
   expanded = false
@@ -359,6 +532,86 @@ class ActivityItemDisclosure extends Container {
   private body: ToolExecutionComponent | undefined
   private initialBodyExpanded = false
   private header = new Text("", 0, 0)
+  private commandAction: CopyAction | undefined
+  private outputAction: CopyAction | undefined
+  private commandHeading: CopyHeading | undefined
+  copyColumns = new Map<number, number>()
+
+  get actions() {
+    return this.expanded
+      ? [this.commandAction, this.outputAction].filter(
+          (action): action is CopyAction => Boolean(action?.enabled),
+        )
+      : []
+  }
+
+  private copyOutput(): CopyPayload {
+    const { result, copyContent, availability, copyOmitted } = this.item.body
+    const output = stripTerminalSequences(
+      (copyContent ?? result?.content ?? [])
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join("\n"),
+    )
+    const details = argumentsOf(result?.details)
+    const raw = [details["patch"], details["diff"]].find(
+      (value): value is string => typeof value === "string" && value.length > 0,
+    )
+    const lines = output.split(/\r?\n/).filter(Boolean)
+    const hasChanges =
+      (lines.some((line) => line.startsWith("+")) &&
+        lines.some((line) => line.startsWith("-"))) ||
+      (this.item.status === "completed" &&
+        this.item.changes &&
+        lines.some((line) => /^[+-]/.test(line)))
+    const diff =
+      this.item.kind === "edit" &&
+      (raw ||
+        (hasChanges &&
+        lines.every(
+          (line) =>
+            /^[ +\-@]/.test(line) ||
+            line === "\\ No newline at end of file" ||
+            /^(?:diff --git |index )/.test(line),
+        )
+          ? output
+          : undefined))
+    return {
+      label: diff ? "Copy diff" : "Copy output",
+      text: diff || output,
+      partial:
+        availability === "omitted" ||
+        copyOmitted ||
+        argumentsOf(details["truncation"])["truncated"] === true,
+    }
+  }
+
+  private createActions() {
+    if (this.item.kind === "command")
+      this.commandAction = new CopyAction(
+        this.adapter,
+        () => {
+          const command = argumentsOf(this.item.body.args)["command"]
+          return {
+            label: "Copy command",
+            text: typeof command === "string" ? command : "",
+          }
+        },
+        false,
+        this,
+      )
+    if (this.item.kind === "command" || this.item.kind === "edit")
+      this.outputAction = new CopyAction(
+        this.adapter,
+        () => this.copyOutput(),
+        true,
+        this,
+      )
+  }
+
+  dispose() {
+    this.commandAction?.dispose()
+    this.outputAction?.dispose()
+  }
 
   private result() {
     const { result, availability } = this.item.body
@@ -379,16 +632,26 @@ class ActivityItemDisclosure extends Container {
     public item: ActivityItem,
   ) {
     super()
+    this.createActions()
   }
 
   update(item: ActivityItem) {
     if (item === this.item) return
     if (
+      item.kind !== this.item.kind ||
       item.body.name !== this.item.body.name ||
       Boolean(item.body.renderers) !== Boolean(this.item.body.renderers)
     ) {
       this.initialBodyExpanded = this.bodyExpanded
       this.body = undefined
+      this.commandHeading = undefined
+    }
+    if (item.kind !== this.item.kind) {
+      this.dispose()
+      this.commandAction = undefined
+      this.outputAction = undefined
+      this.item = item
+      this.createActions()
     }
     this.item = item
     if (this.body) {
@@ -436,13 +699,32 @@ class ActivityItemDisclosure extends Container {
             this.adapter.host.settingsManager.getImageWidthCells(),
           outputPad: pad,
         }
+        let definition = this.item.body.renderers?.() ?? {}
+        const renderCall = definition.renderCall
+        const action = this.commandAction
+        if (renderCall && action)
+          definition = {
+            ...definition,
+            renderCall: (args, theme, context) => {
+              const previous =
+                context.lastComponent instanceof CopyHeading
+                  ? context.lastComponent.component
+                  : undefined
+              const component = renderCall(args, theme, {
+                ...context,
+                lastComponent: previous,
+              })
+              this.commandHeading = new CopyHeading(component, action)
+              return this.commandHeading
+            },
+          }
         this.body = new ToolExecutionComponent(
           this.item.body.name,
           this.item.id,
           this.item.body.args,
           options,
           // Without a definition, Pi's raw renderer ignores output expansion.
-          this.item.body.renderers?.() ?? {},
+          definition,
           this.adapter.host.ui,
           this.item.body.cwd,
         )
@@ -452,8 +734,38 @@ class ActivityItemDisclosure extends Container {
         this.body.setExpanded(this.initialBodyExpanded)
       }
       this.children.push(this.body)
+      if (this.outputAction) this.children.push(this.outputAction)
     }
-    return super.render(width)
+    const rows = super.render(width)
+    this.copyColumns = new Map()
+    if (this.expanded && this.body) {
+      if (this.commandAction && this.commandHeading) {
+        const box = (
+          this.body as unknown as {
+            contentBox: Component & { paddingX: number; paddingY: number }
+          }
+        ).contentBox
+        let top = 1 + box.paddingY
+        for (const child of this.body.children) {
+          if (child === box) break
+          top += child.render(width).length
+        }
+        this.commandAction.row = top + this.commandHeading.actionRow
+        for (let row = 0; row < this.commandAction.height; row++)
+          this.copyColumns.set(
+            this.commandAction.row + row,
+            this.commandHeading.actionRow
+              ? 0
+              : box.paddingX + this.commandAction.column,
+          )
+      }
+      if (this.outputAction) {
+        this.outputAction.row = rows.length - this.outputAction.height
+        for (let row = this.outputAction.row; row < rows.length; row++)
+          this.copyColumns.set(row, 0)
+      }
+    }
+    return rows
   }
 
   contentPadding(row: number) {
@@ -509,6 +821,8 @@ class ActivityItemDisclosure extends Container {
     const expanded = this.bodyExpanded
     const result = super.handleMouse(event)
     if (this.bodyExpanded !== expanded) this.adapter.clearChatSelection()
+    if (result?.target?.component instanceof CopyAction)
+      return { ...result, focusTarget: result.target.component }
     return result
   }
 }
@@ -605,7 +919,9 @@ export class NativeChatHost {
     | RenderGroupHeader
     | ActivityItemDisclosure
     | AgentActivityHeader
+    | CopyAction
   )[] = []
+  private copyStatusOwner: CopyAction | undefined
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -883,13 +1199,6 @@ export class NativeChatHost {
           : [chatRow]
       },
     )
-    this.visibleDisclosures = composed.flatMap(({ component }) =>
-      component instanceof AgentActivityHeader ||
-      component instanceof RenderGroupHeader ||
-      component instanceof ActivityItemDisclosure
-        ? [component]
-        : [],
-    )
     const leaves = composed.map(
       ({ component, occurrence, zoneStart, zoneEnd }) => {
         let rows = component.render(contentWidth)
@@ -942,6 +1251,9 @@ export class NativeChatHost {
           left,
           start,
           top: 0,
+          ...(component instanceof ActivityItemDisclosure
+            ? { copyColumns: component.copyColumns }
+            : {}),
         }
         start += rows.length
         return leaf
@@ -953,15 +1265,33 @@ export class NativeChatHost {
       contentHeight += leaf.rows.length
     }
     this.leaves = leaves
+    this.visibleDisclosures = composed.flatMap<
+      | RenderGroupHeader
+      | ActivityItemDisclosure
+      | AgentActivityHeader
+      | CopyAction
+    >(({ component }) => {
+      if (component instanceof ActivityItemDisclosure) {
+        const controls: (ActivityItemDisclosure | CopyAction)[] = [component]
+        controls.push(...component.actions)
+        return controls
+      }
+      return component instanceof AgentActivityHeader ||
+        component instanceof RenderGroupHeader
+        ? [component]
+        : []
+    })
     if (
       (renderer.getFocusedComponent() instanceof RenderGroupHeader ||
         renderer.getFocusedComponent() instanceof ActivityItemDisclosure ||
-        renderer.getFocusedComponent() instanceof AgentActivityHeader) &&
+        renderer.getFocusedComponent() instanceof AgentActivityHeader ||
+        renderer.getFocusedComponent() instanceof CopyAction) &&
       !this.visibleDisclosures.includes(
         renderer.getFocusedComponent() as
           | RenderGroupHeader
           | ActivityItemDisclosure
-          | AgentActivityHeader,
+          | AgentActivityHeader
+          | CopyAction,
       )
     )
       this.returnToComposer()
@@ -1021,7 +1351,11 @@ export class NativeChatHost {
         if (
           !next ||
           next.rows.length !== old.rows.length ||
-          next.rows.some((line, row) => line !== old.rows[row])
+          next.rows.some(
+            (_, row) =>
+              stripTerminalSequences(this.contentLine(next, row)) !==
+              stripTerminalSequences(this.contentLine(old, row)),
+          )
         ) {
           this.clearSelection(renderer)
           break
@@ -1105,6 +1439,7 @@ export class NativeChatHost {
     const present = new Set(items.map((item) => item.id))
     for (const [id, disclosure] of disclosures)
       if (revealSource && !present.has(id)) {
+        disclosure.dispose()
         this.byComponent.delete(disclosure)
         disclosures.delete(id)
       }
@@ -1339,6 +1674,19 @@ export class NativeChatHost {
     else if (keys.matches(data, "tui.altScreen.pageDown")) this.scrollChat(1)
   }
 
+  copyStatus(action: CopyAction, text?: string, error = false) {
+    if (text) {
+      this.copyStatusOwner = action
+      this.extensionUI.setStatus(
+        "pi-chat.copy",
+        this.extensionUI.theme.fg(error ? "error" : "warning", text),
+      )
+    } else if (this.copyStatusOwner === action) {
+      this.copyStatusOwner = undefined
+      this.extensionUI.setStatus("pi-chat.copy", undefined)
+    }
+  }
+
   focusNearestDisclosure() {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     if (
@@ -1349,6 +1697,7 @@ export class NativeChatHost {
     )
       return
     const nearest = this.visibleDisclosures.findLast((disclosure) => {
+      if (disclosure instanceof CopyAction) return false
       const leaf = this.leaves.find((item) => item.component === disclosure)
       return leaf && this.visibleInterval(leaf)?.start === 0
     })
@@ -1369,11 +1718,19 @@ export class NativeChatHost {
   }
 
   private revealDisclosure(
-    component: RenderGroupHeader | ActivityItemDisclosure | AgentActivityHeader,
+    component:
+      | RenderGroupHeader
+      | ActivityItemDisclosure
+      | AgentActivityHeader
+      | CopyAction,
   ) {
-    const leaf = this.leaves.find((item) => item.component === component)
+    const owner =
+      component instanceof CopyAction
+        ? (component.owner ?? component)
+        : component
+    const leaf = this.leaves.find((item) => item.component === owner)
     if (!leaf) return
-    const top = leaf.top
+    const top = leaf.top + (component instanceof CopyAction ? component.row : 0)
     if (top < this.transcript.scrollTop) this.transcript.scrollTo(top)
     else if (top >= this.transcript.scrollTop + this.viewportHeight)
       this.transcript.scrollTo(top - this.viewportHeight + 1)
@@ -1806,7 +2163,10 @@ export class NativeChatHost {
       index = new AltScreenSearchIndex()
       this.renderedSearch.set(leaf.component, index)
     }
-    const matching = index.search(leaf.rows, hit.query).matches
+    const matching = index.search(
+      leaf.rows.map((_, row) => this.contentLine(leaf, row)),
+      hit.query,
+    ).matches
     const sourceCount = this.searchState?.counts.get(hit.field.owner)
     if (matching.length === sourceCount) return matching[hit.ordinal]?.segments
     if (!hit.field.tool) return undefined
@@ -2114,6 +2474,12 @@ export class NativeChatHost {
     return painted
   }
 
+  private contentLine(leaf: Leaf, row: number) {
+    const line = leaf.rows[row] ?? ""
+    const end = leaf.copyColumns?.get(row)
+    return end === undefined ? line : sliceByColumn(line, 0, end, true)
+  }
+
   private contentBounds(leaf: Leaf, row: number) {
     const { component, occurrence } = leaf
     const padding =
@@ -2126,7 +2492,16 @@ export class NativeChatHost {
           ? this.host.outputPad
           : 0
     const start = Math.min(this.layoutWidth, leaf.left + padding)
-    return { start, end: Math.max(start, this.layoutWidth - padding) }
+    return {
+      start,
+      end: Math.max(
+        start,
+        Math.min(
+          this.layoutWidth - padding,
+          leaf.copyColumns?.get(row) ?? this.layoutWidth,
+        ),
+      ),
+    }
   }
 
   private pointAt(x: number, y: number): SelectionPoint {
@@ -2190,6 +2565,7 @@ export class NativeChatHost {
       const first = Math.max(bounds.start.row, leaf.start)
       const last = Math.min(bounds.end.row, leaf.start + leaf.rows.length - 1)
       for (let row = first; row <= last; row++) {
+        if (leaf.copyColumns?.get(row - leaf.start) === 0) continue
         const line = leaf.rows[row - leaf.start]!
         const range = columns.call(renderer, line, row, bounds)
         const content = this.contentBounds(leaf, row - leaf.start)
@@ -2340,7 +2716,7 @@ export class NativeChatHost {
       if (!this.ownsRenderer(renderer) || point.scrollView !== this.transcript)
         return original.call(renderer, point)
       const leaf = this.leafAt(point.row)
-      return leaf?.rows[point.row - leaf.start] ?? ""
+      return leaf ? this.contentLine(leaf, point.row - leaf.start) : ""
     })
     bind(
       "updateSelectionAutoScroll",
@@ -3040,6 +3416,8 @@ export class NativeChatHost {
             this.byComponent.clear()
             this.thoughts.clear()
             this.renderGroups.clear()
+            for (const items of this.activityDisclosures.values())
+              for (const item of items.values()) item.dispose()
             this.activityDisclosures.clear()
             this.visibleDisclosures = []
             this.streaming = undefined
@@ -3479,6 +3857,8 @@ export class NativeChatHost {
 
   dispose() {
     if (!this.active) return
+    for (const items of this.activityDisclosures.values())
+      for (const item of items.values()) item.dispose()
     if (this.host.fullscreenLayoutRoot === this.root)
       this.transcript.setScrollbar("hidden")
     this.active = false

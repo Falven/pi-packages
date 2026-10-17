@@ -1228,11 +1228,26 @@ test("copy uses the native selected text while a disclosure is focused", async (
   t.mock.method(clipboard, "setText", async (text: string) => {
     copied = text
   })
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
+  const saved = remote.map((name) => process.env[name])
+  t.after(() =>
+    remote.forEach((name, index) => {
+      if (saved[index] === undefined) delete process.env[name]
+      else process.env[name] = saved[index]
+    }),
+  )
+  for (const name of remote) delete process.env[name]
   const sendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 44,
     settings: { fullscreenCopyOnSelect: false },
+    keybindings: {
+      "tui.select.up": "ctrl+k",
+      "tui.select.down": "ctrl+j",
+      "tui.select.confirm": "ctrl+y",
+      "tui.select.cancel": "ctrl+q",
+    },
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(
@@ -1262,6 +1277,100 @@ test("copy uses the native selected text while a disclosure is focused", async (
   await host.key("\x1bg")
   await host.key("\x18")
   await t.waitFor(() => assert.equal(copied, "focused-copy"))
+  await host.key("\x11")
+  const script = "printf 'selection source\\n  output tail\\n'"
+  host.queueResponse(
+    {
+      event: {
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: "assistant",
+              tool_calls: [
+                {
+                  index: 0,
+                  id: "copy-command",
+                  type: "function",
+                  function: {
+                    name: "bash",
+                    arguments: JSON.stringify({ command: script }),
+                  },
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+    },
+    toolFinish,
+    done,
+    end,
+  )
+  await host.type("Copy command and output")
+  await host.key("\r")
+  await host.settled()
+  await host.key("\x0f")
+  await host.frame()
+  const outputLines = host.screenLines().map(stripTerminalSequences)
+  const outputRow = outputLines.findIndex(
+    (line) => line.trim() === "selection source",
+  )
+  assert(outputRow >= 0)
+  const outputStart = outputLines[outputRow]!.indexOf("selection source") + 1
+  await host.key(`\x1b[<0;${outputStart};${outputRow + 1}M`)
+  await host.key(`\x1b[<32;${outputStart + 16};${outputRow + 1}M`)
+  await host.key(`\x1b[<0;${outputStart + 16};${outputRow + 1}m`)
+  await host.key("\x11")
+  await host.key("\x1bg")
+  await host.frame()
+  await host.key("\x0a")
+  await host.frame()
+  const commandAction = host
+    .screenLines()
+    .find((line) => line.includes("[Copy command]"))
+  assert(
+    commandAction?.includes(host.ui.theme.getBgAnsi("selectedBg")),
+    "Configured navigation visibly focuses the command action",
+  )
+  await host.key("\x19")
+  await t.waitFor(() => assert.equal(copied, script))
+  await host.key("\x0a")
+  await host.key("\x19")
+  await t.waitFor(() =>
+    assert.equal(copied, "selection source\n  output tail\n"),
+  )
+  await host.frame()
+  await host.key("\x18")
+  await t.waitFor(() => assert.equal(copied, "selection source"))
+  await host.key("\x11")
+  host.terminal.resize(120, 44)
+  await host.frame()
+  const wide = host.screenLines().map(stripTerminalSequences)
+  const heading = wide.findIndex((line) => line.includes(`$ ${script}`))
+  const footer = wide.findIndex(
+    (line, index) =>
+      index > heading && /^\s*\[(?:Copied|Copy output)\]\s*$/.test(line),
+  )
+  assert(heading >= 0 && footer > heading)
+  await host.key(`\x1b[<0;${wide[heading]!.indexOf("$") + 1};${heading + 1}M`)
+  await host.key(`\x1b[<32;119;${footer + 1}M`)
+  await host.key(`\x1b[<0;119;${footer + 1}m`)
+  await host.key("\x18")
+  await t.waitFor(() => {
+    assert.match(copied, /\n  output tail/)
+    assert.doesNotMatch(copied, /\[Copy (?:command|output)\]|\[Copied\]/)
+  })
+  await host.key("\x1bg")
+  await host.key("\x0a")
+  await host.key("\x0f")
+  assert.doesNotMatch(
+    await host.frame(),
+    /\[Copy (?:command|output)\]|\[Copied\]/,
+  )
+  await host.type("draft after copying")
+  assert.match(await host.frame(), /draft after copying/)
 })
 
 test("collapsing a render group clears selected tool output before native copy", async (t) => {

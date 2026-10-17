@@ -133,6 +133,11 @@ export class ActivityAdapter {
     if (failed) {
       for (const item of items) {
         if (item.kind !== "output") continue
+        failed.body.copyContent = [
+          ...(failed.body.copyContent ?? failed.body.result?.content ?? []),
+          ...(item.body.result?.content ?? []),
+        ]
+        failed.body.copyOmitted ||= item.body.availability === "omitted"
         failed.body.result = {
           isError: true,
           content: [

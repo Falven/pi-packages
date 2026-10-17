@@ -36,6 +36,9 @@ export type ActivityItem = {
     args: unknown
     cwd: string
     result: ActivityResult | undefined
+    // Original text before the adapter adds display-only failure/omission labels.
+    copyContent?: ActivityResult["content"]
+    copyOmitted?: boolean
     renderers?: () => ConstructorParameters<typeof ToolExecutionComponent>[4]
     availability?: "omitted"
   }
