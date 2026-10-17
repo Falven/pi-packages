@@ -1,4 +1,4 @@
-# 15: Unwrap eligible completed singleton render groups
+# 17: Unwrap eligible completed singleton render groups
 
 **What to build:** Let users inspect an eligible inactive singleton directly through its activity-item disclosure, preserving the independent native preview/full-output control. Apply the complete pinned Codex eligibility rule to supported Pi facts in live and retained conversations. Preserve wrappers for excluded or unresolved groups and integrate the verified behavior into main.
 
