@@ -1,11 +1,9 @@
-import {
-  CopyAction,
-  CopyActions,
-  CopyHeading,
-  commandPayload,
-  outputPayload,
-  responsePayload,
-} from "pi-copy"
+import type {
+  CopyControl,
+  CopyControls,
+  CopyProvider,
+  ItemCopyControls,
+} from "./copy-contract.ts"
 import {
   InteractiveMode,
   ToolExecutionComponent,
@@ -17,10 +15,8 @@ import {
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent"
 import {
-  Box,
   Container,
   HStack,
-  MouseRegion,
   ScrollView,
   Spacer,
   Text,
@@ -45,7 +41,6 @@ import { GroupSummaries } from "./group-summaries.ts"
 import { ActivityItems } from "./activity-items.ts"
 import { itemSummary } from "./item-summary.ts"
 import {
-  argumentsOf,
   type ActivityItem,
   type ActivityResult,
 } from "./tool-adapters/types.ts"
@@ -335,23 +330,6 @@ type NativeToolPresenter = Component & {
   setExpanded(expanded: boolean): void
 }
 
-type NativeToolLayout = {
-  contentBox: Box
-  selfRenderContainer: Container
-  callRendererComponent?: Component
-  resultRendererComponent?: Component
-}
-
-type NativeComponentLayout = {
-  paddingX?: number
-  paddingY?: number
-  bgFn?: (text: string) => string
-  child?: Component
-  mouseLayout?: {
-    children: { component: Component; height: number }[]
-  }
-}
-
 function disclosureLine(
   width: number,
   outputPad: number,
@@ -422,39 +400,19 @@ class ActivityItemDisclosure extends Container {
   private body: ToolExecutionComponent | undefined
   private initialBodyExpanded = false
   private header = new Text("", 0, 0)
-  private commandAction: CopyAction | undefined
-  private outputAction: CopyAction | undefined
-  private outputContinuation: Box | undefined
-  copyColumns = new Map<number, number>()
+  private copy: ItemCopyControls | undefined
+  copyColumns: ReadonlyMap<number, number> = new Map()
 
   get actions() {
-    return this.expanded
-      ? [this.commandAction, this.outputAction].filter(
-          (action): action is CopyAction => Boolean(action?.enabled),
-        )
-      : []
+    return this.expanded ? (this.copy?.actions ?? []) : []
   }
 
   private createActions() {
-    if (this.item.kind === "command")
-      this.commandAction = new CopyAction(
-        this.adapter.copyActions,
-        () => commandPayload(argumentsOf(this.item.body.args)["command"]),
-        false,
-        this,
-      )
-    if (this.item.kind === "command" || this.item.kind === "edit")
-      this.outputAction = new CopyAction(
-        this.adapter.copyActions,
-        () => outputPayload(this.item),
-        false,
-        this,
-      )
+    this.copy = this.adapter.copy?.item(() => this.item, this)
   }
 
   dispose() {
-    this.commandAction?.dispose()
-    this.outputAction?.dispose()
+    this.copy?.dispose()
   }
 
   private result() {
@@ -488,12 +446,10 @@ class ActivityItemDisclosure extends Container {
     ) {
       this.initialBodyExpanded = this.bodyExpanded
       this.body = undefined
-      this.outputContinuation = undefined
     }
     if (item.kind !== this.item.kind) {
       this.dispose()
-      this.commandAction = undefined
-      this.outputAction = undefined
+      this.copy = undefined
       this.item = item
       this.createActions()
     }
@@ -519,82 +475,6 @@ class ActivityItemDisclosure extends Container {
   setBodyExpanded(expanded: boolean) {
     this.initialBodyExpanded = expanded
     this.body?.setExpanded(expanded)
-  }
-
-  private placeOutputAction() {
-    const action = this.outputAction
-    if (!action || !this.body) return
-    const body = this.body as unknown as NativeToolLayout
-    if (this.body.children.includes(body.contentBox)) {
-      if (!body.contentBox.children.includes(action))
-        body.contentBox.addChild(action)
-      return
-    }
-    const panel = body.callRendererComponent
-    if (!(panel instanceof Box)) return
-    const container = body.selfRenderContainer
-    if (
-      this.outputContinuation &&
-      container.children.includes(this.outputContinuation)
-    )
-      return
-    const result = body.resultRendererComponent
-    const resultIndex = container.children.findIndex(
-      (component) =>
-        (component as unknown as NativeComponentLayout).child === result,
-    )
-    if (
-      result instanceof Container &&
-      result.children.length &&
-      resultIndex >= 0
-    ) {
-      // Native edits can render error text after their own panel. Continue that
-      // panel with the original result component, preserving its native inset.
-      const { paddingX, paddingY, bgFn } =
-        panel as unknown as NativeComponentLayout
-      const footer = new Box(paddingX, 0)
-      footer.addChild(action)
-      const continuation = new Box(0, 0, bgFn)
-      continuation.addChild(container.children[resultIndex]!)
-      continuation.addChild(footer)
-      continuation.addChild(new Spacer(paddingY ?? 0))
-      container.children[resultIndex] = continuation
-      this.outputContinuation = continuation
-    } else if (!panel.children.includes(action)) panel.addChild(action)
-  }
-
-  private recordCopyGeometry(component: Component, row = 0, column = 0) {
-    const layout = component as unknown as NativeComponentLayout
-    if (component instanceof CopyAction || component instanceof CopyHeading) {
-      const action =
-        component instanceof CopyAction ? component : component.action
-      const headingRow =
-        component instanceof CopyHeading ? component.actionRow : 0
-      action.row = row + headingRow
-      for (let offset = 0; offset < action.height; offset++)
-        this.copyColumns.set(
-          action.row + offset,
-          component instanceof CopyAction || headingRow
-            ? 0
-            : column + action.column,
-        )
-    } else if (component instanceof MouseRegion && layout.child) {
-      this.recordCopyGeometry(layout.child, row, column)
-    } else {
-      if (component === this.body) {
-        const body = component as unknown as NativeToolLayout
-        if (!this.body.children.includes(body.contentBox)) {
-          this.recordCopyGeometry(body.selfRenderContainer, row + 1, column)
-          return
-        }
-      }
-      row += layout.paddingY ?? 0
-      column += layout.paddingX ?? 0
-      for (const child of layout.mouseLayout?.children ?? []) {
-        this.recordCopyGeometry(child.component, row, column)
-        row += child.height
-      }
-    }
   }
 
   override render(width: number) {
@@ -626,24 +506,8 @@ class ActivityItemDisclosure extends Container {
             this.adapter.host.settingsManager.getImageWidthCells(),
           outputPad: pad,
         }
-        let definition = this.item.body.renderers?.() ?? {}
-        const renderCall = definition.renderCall
-        const action = this.commandAction
-        if (renderCall && action)
-          definition = {
-            ...definition,
-            renderCall: (args, theme, context) => {
-              const previous =
-                context.lastComponent instanceof CopyHeading
-                  ? context.lastComponent.component
-                  : undefined
-              const component = renderCall(args, theme, {
-                ...context,
-                lastComponent: previous,
-              })
-              return new CopyHeading(component, action)
-            },
-          }
+        const renderers = this.item.body.renderers?.() ?? {}
+        const definition = this.copy?.wrap(renderers) ?? renderers
         this.body = new ToolExecutionComponent(
           this.item.body.name,
           this.item.id,
@@ -659,12 +523,13 @@ class ActivityItemDisclosure extends Container {
           this.body.updateResult(result, this.item.status === "running")
         this.body.setExpanded(this.initialBodyExpanded)
       }
-      this.placeOutputAction()
+      this.copy?.mount(this.body)
       this.children.push(this.body)
     }
     const rows = super.render(width)
-    this.copyColumns = new Map()
-    if (this.expanded && this.outputAction) this.recordCopyGeometry(this)
+    this.copyColumns = this.expanded
+      ? (this.copy?.measure(this) ?? new Map())
+      : new Map()
     return rows
   }
 
@@ -721,14 +586,18 @@ class ActivityItemDisclosure extends Container {
     const expanded = this.bodyExpanded
     const result = super.handleMouse(event)
     if (this.bodyExpanded !== expanded) this.adapter.clearChatSelection()
-    if (result?.target?.component instanceof CopyAction)
+    if (result?.target && this.adapter.isCopyAction(result.target.component))
       return { ...result, focusTarget: result.target.component }
     return result
   }
 }
 
 export class NativeChatHost {
-  readonly copyActions: CopyActions
+  readonly copy: CopyControls | undefined
+
+  isCopyAction(value: unknown): value is CopyControl {
+    return this.copy?.isAction(value) ?? false
+  }
   readonly host: NativeMode
   get extensionUI(): ExtensionContext["ui"] {
     return this.host.runtimeHost.session.extensionRunner.getUIContext()
@@ -822,12 +691,12 @@ export class NativeChatHost {
   >()
   private readonly thoughts = new Map<Occurrence, Thought>()
   private readonly answerParts = new WeakMap<Component, Container>()
-  private readonly responseActions = new Map<Occurrence, CopyAction>()
+  private readonly responseActions = new Map<Occurrence, CopyControl>()
   private visibleDisclosures: (
     | RenderGroupHeader
     | ActivityItemDisclosure
     | AgentActivityHeader
-    | CopyAction
+    | CopyControl
   )[] = []
   private unsubscribe?: () => void
   private source: Occurrence | undefined
@@ -858,15 +727,16 @@ export class NativeChatHost {
     host: NativeMode,
     readonly activityItems: ActivityItems,
     private readonly working: WorkingLabel,
+    copyProvider?: CopyProvider,
   ) {
     this.host = host
-    this.copyActions = new CopyActions({
+    this.copy = copyProvider?.({
       theme: () => this.extensionUI.theme,
       outputPad: () => host.outputPad,
       handleInput: (data, activate) =>
         this.handleDisclosureInput(data, activate),
       requestRender: () => host.ui.requestRender(),
-      setStatus: (text) => this.extensionUI.setStatus("pi-chat.copy", text),
+      setStatus: (text) => this.extensionUI.setStatus("pi-copy", text),
     })
     this.outputPad = host.outputPad
     this.imageSettings = {
@@ -906,6 +776,7 @@ export class NativeChatHost {
     host: InteractiveMode,
     activityItems: ActivityItems,
     working: WorkingLabel,
+    copyProvider?: CopyProvider,
   ): NativeChatHost {
     const mode = host as unknown as NativeMode
     if (
@@ -915,7 +786,12 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(mode, activityItems, working)
+    const adapter = new NativeChatHost(
+      mode,
+      activityItems,
+      working,
+      copyProvider,
+    )
     try {
       requireMethod(
         mode.setEditorWorkingStatusIndicator,
@@ -1251,7 +1127,7 @@ export class NativeChatHost {
     const leaves = composed.map(
       ({ component, occurrence, zoneStart, zoneEnd }) => {
         let rows = component.render(contentWidth)
-        if (component instanceof CopyAction) {
+        if (this.isCopyAction(component)) {
           // Keep the separator with the control, outside selected response text.
           component.row = stripTerminalSequences(previousLine).trim() ? 1 : 0
           if (component.row) rows = ["", ...rows]
@@ -1308,7 +1184,7 @@ export class NativeChatHost {
           top: 0,
           ...(component instanceof ActivityItemDisclosure
             ? { copyColumns: component.copyColumns }
-            : component instanceof CopyAction
+            : this.isCopyAction(component)
               ? { copyColumns: new Map(rows.map((_, row) => [row, 0])) }
               : {}),
         }
@@ -1326,16 +1202,16 @@ export class NativeChatHost {
       | RenderGroupHeader
       | ActivityItemDisclosure
       | AgentActivityHeader
-      | CopyAction
+      | CopyControl
     >(({ component }) => {
       if (component instanceof ActivityItemDisclosure) {
-        const controls: (ActivityItemDisclosure | CopyAction)[] = [component]
+        const controls: (ActivityItemDisclosure | CopyControl)[] = [component]
         controls.push(...component.actions)
         return controls
       }
       return component instanceof AgentActivityHeader ||
         component instanceof RenderGroupHeader ||
-        (component instanceof CopyAction && component.enabled)
+        (this.isCopyAction(component) && component.enabled)
         ? [component]
         : []
     })
@@ -1344,7 +1220,7 @@ export class NativeChatHost {
       (focused instanceof RenderGroupHeader ||
         focused instanceof ActivityItemDisclosure ||
         focused instanceof AgentActivityHeader ||
-        focused instanceof CopyAction) &&
+        this.isCopyAction(focused)) &&
       !this.visibleDisclosures.includes(focused)
     ) {
       const surviving = unwrapped.get(focused)
@@ -1769,12 +1645,12 @@ export class NativeChatHost {
       return
     const nearest =
       this.visibleDisclosures.findLast((disclosure) => {
-        if (disclosure instanceof CopyAction) return false
+        if (this.isCopyAction(disclosure)) return false
         const leaf = this.leaves.find((item) => item.component === disclosure)
         return leaf && this.visibleInterval(leaf)?.start === 0
       }) ??
       this.visibleDisclosures.findLast((disclosure) => {
-        if (!(disclosure instanceof CopyAction)) return false
+        if (!this.isCopyAction(disclosure)) return false
         const leaf = this.leaves.find(
           (item) => item.component === (disclosure.owner ?? disclosure),
         )
@@ -1806,15 +1682,14 @@ export class NativeChatHost {
       | RenderGroupHeader
       | ActivityItemDisclosure
       | AgentActivityHeader
-      | CopyAction,
+      | CopyControl,
   ) {
-    const owner =
-      component instanceof CopyAction
-        ? (component.owner ?? component)
-        : component
+    const owner = this.isCopyAction(component)
+      ? (component.owner ?? component)
+      : component
     const leaf = this.leaves.find((item) => item.component === owner)
     if (!leaf) return
-    const top = leaf.top + (component instanceof CopyAction ? component.row : 0)
+    const top = leaf.top + (this.isCopyAction(component) ? component.row : 0)
     if (top < this.transcript.scrollTop) this.transcript.scrollTo(top)
     else if (top >= this.transcript.scrollTop + this.viewportHeight)
       this.transcript.scrollTo(top - this.viewportHeight + 1)
@@ -1934,32 +1809,27 @@ export class NativeChatHost {
         final.length &&
         agentActivity.settled &&
         source &&
-        !answers.has(source)
+        !answers.has(source) &&
+        this.copy
       ) {
         answers.add(source)
         let action = this.responseActions.get(source)
         if (!action) {
-          action = new CopyAction(
-            this.copyActions,
-            () => {
-              const activity = this.agentActivity.find(source)
-              const message = source.message
-              return responsePayload(
-                activity?.settled &&
-                  this.agentActivity.isFinalMessage(source, activity) &&
-                  message?.role === "assistant"
-                  ? message.content.flatMap((part, contentIndex) =>
-                      part.type === "text" &&
-                      (!activity.finalParts ||
-                        activity.finalParts.includes(contentIndex))
-                        ? [part.text]
-                        : [],
-                    )
-                  : [],
-              )
-            },
-            true,
-          )
+          action = this.copy.response(() => {
+            const activity = this.agentActivity.find(source)
+            const message = source.message
+            return activity?.settled &&
+              this.agentActivity.isFinalMessage(source, activity) &&
+              message?.role === "assistant"
+              ? message.content.flatMap((part, contentIndex) =>
+                  part.type === "text" &&
+                  (!activity.finalParts ||
+                    activity.finalParts.includes(contentIndex))
+                    ? [part.text]
+                    : [],
+                )
+              : []
+          })
           this.responseActions.set(source, action)
         }
         result.push({ component: action, tool: false })

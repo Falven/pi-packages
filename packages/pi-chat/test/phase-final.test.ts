@@ -12,6 +12,8 @@ import {
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 function writableClipboard(
   clipboard: NativeClipboard | undefined,
 ): asserts clipboard is NativeClipboard &
@@ -88,7 +90,7 @@ async function submit(
 
 test("phase-bearing final text collapses identical commentary while it streams", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -213,7 +215,7 @@ test("the subscription Responses API carries the same explicit final phase over 
     )?.api
   assert(providerApi)
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi,
     settings: { transport: "sse" },
     rows: 36,
@@ -241,7 +243,7 @@ test("the subscription Responses API carries the same explicit final phase over 
 
 test("a failed stream keeps an established partial final and Pi's native error notice", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -274,7 +276,7 @@ test("a failed stream keeps an established partial final and Pi's native error n
 
 test("a phase correction removes an explicitly closed activity disclosure and restores composer focus", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     keybindings: { "app.tools.expand": "ctrl+e" },
@@ -321,7 +323,7 @@ test("a phase correction removes an explicitly closed activity disclosure and re
 
 test("cancellation removes an explicitly closed activity disclosure and restores composer focus", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     keybindings: { "app.tools.expand": "ctrl+e" },
@@ -367,7 +369,7 @@ test("cancellation removes an explicitly closed activity disclosure and restores
 
 test("a Responses message without phase does not collapse early", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -405,7 +407,7 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
   )
   for (const name of remote) delete process.env[name]
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -516,7 +518,7 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
 
 test("commentary-only phase evidence prevents settled-message fallback", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -537,7 +539,7 @@ test("commentary-only phase evidence prevents settled-message fallback", async (
 
 test("an explicit final remains selected when the response is incomplete", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -569,7 +571,7 @@ test("an explicit final remains selected when the response is incomplete", async
 
 test("individual and configured global choices persist during a final stream and settlement", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     keybindings: { "app.tools.expand": "ctrl+e" },
@@ -627,7 +629,7 @@ test("individual and configured global choices persist during a final stream and
 for (const expanded of [false, true])
   test(`requalification restores an explicitly ${expanded ? "open" : "closed"} parent without changing descendant choices`, async (t) => {
     const host = await openNativeHost(t, {
-      extensionPaths: [chat],
+      extensionPaths: [copyExtension, chat],
       providerApi: "openai-responses",
       rows: 44,
       keybindings: { "app.tools.expand": "ctrl+e" },
@@ -736,7 +738,7 @@ for (const expanded of [false, true])
 
 test("Find during final revocation replaces a dormant closure and permits later manual closure", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -794,7 +796,7 @@ test("Find during final revocation replaces a dormant closure and permits later 
 
 test("an exactly completed blank final collapses prior activity and preserves native errors on replay", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -898,7 +900,7 @@ test("phase-only blank history leaves activity visible without settled qualifica
   assert(sessionFile)
   await source.close()
   const restored = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     sessionFile,
     directory: source.directory,
     rows: 32,
@@ -916,7 +918,7 @@ test("phase-only blank history leaves activity visible without settled qualifica
 
 test("a completed blank final cannot collapse across an unidentified native boundary", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 38,
   })
@@ -979,7 +981,7 @@ test("a completed blank final cannot collapse across an unidentified native boun
 
 test("a blank replacement revokes a provisional final", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
   })
@@ -1005,7 +1007,7 @@ test("a blank replacement revokes a provisional final", async (t) => {
 
 test("native message replacement cannot select a reordered commentary part as final", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     extensionFactories: [
@@ -1056,7 +1058,7 @@ test("native message replacement cannot select a reordered commentary part as fi
 
 test("a new same-text block without native signature cannot inherit final phase", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     extensionFactories: [
@@ -1112,7 +1114,7 @@ test("a new same-text block without native signature cannot inherit final phase"
 test("an agent retry discards stale phase evidence and retains the enclosing choice", async (t) => {
   let turns = 0
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [copyExtension, chat],
     providerApi: "openai-responses",
     rows: 36,
     settings: {

@@ -19,6 +19,8 @@ import { openNativeHost } from "../../../fixtures/native-host.ts"
 import { installReplacement, observed } from "./fixtures/root-owner.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 const ownedRoot = () => observed.host?.fullscreenLayoutRoot
 const readDelta = (id: string, path: string) => ({
   event: {
@@ -125,7 +127,7 @@ test("native chat right-aligns user messages and keeps the answer, composer, and
   )
   for (const name of remote) delete process.env[name]
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     settings: { fullscreenCopyOnSelect: false, outputPad: 0 },
   })
   await host.type("Hello")
@@ -213,7 +215,7 @@ test("native Markdown transforms still apply without changing stored or requeste
   const prose =
     "Aligned **界** content retains the full native wrapping width and Markdown layout while the user text moves to the right within its bar.\n\n```text\n  kept-indent\n```"
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     settings: { fullscreenCopyOnSelect: false },
     keybindings: { "tui.altScreen.previousPrompt": "alt+up" },
@@ -295,7 +297,7 @@ test("native Markdown transforms still apply without changing stored or requeste
 
 test("switching sessions rebuilds the visible native conversation", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
   })
   await host.type("First session")
@@ -317,7 +319,9 @@ test("switching sessions rebuilds the visible native conversation", async (t) =>
 })
 
 test("reloading extensions rebinds the current native conversation", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat] })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+  })
   await host.type("Before reload")
   await host.key("\r")
   await host.settled()
@@ -336,7 +340,7 @@ test("reloading extensions rebinds the current native conversation", async (t) =
 
 test("Pi's compacted replay remains canonical in the owned view", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 40,
   })
@@ -359,7 +363,7 @@ test("Pi's compacted replay remains canonical in the owned view", async (t) => {
 
 test("native tool calls and results survive session replay without rerunning the tool", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
   })
@@ -415,7 +419,7 @@ test("native tool calls and results survive session replay without rerunning the
 
 test("consecutive native calls start as one closed group and open from the composer", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     onMount: (interactive) => {
       const mode = interactive as unknown as {
@@ -518,7 +522,7 @@ test("consecutive native calls start as one closed group and open from the compo
 
 test("a finished call retains choices while arriving groups and items inherit native expansion", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 60,
     keybindings: { "app.tools.expand": "ctrl+e" },
   })
@@ -617,7 +621,7 @@ test("a completed singleton keeps its independent item and native controls", asy
     copied = text
   })
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 28,
     settings: { fullscreenCopyOnSelect: false },
     keybindings: { "tui.altScreen.top": "home" },
@@ -762,7 +766,7 @@ test("a completed singleton keeps its independent item and native controls", asy
 test("commentary between model iterations separates render groups in source order", async (t) => {
   let noticeBetweenCalls = false
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     settings: { hideThinkingBlock: true },
     extensionFactories: [
@@ -904,7 +908,10 @@ test("commentary between model iterations separates render groups in source orde
 })
 
 test("a later assistant's trailing prose follows consecutive calls", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 44 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 44,
+  })
   await writeFile(join(host.directory, "one.txt"), "first")
   await writeFile(join(host.directory, "two.txt"), "second")
   host.queueResponse(readDelta("first", "one.txt"), toolFinish, done, end)
@@ -939,7 +946,7 @@ test("a later assistant's trailing prose follows consecutive calls", async (t) =
 
 test("native Hide thinking controls whether reasoning separates render groups", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     settings: { hideThinkingBlock: true, outputPad: 0 },
     keybindings: {
@@ -1022,7 +1029,7 @@ test("native Hide thinking controls whether reasoning separates render groups", 
 
 test("remapped selector keys navigate groups and cancel returns to the composer", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     keybindings: {
       "tui.select.up": "ctrl+k",
@@ -1104,7 +1111,7 @@ test("remapped selector keys navigate groups and cancel returns to the composer"
 test("disclosure focus enters the group visible in scrollback", async (t) => {
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 19,
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
@@ -1159,7 +1166,7 @@ test("disclosure focus enters the group visible in scrollback", async (t) => {
 test("group pointer toggles retain native tool clicks and overlay focus", async (t) => {
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     settings: { outputPad: 0 },
     onMount: (interactive) => {
@@ -1330,7 +1337,7 @@ test("copy uses the native selected text while a disclosure is focused", async (
   for (const name of remote) delete process.env[name]
   const sendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     settings: { fullscreenCopyOnSelect: false },
     keybindings: {
@@ -1472,7 +1479,7 @@ test("collapsing a render group clears selected tool output before native copy",
     copied = text
   })
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     settings: { fullscreenCopyOnSelect: false },
   })
@@ -1506,7 +1513,7 @@ test("custom renderers and failed calls keep a manually opened group", async (t)
   let resultPresenters = 0
   let invalidateResult: (() => void) | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     extensionFactories: [
       (pi) =>
@@ -1648,7 +1655,7 @@ test("native custom renderers keep equal occurrences distinct", async (t) => {
   const sendRef: { current?: () => void } = {}
   const appendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     extensionFactories: [
@@ -1755,7 +1762,9 @@ test("native custom renderers keep equal occurrences distinct", async (t) => {
 })
 
 test("native shell output remains a persisted standalone conversation row", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat] })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+  })
   await host.type("!printf ShellOwned")
   await host.key("\r")
   await t.waitFor(() => {
@@ -1775,7 +1784,9 @@ test("native shell output remains a persisted standalone conversation row", asyn
 })
 
 test("shell output queued during streaming joins its native row after persistence", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat] })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+  })
   host.queueResponse(
     {
       event: {
@@ -1823,7 +1834,7 @@ test("shell output queued during streaming joins its native row after persistenc
 
 test("regular mode keeps native history and switching to fullscreen mounts owned chat", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     tuiMode: "regular",
   })
   await host.type("Regular mode")
@@ -1849,7 +1860,7 @@ test("a prior fullscreen owner prevents activation without losing its root", asy
   observed.notifications.length = 0
   observed.errors.length = 0
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     onMount: (interactive) => {
       const mode = interactive as unknown as {
         showError(message: string): void
@@ -1884,7 +1895,7 @@ for (const hook of ["getSelectionSourceLine", "getSelectionColumns"])
       let currentRoot: (() => unknown) | undefined
       let restore: (() => void) | undefined
       const host = await openNativeHost(t, {
-        extensionPaths: [chat],
+        extensionPaths: [chat, copyExtension],
         onMount: (interactive) => {
           const mode = interactive as unknown as {
             fullscreenLayoutRoot: unknown
@@ -1938,7 +1949,7 @@ test("cleanup leaves a later fullscreen owner's replacement intact", async (t) =
   let interactive: Parameters<typeof installReplacement>[0] | undefined
   let customEntryMethod: unknown
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     settings: { fullscreenScrollbar: "always" },
     onMount: (mode) => {
       interactive = mode
@@ -1967,7 +1978,7 @@ test("page navigation scrolls native chat while the composer stays usable", asyn
   const sendRef: { current?: () => void } = {}
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 16,
     settings: { fullscreenScrollbar: "always" },
     onMount: (interactive) => {
@@ -2075,7 +2086,7 @@ test("selecting through offscreen native rows copies Unicode through Pi's clipbo
   })
   const sendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 17,
     settings: { fullscreenScrollbar: "always", outputPad: 0 },
     keybindings: { "tui.altScreen.top": "home" },
@@ -2212,7 +2223,7 @@ test("message copy prefers a retained selection and resize clears it", async (t)
   })
   const sendRef: { current?: () => void } = {}
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 20,
     settings: { fullscreenCopyOnSelect: false },
     extensionFactories: [
@@ -2260,7 +2271,7 @@ test("changing selected rendered content clears the native selection", async (t)
   const sendRef: { current?: () => void } = {}
   let rendered: Text | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 20,
     settings: { fullscreenCopyOnSelect: false },
     extensionFactories: [
@@ -2304,7 +2315,7 @@ test("native child input keeps source coordinates while padding routes wheels to
   let childHasRoom = true
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 17,
     settings: { outputPad: 0, fullscreenScrollbar: "hidden" },
     onMount: (interactive) => {
@@ -2413,7 +2424,7 @@ test("reflow keeps the first visible native occurrence and following end", async
   let prelude: Text | undefined
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 18,
     onMount: (interactive) => {
       renderer = (interactive as unknown as { renderer: TuiAltScreen }).renderer
@@ -2474,7 +2485,7 @@ test("dragging at the chat edge reveals offscreen rows for selection", async (t)
   const sendRef: { current?: () => void } = {}
   let renderer: TuiAltScreen | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 16,
     keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },

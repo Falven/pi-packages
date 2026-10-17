@@ -12,6 +12,8 @@ import {
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 function assertWritableClipboard(
   clipboard: NativeClipboard | undefined,
 ): asserts clipboard is NativeClipboard &
@@ -56,7 +58,7 @@ const done = { event: "[DONE]" }
 test("settled agent activity hides the earlier identical text and retains the final occurrence", async (t) => {
   const appendNotice = { current: () => {} }
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     extensionFactories: [
       (pi) => {
@@ -158,7 +160,7 @@ test("settled agent activity hides the earlier identical text and retains the fi
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
   const appendFinalNotice = { current: () => {} }
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 52,
     keybindings: { "app.tools.expand": "ctrl+e" },
     settings: { hideThinkingBlock: true },
@@ -312,7 +314,10 @@ test("identical delivered steering and follow-up retain separate request relatio
 })
 
 test("without provider phase evidence agent activity stays visible until the final stream settles", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 34 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 34,
+  })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
     delta("Earlier commentary", "one.txt"),
@@ -347,7 +352,7 @@ test("native user replacement preserves the delivered request relationship and p
     { type: "text" as const, text: "Forwarded first part" },
   ]
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 30,
     extensionFactories: [
       (pi) => {
@@ -395,7 +400,7 @@ test("native user replacement preserves the delivered request relationship and p
 
 test("a settled terminal assistant keeps its native thoughts in agent activity and its text as one answer", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 38,
     keybindings: { "tui.altScreen.bottom": "end" },
     settings: { hideThinkingBlock: false },
@@ -474,7 +479,7 @@ test("all terminal text parts share one answer when a native extension interleav
   const first = "First answer part\n\n```ts\n  const one = 1\n```\n"
   const last = "\n- Last answer part\n- [Link](https://example.com)\n"
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 40,
     settings: { hideThinkingBlock: false },
     extensionFactories: [
@@ -557,7 +562,7 @@ test("all terminal text parts share one answer when a native extension interleav
 
 test("individual activity toggles preserve bodies and configured global expansion sets every disclosure", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "app.tools.expand": "ctrl+e" },
   })
@@ -626,7 +631,10 @@ test("individual activity toggles preserve bodies and configured global expansio
 })
 
 test("cancelling a partial final leaves agent activity expanded", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 32,
+  })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
     delta("Before cancellation", "one.txt"),
@@ -647,7 +655,10 @@ test("cancelling a partial final leaves agent activity expanded", async (t) => {
 })
 
 test("a terminal stream error leaves earlier agent activity and its partial text visible", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 32,
+  })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
     delta("Before failure", "one.txt"),
@@ -674,7 +685,7 @@ test("a terminal stream error leaves earlier agent activity and its partial text
 
 test("cleared and consumed inputs never create agent activity relationships", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     extensionFactories: [
       (pi) => {
@@ -726,7 +737,10 @@ test("cleared and consumed inputs never create agent activity relationships", as
 })
 
 test("an all-at-once follow-up batch does not invent an answer for every queued user", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 40 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 40,
+  })
   host.session.setFollowUpMode("all")
   await writeFile(join(host.directory, "one.txt"), "one native result")
   await writeFile(join(host.directory, "two.txt"), "two native result")
@@ -767,7 +781,7 @@ test("cancellation after agent_end stays expanded through the next request", asy
   let waiting = false
   t.after(() => gate.resolve())
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 38,
     extensionFactories: [
       (pi) => {
@@ -808,7 +822,10 @@ test("cancellation after agent_end stays expanded through the next request", asy
 })
 
 test("a terminal response without answer text leaves agent activity expanded", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 30 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 30,
+  })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
     delta("Visible work without answer", "one.txt"),
@@ -828,7 +845,7 @@ test("a terminal response without answer text leaves agent activity expanded", a
 
 test("a truncated terminal text can be the final answer without hiding its native notice", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 30,
     settings: { hideThinkingBlock: false },
   })
@@ -878,7 +895,7 @@ test("automatic collapse clears a selected progress range even while reading scr
     copied = text
   })
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 16,
     keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
@@ -919,7 +936,10 @@ test("automatic collapse clears a selected progress range even while reading scr
 })
 
 test("certified agent activity relationships survive native journal reload", async (t) => {
-  const host = await openNativeHost(t, { extensionPaths: [chat], rows: 32 })
+  const host = await openNativeHost(t, {
+    extensionPaths: [chat, copyExtension],
+    rows: 32,
+  })
   await writeFile(join(host.directory, "one.txt"), "native result")
   host.queueResponse(
     delta("Live progress", "one.txt"),
@@ -969,7 +989,7 @@ test("history without delivery records leaves uncertain agent activity expanded"
   await source.close()
 
   const restored = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     sessionFile,
     directory: source.directory,
     rows: 32,
@@ -983,7 +1003,7 @@ test("history without delivery records leaves uncertain agent activity expanded"
 test("same-journal tree navigation restores only surviving relationships", async (t) => {
   let target = ""
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 36,
     extensionFactories: [
       (pi) => {
@@ -1059,7 +1079,7 @@ test("same-journal tree navigation restores only surviving relationships", async
 
 test("native fork carries certified relationships whose sources survive", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
     extensionFactories: [
@@ -1128,7 +1148,7 @@ test("native fork carries certified relationships whose sources survive", async 
 
 test("a retained fork method cannot transfer a disposed adapter's relationships", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
   })
@@ -1178,7 +1198,7 @@ test("a retained fork method cannot transfer a disposed adapter's relationships"
 
 test("a fork remains usable when relationship metadata fails to append", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
   })
@@ -1233,7 +1253,7 @@ test("a fork remains usable when relationship metadata fails to append", async (
 
 test("copied journal restores agent activity without changing provider context", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
   })
@@ -1272,7 +1292,7 @@ test("copied journal restores agent activity without changing provider context",
 test("compaction keeps certified source relationships for later tree navigation", async (t) => {
   let target = ""
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
     extensionFactories: [
@@ -1334,7 +1354,7 @@ test("compaction keeps certified source relationships for later tree navigation"
 test("a standalone native message after the final keeps its source position", async (t) => {
   const appendNotice = { current: () => {} }
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 40,
     extensionFactories: [
       (pi) => {

@@ -2,6 +2,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent"
+import type { CopyProvider } from "./copy-contract.ts"
 import { activityType } from "./tool-adapters/activity-contract.ts"
 import {
   armHistoryBootstrap,
@@ -15,6 +16,11 @@ import { WorkingLabel } from "./working-label.ts"
 const relationshipRenderer = () => undefined
 
 export default function piChat(pi: ExtensionAPI) {
+  pi.events.on("pi.copy.host", (value) => {
+    const request = value as { version?: unknown; claim?: unknown } | undefined
+    if (request?.version === 1 && typeof request.claim === "function")
+      request.claim()
+  })
   pi.registerEntryRenderer("pi-chat.relationship", relationshipRenderer)
   pi.registerEntryRenderer(nativeToolType, relationshipRenderer)
   let adapter: NativeChatHost | undefined
@@ -66,7 +72,19 @@ export default function piChat(pi: ExtensionAPI) {
   const install = (host: Parameters<typeof NativeChatHost.install>[0]) => {
     adapter?.dispose()
     adapter = undefined
-    adapter = NativeChatHost.install(host, new ActivityItems(pi), working)
+    let copyProvider: CopyProvider | undefined
+    pi.events.emit("pi.copy.provider", {
+      version: 1,
+      use(provider: CopyProvider) {
+        copyProvider = provider
+      },
+    })
+    adapter = NativeChatHost.install(
+      host,
+      new ActivityItems(pi),
+      working,
+      copyProvider,
+    )
   }
   const disarm = armHistoryBootstrap(relationshipRenderer, install)
 

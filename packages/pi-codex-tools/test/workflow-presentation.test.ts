@@ -27,6 +27,7 @@ const companions = [
   "pi-attachments",
   "pi-skill-references",
   "pi-chat",
+  "pi-copy",
   "pi-goal",
 ].map((name) => new URL(`../../${name}/src/index.ts`, import.meta.url).pathname)
 const tiny =

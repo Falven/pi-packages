@@ -1,4 +1,4 @@
-import { copyToClipboard, type Theme } from "@earendil-works/pi-coding-agent"
+import { copyToClipboard } from "@earendil-works/pi-coding-agent"
 import {
   Text,
   compositeTuiLine,
@@ -8,23 +8,16 @@ import {
   type Component,
 } from "@earendil-works/pi-tui"
 import type { CopyPayload } from "./payloads.ts"
+import type { CopyEnvironment } from "./copy-contract.ts"
 
 const { dispatchMouseEvent } = (await import(
   new URL("./tui.js", import.meta.resolve("@earendil-works/pi-tui")).href
 )) as typeof import("@earendil-works/pi-tui/dist/tui.js")
 
-type CopyHost = {
-  theme(): Theme
-  outputPad(): number
-  handleInput(data: string, activate: () => void): void
-  requestRender(): void
-  setStatus(text: string | undefined): void
-}
-
 export class CopyActions {
   private statusOwner: CopyAction | undefined
 
-  constructor(readonly host: CopyHost) {}
+  constructor(readonly host: CopyEnvironment) {}
 
   status(action: CopyAction, text?: string, error = false) {
     if (text) {

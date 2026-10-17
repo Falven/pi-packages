@@ -21,6 +21,7 @@ type CopyOutputSource = {
   changes?: { added: number; removed: number }
   body: {
     result: CopyResult | undefined
+    name?: string
     copyContent?: CopyResult["content"]
     copyOmitted?: boolean
     availability?: "omitted"
@@ -45,7 +46,13 @@ export function responsePayload(parts: readonly string[]): CopyPayload {
 }
 
 export function outputPayload(item: CopyOutputSource): CopyPayload {
-  const { result, copyContent, availability, copyOmitted } = item.body
+  const { result, availability } = item.body
+  const normalized =
+    item.body.name === "bash" && result && item.body.copyContent === undefined
+      ? bashCopy(result)
+      : {}
+  const copyContent = item.body.copyContent ?? normalized.copyContent
+  const copyOmitted = item.body.copyOmitted ?? normalized.copyOmitted
   const output = stripTerminalSequences(
     (copyContent ?? result?.content ?? [])
       .flatMap((part) => (part.type === "text" ? [part.text] : []))

@@ -19,6 +19,8 @@ import { activityDetails } from "../../../fixtures/activity.ts"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 function assertWritableClipboard(
   clipboard: NativeClipboard | undefined,
 ): asserts clipboard is NativeClipboard &
@@ -106,7 +108,7 @@ test("pending calls stay out of activity until dispatch and retain generic outco
   const gate = Promise.withResolvers<void>()
   t.after(() => gate.resolve())
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 80,
     extensionFactories: [
       (pi) => {
@@ -168,7 +170,7 @@ test("cancellation and unknown historical outcomes remain visible after reload",
   let received = false
   let executions = 0
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 80,
     persistSession: true,
     extensionFactories: [
@@ -280,7 +282,7 @@ test("native reads and an unrelated command provider share skill labels and reta
     "---\nname: review\ndescription: Review work\n---\nInspect the requested work.\n",
   )
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     skillPaths: [catalog],
     rows: 110,
     persistSession: true,
@@ -443,7 +445,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   }
   let initial: ActivityUpdate["operations"] | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 140,
     columns: 110,
     persistSession: true,
@@ -1186,7 +1188,7 @@ for (const legacy of [false, true])
   test(`Find temporarily reveals retained source for ${legacy ? "old output metadata" : "an explicitly empty activity"}`, async (t) => {
     let calls = 0
     const host = await openNativeHost(t, {
-      extensionPaths: [chat],
+      extensionPaths: [chat, copyExtension],
       rows: 70,
       persistSession: true,
       keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -1312,7 +1314,7 @@ for (const legacy of [false, true])
 test("processed output invalidates metadata and cannot regain an earlier live body", async (t) => {
   let publish: (() => void) | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 60,
     extensionFactories: [
       (pi) => {
@@ -1430,7 +1432,7 @@ test("declared command actions use the app parser and retain full command bodies
     ...uncertain,
   ]
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 300,
     columns: 160,
     persistSession: true,
@@ -1726,7 +1728,7 @@ test("declared command actions use the app parser and retain full command bodies
   clipboardWrite = undefined
   let processing: "tool" | "message" | undefined
   const native = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 60,
     columns: 120,
     persistSession: true,

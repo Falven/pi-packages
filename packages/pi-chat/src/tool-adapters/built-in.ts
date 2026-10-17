@@ -1,4 +1,3 @@
-import { bashCopy } from "pi-copy"
 import { homedir } from "node:os"
 import { resolve } from "node:path"
 import {
@@ -48,7 +47,6 @@ export function builtInItems(facts: CallFacts): ActivityItem[] | undefined {
       args: facts.args,
       cwd: facts.cwd,
       result: facts.result,
-      ...(name === "bash" && facts.result ? bashCopy(facts.result) : {}),
       renderers: () => definitions[name](facts.cwd),
     },
   }

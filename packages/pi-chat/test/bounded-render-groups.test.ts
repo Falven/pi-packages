@@ -17,6 +17,8 @@ import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import { openNativeHost } from "../../../fixtures/native-host.ts"
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 const reads = (paths: string[]) => ({
   event: {
     choices: [
@@ -67,7 +69,7 @@ function writableClipboard(
 test("expanded groups expose all native output in conversation flow without invalidating cached Markdown", async (t) => {
   let markdownTransforms = 0
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 80,
     keybindings: { "tui.altScreen.top": "home" },
     extensionFactories: [
@@ -153,7 +155,7 @@ test("selection copies expanded native output across offscreen conversation rows
     copied = text
   })
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 44,
     keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false, outputPad: 1 },
@@ -245,7 +247,7 @@ test("group summaries combine native categories and distinct paths while executi
   const gate = Promise.withResolvers<void>()
   let waiting = false
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     columns: 100,
     rows: 24,
     extensionFactories: [
@@ -328,7 +330,7 @@ test("group summaries combine native categories and distinct paths while executi
 test("default activity bodies and surrounding entries scroll together in the conversation", async (t) => {
   let appendPrefix: (() => void) | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 28,
     keybindings: {
       "tui.altScreen.top": "home",
@@ -403,7 +405,7 @@ test("growing output and resizing preserve a conversation anchor and follow only
     target: Promise.withResolvers<void>(),
   }
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     columns: 82,
     rows: 44,
     extensionFactories: [
@@ -541,7 +543,7 @@ test("native images crop once against the conversation and retain their identity
   })
   let append: ((name: string) => void) | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     columns: 82,
     rows: 28,
     keybindings: { "tui.altScreen.top": "home" },

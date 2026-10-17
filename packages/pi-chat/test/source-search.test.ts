@@ -12,6 +12,8 @@ import { openNativeHost } from "../../../fixtures/native-host.ts"
 /* oxlint-disable eslint/no-control-regex -- Assert Pi's native terminal highlight sequences. */
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 const delta = (content: string, tool?: string) => ({
   event: {
     choices: [
@@ -48,7 +50,7 @@ const done = { event: "[DONE]" }
 
 test("native Find reveals a matching occurrence inside closed agent activity", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -81,7 +83,7 @@ test("native Find reveals a matching occurrence inside closed agent activity", a
 
 test("Find opens a closed render group and keeps the native result presenter", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -136,7 +138,7 @@ test("Find opens a closed render group and keeps the native result presenter", a
 
 test("Find includes the native tool-call name", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -161,7 +163,7 @@ test("Find includes the native tool-call name", async (t) => {
 
 test("Find searches original tool argument values with escapes", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -179,7 +181,7 @@ test("Find searches original tool argument values with escapes", async (t) => {
 
 test("Find searches readable Markdown and literal command syntax", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -253,7 +255,7 @@ for (const { name, source, rendered, escaped, escapedQuery } of [
 ] as const) {
   test(`Find includes an entire Markdown link label with ${name}`, async (t) => {
     const host = await openNativeHost(t, {
-      extensionPaths: [chat],
+      extensionPaths: [chat, copyExtension],
       rows: 34,
       keybindings: { "tui.altScreen.search": "ctrl+f" },
     })
@@ -282,7 +284,7 @@ for (const { name, source, rendered, escaped, escapedQuery } of [
 
 test("native Find navigation keeps duplicate occurrences distinct", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: {
       "tui.altScreen.search": "ctrl+f",
@@ -304,7 +306,7 @@ test("native Find navigation keeps duplicate occurrences distinct", async (t) =>
 
 test("Find reveals source through default bodies despite a custom renderer", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -388,7 +390,7 @@ test("Find reveals source through default bodies despite a custom renderer", asy
 
 test("Find temporarily reveals a hidden thought body or extracted activity heading", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     providerApi: "openai-responses",
     rows: 38,
     settings: { hideThinkingBlock: true },
@@ -507,7 +509,7 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
 
 test("Find refreshes results as a represented assistant message streams", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -553,7 +555,7 @@ test("Find refreshes results as a represented assistant message streams", async 
 test("Find excludes source text outside the active branch after tree navigation", async (t) => {
   let target = ""
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     extensionFactories: [
@@ -588,7 +590,7 @@ test("Find excludes source text outside the active branch after tree navigation"
 
 test("Find indexes the literal native shell command and output", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -619,7 +621,7 @@ test("Find indexes the literal native shell command and output", async (t) => {
 
 test("Find scrolls native activity output in the conversation to the selected source occurrence", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 30,
     keybindings: {
       "tui.altScreen.search": "ctrl+f",
@@ -664,7 +666,7 @@ test("Find scrolls native activity output in the conversation to the selected so
 
 test("Find uses native case, Unicode, and whitespace matching", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
   })
@@ -688,7 +690,7 @@ test("Find uses native case, Unicode, and whitespace matching", async (t) => {
 test("Find reveals a retained message before Pi's compaction summary", async (t) => {
   let native: unknown
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -731,7 +733,7 @@ test("Find reveals a retained message before Pi's compaction summary", async (t)
 
 test("revealing a retained user row does not add it to native editor history", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -796,7 +798,7 @@ test("revealing a retained user row does not add it to native editor history", a
 
 test("Find reopens a hidden retained thought using the native Markdown environment", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 42,
     settings: { hideThinkingBlock: true },
@@ -874,7 +876,7 @@ test("Find reopens a hidden retained thought using the native Markdown environme
 
 test("Find restores separate retained calls with reused IDs and their own results", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 50,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -934,7 +936,7 @@ test("Find restores separate retained calls with reused IDs and their own result
 
 test("configured native global expansion reaches a revealed retained call", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     keybindings: {
@@ -976,7 +978,7 @@ test("configured native global expansion reaches a revealed retained call", asyn
 test("Find includes displayed native custom messages before and after compaction", async (t) => {
   let send: (() => void) | undefined
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 42,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -1053,7 +1055,7 @@ test("revealing retained history leaves a live native tool result attached", asy
   t.after(() => release())
   let started = false
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -1132,7 +1134,7 @@ test("revealing retained history leaves a live native tool result attached", asy
 
 test("Find keeps source order when selecting a retained assistant's calls backward", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 50,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -1190,7 +1192,7 @@ test("Find keeps source order when selecting a retained assistant's calls backwa
 test("historical presenters clear on reload and branch navigation", async (t) => {
   let target = ""
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 42,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
@@ -1237,7 +1239,7 @@ test("historical presenters clear on reload and branch navigation", async (t) =>
 
 test("retained aborted and failed calls keep Pi's historical error display", async (t) => {
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     keybindings: { "tui.altScreen.search": "ctrl+f" },

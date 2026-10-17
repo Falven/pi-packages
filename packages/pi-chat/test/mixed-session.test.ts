@@ -17,6 +17,8 @@ import { openNativeHost } from "../../../fixtures/native-host.ts"
 /* oxlint-disable eslint/no-control-regex -- Assert Pi's native Kitty image sequences. */
 
 const chat = new URL("../src/index.ts", import.meta.url).pathname
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
+  .pathname
 const composer = new URL("../../pi-composer/src/index.ts", import.meta.url)
   .pathname
 const attachments = new URL(
@@ -138,8 +140,14 @@ function writableClipboard(
 }
 
 for (const [name, paths] of [
-  ["chat first", [chat, composer, skills, attachments, acceptance]],
-  ["chat last", [composer, attachments, skills, acceptance, chat]],
+  [
+    "chat first",
+    [chat, composer, skills, attachments, acceptance, copyExtension],
+  ],
+  [
+    "chat last",
+    [copyExtension, composer, attachments, skills, acceptance, chat],
+  ],
 ] as const) {
   test(`mixed ${name} session keeps the draft, native dock, and streaming final`, async (t) => {
     const host = await openNativeHost(t, {
@@ -257,7 +265,14 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
   for (const name of remote) delete process.env[name]
   const catalog = await skillCatalog(t)
   const host = await openNativeHost(t, {
-    extensionPaths: [composer, attachments, skills, acceptance, chat],
+    extensionPaths: [
+      copyExtension,
+      composer,
+      attachments,
+      skills,
+      acceptance,
+      chat,
+    ],
     skillPaths: [catalog],
     rows: 52,
     settings: {
@@ -497,7 +512,7 @@ test("revealed retained tool images follow native image settings", async (t) => 
   setCapabilities({ ...capabilities, images: "kitty" })
   t.after(() => setCapabilities(capabilities))
   const host = await openNativeHost(t, {
-    extensionPaths: [chat],
+    extensionPaths: [chat, copyExtension],
     persistSession: true,
     columns: 100,
     rows: 42,

@@ -13,7 +13,6 @@
     "provenance": true
   },
   "dependencies": {
-    "pi-copy": "workspace:*",
     "tree-sitter": "0.25.1",
     "tree-sitter-bash": "0.25.1"
   },
