@@ -62,7 +62,7 @@ _Avoid_: Child operation, when referring to the execution's own outcome
 A concise description shown at a disclosure. Qualify it as a group summary or item summary when identifying what it describes.
 
 **Group summary**:
-A short description in a render group's header that summarizes the types of operations it contains without replacing their item summaries.
+An aggregate description of the operation types in a render group. Its header uses this summary when it is not showing the existing label of the current operation belonging to that group; item summaries remain separate.
 
 **Item summary**:
 A short description identifying the action and target of one activity item. Its wording can become less specific when the full output already shows the command or target.
