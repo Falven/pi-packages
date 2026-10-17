@@ -1,8 +1,15 @@
 import {
+  CopyAction,
+  CopyActions,
+  CopyHeading,
+  commandPayload,
+  outputPayload,
+  responsePayload,
+} from "pi-copy"
+import {
   InteractiveMode,
   ToolExecutionComponent,
   UserMessageComponent,
-  copyToClipboard,
   sessionEntryToContextMessages,
   type AgentSession,
   type AgentSessionRuntime,
@@ -408,173 +415,6 @@ class RenderGroupHeader implements Component {
   }
 }
 
-type CopyPayload = {
-  label: "Copy command" | "Copy output" | "Copy diff" | "Copy response"
-  text: string
-  partial?: boolean
-}
-
-class CopyAction implements Component {
-  focused = false
-  row = 0
-  column = 0
-  height = 1
-  width = 0
-  private active = true
-  private pending = false
-  private copied = false
-  private timer: NodeJS.Timeout | undefined
-
-  constructor(
-    private readonly adapter: NativeChatHost,
-    private readonly payload: () => CopyPayload,
-    private readonly inset: boolean,
-    readonly owner?: ActivityItemDisclosure,
-  ) {}
-
-  get enabled() {
-    return Boolean(this.payload().text)
-  }
-
-  invalidate() {}
-
-  render(width: number) {
-    const { label, text } = this.payload()
-    const padding = this.inset
-      ? Math.min(this.adapter.host.outputPad, Math.floor((width - 1) / 2))
-      : 0
-    const available = Math.max(1, width - padding * 2)
-    const original = `[${label}]`
-    this.width = Math.min(available, original.length)
-    this.column = padding + (this.owner ? available - this.width : 0)
-    const plain = new Text(original, 0, 0).render(this.width)
-    const value = this.copied ? "[Copied]".padEnd(original.length) : original
-    const theme = this.adapter.extensionUI.theme
-    const styled = theme.fg(text ? "muted" : "dim", value)
-    const rows = new Text(
-      this.focused ? theme.bg("selectedBg", styled) : styled,
-      0,
-      0,
-    ).render(this.width)
-    this.height = plain.length
-    return plain.map((_, row) => " ".repeat(this.column) + (rows[row] ?? ""))
-  }
-
-  handleInput(data: string) {
-    this.adapter.handleDisclosureInput(data, () => void this.copy())
-  }
-
-  handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
-    // Pi captures a handled press through release. Drags from text selection pass through.
-    if (
-      event.button !== "left" ||
-      (event.type !== "press" && event.type !== "click") ||
-      event.x < this.column ||
-      event.x >= this.column + this.width
-    )
-      return undefined
-    if (event.type === "click") void this.copy()
-    return { handled: true, focus: this.enabled }
-  }
-
-  private async copy() {
-    if (!this.active || this.pending) return
-    const payload = this.payload()
-    if (!payload.text) return
-    this.pending = true
-    clearTimeout(this.timer)
-    this.copied = false
-    this.adapter.copyStatus(this)
-    try {
-      await copyToClipboard(payload.text)
-      if (!this.active) return
-      this.copied = true
-      if (payload.partial)
-        this.adapter.copyStatus(
-          this,
-          "Only retained output copied; some output was omitted.",
-        )
-    } catch (error) {
-      if (!this.active) return
-      this.adapter.copyStatus(this, `Copy failed: ${String(error)}`, true)
-    } finally {
-      this.pending = false
-      if (this.active) {
-        this.adapter.host.ui.requestRender()
-        this.timer = setTimeout(() => {
-          this.copied = false
-          this.adapter.copyStatus(this)
-          this.adapter.host.ui.requestRender()
-        }, 1_500)
-        this.timer.unref()
-      }
-    }
-  }
-
-  dispose() {
-    this.active = false
-    clearTimeout(this.timer)
-    this.adapter.copyStatus(this)
-  }
-}
-
-class CopyHeading implements Component {
-  actionRow = 0
-
-  constructor(
-    readonly component: Component,
-    readonly action: CopyAction,
-  ) {}
-
-  invalidate() {
-    this.component.invalidate()
-  }
-
-  render(width: number) {
-    const rows = this.component.render(width)
-    const action = this.action.render(width)
-    if (
-      action.length === 1 &&
-      visibleWidth(stripTerminalSequences(rows[0] ?? "").trimEnd()) <
-        this.action.column
-    ) {
-      this.actionRow = 0
-      return [
-        compositeTuiLine(
-          rows[0] ?? "",
-          sliceByColumn(
-            action[0]!,
-            this.action.column,
-            this.action.width,
-            true,
-          ),
-          this.action.column,
-          this.action.width,
-          width,
-        ),
-        ...rows.slice(1),
-      ]
-    }
-    this.actionRow = rows.length
-    return [...rows, ...action]
-  }
-
-  handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
-    if (
-      event.y >= this.actionRow &&
-      event.y < this.actionRow + this.action.height
-    ) {
-      const result = dispatchMouseEvent(this.action, {
-        ...event,
-        y: event.y - this.actionRow,
-        height: this.action.height,
-      })
-      if (result) return result
-    }
-    return dispatchMouseEvent(this.component, event)
-  }
-}
-
 class ActivityItemDisclosure extends Container {
   focused = false
   expanded = false
@@ -595,66 +435,18 @@ class ActivityItemDisclosure extends Container {
       : []
   }
 
-  private copyOutput(): CopyPayload {
-    const { result, copyContent, availability, copyOmitted } = this.item.body
-    const output = stripTerminalSequences(
-      (copyContent ?? result?.content ?? [])
-        .flatMap((part) => (part.type === "text" ? [part.text] : []))
-        .join("\n"),
-    )
-    const details = argumentsOf(result?.details)
-    const raw = [details["patch"], details["diff"]].find(
-      (value): value is string => typeof value === "string" && value.length > 0,
-    )
-    const lines = output.split(/\r?\n/).filter(Boolean)
-    const hasChanges =
-      (lines.some((line) => line.startsWith("+")) &&
-        lines.some((line) => line.startsWith("-"))) ||
-      (((this.item.status === "completed" && this.item.changes) ||
-        lines.some((line) =>
-          /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(line),
-        )) &&
-        lines.some((line) => /^[+-]/.test(line)))
-    const diff =
-      this.item.kind === "edit" &&
-      (raw ||
-        (hasChanges &&
-        lines.every(
-          (line) =>
-            /^[ +\-@]/.test(line) ||
-            line === "\\ No newline at end of file" ||
-            /^(?:diff --git |index )/.test(line),
-        )
-          ? output
-          : undefined))
-    return {
-      label: diff ? "Copy diff" : "Copy output",
-      text: diff || output,
-      partial:
-        availability === "omitted" ||
-        (copyOmitted ??
-          argumentsOf(details["truncation"])["truncated"] === true),
-    }
-  }
-
   private createActions() {
     if (this.item.kind === "command")
       this.commandAction = new CopyAction(
-        this.adapter,
-        () => {
-          const command = argumentsOf(this.item.body.args)["command"]
-          return {
-            label: "Copy command",
-            text: typeof command === "string" ? command : "",
-          }
-        },
+        this.adapter.copyActions,
+        () => commandPayload(argumentsOf(this.item.body.args)["command"]),
         false,
         this,
       )
     if (this.item.kind === "command" || this.item.kind === "edit")
       this.outputAction = new CopyAction(
-        this.adapter,
-        () => this.copyOutput(),
+        this.adapter.copyActions,
+        () => outputPayload(this.item),
         false,
         this,
       )
@@ -936,6 +728,7 @@ class ActivityItemDisclosure extends Container {
 }
 
 export class NativeChatHost {
+  readonly copyActions: CopyActions
   readonly host: NativeMode
   get extensionUI(): ExtensionContext["ui"] {
     return this.host.runtimeHost.session.extensionRunner.getUIContext()
@@ -1036,7 +829,6 @@ export class NativeChatHost {
     | AgentActivityHeader
     | CopyAction
   )[] = []
-  private copyStatusOwner: CopyAction | undefined
   private unsubscribe?: () => void
   private source: Occurrence | undefined
   private streaming: Occurrence | undefined
@@ -1068,6 +860,14 @@ export class NativeChatHost {
     private readonly working: WorkingLabel,
   ) {
     this.host = host
+    this.copyActions = new CopyActions({
+      theme: () => this.extensionUI.theme,
+      outputPad: () => host.outputPad,
+      handleInput: (data, activate) =>
+        this.handleDisclosureInput(data, activate),
+      requestRender: () => host.ui.requestRender(),
+      setStatus: (text) => this.extensionUI.setStatus("pi-chat.copy", text),
+    })
     this.outputPad = host.outputPad
     this.imageSettings = {
       show: host.settingsManager.getShowImages(),
@@ -1951,19 +1751,6 @@ export class NativeChatHost {
     else if (keys.matches(data, "tui.altScreen.pageDown")) this.scrollChat(1)
   }
 
-  copyStatus(action: CopyAction, text?: string, error = false) {
-    if (text) {
-      this.copyStatusOwner = action
-      this.extensionUI.setStatus(
-        "pi-chat.copy",
-        this.extensionUI.theme.fg(error ? "error" : "warning", text),
-      )
-    } else if (this.copyStatusOwner === action) {
-      this.copyStatusOwner = undefined
-      this.extensionUI.setStatus("pi-chat.copy", undefined)
-    }
-  }
-
   focusNearestDisclosure() {
     const renderer = this.host.renderer as unknown as TuiAltScreen
     if (
@@ -2146,27 +1933,23 @@ export class NativeChatHost {
         let action = this.responseActions.get(source)
         if (!action) {
           action = new CopyAction(
-            this,
+            this.copyActions,
             () => {
               const activity = this.agentActivity.find(source)
               const message = source.message
-              return {
-                label: "Copy response",
-                text:
-                  activity?.settled &&
+              return responsePayload(
+                activity?.settled &&
                   this.agentActivity.isFinalMessage(source, activity) &&
                   message?.role === "assistant"
-                    ? message.content
-                        .flatMap((part, contentIndex) =>
-                          part.type === "text" &&
-                          (!activity.finalParts ||
-                            activity.finalParts.includes(contentIndex))
-                            ? [part.text]
-                            : [],
-                        )
-                        .join("")
-                    : "",
-              }
+                  ? message.content.flatMap((part, contentIndex) =>
+                      part.type === "text" &&
+                      (!activity.finalParts ||
+                        activity.finalParts.includes(contentIndex))
+                        ? [part.text]
+                        : [],
+                    )
+                  : [],
+              )
             },
             true,
           )

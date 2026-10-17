@@ -1,0 +1,25 @@
+{
+  "name": "pi-copy",
+  "version": "0.1.0",
+  "description": "Copy controls and retained-source payloads for Pi chat",
+  "files": [
+    "src/**/*.ts",
+    "README.md"
+  ],
+  "type": "module",
+  "exports": "./src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "devDependencies": {
+    "@earendil-works/pi-tui": "1.1.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.1.0",
+    "@earendil-works/pi-tui": "^1.1.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -12,6 +12,8 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 `pi-attachments` and `pi-skill-references` also work with Pi's native editor.
 
+[`pi-copy`](packages/pi-copy) provides the command, output, diff, and response copy controls used by `pi-chat`. Chat includes it as a library dependency; it requires no separate extension installation.
+
 Tool providers and chat consumers can independently implement the [generic activity format](docs/specs/tool-activity.md) using Pi events and result details.
 
 ## Install
