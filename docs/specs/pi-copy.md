@@ -1,6 +1,6 @@
 # pi-copy specification
 
-**Status:** independent-plugin correction in progress. Independent chat integration is implemented at `8902b5f`; native decoration and distribution verification are tracked in [ticket 04](../../.scratch/pi-copy/issues/04-native-pi-decoration.md). The preceding library extraction and response spacing were verified at `a83094c` and integrated into local `main`; [ticket 02](../../.scratch/pi-copy/issues/02-separate-response-copy-footer.md) retains that historical evidence.
+**Status:** implemented and verified at `eabaf49`, integrated into local main at `faef6a6`, and explicitly installed as editable Pi packages. [Ticket 04](../../.scratch/pi-copy/issues/04-native-pi-decoration.md) records 147 existing checks, eight native probes, four isolated package checks, review results, installation, cleanup, and verification limits. The preceding library extraction and response spacing were verified at `a83094c`; [ticket 02](../../.scratch/pi-copy/issues/02-separate-response-copy-footer.md) retains that historical evidence.
 
 **Accepted scope:** Independently install `pi-copy` and `pi-chat`, with no dependency between them and no loss of current functionality. Copy also decorates stock Pi's output boxes and final assistant responses. Preserve one blank display row before Copy response and exact copied text. The user's correction and instruction to continue on 2026-10-17 replace the earlier library design.
 

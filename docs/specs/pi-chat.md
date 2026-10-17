@@ -2,7 +2,7 @@
 
 **Current revision:** Integrate the independently installed `pi-copy` plugin through an optional Pi event agreement while retaining chat-owned source identity, final recognition, placement, navigation, selection, and Find. Neither plugin imports, depends on, or installs the other. The [pi-copy specification](pi-copy.md) owns the existing copy-action contract and blank row before Copy response.
 
-**Copy correction status:** optional integration is implemented at `8902b5f`, with 147/147 existing affected checks passing on Pi/TUI 1.1.0. Native-only decoration and independent distribution are in progress. The preceding library extraction was verified at `a83094c` and integrated into local `main`; the [copy tracker](../../.scratch/pi-copy/spec.md) preserves each revision's evidence.
+**Copy correction status:** independent chat and copy plugins are verified at `eabaf49` and integrated into local main at `faef6a6`. All 147 existing affected checks pass on Pi/TUI 1.1.0; native-only behavior and separate distribution also pass. Both plugins are explicitly installed as editable local packages. The [copy tracker](../../.scratch/pi-copy/spec.md) preserves verification, review and installation evidence, cleanup, and remaining validation limits.
 
 **Working-row revision:** Move render-group and activity-item disclosure chevrons after their labels, keeping the loading indicator on the left. Make the existing thinking row the active render group’s header, with one live presentation that can show an operation, a complete thought heading, or `Thinking`. Preserve grouping, singleton eligibility, label selection, disclosure choices, and the [activity specification](tool-activity.md).
 
