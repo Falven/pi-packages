@@ -1,0 +1,77 @@
+# Enclosing agent activity collapse parity
+
+The ordinary local conversation policy, existing real-Pi native-host seam, and one combined implementation ticket are approved. The user's follow-up limits verification to installed Pi **1.1.0**. This record fixes the reference and implementation scope; approval is not implementation or verification evidence.
+
+## Baseline and protected work
+
+Starting local main: `cbf6ffac013f10b6b2a227804d076a4556bd248d`. Preserve the separate spacing identities introduced by `40dcdd1` and checked by `3b08a9a`. The existing untracked comparison report is excluded from task commits and formatting; its starting SHA-256 is `5e309230c0dda894020498e75ddd9aa03765b4ca44d2d15e10a916045a3148ed`.
+
+Other copy, singleton, and working-label worktrees are concurrent work, not task-owned cleanup targets. Recheck main, worktrees, and the local ticket numbers before publication and landing. Never rewrite shared main or push without a separate request.
+
+## Pinned source evidence
+
+Inspected application: `/Applications/ChatGPT.app`, bundle `com.openai.codex`, version **26.1013.31256**, build **20586**. The installed archive and supplied reference manifest match. No live desktop interaction established these facts.
+
+| Asset                                       | Original SHA-256                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------ |
+| `sites-end-resource-1b9f3ba94deb.js`        | `a3955c507c2bba1d3c1957b24abd9e55388f733ff6e3cd613afa3cbe4a441b4c` |
+| `local-conversation-turn-e5216ce34062.js`   | `e72d61f0567d235ca93e62d8f9fea347e1f303778747be61ca3ca7ae8d0d74c7` |
+| `app-initial-3ccf4886957f.js`               | `d6278b4127345cf6012fe969eea9f5a2d55a13225d1fcadc23db81ef5bab78fe` |
+| `local-conversation-thread-5ec41ebdd09b.js` | `e203868a18600a77a62ec38aa908de2fe7f4719f6b5c3c2c356eceda04b95479` |
+| `mcp-tool-item-content-179ee16f038b.js`     | `bfa31cfcb00798df084c1b8bdc9ba2082b621f131a4560b72d81595174bd97d7` |
+
+The formatted files and manifest were available under `/tmp/pi-chat-codex-ux-20261016`. They are temporary evidence, not runtime dependencies. Useful locations:
+
+- Collapse decision: `sites-end-resource`, lines 22588–22599. Eligibility precedes forced expansion, preference, and automatic default. Ordinary eligibility requires final-start evidence, no cancellation, and renderable activity.
+- Header availability: the same asset, lines 22724–22790 and 22905–22909. Ineligibility removes the toggle and leaves activity visible; it does not merely draw an expanded but closable header.
+- Mode inputs: `local-conversation-turn`, lines 5070–5091. Activity-only mode can allow collapse before a final; full-transcript, embedded/voice, and specialized Work views have other force/disable inputs. Those modes are outside this target.
+- Final predicate: `app-initial`, lines 183669–183686. Final phase, non-async delivery, no asynchronous user-input marker, and nonblank content **or completion or structured output** establish final start. The stricter completed-answer predicate is a different decision.
+- Completion-only path: `app-initial`, lines 131939–131994, 186446–186464, and 152275–152330. The app tracks item completion separately from text; a completed blank final can qualify without nonblank displayed prose.
+- Preference retention: `sites-end-resource`, lines 22636–22659; `local-conversation-thread`, lines 16595–16601 and 16988–17041. The same turn retains its preference through temporary ineligibility. No disk-persistence or restart guarantee is inferred.
+- Inspection: `app-initial`, lines 417595–417616; `sites-end-resource`, lines 9677–9679; `mcp-tool-item-content`, lines 2658–2672. Explicit tool inspection prevents the automatic default, below an eligible manual enclosing choice. Ordinary scrolling, selection, and header focus are separate.
+- Find: `local-conversation-thread`, lines 19476–19490 and 19111–19131. Reveal explicitly opens the containing turn. It is not a permanent forced-open mode.
+
+## Approved Pi mapping
+
+Use exact provider-item/normalized-content association. Nonblank final text qualifies immediately; a blank final qualifies only with explicitly observed item status `completed`. Raw Responses completion status is Pi's analogous fact, not the reference app-server protocol. A done event name, response completion, or message error is insufficient. Pi has no separate app-level structured-output or asynchronous user-input message objects; do not invent them. Ordinary JSON text is already text.
+
+Ineligible enclosing activity is revealed and has no header or enclosing control. Retain its memory-only choice for requalification. While eligible, explicit preference wins over the default and the existing child-inspection hold. Find records an open choice even while the header is unavailable; later eligible closure still works. Global actions affect eligible parents and descendants, without creating or overwriting an unavailable parent's preference. Preserve descendant choices when a parent disappears.
+
+Keep the existing no-phase settlement fallback. Valid partial finals survive non-cancellation failures; actual cancellation removes eligibility. An abort after agent-end but before settlement can establish cancellation; an idle abort after successful settlement does not retroactively change that outcome. Unknown history remains visible in source order.
+
+The existing settled final references can retain completed blank selections. Phase-only history without enough qualification evidence stays visible. No relationship schema or persistent preference change is planned. This supersedes the independent-manual-closure policy in ADR 0015 and Chat 07's `9f57ab9` revision; their earlier completion evidence remains historical.
+
+## Implementation scope and ownership
+
+One implementer owns runtime and corresponding regression coverage in its worktree. The coordinator owns ADR/spec/ticket documentation; a merger agent integrates the implementer. Standards and specification reviews run independently against the pinned base.
+
+| Boundary                 | Files and responsibilities                                                                                                                                                                    |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Activity policy          | `packages/pi-chat/src/agent-activity.ts`: qualification, cancellation, expansion precedence, retained preference, settlement/replay                                                           |
+| Provider evidence        | `packages/pi-chat/src/provider-phase.ts`: exact completion evidence using existing slot and native-signature association                                                                      |
+| Composition and controls | `packages/pi-chat/src/native-host.ts`: remove revoked-header path, preserve an exact zero-row final boundary/native notices, Find choice, shared control eligibility, existing focus recovery |
+| Existing storage         | `packages/pi-chat/src/relationships.ts`: inspect and preserve the schema and memory-only preference rule                                                                                      |
+| Behavioral seam          | `fixtures/native-host.ts`, existing phase-final, agent-activity, and source-search cases; reuse the host and avoid tests of private state                                                     |
+
+Do not merely remove composition's final-row guard: it also prevents collapse across an unidentified native notice or missing historical member relationship. A completed blank final needs its exact source boundary even though Pi renders no text child. Keep native error/truncation notices and source order. Preserve `beforeSpacing`, `afterSpacing`, and `beforeFinalSpacing` identities and the collapsed-boundary regression.
+
+No singleton-group change, label, preview, bounded-scrolling change, thought-presentation change, message menu, setting, dependency, Pi-source edit, or new primary test seam belongs to this delta. Existing glossary terms and ADR 0017 suffice.
+
+## Verification and landing
+
+The baseline focused suite passed 38/38 on installed Pi 1.1.0 before runtime changes. An earlier 38/38 run used repository dependencies at 1.0.2; it is baseline context only, not delta compatibility evidence. Installed native package links in task worktrees resolve to one physical 1.1.0 installation. Repository dependency declarations remain unchanged.
+
+Use red-before-green host assertions for cancellation and revocation first, then one behavioral slice at a time. The agreed commands are:
+
+```sh
+node --test packages/pi-chat/test/phase-final.test.ts packages/pi-chat/test/agent-activity.test.ts
+node --test --test-concurrency=2 packages/pi-chat/test/*.test.ts packages/pi-codex-tools/test/workflow-presentation.test.ts
+./node_modules/.bin/tsc --noEmit -p tsconfig.json
+./node_modules/.bin/oxlint .
+git ls-files -z | xargs -0 ./node_modules/.bin/oxfmt --check
+git diff --check
+```
+
+Check changed/new files before staging as well. Preserve the unrelated untracked comparison report. No secondary compatibility run is required. Assert fresh terminal frames, effective input, original provider requests, and canonical session content. This seam proves emitted output and native-host behavior, not physical-terminal or desktop pixel parity.
+
+After reviews, reconcile any main advances in the isolated integration worktree, verify the resulting delta, then fast-forward local main. Record actual code SHA, commands/results, review outcomes, and limits when closing the ticket. Archive every task-owned managed worktree and remove task branches only after verifying integration; preserve all other work and do not push.
