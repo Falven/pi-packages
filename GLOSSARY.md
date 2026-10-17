@@ -114,6 +114,10 @@ The editing surface where a user prepares a prompt and its associated references
 **Draft**:
 A prompt being prepared for submission, including its text, references, and attachments.
 
+**Quote**:
+Selected conversation text inserted into a draft as an editable Markdown blockquote.
+_Avoid_: Annotation, when referring only to quoting selected text
+
 **Reference**:
 Editable text within a draft that identifies a resource, such as a file or skill. A plain source path identifies the file whose current contents can be read.
 

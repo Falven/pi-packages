@@ -8,6 +8,7 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 | ----------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
 | [`pi-composer`](packages/pi-composer)                 | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Edit Markdown with selection, undo/redo, and saved session drafts.   |
 | [`pi-attachments`](packages/pi-attachments)           | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Paste text, files, and images with attachment previews and recovery. |
+| [`pi-quote`](packages/pi-quote)                       | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Quote highlighted conversation text into the current draft.          |
 | [`pi-skill-references`](packages/pi-skill-references) | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Complete and expand inline skill references.                         |
 | [`pi-chat`](packages/pi-chat)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Group native chat activity and search retained source.               |
 | [`pi-copy`](packages/pi-copy)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Copy commands, retained output, diffs, and final responses.          |
@@ -25,6 +26,7 @@ Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.1.0
 ```bash
 pi install ./packages/pi-composer
 pi install ./packages/pi-attachments
+pi install ./packages/pi-quote
 pi install ./packages/pi-skill-references
 pi install ./packages/pi-chat
 pi install ./packages/pi-copy
@@ -36,7 +38,7 @@ If `pi-paste` is already installed, remove that package entry with `pi remove ./
 
 ## Development
 
-See the [specifications](docs/specs/), [architecture decisions](docs/adr/), and [glossary](GLOSSARY.md) for package behavior and design. Each package keeps `node:test` behavior tests in `test/` and supporting hosts and fixtures in `fixtures/`. The root typecheck covers source, TypeScript tests, and TypeScript fixtures across all packages.
+See the [specifications](docs/specs/), [architecture decisions](docs/adr/), and [glossary](GLOSSARY.md) for package behavior and design. Package `node:test` behavior tests live in `test/`, with supporting hosts and fixtures in `fixtures/`. The root typecheck covers source, TypeScript tests, and TypeScript fixtures across all packages.
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
