@@ -6,6 +6,7 @@ import test from "node:test"
 import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
 import {
   getNativeClipboard,
+  sliceByColumn,
   stripTerminalSequences,
   type NativeClipboard,
   visibleWidth,
@@ -23,6 +24,37 @@ function assertWritableClipboard(
 ): asserts clipboard is NativeClipboard &
   Required<Pick<NativeClipboard, "setText">> {
   assert(clipboard?.setText)
+}
+
+function assertPanelFooter(
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+  target: string,
+  label: string,
+  background: "toolPendingBg" | "toolSuccessBg" | "toolErrorBg",
+) {
+  const lines = host.screenLines()
+  const plain = lines.map(stripTerminalSequences)
+  const start = plain.findIndex((line) => line.includes(target))
+  const row = plain.findIndex(
+    (line, index) =>
+      index > start && (line.includes(label) || line.trim() === "[Copied]"),
+  )
+  assert(start >= 0 && row > start, `${target} has a result footer`)
+  const color = host.ui.theme.getBgAnsi(background).slice(2, -1)
+  assert(
+    sliceByColumn(lines[row]!, 0, 1, true).includes(color),
+    `${target} ${label} shares the native result panel's background`,
+  )
+  assert.equal(
+    plain[row + 1]?.trim(),
+    "",
+    "Native bottom padding follows the footer",
+  )
+  assert(
+    sliceByColumn(lines[row + 1]!, 0, 1, true).includes(color),
+    "The footer remains inside the native bottom padding",
+  )
+  return row
 }
 const response = (
   content: string,
@@ -529,6 +561,12 @@ test("an unrelated provider presents semantic operations and late updates withou
   await click("> Running printf generic-evidence")
   assert.match(screen(), /\[Copy command\]/)
   assert.doesNotMatch(screen(), /generic-evidence 239/)
+  assertPanelFooter(
+    host,
+    "printf generic-evidence",
+    "[Copy output]",
+    "toolPendingBg",
+  )
   await click("printf generic-evidence", "[Copy output]")
   await t.waitFor(() => assert.equal(copied.at(-1), longOutput))
   assert.match(screen(), /▼ Running printf generic-evidence/)
@@ -549,6 +587,13 @@ test("an unrelated provider presents semantic operations and late updates withou
   await host.key("\r")
   await t.waitFor(() =>
     assert.equal(copied.at(-1), "  updated output\nsecond line\n"),
+  )
+  await host.frame()
+  assertPanelFooter(
+    host,
+    "printf generic-evidence",
+    "[Copy output]",
+    "toolPendingBg",
   )
   await click("▼ Running printf generic-evidence")
   await host.key("\x14")
@@ -636,6 +681,12 @@ test("an unrelated provider presents semantic operations and late updates withou
   assert.match(after, /^\s*▼ Edited a file, read files, ran a command\s*$/m)
   assert.doesNotMatch(after, /─+ [^\n]*(Thinking|Working|Running)/)
   assert.equal((after.match(/late-generic-failure/g) ?? []).length, 1)
+  assertPanelFooter(
+    host,
+    "printf generic-evidence",
+    "[Copy output]",
+    "toolErrorBg",
+  )
   await click("printf generic-evidence", "[Copy output]")
   await t.waitFor(() => assert.equal(copied.at(-1), "late-generic-failure"))
   publish([
@@ -732,6 +783,16 @@ test("an unrelated provider presents semantic operations and late updates withou
   ])
   await host.frame()
   assert.equal((screen().match(/\[Copy diff\]/g) ?? []).length, 2)
+  assertPanelFooter(host, "Edited first.ts", "[Copy diff]", "toolSuccessBg")
+  assertPanelFooter(host, "Edited second.ts", "[Copy diff]", "toolSuccessBg")
+  assertPanelFooter(host, "failure.ts", "[Copy output]", "toolErrorBg")
+  assertPanelFooter(host, "Edited counted.ts", "[Copy output]", "toolSuccessBg")
+  assertPanelFooter(
+    host,
+    "printf first-operation",
+    "[Copy output]",
+    "toolSuccessBg",
+  )
   await click("Edited first.ts", "[Copy diff]")
   assert.equal(copied.at(-1), patch)
   await click("Edited second.ts", "[Copy diff]")
@@ -1330,6 +1391,12 @@ test("declared command actions use the app parser and retain full command bodies
       edits: [{ oldText: "before", newText: "after" }],
     }),
   )
+  host.queueResponse(
+    ...response("", "edit", {
+      path: "missing-native-edit.txt",
+      edits: [{ oldText: "before", newText: "after" }],
+    }),
+  )
   host.queueResponse(...response("Finished"))
   await host.type("Inspect the command report")
   await host.key("\r")
@@ -1373,7 +1440,7 @@ test("declared command actions use the app parser and retain full command bodies
   )
   assert.equal(
     (screen.match(/\[Copy output\]/g) ?? []).length,
-    uncertain.length + 4,
+    uncertain.length + 5,
   )
   const commandLines = host.screenLines().map(stripTerminalSequences)
   const commandRow = commandLines.findIndex((line) =>
@@ -1407,12 +1474,24 @@ test("declared command actions use the app parser and retain full command bodies
     await host.frame()
     return row
   }
+  assertPanelFooter(
+    host,
+    "cd missing-native-directory",
+    "[Copy output]",
+    "toolErrorBg",
+  )
   await click("cd missing-native-directory", "[Copy output]")
   assert.match(
     copied.at(-1)!,
     /cd: missing-native-directory: No such file or directory/,
   )
   assert.doesNotMatch(copied.at(-1)!, /Copy output|Ran command/)
+  assertPanelFooter(
+    host,
+    "Edited native-edit.txt",
+    "[Copy diff]",
+    "toolSuccessBg",
+  )
   await click("Edited native-edit.txt", "[Copy diff]")
   assert.equal(
     copied.at(-1),
@@ -1427,6 +1506,19 @@ test("declared command actions use the app parser and retain full command bodies
     ).length,
     0,
   )
+  const errorFooter = assertPanelFooter(
+    host,
+    "missing-native-edit.txt",
+    "[Copy output]",
+    "toolErrorBg",
+  )
+  assert.match(
+    stripTerminalSequences(host.screenLines()[errorFooter - 1]!),
+    /Could not edit file: missing-native-edit.txt/,
+    "The native edit error precedes its footer",
+  )
+  await click("missing-native-edit.txt", "[Copy output]")
+  assert.match(copied.at(-1)!, /Could not edit file: missing-native-edit.txt/)
   host.terminal.resize(18, 300)
   await host.frame()
   const narrow = host.screenLines().map(stripTerminalSequences)
@@ -1443,6 +1535,24 @@ test("declared command actions use the app parser and retain full command bodies
   assert.match(
     stripTerminalSequences(host.screenLines()[narrowRow]!),
     /\[Copied\]/,
+  )
+  const narrowOutputRow = narrow.findIndex(
+    (line, index) =>
+      index > narrowRow && /^\s*\[(?:Copied|Copy output)\]\s*$/.test(line),
+  )
+  assert(narrowOutputRow > narrowRow)
+  assert(
+    sliceByColumn(host.screenLines()[narrowOutputRow]!, 0, 1, true).includes(
+      host.ui.theme.getBgAnsi("toolErrorBg").slice(2, -1),
+    ),
+    "The narrow command footer remains inside its result panel",
+  )
+  const narrowOutputColumn = narrow[narrowOutputRow]!.indexOf("[") + 1
+  await host.key(`\x1b[<0;${narrowOutputColumn};${narrowOutputRow + 1}M`)
+  await host.key(`\x1b[<0;${narrowOutputColumn};${narrowOutputRow + 1}m`)
+  assert.match(
+    copied.at(-1)!,
+    /cd: missing-native-directory: No such file or directory/,
   )
   host.terminal.resize(160, 300)
   await host.frame()

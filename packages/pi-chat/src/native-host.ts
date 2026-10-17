@@ -10,8 +10,10 @@ import {
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent"
 import {
+  Box,
   Container,
   HStack,
+  MouseRegion,
   ScrollView,
   Spacer,
   Text,
@@ -321,6 +323,23 @@ type NativeToolPresenter = Component & {
   setExpanded(expanded: boolean): void
 }
 
+type NativeToolLayout = {
+  contentBox: Box
+  selfRenderContainer: Container
+  callRendererComponent?: Component
+  resultRendererComponent?: Component
+}
+
+type NativeComponentLayout = {
+  paddingX?: number
+  paddingY?: number
+  bgFn?: (text: string) => string
+  child?: Component
+  mouseLayout?: {
+    children: { component: Component; height: number }[]
+  }
+}
+
 class RenderGroupHeader implements Component {
   focused = false
   readonly spacing = new Spacer(1)
@@ -535,7 +554,7 @@ class ActivityItemDisclosure extends Container {
   private header = new Text("", 0, 0)
   private commandAction: CopyAction | undefined
   private outputAction: CopyAction | undefined
-  private commandHeading: CopyHeading | undefined
+  private outputContinuation: Box | undefined
   copyColumns = new Map<number, number>()
 
   get actions() {
@@ -606,7 +625,7 @@ class ActivityItemDisclosure extends Container {
       this.outputAction = new CopyAction(
         this.adapter,
         () => this.copyOutput(),
-        true,
+        false,
         this,
       )
   }
@@ -647,7 +666,7 @@ class ActivityItemDisclosure extends Container {
     ) {
       this.initialBodyExpanded = this.bodyExpanded
       this.body = undefined
-      this.commandHeading = undefined
+      this.outputContinuation = undefined
     }
     if (item.kind !== this.item.kind) {
       this.dispose()
@@ -678,6 +697,82 @@ class ActivityItemDisclosure extends Container {
   setBodyExpanded(expanded: boolean) {
     this.initialBodyExpanded = expanded
     this.body?.setExpanded(expanded)
+  }
+
+  private placeOutputAction() {
+    const action = this.outputAction
+    if (!action || !this.body) return
+    const body = this.body as unknown as NativeToolLayout
+    if (this.body.children.includes(body.contentBox)) {
+      if (!body.contentBox.children.includes(action))
+        body.contentBox.addChild(action)
+      return
+    }
+    const panel = body.callRendererComponent
+    if (!(panel instanceof Box)) return
+    const container = body.selfRenderContainer
+    if (
+      this.outputContinuation &&
+      container.children.includes(this.outputContinuation)
+    )
+      return
+    const result = body.resultRendererComponent
+    const resultIndex = container.children.findIndex(
+      (component) =>
+        (component as unknown as NativeComponentLayout).child === result,
+    )
+    if (
+      result instanceof Container &&
+      result.children.length &&
+      resultIndex >= 0
+    ) {
+      // Native edits can render error text after their own panel. Continue that
+      // panel with the original result component, preserving its native inset.
+      const { paddingX, paddingY, bgFn } =
+        panel as unknown as NativeComponentLayout
+      const footer = new Box(paddingX, 0)
+      footer.addChild(action)
+      const continuation = new Box(0, 0, bgFn)
+      continuation.addChild(container.children[resultIndex]!)
+      continuation.addChild(footer)
+      continuation.addChild(new Spacer(paddingY ?? 0))
+      container.children[resultIndex] = continuation
+      this.outputContinuation = continuation
+    } else if (!panel.children.includes(action)) panel.addChild(action)
+  }
+
+  private recordCopyGeometry(component: Component, row = 0, column = 0) {
+    const layout = component as unknown as NativeComponentLayout
+    if (component instanceof CopyAction || component instanceof CopyHeading) {
+      const action =
+        component instanceof CopyAction ? component : component.action
+      const headingRow =
+        component instanceof CopyHeading ? component.actionRow : 0
+      action.row = row + headingRow
+      for (let offset = 0; offset < action.height; offset++)
+        this.copyColumns.set(
+          action.row + offset,
+          component instanceof CopyAction || headingRow
+            ? 0
+            : column + action.column,
+        )
+    } else if (component instanceof MouseRegion && layout.child) {
+      this.recordCopyGeometry(layout.child, row, column)
+    } else {
+      if (component === this.body) {
+        const body = component as unknown as NativeToolLayout
+        if (!this.body.children.includes(body.contentBox)) {
+          this.recordCopyGeometry(body.selfRenderContainer, row + 1, column)
+          return
+        }
+      }
+      row += layout.paddingY ?? 0
+      column += layout.paddingX ?? 0
+      for (const child of layout.mouseLayout?.children ?? []) {
+        this.recordCopyGeometry(child.component, row, column)
+        row += child.height
+      }
+    }
   }
 
   override render(width: number) {
@@ -717,8 +812,7 @@ class ActivityItemDisclosure extends Container {
                 ...context,
                 lastComponent: previous,
               })
-              this.commandHeading = new CopyHeading(component, action)
-              return this.commandHeading
+              return new CopyHeading(component, action)
             },
           }
         this.body = new ToolExecutionComponent(
@@ -736,38 +830,12 @@ class ActivityItemDisclosure extends Container {
           this.body.updateResult(result, this.item.status === "running")
         this.body.setExpanded(this.initialBodyExpanded)
       }
+      this.placeOutputAction()
       this.children.push(this.body)
-      if (this.outputAction) this.children.push(this.outputAction)
     }
     const rows = super.render(width)
     this.copyColumns = new Map()
-    if (this.expanded && this.body) {
-      if (this.commandAction && this.commandHeading) {
-        const box = (
-          this.body as unknown as {
-            contentBox: Component & { paddingX: number; paddingY: number }
-          }
-        ).contentBox
-        let top = 1 + box.paddingY
-        for (const child of this.body.children) {
-          if (child === box) break
-          top += child.render(width).length
-        }
-        this.commandAction.row = top + this.commandHeading.actionRow
-        for (let row = 0; row < this.commandAction.height; row++)
-          this.copyColumns.set(
-            this.commandAction.row + row,
-            this.commandHeading.actionRow
-              ? 0
-              : box.paddingX + this.commandAction.column,
-          )
-      }
-      if (this.outputAction) {
-        this.outputAction.row = rows.length - this.outputAction.height
-        for (let row = this.outputAction.row; row < rows.length; row++)
-          this.copyColumns.set(row, 0)
-      }
-    }
+    if (this.expanded && this.outputAction) this.recordCopyGeometry(this)
     return rows
   }
 
