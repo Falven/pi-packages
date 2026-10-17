@@ -125,8 +125,7 @@ export class WorkingLabel {
     this.refresh()
   }
 
-  refresh(width = this.width) {
-    this.width = width
+  currentOperation() {
     if (!this.ui) return
     const boundary = this.steps.findLastIndex((step) => step.kind === "text")
     const items = this.steps
@@ -143,6 +142,18 @@ export class WorkingLabel {
           item.kind !== "image" &&
           item.kind !== "output",
       )
+    return (
+      active && {
+        item: active,
+        label: operationLabel(active)?.replace(/\s+/gu, " ").trim(),
+      }
+    )
+  }
+
+  refresh(width = this.width) {
+    this.width = width
+    if (!this.ui) return
+    const active = this.currentOperation()
     const hidden = !active && this.hasFinalResponse()
     if (hidden !== this.hidden) {
       this.hidden = hidden
@@ -153,7 +164,7 @@ export class WorkingLabel {
       (step) => step.kind === "reasoning" && step.label,
     )
     const label = (
-      (active && operationLabel(active)) ??
+      active?.label ??
       (thought?.kind === "reasoning" ? thought.label : undefined) ??
       activityConfig.working.thinking
     )

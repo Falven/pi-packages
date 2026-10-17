@@ -115,6 +115,13 @@ test("streaming exec arguments stay quiet until the command starts", async (t) =
   await t.waitFor(() => assert(commandStarted))
   await host.frame()
   assert.match(screen(), /Running (?:node|command)/)
+  assert.equal(
+    screen()
+      .split("\n")
+      .find((line) => line.trimStart().startsWith("▼ "))
+      ?.trim(),
+    `▼ Running ${command}`,
+  )
   assert.match(screen(), /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][^\n]*Running node/)
   assert.doesNotMatch(screen(), /(?:Called|Calling) exec|status unknown/)
   await work

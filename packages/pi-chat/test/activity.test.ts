@@ -107,6 +107,13 @@ test("pending calls stay out of activity until dispatch and retain generic outco
   await t.waitFor(() => assert(started))
   await host.frame()
   assert.match(screen(), /Calling inspect_workspace/)
+  assert.equal(
+    screen()
+      .split("\n")
+      .find((line) => line.trimStart().startsWith("▼ "))
+      ?.trim(),
+    "▼ Calling inspect_workspace",
+  )
   gate.resolve()
   await work
   await host.frame()
@@ -277,6 +284,14 @@ test("native reads and an unrelated command provider share skill labels and reta
       host.screenLines().map(stripTerminalSequences).join("\n"),
       /─+ [^\n]*Reading review skill/,
     )
+    assert(
+      host
+        .screenLines()
+        .some(
+          (line) =>
+            stripTerminalSequences(line).trim() === "> Reading review skill",
+        ),
+    )
     host.resumeResponse()
   }
   await work
@@ -326,6 +341,15 @@ test("native reads and an unrelated command provider share skill labels and reta
 
 test("an unrelated provider presents semantic operations and late updates without tool-name mappings", async (t) => {
   let publish: ((operations?: ActivityUpdate["operations"]) => void) | undefined
+  const runningCommand = {
+    id: "job-command",
+    order: 0,
+    revision: 1,
+    kind: "command" as const,
+    commands: ["printf generic-evidence"],
+    status: "running" as const,
+    output: "generic-evidence",
+  }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
     rows: 140,
@@ -347,17 +371,7 @@ test("an unrelated provider presents semantic operations and late updates withou
               callId,
               sessionId: ctx.sessionManager.getSessionId(),
               revision: 1,
-              operations: [
-                {
-                  id: "job-command",
-                  order: 0,
-                  revision: 1,
-                  kind: "command",
-                  commands: ["printf generic-evidence"],
-                  status: "running",
-                  output: "generic-evidence",
-                },
-              ],
+              operations: [runningCommand],
             }
             let revision = update.revision
             publish = (
@@ -401,7 +415,12 @@ test("an unrelated provider presents semantic operations and late updates withou
   const work = host.session.prompt("Start work")
   await t.waitFor(() => assert.equal(host.requests.length, 2))
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n")
-  const status = async (label: string) => {
+  const header = () =>
+    screen()
+      .split("\n")
+      .find((line) => line.trimStart().startsWith("> "))
+      ?.trim()
+  const status = async (label: string, groupLabel = label) => {
     await host.frame()
     const indicator = host
       .screenLines()
@@ -413,12 +432,23 @@ test("an unrelated provider presents semantic operations and late updates withou
     )
     assert(indicator)
     assert.doesNotMatch(indicator, /Working|opaque_job/)
+    assert.equal(header(), `> ${groupLabel}`)
   }
+  await status("Running printf generic-evidence")
+  host.terminal.resize(24, 140)
+  await host.frame()
+  assert.match(header()!, /^> Running printf.*\.\.\.$/)
+  assert.doesNotMatch(header()!, /generic-evidence/)
+  host.terminal.resize(110, 140)
   await status("Running printf generic-evidence")
   await host.key("\x14")
   await status("Running printf generic-evidence")
   await host.key("\x14")
   assert(publish)
+  publish([{ ...runningCommand, commands: [" \n "] }])
+  await status("Running command")
+  publish([runningCommand])
+  await status("Running printf generic-evidence")
   const firstRead = {
     id: "read-a",
     order: 1,
@@ -476,7 +506,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   }
   host.resumeResponse()
   await t.waitFor(() => assert.match(screen(), /Finished/))
-  await status("Thinking")
+  await status("Thinking", "Edited a file, read files, running a command")
   host.resumeResponse()
   await work
   await host.frame()
@@ -493,6 +523,7 @@ test("an unrelated provider presents semantic operations and late updates withou
   const after = host.screenLines().map(stripTerminalSequences).join("\n")
   assert.match(after, /late-generic-failure/)
   assert.match(after, /Ran command \(failed\)/)
+  assert.match(after, /^\s*▼ Edited a file, read files, ran a command\s*$/m)
   assert.doesNotMatch(after, /─+ [^\n]*(Thinking|Working|Running)/)
   assert.equal((after.match(/late-generic-failure/g) ?? []).length, 1)
   const fork = await host.runtime.fork(

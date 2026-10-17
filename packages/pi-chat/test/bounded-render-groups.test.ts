@@ -278,9 +278,10 @@ test("group summaries combine native categories and distinct paths while executi
   try {
     await host.key("\r")
     await t.waitFor(() => assert(waiting))
+    await host.frame()
     assert.match(
-      await host.frame(),
-      /> Edited a file, read files, running commands/,
+      host.screenLines().map(stripTerminalSequences).join("\n"),
+      /^\s*> Running printf second-command\s*$/m,
     )
   } finally {
     gate.resolve()

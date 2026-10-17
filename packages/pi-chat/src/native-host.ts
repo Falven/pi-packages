@@ -305,6 +305,7 @@ type ChatRow = {
 type RenderGroup = {
   items: ChatRow[]
   expanded: boolean
+  operationLabel?: string | undefined
   header?: RenderGroupHeader
 }
 
@@ -327,7 +328,7 @@ class RenderGroupHeader implements Component {
   render(width: number) {
     return new Text(
       truncateToWidth(
-        `${this.group.expanded ? "▼" : ">"} ${this.adapter.groupSummaries.summary(this.group)}`,
+        `${this.group.expanded ? "▼" : ">"} ${this.group.operationLabel ?? this.adapter.groupSummaries.summary(this.group)}`,
         Math.max(1, width - this.adapter.host.outputPad * 2),
       ),
       this.adapter.host.outputPad,
@@ -811,6 +812,7 @@ export class NativeChatHost {
         components.push(...missing[nextMissing++]![1])
     }
     const chatRows = this.orderedChatRows(components)
+    const operation = this.working.currentOperation()
     let composed: ChatRow[] = []
     for (let index = 0; index < chatRows.length;) {
       const chatRow = chatRows[index]!
@@ -845,6 +847,10 @@ export class NativeChatHost {
         this.renderGroups.set(first, group)
       }
       group.items = items
+      group.operationLabel =
+        operation && items.some((row) => row.activityItem === operation.item)
+          ? operation.label
+          : undefined
       composed.push({
         component: group.header!,
         tool: false,
