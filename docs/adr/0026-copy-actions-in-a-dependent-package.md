@@ -1,5 +1,7 @@
 # Copy actions belong to a dependent package
 
+**Status:** superseded by [ADR 0028](0028-copy-as-an-independent-extension.md). The original extraction below records its historical scope; the user subsequently required independent plugins without an installation dependency.
+
 `pi-copy` owns the existing command, output, diff, and final-response copy behavior, and `pi-chat` depends on it. Chat supplies authoritative activity and final-response context and mounts the controls through a small interface; copy does not import chat or receive its complete native host. This separates copy maintenance while preserving one owner of chat layout, source identity, navigation, selection, and lifecycle.
 
 ## Consequences
