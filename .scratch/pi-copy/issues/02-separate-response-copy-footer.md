@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Extract chat copy behavior.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Guarantee exactly one blank boundary row before Copy response after prose, lists, and code blocks, reusing existing rendered separation instead of stacking blank rows.
 - [ ] Preserve the gap through redraw, narrow layouts, resize, history reload, and multipart finals. Keep eligible empty-final and absent-final behavior unchanged.

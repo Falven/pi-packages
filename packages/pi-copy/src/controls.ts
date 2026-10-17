@@ -94,6 +94,8 @@ export class CopyAction implements Component {
     if (
       event.button !== "left" ||
       (event.type !== "press" && event.type !== "click") ||
+      (!this.owner &&
+        (event.y < this.row || event.y >= this.row + this.height)) ||
       event.x < this.column ||
       event.x >= this.column + this.width
     )

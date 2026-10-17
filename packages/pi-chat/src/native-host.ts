@@ -1247,9 +1247,16 @@ export class NativeChatHost {
       height,
       gap,
     )
+    let previousLine = ""
     const leaves = composed.map(
       ({ component, occurrence, zoneStart, zoneEnd }) => {
         let rows = component.render(contentWidth)
+        if (component instanceof CopyAction) {
+          // Keep the separator with the control, outside selected response text.
+          component.row = stripTerminalSequences(previousLine).trim() ? 1 : 0
+          if (component.row) rows = ["", ...rows]
+        }
+        previousLine = rows.at(-1) ?? previousLine
         let left = 0
         if (component instanceof UserMessageComponent) {
           const textWidth = Math.min(

@@ -2,6 +2,8 @@
 
 Copy controls for `pi-chat`: Copy command, Copy output, Copy diff, and Copy response. Chat includes this library as a dependency; no separate Pi extension or installation step is required.
 
+Chat leaves one blank display row before Copy response, reusing existing separation without adding whitespace to the copied answer.
+
 Controls copy the owning command, edit, or final response from its current retained source. They preserve original Markdown, whitespace, native panel placement, configured keyboard navigation, and pointer behavior. Empty payloads do not replace the clipboard. Successful writes show Copied briefly; failures and partial retained output use Pi's status display. Disposing controls prevents late writes from updating a replaced view.
 
 Chat supplies current source data, theme and padding, render/status callbacks, and input integration. It retains final-response recognition, activity classification, source identity, layout, focus, selection, Find, and extension lifecycle. Copy reuses Pi's native clipboard transport and TUI; it does not attach to stock Pi independently.

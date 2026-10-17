@@ -513,6 +513,8 @@ test("all terminal text parts share one answer when a native extension interleav
   const firstRow = lines.findIndex((line) => line.includes("First answer part"))
   const lastRow = lines.findIndex((line) => line.includes("Last answer part"))
   assert(actionRow > lastRow)
+  assert.equal(lines[actionRow - 1]!.trim(), "")
+  assert.notEqual(lines[actionRow - 2]!.trim(), "")
   assert.equal(
     lines[actionRow]!.indexOf("["),
     lines[firstRow]!.indexOf("First"),
@@ -1333,7 +1335,7 @@ test("a standalone native message after the final keeps its source position", as
   const appendNotice = { current: () => {} }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
-    rows: 34,
+    rows: 40,
     extensionFactories: [
       (pi) => {
         pi.registerEntryRenderer(

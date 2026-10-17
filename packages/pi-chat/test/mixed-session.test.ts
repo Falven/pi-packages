@@ -285,7 +285,7 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
         })
         pi.registerMarkdownTransformer((markdown, context) =>
           context.messageType === "assistant"
-            ? markdown.replaceAll("Recovered answer", "Shown answer")
+            ? markdown.replaceAll("Recovered answer", "Shown answer\n\n")
             : markdown,
         )
       },
@@ -354,6 +354,8 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
         index > answerRow && /\[(?:Copy response|Copied)\]/.test(line),
     )
     assert(answerRow >= 0 && footerRow > answerRow)
+    assert.equal(lines[footerRow - 1]!.trim(), "")
+    assert.notEqual(lines[footerRow - 2]!.trim(), "")
     const column = lines[footerRow]!.indexOf("[") + 1
     copied = ""
     await host.key(`\x1b[<0;${column};${footerRow + 1}M`)
@@ -434,11 +436,19 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
     .screenLines()
     .findIndex((line) => stripTerminalSequences(line).includes("First answer"))
   assert(answerRow >= 0)
+  const footerRow = host
+    .screenLines()
+    .findIndex(
+      (line, index) =>
+        index > answerRow &&
+        /\[(?:Copy response|Copied)\]/.test(stripTerminalSequences(line)),
+    )
+  assert(footerRow > answerRow)
   await host.key(`\x1b[<0;2;${answerRow + 1}M`)
-  await host.key(`\x1b[<32;14;${answerRow + 1}M`)
-  await host.key(`\x1b[<0;14;${answerRow + 1}m`)
+  await host.key(`\x1b[<32;14;${footerRow + 1}M`)
+  await host.key(`\x1b[<0;14;${footerRow + 1}m`)
   await host.key("\x18")
-  await t.waitFor(() => assert.match(copied, /First answer/))
+  await t.waitFor(() => assert.equal(copied, "First answer"))
 
   await host.key("\x1b")
   host.queueResponse(

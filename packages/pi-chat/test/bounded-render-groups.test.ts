@@ -612,7 +612,6 @@ test("native images crop once against the conversation and retain their identity
   const third = kittyPlacements(host.terminal.output).at(-1)
   assert(third)
   assert.equal(third["i"], first["i"])
-  // The final-response footer adds one row at the clamped conversation end.
   assert.equal(third["y"], "720")
   assert.equal(third["h"], "360")
   assert.equal(third["r"], "8")
@@ -630,14 +629,20 @@ test("native images crop once against the conversation and retain their identity
   )
   const answer = stripTerminalSequences(lines[imageRow + 9] ?? "")
   assert.match(answer, /Received\./)
+  assert.equal(
+    stripTerminalSequences(lines[imageRow + 10]!)
+      .slice(0, -1)
+      .trim(),
+    "",
+  )
   assert.deepEqual(
     lines.flatMap((line, row) =>
       stripTerminalSequences(line).includes("[Copy response]") ? [row] : [],
     ),
-    [imageRow + 10],
+    [imageRow + 11],
   )
   assert.equal(
-    stripTerminalSequences(lines[imageRow + 10]!).indexOf("[Copy response]"),
+    stripTerminalSequences(lines[imageRow + 11]!).indexOf("[Copy response]"),
     answer.indexOf("Received."),
   )
   host.terminal.resize(60, 28)

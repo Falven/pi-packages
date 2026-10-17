@@ -415,6 +415,7 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
     summary: [{ type: "summary_text", text: "Hidden thought" }],
     content: [],
   }
+  const answer = "Visible answer\n\n```ts\n  const answer = 42\n```\n\n"
   host.queueResponse(
     {
       event: {
@@ -434,9 +435,9 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
     delta(19, "Prior work"),
     ended(19, "progress", "commentary", "Prior work"),
     added(19, "answer", "final_answer"),
-    delta(19, "Visible answer"),
+    delta(19, answer),
     { pause: true },
-    ended(19, "answer", "final_answer", "Visible answer"),
+    ended(19, "answer", "final_answer", answer),
     ended(31, "late", "commentary", "Late commentary"),
     completed,
   )
@@ -459,12 +460,26 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
     const lines = host.screenLines().map(stripTerminalSequences)
     const row = lines.findIndex((line) => line.includes("[Copy response]"))
     assert(row >= 0)
+    assert.equal(
+      lines[row - 1]!.trim(),
+      "",
+      "One blank row separates the final response from its copy action",
+    )
+    assert.notEqual(
+      lines[row - 2]!.trim(),
+      "",
+      "The response separator does not stack blank rows",
+    )
     const column = lines[row]!.indexOf("[") + 1
+    copied = ""
+    await host.key(`\x1b[<0;${column};${row}M`)
+    await host.key(`\x1b[<0;${column};${row}m`)
+    assert.equal(copied, "", "The separator is outside the copy click target")
     await host.key(`\x1b[<0;${column};${row + 1}M`)
     await host.key(`\x1b[<0;${column};${row + 1}m`)
   }
   await copy()
-  await t.waitFor(() => assert.equal(copied, "Visible answer"))
+  await t.waitFor(() => assert.equal(copied, answer))
   assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
   const assistant = host.session.messages.at(-1)
   assert.equal(assistant?.role, "assistant")
@@ -479,6 +494,7 @@ test("reused sparse provider slots and a reasoning slot select the exact final p
   await host.reload()
   reloading.resolve()
   pending = undefined
+  host.terminal.resize(24, 36)
   const replay = await host.frame()
   assert.match(replay, /Worked for \d+m \d+s ▶/)
   assert.match(replay, /Visible answer/)
