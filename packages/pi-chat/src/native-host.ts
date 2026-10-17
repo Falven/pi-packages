@@ -345,6 +345,22 @@ type NativeComponentLayout = {
   }
 }
 
+function disclosureLine(
+  width: number,
+  outputPad: number,
+  expanded: boolean,
+  label: (width: number) => string,
+) {
+  const padding = Math.min(outputPad, Math.floor((width - 1) / 2))
+  const available = Math.max(1, width - padding * 2)
+  const labelWidth = available > 2 ? available - 2 : available - 1
+  const chevron = expanded ? "▼" : ">"
+  return {
+    padding,
+    line: `${available === 1 ? "" : label(labelWidth)}${available > 2 ? " " : ""}${chevron}`,
+  }
+}
+
 class RenderGroupHeader implements Component {
   focused = false
   readonly spacing = new Spacer(1)
@@ -357,24 +373,20 @@ class RenderGroupHeader implements Component {
   invalidate() {}
 
   render(width: number) {
-    const padding = Math.min(
+    const { line, padding } = disclosureLine(
+      width,
       this.adapter.host.outputPad,
-      Math.floor((width - 1) / 2),
-    )
-    const available = Math.max(1, width - padding * 2)
-    const chevron = this.group.expanded ? "▼" : ">"
-    const labelWidth = available > 2 ? available - 2 : available - 1
-    const label =
-      available === 1
-        ? ""
-        : this.adapter.workingGroup === this.group
+      this.group.expanded,
+      (labelWidth) =>
+        this.adapter.workingGroup === this.group
           ? this.adapter.workingLine(labelWidth)
           : truncateToWidth(
               this.adapter.groupSummaries.summary(this.group),
               labelWidth,
-            )
+            ),
+    )
     return new Text(
-      `${label}${available > 2 ? " " : ""}${chevron}`,
+      line,
       padding,
       0,
       this.focused
@@ -795,12 +807,18 @@ class ActivityItemDisclosure extends Container {
 
   override render(width: number) {
     const pad = this.adapter.host.outputPad
-    const padding = Math.min(pad, Math.floor((width - 1) / 2))
-    const available = Math.max(1, width - padding * 2)
-    const chevron = this.expanded ? "▼" : ">"
-    const labelWidth = available > 2 ? available - 2 : available - 1
+    const { line, padding } = disclosureLine(
+      width,
+      pad,
+      this.expanded,
+      (labelWidth) =>
+        truncateToWidth(
+          itemSummary(this.item, this.expanded && this.bodyExpanded),
+          labelWidth,
+        ),
+    )
     this.header = new Text(
-      `${truncateToWidth(itemSummary(this.item, this.expanded && this.bodyExpanded), labelWidth)}${available > 2 ? " " : ""}${chevron}`,
+      line,
       padding,
       0,
       this.focused
@@ -1259,7 +1277,12 @@ export class NativeChatHost {
             (part.type === "thinking" && part.thinking.trim())),
       )
     }
+    const emptyThoughtBody = (row: ChatRow) =>
+      row.occurrence !== undefined &&
+      this.thoughts.has(row.occurrence) &&
+      row.component.render(contentWidth).length === 0
     const latest = new Map<AgentActivity, ChatRow>()
+    let latestDisplayedWorking: ChatRow | undefined
     for (const chatRow of chatRows) {
       if (!hasVisibleContent(chatRow)) continue
       const activity = this.agentActivity.find(chatRow.occurrence)
@@ -1268,12 +1291,15 @@ export class NativeChatHost {
         !(chatRow.component instanceof Spacer) &&
         !this.agentActivity.isFinal(chatRow.occurrence, activity) &&
         !this.agentActivity.isRequest(chatRow.occurrence, activity)
-      )
+      ) {
         latest.set(activity, chatRow)
+        if (activity === current && !emptyThoughtBody(chatRow))
+          latestDisplayedWorking = chatRow
+      }
     }
     const latestWorking =
       current && !current.settled && !current.final
-        ? latest.get(current)
+        ? latestDisplayedWorking
         : undefined
     const laterVisible =
       latestWorking &&
@@ -1283,6 +1309,7 @@ export class NativeChatHost {
           (row) =>
             !(row.component instanceof Spacer) &&
             hasVisibleContent(row) &&
+            !emptyThoughtBody(row) &&
             (row.agentActivity ??
               this.agentActivity.find(row.occurrence ?? row.owner)) === current,
         )
