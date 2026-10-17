@@ -379,7 +379,7 @@ test("an unrelated provider presents semantic operations and late updates withou
     kind: "command" as const,
     commands: ["printf generic-evidence"],
     status: "running" as const,
-    output: `\x1b[31m${longOutput}\x1b[0m`,
+    output: "generic-evidence",
   }
   const host = await openNativeHost(t, {
     extensionPaths: [chat],
@@ -402,7 +402,12 @@ test("an unrelated provider presents semantic operations and late updates withou
               callId,
               sessionId: ctx.sessionManager.getSessionId(),
               revision: 1,
-              operations: [runningCommand],
+              operations: [
+                {
+                  ...runningCommand,
+                  output: `\x1b[31m${longOutput}\x1b[0m`,
+                },
+              ],
             }
             let revision = update.revision
             publish = (
