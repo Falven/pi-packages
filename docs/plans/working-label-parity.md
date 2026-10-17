@@ -1,6 +1,6 @@
 # Working label parity
 
-**Status:** thought-title correction in progress on `main` from `e338ecf`, tracked in Ticket 13. Ticket 12 retains the earlier implementation at `4e27987`, its checks, and their limits.
+**Status:** thought-title correction implemented and verified at `fc33210` on `main`, from `e338ecf`. Ticket 13 records 141/141 chat/combined-workflow checks on each supported Pi host, the captured-thought check, static checks, independent reviews, and limits. Ticket 12 retains the earlier implementation at `4e27987`, its checks, and their limits.
 
 The working label is the text in Pi's native progress indicator. The original implementation ignored tool activities and cleared thought titles at thinking/message completion, leaving `Working` during much of a request. The first correction added operation labels but selected the last line of a whole Pi thought. A long body paragraph then replaced its title and wrapped into several indicator rows. The reported saved thought already has the title `Auditing project requirements`.
 
