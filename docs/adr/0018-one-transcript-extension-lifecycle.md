@@ -5,3 +5,5 @@
 ## Consequences
 
 Scope is visual presentation. Model verbosity, reasoning effort, model selection, and other model controls remain outside this package. Planning and todo workflows, subagent workflows, and pending-question/answer workflows also remain outside it; their existing native integrations must remain usable.
+
+[ADR 0026](0026-copy-actions-in-a-dependent-package.md) assigns the existing scoped copy actions to `pi-copy`, a dependency consumed within chat's lifecycle. Chat continues to own their placement, source identity, navigation, selection, and Find integration.

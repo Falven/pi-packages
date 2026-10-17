@@ -1,0 +1,5 @@
+# Copy retained source independently of presentation
+
+Copy actions read the owning command, edit, or final response's retained source when activated, using the existing payload rules and Pi's clipboard transport. Rendered rows, shortened summaries, current files, and newer answers cannot replace that source; copying preserves source whitespace and reports retained-output limits without recovering discarded data. This retains accurate copying across wrapping, previews, history, and asynchronous updates at the cost of carrying source ownership into each control.
+
+The blank row before a final-response copy action belongs to layout. Controls, their feedback, and their spacing never become response Markdown, retained conversation content, or provider input. Chat retains selection and Find integration, and disposing a control prevents late clipboard completion from updating a replacement view.

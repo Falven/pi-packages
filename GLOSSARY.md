@@ -88,6 +88,12 @@ _Avoid_: Compaction, when only presentation changes
 **Expanded**:
 The display state that reveals the content associated with a disclosure.
 
+**Copy action**:
+A control that copies the retained text of one command, edit, or final response. It belongs to presentation rather than conversation content.
+
+**Retained output**:
+The output of an operation that is still available to inspect or copy. It may be incomplete when earlier output has been omitted.
+
 **Hide thinking**:
 The choice to omit thoughts from ordinary chat flow while retaining them in conversation history. Finding a thought can temporarily reveal that occurrence without changing the choice.
 
