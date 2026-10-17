@@ -4,7 +4,15 @@
 
 **Blocked by:** None for this delta; the established native activity presentation is already integrated.
 
-**Status:** resolved — component-copy implementation; combined supported-host validation remains in Chat 12
+**Status:** in progress — native result footer placement correction; prior component-copy evidence remains below
+
+## Native result footer correction — approved 2026-10-16
+
+The reported screenshot places Copy output on the conversation background outside the native result. Command Copy output and edit Copy diff/Copy output must sit after the native result text at the bottom inside that panel, sharing its background and padding. This clarifies the earlier “below the output” placement; final-response copying is unchanged.
+
+- [ ] Compose the footer inside the existing native result panel for running, successful, and failed command/edit items, in both preview and full-output states.
+- [ ] Preserve clipboard payloads, mouse consumption, keyboard focus, selection exclusions, narrow resizing, disclosure choices, and native image ownership.
+- [ ] Extend existing real-Pi recording-terminal cases to catch the reported background mismatch; pass relevant checks and independent review, then integrate and clean up the task branch/worktree.
 
 ## Component-copy delta — approved 2026-10-16
 
