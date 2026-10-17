@@ -1,58 +1,51 @@
-import { createHash } from "node:crypto"
+import { createHash } from "node:crypto";
 import type {
   ExtensionAPI,
   SessionEntry,
   ToolExecutionEndEvent,
   ToolExecutionStartEvent,
   ToolExecutionUpdateEvent,
-} from "@earendil-works/pi-coding-agent"
-import { ActivityAdapters } from "./tool-adapters/index.ts"
-import { fallbackItems } from "./tool-adapters/fallback.ts"
-import type {
-  ActivityItem,
-  ActivityResult,
-  CallFacts,
-} from "./tool-adapters/types.ts"
-import { argumentsOf } from "./tool-adapters/types.ts"
+} from "@earendil-works/pi-coding-agent";
+import { ActivityAdapters } from "./tool-adapters/index.ts";
+import { fallbackItems } from "./tool-adapters/fallback.ts";
+import type { ActivityItem, ActivityResult, CallFacts } from "./tool-adapters/types.ts";
+import { argumentsOf } from "./tool-adapters/types.ts";
 
-export const nativeToolType = "pi-chat.native-tool"
+export const nativeToolType = "pi-chat.native-tool";
 type NativeTool = {
-  version: 1
-  entryId: string
-  contentIndex: number
-  callId: string
-  name: string
-  cwd: string
-  argsHash: string
-}
+  version: 1;
+  entryId: string;
+  contentIndex: number;
+  callId: string;
+  name: string;
+  cwd: string;
+  argsHash: string;
+};
 const argsHash = (args: unknown) =>
-  createHash("sha256").update(JSON.stringify({ args })).digest("hex")
+  createHash("sha256").update(JSON.stringify({ args })).digest("hex");
 const sourceKey = (source: Pick<NativeTool, "entryId" | "contentIndex">) =>
-  JSON.stringify([source.entryId, source.contentIndex])
+  JSON.stringify([source.entryId, source.contentIndex]);
 
-type Call = { id: string; name: string; arguments: unknown }
+type Call = { id: string; name: string; arguments: unknown };
 type State = {
-  facts: CallFacts
-  pending: boolean
-  items?: ActivityItem[]
-  retained?: ActivityResult
-  source?: Pick<NativeTool, "entryId" | "contentIndex">
-}
+  facts: CallFacts;
+  pending: boolean;
+  items?: ActivityItem[];
+  retained?: ActivityResult;
+  source?: Pick<NativeTool, "entryId" | "contentIndex">;
+};
 
 export class ActivityItems {
-  private readonly calls = new WeakMap<object, State>()
-  private readonly entries = new WeakMap<object, Map<number, State>>()
-  private readonly live = new Map<string, State>()
-  private readonly dispatched = new Map<string, State>()
-  private readonly byId = new Map<string, Set<State>>()
-  private readonly adapters = new ActivityAdapters()
-  private readonly nativeTools = new Map<string, NativeTool>()
+  private readonly calls = new WeakMap<object, State>();
+  private readonly entries = new WeakMap<object, Map<number, State>>();
+  private readonly live = new Map<string, State>();
+  private readonly dispatched = new Map<string, State>();
+  private readonly byId = new Map<string, Set<State>>();
+  private readonly adapters = new ActivityAdapters();
+  private readonly nativeTools = new Map<string, NativeTool>();
 
   constructor(
-    private readonly pi: Pick<
-      ExtensionAPI,
-      "getAllTools" | "getCommands" | "appendEntry"
-    >,
+    private readonly pi: Pick<ExtensionAPI, "getAllTools" | "getCommands" | "appendEntry">,
   ) {}
 
   bind(
@@ -64,7 +57,7 @@ export class ActivityItems {
     entry?: SessionEntry,
     index?: number,
   ) {
-    const parts = entry && this.entries.get(entry)
+    const parts = entry && this.entries.get(entry);
     const state: State = this.calls.get(owner) ??
       (index !== undefined ? parts?.get(index) : undefined) ?? {
         pending: live,
@@ -79,54 +72,54 @@ export class ActivityItems {
           result: undefined,
           skills: [],
         },
-      }
-    this.calls.set(owner, state)
-    const states = this.byId.get(call.id) ?? new Set<State>()
-    states.add(state)
-    this.byId.set(call.id, states)
-    if (live) this.live.set(call.id, state)
+      };
+    this.calls.set(owner, state);
+    const states = this.byId.get(call.id) ?? new Set<State>();
+    states.add(state);
+    this.byId.set(call.id, states);
+    if (live) this.live.set(call.id, state);
     if (entry && index !== undefined) {
-      state.source = { entryId: entry.id, contentIndex: index }
-      const retained = parts ?? new Map<number, State>()
-      retained.set(index, state)
-      this.entries.set(entry, retained)
+      state.source = { entryId: entry.id, contentIndex: index };
+      const retained = parts ?? new Map<number, State>();
+      retained.set(index, state);
+      this.entries.set(entry, retained);
     }
   }
 
   start(event: ToolExecutionStartEvent, cwd: string) {
-    if (event.parentToolCallId) return
-    const state = this.live.get(event.toolCallId)
-    if (!state) return
-    this.dispatched.set(event.toolCallId, state)
-    state.pending = false
+    if (event.parentToolCallId) return;
+    const state = this.live.get(event.toolCallId);
+    if (!state) return;
+    this.dispatched.set(event.toolCallId, state);
+    state.pending = false;
     state.facts = {
       ...state.facts,
       args: event.args,
       cwd,
       status: "running",
       builtin:
-        this.pi.getAllTools().find((tool) => tool.name === event.toolName)
-          ?.sourceInfo.source === "builtin",
-    }
-    delete state.items
+        this.pi.getAllTools().find((tool) => tool.name === event.toolName)?.sourceInfo.source ===
+        "builtin",
+    };
+    delete state.items;
   }
 
   update(event: ToolExecutionUpdateEvent) {
-    if (event.parentToolCallId) return
-    const state = this.live.get(event.toolCallId)
-    if (!state) return
-    state.pending = false
-    state.facts.result = { ...event.partialResult, isError: false }
-    delete state.items
+    if (event.parentToolCallId) return;
+    const state = this.live.get(event.toolCallId);
+    if (!state) return;
+    state.pending = false;
+    state.facts.result = { ...event.partialResult, isError: false };
+    delete state.items;
   }
 
   end(event: ToolExecutionEndEvent) {
-    if (event.parentToolCallId) return
-    const state = this.live.get(event.toolCallId)
-    if (!state) return
-    state.pending = false
-    state.facts.result = { ...event.result, isError: event.isError }
-    state.facts.status = event.isError ? "failed" : "completed"
+    if (event.parentToolCallId) return;
+    const state = this.live.get(event.toolCallId);
+    if (!state) return;
+    state.pending = false;
+    state.facts.result = { ...event.result, isError: event.isError };
+    state.facts.status = event.isError ? "failed" : "completed";
     if (state.source && state.facts.builtin)
       this.pi.appendEntry(nativeToolType, {
         version: 1,
@@ -135,43 +128,42 @@ export class ActivityItems {
         name: state.facts.name,
         cwd: state.facts.cwd,
         argsHash: argsHash(state.facts.args),
-      } satisfies NativeTool)
-    this.live.delete(event.toolCallId)
-    delete state.items
+      } satisfies NativeTool);
+    this.live.delete(event.toolCallId);
+    delete state.items;
   }
 
   items(owner: object, result?: ActivityResult): readonly ActivityItem[] {
-    const state = this.calls.get(owner)
-    if (!state) return []
+    const state = this.calls.get(owner);
+    if (!state) return [];
     if (result && result !== state.retained) {
-      state.pending = false
-      state.retained = result
-      state.facts.result = result
+      state.pending = false;
+      state.retained = result;
+      state.facts.result = result;
       if (state.facts.status !== "running")
-        state.facts.status = result.isError ? "failed" : "completed"
-      delete state.items
+        state.facts.status = result.isError ? "failed" : "completed";
+      delete state.items;
     }
-    return this.describe(state)
+    return this.describe(state);
   }
 
   forCall(id: string): readonly ActivityItem[] {
-    const state = this.dispatched.get(id)
-    return state ? this.describe(state) : []
+    const state = this.dispatched.get(id);
+    return state ? this.describe(state) : [];
   }
 
   private describe(state: State): readonly ActivityItem[] {
-    if (state.pending) return []
+    if (state.pending) return [];
     if (!state.items) {
-      const native =
-        state.source && this.nativeTools.get(sourceKey(state.source))
+      const native = state.source && this.nativeTools.get(sourceKey(state.source));
       if (
         native &&
         native.callId === state.facts.id &&
         native.name === state.facts.name &&
         native.argsHash === argsHash(state.facts.args)
       ) {
-        state.facts.builtin = true
-        state.facts.cwd = native.cwd
+        state.facts.builtin = true;
+        state.facts.cwd = native.cwd;
       }
       state.facts.skills = this.pi
         .getCommands()
@@ -179,16 +171,16 @@ export class ActivityItems {
           command.source === "skill" && command.sourceInfo?.path
             ? [{ name: command.name, path: command.sourceInfo.path }]
             : [],
-        )
-      state.items = this.adapters.describe(state.facts)
+        );
+      state.items = this.adapters.describe(state.facts);
     }
-    return state.items
+    return state.items;
   }
 
   observe(type: string, data: unknown, live: boolean) {
-    let changed: string[]
+    let changed: string[];
     if (type === nativeToolType) {
-      const value = argumentsOf(data)
+      const value = argumentsOf(data);
       if (
         value["version"] !== 1 ||
         !["entryId", "callId", "name", "cwd", "argsHash"].every(
@@ -197,59 +189,56 @@ export class ActivityItems {
         !Number.isSafeInteger(value["contentIndex"]) ||
         (value["contentIndex"] as number) < 0
       )
-        return false
-      const native = data as NativeTool
-      this.nativeTools.set(sourceKey(native), native)
-      changed = [native.callId]
-    } else changed = this.adapters.observe(type, data, live)
+        return false;
+      const native = data as NativeTool;
+      this.nativeTools.set(sourceKey(native), native);
+      changed = [native.callId];
+    } else changed = this.adapters.observe(type, data, live);
     for (const id of changed)
       for (const state of this.byId.get(id) ?? []) {
-        if (live) state.pending = false
-        delete state.items
+        if (live) state.pending = false;
+        delete state.items;
       }
-    return changed.length > 0
+    return changed.length > 0;
   }
 
   sourceItems(owner: object): readonly ActivityItem[] {
-    const state = this.calls.get(owner)
-    if (!state) return []
-    const items = fallbackItems(state.facts)
+    const state = this.calls.get(owner);
+    if (!state) return [];
+    const items = fallbackItems(state.facts);
     for (const item of items) {
-      while (state.items?.some((normal) => normal.id === item.id))
-        item.id = `source:${item.id}`
+      while (state.items?.some((normal) => normal.id === item.id)) item.id = `source:${item.id}`;
       if (item.body.result)
         item.body.result = {
           ...item.body.result,
           // Images keep their normal activity owner while Find reveals text.
-          content: item.body.result.content.filter(
-            (part) => part.type === "text",
-          ),
-        }
+          content: item.body.result.content.filter((part) => part.type === "text"),
+        };
     }
-    return items
+    return items;
   }
 
   rebase() {
-    this.adapters.clear()
-    this.nativeTools.clear()
+    this.adapters.clear();
+    this.nativeTools.clear();
     for (const states of this.byId.values())
       for (const state of states) {
-        state.pending = false
-        state.facts.builtin = false
-        delete state.items
+        state.pending = false;
+        state.facts.builtin = false;
+        delete state.items;
       }
-    this.byId.clear()
-    this.live.clear()
-    this.dispatched.clear()
+    this.byId.clear();
+    this.live.clear();
+    this.dispatched.clear();
   }
 
   stop() {
     for (const state of this.live.values()) {
-      state.pending = false
-      state.facts.status = "unknown"
-      delete state.items
+      state.pending = false;
+      state.facts.status = "unknown";
+      delete state.items;
     }
-    this.live.clear()
-    this.dispatched.clear()
+    this.live.clear();
+    this.dispatched.clear();
   }
 }

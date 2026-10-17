@@ -1,24 +1,22 @@
-import assert from "node:assert/strict"
-import { copyFile, writeFile } from "node:fs/promises"
-import { join } from "node:path"
-import test from "node:test"
-import { SessionManager } from "@earendil-works/pi-coding-agent"
+import assert from "node:assert/strict";
+import { copyFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import test from "node:test";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import {
   getNativeClipboard,
   Text,
   stripTerminalSequences,
   type NativeClipboard,
-} from "@earendil-works/pi-tui"
-import { openNativeHost } from "../../../fixtures/native-host.ts"
+} from "@earendil-works/pi-tui";
+import { openNativeHost } from "../../../fixtures/native-host.ts";
 
-const chat = new URL("../src/index.ts", import.meta.url).pathname
-const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
-  .pathname
+const chat = new URL("../src/index.ts", import.meta.url).pathname;
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url).pathname;
 function assertWritableClipboard(
   clipboard: NativeClipboard | undefined,
-): asserts clipboard is NativeClipboard &
-  Required<Pick<NativeClipboard, "setText">> {
-  assert(clipboard?.setText)
+): asserts clipboard is NativeClipboard & Required<Pick<NativeClipboard, "setText">> {
+  assert(clipboard?.setText);
 }
 const delta = (content: string, toolPath?: string, reasoning?: string) => ({
   event: {
@@ -49,14 +47,14 @@ const delta = (content: string, toolPath?: string, reasoning?: string) => ({
       },
     ],
   },
-})
+});
 const finish = (reason = "stop") => ({
   event: { choices: [{ index: 0, delta: {}, finish_reason: reason }] },
-})
-const done = { event: "[DONE]" }
+});
+const done = { event: "[DONE]" };
 
 test("settled agent activity hides the earlier identical text and retains the final occurrence", async (t) => {
-  const appendNotice = { current: () => {} }
+  const appendNotice = { current: () => {} };
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 44,
@@ -65,100 +63,88 @@ test("settled agent activity hides the earlier identical text and retains the fi
         pi.registerEntryRenderer(
           "test.work-notice",
           () => new Text("Native intervening notice", 0, 0),
-        )
-        appendNotice.current = () => pi.appendEntry("test.work-notice", {})
+        );
+        appendNotice.current = () => pi.appendEntry("test.work-notice", {});
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native tool result")
-  host.queueResponse(delta("Done", "one.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), { pause: true }, finish(), done)
-  await host.type("Do the work")
-  await host.key("\r")
+  });
+  await writeFile(join(host.directory, "one.txt"), "native tool result");
+  host.queueResponse(delta("Done", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), { pause: true }, finish(), done);
+  await host.type("Do the work");
+  await host.key("\r");
   await t.waitFor(async () =>
     assert.equal(((await host.frame()).match(/\bDone\b/g) ?? []).length, 2),
-  )
-  appendNotice.current()
-  host.resumeResponse()
-  await host.settled()
+  );
+  appendNotice.current();
+  host.resumeResponse();
+  await host.settled();
 
-  const collapsed = await host.frame()
-  assert.match(collapsed, /Worked for \d+m \d+s ▶/)
-  assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1)
-  assert.match(
-    collapsed,
-    /Worked for \d+m \d+s ▶[\s\S]*Native intervening notice[\s\S]*Done/,
-  )
-  assert.equal((collapsed.match(/Native intervening notice/g) ?? []).length, 1)
-  assert.doesNotMatch(collapsed, /read one\.txt/)
-  assert.match(collapsed, /Do the work/)
-  assert.equal(host.requests.length, 2)
-  assert.match(JSON.stringify(host.requests[1]), /Done/)
+  const collapsed = await host.frame();
+  assert.match(collapsed, /Worked for \d+m \d+s ▶/);
+  assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1);
+  assert.match(collapsed, /Worked for \d+m \d+s ▶[\s\S]*Native intervening notice[\s\S]*Done/);
+  assert.equal((collapsed.match(/Native intervening notice/g) ?? []).length, 1);
+  assert.doesNotMatch(collapsed, /read one\.txt/);
+  assert.match(collapsed, /Do the work/);
+  assert.equal(host.requests.length, 2);
+  assert.match(JSON.stringify(host.requests[1]), /Done/);
   const source = JSON.stringify(
     host.session.messages.filter((message) => message.role !== "system"),
-  )
-  assert.equal((source.match(/"text":"Done"/g) ?? []).length, 2)
-  assert.doesNotMatch(source, /Worked|pi-chat/)
+  );
+  assert.equal((source.match(/"text":"Done"/g) ?? []).length, 2);
+  assert.doesNotMatch(source, /Worked|pi-chat/);
 
-  const entries = host.session.sessionManager.getBranch()
+  const entries = host.session.sessionManager.getBranch();
   const request = entries.find(
     (entry) => entry.type === "message" && entry.message.role === "user",
-  )!
+  )!;
   const final = entries.findLast(
     (entry) => entry.type === "message" && entry.message.role === "assistant",
-  )!
-  request.timestamp = new Date(
-    Date.parse(final.timestamp) - (34 * 60 + 49) * 1_000,
-  ).toISOString()
+  )!;
+  request.timestamp = new Date(Date.parse(final.timestamp) - (34 * 60 + 49) * 1_000).toISOString();
 
-  await host.key("\x1bg")
-  await host.frame()
-  const workRow = () =>
-    host.screenLines().find((line) => line.includes("Worked")) ?? ""
-  const selectedBg = host.ui.theme.getBgAnsi("selectedBg")
-  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▶/)
-  assert(!workRow().includes(selectedBg))
-  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▶")))
-  const row = host.screenLines().findIndex((line) => line.includes("Worked"))
-  const separator = host.screenLines()[row - 1]!
-  assert.equal(stripTerminalSequences(separator).trim(), "")
-  assert(!separator.includes(host.ui.theme.getBgAnsi("userMessageBg")))
-  assert.match(stripTerminalSequences(host.screenLines()[row + 1]!), /^ ─+ $/)
-  assert.equal(stripTerminalSequences(host.screenLines()[row + 2]!).trim(), "")
-  assert(!host.screenLines()[row + 1]!.includes(selectedBg))
-  assert(!host.screenLines()[row + 2]!.includes(selectedBg))
-  await host.key("\r")
-  await host.frame()
-  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▼/)
-  assert(!workRow().includes(selectedBg))
-  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▼")))
-  await host.key("\x1b")
-  await host.frame()
-  assert(!workRow().includes(selectedBg))
-  assert(workRow().includes(host.ui.theme.fg("muted", "Worked for 34m 49s ▼")))
-  const expanded = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(expanded, /Worked for \d+m \d+s ▼/)
-  assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
-  assert.match(
-    expanded,
-    /Done[\s\S]*Read one\.txt[\s\S]*Native intervening notice[\s\S]*Done/,
-  )
-  assert.equal((expanded.match(/Native intervening notice/g) ?? []).length, 1)
-  assert.match(expanded, /Read one\.txt >/)
-  assert.doesNotMatch(expanded, /Read files|read one\.txt/)
+  await host.key("\x1bg");
+  await host.frame();
+  const workRow = () => host.screenLines().find((line) => line.includes("Worked")) ?? "";
+  const selectedBg = host.ui.theme.getBgAnsi("selectedBg");
+  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▶/);
+  assert(!workRow().includes(selectedBg));
+  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▶")));
+  const row = host.screenLines().findIndex((line) => line.includes("Worked"));
+  const separator = host.screenLines()[row - 1]!;
+  assert.equal(stripTerminalSequences(separator).trim(), "");
+  assert(!separator.includes(host.ui.theme.getBgAnsi("userMessageBg")));
+  assert.match(stripTerminalSequences(host.screenLines()[row + 1]!), /^ ─+ $/);
+  assert.equal(stripTerminalSequences(host.screenLines()[row + 2]!).trim(), "");
+  assert(!host.screenLines()[row + 1]!.includes(selectedBg));
+  assert(!host.screenLines()[row + 2]!.includes(selectedBg));
+  await host.key("\r");
+  await host.frame();
+  assert.match(stripTerminalSequences(workRow()), /^ Worked for 34m 49s ▼/);
+  assert(!workRow().includes(selectedBg));
+  assert(workRow().includes(host.ui.theme.underline("Worked for 34m 49s ▼")));
+  await host.key("\x1b");
+  await host.frame();
+  assert(!workRow().includes(selectedBg));
+  assert(workRow().includes(host.ui.theme.fg("muted", "Worked for 34m 49s ▼")));
+  const expanded = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(expanded, /Worked for \d+m \d+s ▼/);
+  assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2);
+  assert.match(expanded, /Done[\s\S]*Read one\.txt[\s\S]*Native intervening notice[\s\S]*Done/);
+  assert.equal((expanded.match(/Native intervening notice/g) ?? []).length, 1);
+  assert.match(expanded, /Read one\.txt >/);
+  assert.doesNotMatch(expanded, /Read files|read one\.txt/);
 
-  await host.reload()
-  const replayed = await host.frame()
-  assert.match(replayed, /Worked for 34m 49s ▶/)
-  assert.equal((replayed.match(/\bDone\b/g) ?? []).length, 1)
-  assert.match(
-    replayed,
-    /Worked for 34m 49s ▶[\s\S]*Native intervening notice[\s\S]*Done/,
-  )
-})
+  await host.reload();
+  const replayed = await host.frame();
+  assert.match(replayed, /Worked for 34m 49s ▶/);
+  assert.equal((replayed.match(/\bDone\b/g) ?? []).length, 1);
+  assert.match(replayed, /Worked for 34m 49s ▶[\s\S]*Native intervening notice[\s\S]*Done/);
+});
 
 test("identical delivered steering and follow-up retain separate request relationships", async (t) => {
-  const appendFinalNotice = { current: () => {} }
+  const appendFinalNotice = { current: () => {} };
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 52,
@@ -169,234 +155,191 @@ test("identical delivered steering and follow-up retain separate request relatio
         pi.registerEntryRenderer(
           "test.final-notice",
           () => new Text("Notice after steering", 0, 0),
-        )
-        appendFinalNotice.current = () =>
-          pi.appendEntry("test.final-notice", {})
+        );
+        appendFinalNotice.current = () => pi.appendEntry("test.final-notice", {});
         pi.registerEntryRenderer(
           "test.steering-notice",
           () => new Text("Notice before steering", 0, 0),
-        )
+        );
         pi.on("tool_execution_end", (event) => {
-          if (event.toolCallId === "read-one.txt")
-            pi.appendEntry("test.steering-notice", {})
-        })
+          if (event.toolCallId === "read-one.txt") pi.appendEntry("test.steering-notice", {});
+        });
       },
     ],
-  })
+  });
   const assertSteeringGap = (nextText: string) => {
-    const lines = host.screenLines()
-    const replyRow = lines.findIndex((line) =>
-      stripTerminalSequences(line).includes(nextText),
-    )
-    assert(replyRow >= 2)
-    const background = host.ui.theme.getBgAnsi("userMessageBg")
-    assert.equal(stripTerminalSequences(lines[replyRow - 1]!).trim(), "")
-    assert(!lines[replyRow - 1]!.includes(background))
-    assert(lines[replyRow - 2]!.includes(background))
-  }
-  await writeFile(join(host.directory, "one.txt"), "one native result")
-  await writeFile(join(host.directory, "two.txt"), "two native result")
-  await writeFile(join(host.directory, "three.txt"), "three native result")
+    const lines = host.screenLines();
+    const replyRow = lines.findIndex((line) => stripTerminalSequences(line).includes(nextText));
+    assert(replyRow >= 2);
+    const background = host.ui.theme.getBgAnsi("userMessageBg");
+    assert.equal(stripTerminalSequences(lines[replyRow - 1]!).trim(), "");
+    assert(!lines[replyRow - 1]!.includes(background));
+    assert(lines[replyRow - 2]!.includes(background));
+  };
+  await writeFile(join(host.directory, "one.txt"), "one native result");
+  await writeFile(join(host.directory, "two.txt"), "two native result");
+  await writeFile(join(host.directory, "three.txt"), "three native result");
   host.queueResponse(
     delta("Before steering", "one.txt"),
     { pause: true },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(
-    delta("After steering", "two.txt"),
-    finish("tool_calls"),
-    done,
-  )
+  );
+  host.queueResponse(delta("After steering", "two.txt"), finish("tool_calls"), done);
   host.queueResponse(
     delta("First answer", undefined, "Final reasoning"),
     { pause: true },
     finish(),
     done,
-  )
-  host.queueResponse(
-    delta("Followup progress", "three.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Second answer"), finish(), done)
-  await host.type("Original request")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 1))
-  await host.session.steer("Same queued text")
-  await host.session.followUp("Same queued text")
-  host.resumeResponse()
-  await t.waitFor(async () => assert.match(await host.frame(), /First answer/))
-  appendFinalNotice.current()
-  host.resumeResponse()
-  await host.settled()
+  );
+  host.queueResponse(delta("Followup progress", "three.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Second answer"), finish(), done);
+  await host.type("Original request");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 1));
+  await host.session.steer("Same queued text");
+  await host.session.followUp("Same queued text");
+  host.resumeResponse();
+  await t.waitFor(async () => assert.match(await host.frame(), /First answer/));
+  appendFinalNotice.current();
+  host.resumeResponse();
+  await host.settled();
 
   const assertNoticeGap = () => {
-    const lines = host.screenLines().map(stripTerminalSequences)
-    const answer = lines.findIndex((line) => line.includes("First answer"))
-    assert(answer > 0)
-    assert.match(lines[answer - 1]!, /Notice after steering/)
-  }
-  const frame = await host.frame()
-  assert.equal(host.requests.length, 5)
-  assert.equal(
-    (JSON.stringify(host.requests[1]).match(/Same queued text/g) ?? []).length,
-    1,
-  )
-  assert.equal(
-    (JSON.stringify(host.requests[3]).match(/Same queued text/g) ?? []).length,
-    2,
-  )
-  assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
-  assert.equal((frame.match(/Same queued text/g) ?? []).length, 2)
+    const lines = host.screenLines().map(stripTerminalSequences);
+    const answer = lines.findIndex((line) => line.includes("First answer"));
+    assert(answer > 0);
+    assert.match(lines[answer - 1]!, /Notice after steering/);
+  };
+  const frame = await host.frame();
+  assert.equal(host.requests.length, 5);
+  assert.equal((JSON.stringify(host.requests[1]).match(/Same queued text/g) ?? []).length, 1);
+  assert.equal((JSON.stringify(host.requests[3]).match(/Same queued text/g) ?? []).length, 2);
+  assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2);
+  assert.equal((frame.match(/Same queued text/g) ?? []).length, 2);
   assert.match(
     frame,
     /Original request[\s\S]*Worked for \d+m \d+s ▶[\s\S]*Same queued text[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Worked for \d+m \d+s ▶[\s\S]*Second answer/,
-  )
+  );
   assert.match(
     frame,
     /Worked for \d+m \d+s ▶[\s\S]*Notice before steering[\s\S]*Same queued text[\s\S]*First answer/,
-  )
-  assert.equal((frame.match(/Notice before steering/g) ?? []).length, 1)
-  assert.match(
-    frame,
-    /Same queued text[\s\S]*Notice after steering[\s\S]*First answer/,
-  )
-  assert.equal((frame.match(/Notice after steering/g) ?? []).length, 1)
-  assert.match(frame, /Original request/)
-  assert.match(frame, /First answer/)
-  assert.match(frame, /Second answer/)
-  assert.doesNotMatch(frame, /Before steering|After steering|Followup progress/)
-  assertNoticeGap()
+  );
+  assert.equal((frame.match(/Notice before steering/g) ?? []).length, 1);
+  assert.match(frame, /Same queued text[\s\S]*Notice after steering[\s\S]*First answer/);
+  assert.equal((frame.match(/Notice after steering/g) ?? []).length, 1);
+  assert.match(frame, /Original request/);
+  assert.match(frame, /First answer/);
+  assert.match(frame, /Second answer/);
+  assert.doesNotMatch(frame, /Before steering|After steering|Followup progress/);
+  assertNoticeGap();
 
   const row = host
     .screenLines()
-    .findIndex((line) =>
-      /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
-    )
-  assert(row >= 0)
-  await host.key(`\x1b[<0;2;${row + 1}M`)
-  await host.key(`\x1b[<0;2;${row + 1}m`)
-  const expanded = await host.frame()
-  assert.equal((expanded.match(/Same queued text/g) ?? []).length, 2)
-  assert.match(expanded, /Before steering/)
-  assert.match(expanded, /After steering/)
+    .findIndex((line) => /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)));
+  assert(row >= 0);
+  await host.key(`\x1b[<0;2;${row + 1}M`);
+  await host.key(`\x1b[<0;2;${row + 1}m`);
+  const expanded = await host.frame();
+  assert.equal((expanded.match(/Same queued text/g) ?? []).length, 2);
+  assert.match(expanded, /Before steering/);
+  assert.match(expanded, /After steering/);
   assert.match(
     expanded,
     /Before steering[\s\S]*Notice before steering[\s\S]*Same queued text[\s\S]*After steering[\s\S]*First answer[\s\S]*Same queued text[\s\S]*Second answer/,
-  )
-  assert.doesNotMatch(expanded, /Followup progress/)
-  assertSteeringGap("After steering")
+  );
+  assert.doesNotMatch(expanded, /Followup progress/);
+  assertSteeringGap("After steering");
 
-  await host.reload()
-  const replayed = await host.frame()
-  assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
-  assert.equal((replayed.match(/Same queued text/g) ?? []).length, 2)
-  assert.match(
-    replayed,
-    /Notice before steering[\s\S]*Same queued text[\s\S]*First answer/,
-  )
-  assert.equal((replayed.match(/Notice before steering/g) ?? []).length, 1)
-  assert.match(replayed, /First answer|Second answer/)
-  assertNoticeGap()
-  host.terminal.resize(60, 80)
-  await host.key("\x05")
-  const allExpanded = await host.frame()
-  assert.equal((allExpanded.match(/Worked for \d+m \d+s ▼/g) ?? []).length, 2)
-  assert.match(allExpanded, /one native result[\s\S]*three native result/)
-  assert.doesNotMatch(allExpanded, /Final reasoning/)
-  await host.key("\x05")
-  const allCollapsed = await host.frame()
-  assert.equal((allCollapsed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
-  assert.equal((allCollapsed.match(/Same queued text/g) ?? []).length, 2)
-  assert.match(allCollapsed, /First answer[\s\S]*Second answer/)
-  assert.doesNotMatch(allCollapsed, /Before steering|Followup progress/)
-})
+  await host.reload();
+  const replayed = await host.frame();
+  assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2);
+  assert.equal((replayed.match(/Same queued text/g) ?? []).length, 2);
+  assert.match(replayed, /Notice before steering[\s\S]*Same queued text[\s\S]*First answer/);
+  assert.equal((replayed.match(/Notice before steering/g) ?? []).length, 1);
+  assert.match(replayed, /First answer|Second answer/);
+  assertNoticeGap();
+  host.terminal.resize(60, 80);
+  await host.key("\x05");
+  const allExpanded = await host.frame();
+  assert.equal((allExpanded.match(/Worked for \d+m \d+s ▼/g) ?? []).length, 2);
+  assert.match(allExpanded, /one native result[\s\S]*three native result/);
+  assert.doesNotMatch(allExpanded, /Final reasoning/);
+  await host.key("\x05");
+  const allCollapsed = await host.frame();
+  assert.equal((allCollapsed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2);
+  assert.equal((allCollapsed.match(/Same queued text/g) ?? []).length, 2);
+  assert.match(allCollapsed, /First answer[\s\S]*Second answer/);
+  assert.doesNotMatch(allCollapsed, /Before steering|Followup progress/);
+});
 
 test("without provider phase evidence agent activity stays visible until the final stream settles", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 34,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Earlier commentary", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Earlier commentary", "one.txt"), finish("tool_calls"), done);
   host.queueResponse(
     delta("A partial final"),
     { pause: true },
     delta(" becomes complete."),
     finish(),
     done,
-  )
-  await host.type("Finish this")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 2))
-  const streaming = await host.frame()
-  assert.match(streaming, /Earlier commentary/)
-  assert.match(streaming, /A partial final/)
-  assert.doesNotMatch(streaming, /Worked/)
-  host.resumeResponse()
-  await host.settled()
-  const settled = await host.frame()
-  assert.match(settled, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(settled, /Earlier commentary/)
-  assert.match(settled, /A partial final becomes complete\./)
-})
+  );
+  await host.type("Finish this");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 2));
+  const streaming = await host.frame();
+  assert.match(streaming, /Earlier commentary/);
+  assert.match(streaming, /A partial final/);
+  assert.doesNotMatch(streaming, /Worked/);
+  host.resumeResponse();
+  await host.settled();
+  const settled = await host.frame();
+  assert.match(settled, /Worked for \d+m \d+s ▶/);
+  assert.doesNotMatch(settled, /Earlier commentary/);
+  assert.match(settled, /A partial final becomes complete\./);
+});
 
 test("native user replacement preserves the delivered request relationship and persisted content", async (t) => {
   const content = [
     { type: "text" as const, text: "Forwarded second part" },
     { type: "text" as const, text: "Forwarded first part" },
-  ]
+  ];
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 30,
     extensionFactories: [
       (pi) => {
         pi.on("message_end", ({ message }) => {
-          if (message.role === "user")
-            return { message: { ...message, content } }
-          return undefined
-        })
+          if (message.role === "user") return { message: { ...message, content } };
+          return undefined;
+        });
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Original work", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Forwarded answer"), finish(), done)
-  await host.type("Original request")
-  await host.key("\r")
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Forwarded answer/)
-  assert.doesNotMatch(frame, /Original work/)
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Original work", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Forwarded answer"), finish(), done);
+  await host.type("Original request");
+  await host.key("\r");
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Forwarded answer/);
+  assert.doesNotMatch(frame, /Original work/);
   const entry = host.session.sessionManager
     .getBranch()
-    .find((item) => item.type === "message" && item.message.role === "user")
-  assert(entry?.type === "message" && entry.message.role === "user")
-  assert.deepEqual(entry.message.content, content)
-  const requested = host.requests[0]?.messages.find(
-    ({ role }) => role === "user",
-  )
-  assert.match(
-    JSON.stringify(requested),
-    /Forwarded second part[\s\S]*Forwarded first part/,
-  )
-  assert.doesNotMatch(
-    JSON.stringify(requested),
-    /Original request|Worked|pi-chat/,
-  )
-  await host.reload()
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
-})
+    .find((item) => item.type === "message" && item.message.role === "user");
+  assert(entry?.type === "message" && entry.message.role === "user");
+  assert.deepEqual(entry.message.content, content);
+  const requested = host.requests[0]?.messages.find(({ role }) => role === "user");
+  assert.match(JSON.stringify(requested), /Forwarded second part[\s\S]*Forwarded first part/);
+  assert.doesNotMatch(JSON.stringify(requested), /Original request|Worked|pi-chat/);
+  await host.reload();
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/);
+});
 
 test("a settled terminal assistant keeps its native thoughts in agent activity and its text as one answer", async (t) => {
   const host = await openNativeHost(t, {
@@ -404,9 +347,9 @@ test("a settled terminal assistant keeps its native thoughts in agent activity a
     rows: 38,
     keybindings: { "tui.altScreen.bottom": "end" },
     settings: { hideThinkingBlock: false },
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(delta("Done", "one.txt"), finish("tool_calls"), done)
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Done", "one.txt"), finish("tool_calls"), done);
   host.queueResponse(
     {
       event: {
@@ -422,62 +365,57 @@ test("a settled terminal assistant keeps its native thoughts in agent activity a
         ],
       },
     },
-    delta(
-      "Done\n\n" +
-        Array.from({ length: 18 }, (_, index) => `answer-row-${index}`).join(
-          "\n",
-        ),
-    ),
+    delta("Done\n\n" + Array.from({ length: 18 }, (_, index) => `answer-row-${index}`).join("\n")),
     finish(),
     done,
-  )
-  await host.type("Keep thoughts separate")
-  await host.key("\r")
-  await host.settled()
-  const collapsed = await host.frame()
-  assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1)
-  assert.match(collapsed, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(collapsed, /Private thought body/)
-  await host.key("\x1bg")
-  await host.key("\r")
-  await host.frame()
-  const expanded = await host.frame()
-  assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2)
-  assert.match(expanded, /Private thought body/)
-  assert.equal((expanded.match(/Worked/g) ?? []).length, 1)
+  );
+  await host.type("Keep thoughts separate");
+  await host.key("\r");
+  await host.settled();
+  const collapsed = await host.frame();
+  assert.equal((collapsed.match(/\bDone\b/g) ?? []).length, 1);
+  assert.match(collapsed, /Worked for \d+m \d+s ▶/);
+  assert.doesNotMatch(collapsed, /Private thought body/);
+  await host.key("\x1bg");
+  await host.key("\r");
+  await host.frame();
+  const expanded = await host.frame();
+  assert.equal((expanded.match(/\bDone\b/g) ?? []).length, 2);
+  assert.match(expanded, /Private thought body/);
+  assert.equal((expanded.match(/Worked/g) ?? []).length, 1);
   const workRow = host
     .screenLines()
-    .findIndex((row) => stripTerminalSequences(row).includes("Worked"))
-  assert(workRow >= 0)
-  await host.key(`\x1b[<0;3;${workRow + 1}M`)
-  await host.key(`\x1b[<0;3;${workRow + 1}m`)
-  await host.key("\x1b")
-  host.terminal.resize(60, 14)
-  await host.frame()
-  await host.key("\x1b[F")
-  await host.key("\x1b[1;5A")
-  await host.frame()
-  assert.match(stripTerminalSequences(host.screenLines()[0] ?? ""), /Done/)
-})
+    .findIndex((row) => stripTerminalSequences(row).includes("Worked"));
+  assert(workRow >= 0);
+  await host.key(`\x1b[<0;3;${workRow + 1}M`);
+  await host.key(`\x1b[<0;3;${workRow + 1}m`);
+  await host.key("\x1b");
+  host.terminal.resize(60, 14);
+  await host.frame();
+  await host.key("\x1b[F");
+  await host.key("\x1b[1;5A");
+  await host.frame();
+  assert.match(stripTerminalSequences(host.screenLines()[0] ?? ""), /Done/);
+});
 
 test("all terminal text parts share one answer when a native extension interleaves thought blocks", async (t) => {
-  const clipboard = getNativeClipboard()
-  assertWritableClipboard(clipboard)
-  let copied = ""
+  const clipboard = getNativeClipboard();
+  assertWritableClipboard(clipboard);
+  let copied = "";
   t.mock.method(clipboard, "setText", async (text: string) => {
-    copied = text
-  })
-  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
-  const saved = remote.map((name) => process.env[name])
+    copied = text;
+  });
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"];
+  const saved = remote.map((name) => process.env[name]);
   t.after(() =>
     remote.forEach((name, index) => {
-      if (saved[index] === undefined) delete process.env[name]
-      else process.env[name] = saved[index]
+      if (saved[index] === undefined) delete process.env[name];
+      else process.env[name] = saved[index];
     }),
-  )
-  for (const name of remote) delete process.env[name]
-  const first = "First answer part\n\n```ts\n  const one = 1\n```\n"
-  const last = "\n- Last answer part\n- [Link](https://example.com)\n"
+  );
+  for (const name of remote) delete process.env[name];
+  const first = "First answer part\n\n```ts\n  const one = 1\n```\n";
+  const last = "\n- Last answer part\n- [Link](https://example.com)\n";
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 40,
@@ -485,8 +423,7 @@ test("all terminal text parts share one answer when a native extension interleav
     extensionFactories: [
       (pi) => {
         pi.on("message_end", ({ message }) => {
-          if (message.role !== "assistant" || message.stopReason !== "stop")
-            return
+          if (message.role !== "assistant" || message.stopReason !== "stop") return;
           return {
             message: {
               ...message,
@@ -496,192 +433,167 @@ test("all terminal text parts share one answer when a native extension interleav
                 { type: "text", text: last },
               ],
             },
-          }
-        })
+          };
+        });
       },
     ],
-  })
-  host.queueResponse(delta("Replaced at native message end"), finish(), done)
-  await host.type("Keep one answer")
-  await host.key("\r")
-  await host.settled()
-  const frame = await host.frame()
-  assert.equal((frame.match(/Worked/g) ?? []).length, 1)
-  assert.match(
-    frame,
-    /Worked for \d+m \d+s ▶[\s\S]*First answer part[\s\S]*Last answer part/,
-  )
-  assert.doesNotMatch(frame, /Interleaved native thought/)
-  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 1)
-  const lines = host.screenLines().map(stripTerminalSequences)
-  const actionRow = lines.findIndex((line) => line.includes("[Copy response]"))
-  const firstRow = lines.findIndex((line) => line.includes("First answer part"))
-  const lastRow = lines.findIndex((line) => line.includes("Last answer part"))
-  assert(actionRow > lastRow)
-  assert.equal(lines[actionRow - 1]!.trim(), "")
-  assert.notEqual(lines[actionRow - 2]!.trim(), "")
-  assert.equal(
-    lines[actionRow]!.indexOf("["),
-    lines[firstRow]!.indexOf("First"),
-  )
-  const column = lines[actionRow]!.indexOf("[") + 1
-  await host.key(`\x1b[<0;${column};${actionRow + 1}M`)
-  await host.key(`\x1b[<0;${column};${actionRow + 1}m`)
+  });
+  host.queueResponse(delta("Replaced at native message end"), finish(), done);
+  await host.type("Keep one answer");
+  await host.key("\r");
+  await host.settled();
+  const frame = await host.frame();
+  assert.equal((frame.match(/Worked/g) ?? []).length, 1);
+  assert.match(frame, /Worked for \d+m \d+s ▶[\s\S]*First answer part[\s\S]*Last answer part/);
+  assert.doesNotMatch(frame, /Interleaved native thought/);
+  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 1);
+  const lines = host.screenLines().map(stripTerminalSequences);
+  const actionRow = lines.findIndex((line) => line.includes("[Copy response]"));
+  const firstRow = lines.findIndex((line) => line.includes("First answer part"));
+  const lastRow = lines.findIndex((line) => line.includes("Last answer part"));
+  assert(actionRow > lastRow);
+  assert.equal(lines[actionRow - 1]!.trim(), "");
+  assert.notEqual(lines[actionRow - 2]!.trim(), "");
+  assert.equal(lines[actionRow]!.indexOf("["), lines[firstRow]!.indexOf("First"));
+  const column = lines[actionRow]!.indexOf("[") + 1;
+  await host.key(`\x1b[<0;${column};${actionRow + 1}M`);
+  await host.key(`\x1b[<0;${column};${actionRow + 1}m`);
   await t.waitFor(() =>
     assert.equal(
       copied,
       "First answer part\n\n```ts\n  const one = 1\n```\n\n- Last answer part\n- [Link](https://example.com)\n",
     ),
-  )
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
-  await host.key("\x1b")
-  await host.key("\x1bg")
-  await host.key("\r")
-  const expanded = await host.frame()
-  assert.equal((expanded.match(/Worked/g) ?? []).length, 1)
+  );
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/);
+  await host.key("\x1b");
+  await host.key("\x1bg");
+  await host.key("\r");
+  const expanded = await host.frame();
+  assert.equal((expanded.match(/Worked/g) ?? []).length, 1);
   assert.match(
     expanded,
     /Interleaved native thought[\s\S]*First answer part[\s\S]*Last answer part/,
-  )
-  assert.equal(
-    (expanded.match(/\[(?:Copy response|Copied)\]/g) ?? []).length,
-    1,
-  )
-  await host.key("\r")
-  const closed = await host.frame()
-  assert.doesNotMatch(closed, /Interleaved native thought/)
-  assert.equal((closed.match(/\[(?:Copy response|Copied)\]/g) ?? []).length, 1)
-  const final = host.session.messages.at(-1)
-  assert.equal(final?.role, "assistant")
+  );
+  assert.equal((expanded.match(/\[(?:Copy response|Copied)\]/g) ?? []).length, 1);
+  await host.key("\r");
+  const closed = await host.frame();
+  assert.doesNotMatch(closed, /Interleaved native thought/);
+  assert.equal((closed.match(/\[(?:Copy response|Copied)\]/g) ?? []).length, 1);
+  const final = host.session.messages.at(-1);
+  assert.equal(final?.role, "assistant");
   assert.deepEqual(final?.content, [
     { type: "text", text: first },
     { type: "thinking", thinking: "Interleaved native thought" },
     { type: "text", text: last },
-  ])
-})
+  ]);
+});
 
 test("individual activity toggles preserve bodies and configured global expansion sets every disclosure", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "app.tools.expand": "ctrl+e" },
-  })
-  await writeFile(join(host.directory, "one.txt"), "INSPECTED BODY")
-  host.queueResponse(
-    delta("Inspected commentary", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Final text"), { pause: true }, finish(), done)
-  await host.type("Inspect the tool")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 2))
-  const items = await host.frame()
-  assert.match(items, /Read one\.txt >/)
-  assert.doesNotMatch(items, /Read files|INSPECTED BODY/)
+  });
+  await writeFile(join(host.directory, "one.txt"), "INSPECTED BODY");
+  host.queueResponse(delta("Inspected commentary", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Final text"), { pause: true }, finish(), done);
+  await host.type("Inspect the tool");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 2));
+  const items = await host.frame();
+  assert.match(items, /Read one\.txt >/);
+  assert.doesNotMatch(items, /Read files|INSPECTED BODY/);
   const call = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"))
-  assert(call >= 0)
-  await host.key(`\x1b[<0;3;${call + 1}M`)
-  await host.key(`\x1b[<0;3;${call + 1}m`)
-  assert.doesNotMatch(await host.frame(), /INSPECTED BODY/)
+    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"));
+  assert(call >= 0);
+  await host.key(`\x1b[<0;3;${call + 1}M`);
+  await host.key(`\x1b[<0;3;${call + 1}m`);
+  assert.doesNotMatch(await host.frame(), /INSPECTED BODY/);
   const nativeCall = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
-  assert(nativeCall >= 0)
-  await host.key(`\x1b[<0;3;${nativeCall + 1}M`)
-  await host.key(`\x1b[<0;3;${nativeCall + 1}m`)
-  assert.match(await host.frame(), /INSPECTED BODY/)
-  host.resumeResponse()
-  await host.settled()
-  const settled = await host.frame()
-  assert.match(settled, /Worked for \d+m \d+s ▼/)
-  assert.match(settled, /Inspected commentary/)
-  assert.match(settled, /INSPECTED BODY/)
+    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"));
+  assert(nativeCall >= 0);
+  await host.key(`\x1b[<0;3;${nativeCall + 1}M`);
+  await host.key(`\x1b[<0;3;${nativeCall + 1}m`);
+  assert.match(await host.frame(), /INSPECTED BODY/);
+  host.resumeResponse();
+  await host.settled();
+  const settled = await host.frame();
+  assert.match(settled, /Worked for \d+m \d+s ▼/);
+  assert.match(settled, /Inspected commentary/);
+  assert.match(settled, /INSPECTED BODY/);
 
   const header = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("Worked"))
-  assert(header >= 0)
-  await host.key(`\x1b[<0;3;${header + 1}M`)
-  await host.key(`\x1b[<0;3;${header + 1}m`)
-  assert.doesNotMatch(await host.frame(), /INSPECTED BODY|Inspected commentary/)
-  host.terminal.resize(55, 34)
-  assert.doesNotMatch(await host.frame(), /INSPECTED BODY/)
-  await host.key("\r")
-  assert.match(await host.frame(), /INSPECTED BODY/)
-  await host.key("\x05")
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
-  assert.match(await host.frame(), /INSPECTED BODY/)
-  await host.key("\x05")
-  const globallyCollapsed = await host.frame()
-  assert.match(globallyCollapsed, /Worked for \d+m \d+s ▶/)
-  assert.match(globallyCollapsed, /Final text/)
-  assert.doesNotMatch(globallyCollapsed, /INSPECTED BODY|Inspected commentary/)
-  await host.key("\r")
-  const parentOnly = await host.frame()
-  assert.match(parentOnly, /Worked for \d+m \d+s ▼/)
-  assert.match(parentOnly, /Read one\.txt >/)
-  assert.doesNotMatch(parentOnly, /Read files|INSPECTED BODY/)
-  await host.key("\x1b")
-  await host.key("\x05")
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
-  assert.match(await host.frame(), /INSPECTED BODY/)
-})
+    .findIndex((line) => stripTerminalSequences(line).includes("Worked"));
+  assert(header >= 0);
+  await host.key(`\x1b[<0;3;${header + 1}M`);
+  await host.key(`\x1b[<0;3;${header + 1}m`);
+  assert.doesNotMatch(await host.frame(), /INSPECTED BODY|Inspected commentary/);
+  host.terminal.resize(55, 34);
+  assert.doesNotMatch(await host.frame(), /INSPECTED BODY/);
+  await host.key("\r");
+  assert.match(await host.frame(), /INSPECTED BODY/);
+  await host.key("\x05");
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/);
+  assert.match(await host.frame(), /INSPECTED BODY/);
+  await host.key("\x05");
+  const globallyCollapsed = await host.frame();
+  assert.match(globallyCollapsed, /Worked for \d+m \d+s ▶/);
+  assert.match(globallyCollapsed, /Final text/);
+  assert.doesNotMatch(globallyCollapsed, /INSPECTED BODY|Inspected commentary/);
+  await host.key("\r");
+  const parentOnly = await host.frame();
+  assert.match(parentOnly, /Worked for \d+m \d+s ▼/);
+  assert.match(parentOnly, /Read one\.txt >/);
+  assert.doesNotMatch(parentOnly, /Read files|INSPECTED BODY/);
+  await host.key("\x1b");
+  await host.key("\x05");
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▼/);
+  assert.match(await host.frame(), /INSPECTED BODY/);
+});
 
 test("cancelling a partial final leaves agent activity expanded", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Before cancellation", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Partial answer"), { pause: true }, finish(), done)
-  await host.type("Cancel this work")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 2))
-  assert.match(await host.frame(), /Partial answer/)
-  await host.session.abort()
-  const frame = await host.frame()
-  assert.match(frame, /Before cancellation/)
-  assert.match(frame, /Partial answer/)
-  assert.match(frame, /Operation aborted/)
-  assert.doesNotMatch(frame, /Worked/)
-})
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Before cancellation", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Partial answer"), { pause: true }, finish(), done);
+  await host.type("Cancel this work");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 2));
+  assert.match(await host.frame(), /Partial answer/);
+  await host.session.abort();
+  const frame = await host.frame();
+  assert.match(frame, /Before cancellation/);
+  assert.match(frame, /Partial answer/);
+  assert.match(frame, /Operation aborted/);
+  assert.doesNotMatch(frame, /Worked/);
+});
 
 test("a terminal stream error leaves earlier agent activity and its partial text visible", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Before failure", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(
-    delta("Partial before failure"),
-    { pause: true },
-    { disconnect: true },
-  )
-  await host.type("Handle a failed stream")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 2))
-  assert.match(await host.frame(), /Partial before failure/)
-  host.resumeResponse()
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Before failure/)
-  assert.match(frame, /Partial before failure/)
-  assert.match(frame, /Error:/)
-  assert.doesNotMatch(frame, /Worked/)
-})
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Before failure", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Partial before failure"), { pause: true }, { disconnect: true });
+  await host.type("Handle a failed stream");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 2));
+  assert.match(await host.frame(), /Partial before failure/);
+  host.resumeResponse();
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Before failure/);
+  assert.match(frame, /Partial before failure/);
+  assert.match(frame, /Error:/);
+  assert.doesNotMatch(frame, /Worked/);
+});
 
 test("cleared and consumed inputs never create agent activity relationships", async (t) => {
   const host = await openNativeHost(t, {
@@ -691,170 +603,142 @@ test("cleared and consumed inputs never create agent activity relationships", as
       (pi) => {
         pi.on("input", (event) =>
           event.text.startsWith("ignored") ? { action: "handled" } : undefined,
-        )
+        );
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
   host.queueResponse(
     delta("Real progress", "one.txt"),
     { pause: true },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Real answer"), finish(), done)
-  await host.type("Real request")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 1))
-  await host.session.steer("cleared same text")
-  await host.session.followUp("cleared same text")
+  );
+  host.queueResponse(delta("Real answer"), finish(), done);
+  await host.type("Real request");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 1));
+  await host.session.steer("cleared same text");
+  await host.session.followUp("cleared same text");
   assert.deepEqual(host.session.clearQueue(), {
     steering: ["cleared same text"],
     followUp: ["cleared same text"],
-  })
-  assert.equal(await host.session.steer("ignored steering"), "handled")
-  assert.equal(await host.session.followUp("ignored follow-up"), "handled")
-  host.resumeResponse()
-  await host.settled()
-  await host.type("ignored initial")
-  await host.key("\r")
-  const frame = await host.frame()
-  assert.equal(host.requests.length, 2)
-  assert.equal((frame.match(/Worked/g) ?? []).length, 1)
-  assert.match(frame, /Real answer/)
-  assert.doesNotMatch(
-    frame,
-    /cleared same text|ignored steering|ignored follow-up/,
-  )
-  assert.doesNotMatch(
-    JSON.stringify(host.requests),
-    /cleared same text|ignored/,
-  )
-  assert.doesNotMatch(
-    JSON.stringify(host.session.messages),
-    /cleared same text|ignored/,
-  )
-})
+  });
+  assert.equal(await host.session.steer("ignored steering"), "handled");
+  assert.equal(await host.session.followUp("ignored follow-up"), "handled");
+  host.resumeResponse();
+  await host.settled();
+  await host.type("ignored initial");
+  await host.key("\r");
+  const frame = await host.frame();
+  assert.equal(host.requests.length, 2);
+  assert.equal((frame.match(/Worked/g) ?? []).length, 1);
+  assert.match(frame, /Real answer/);
+  assert.doesNotMatch(frame, /cleared same text|ignored steering|ignored follow-up/);
+  assert.doesNotMatch(JSON.stringify(host.requests), /cleared same text|ignored/);
+  assert.doesNotMatch(JSON.stringify(host.session.messages), /cleared same text|ignored/);
+});
 
 test("an all-at-once follow-up batch does not invent an answer for every queued user", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 40,
-  })
-  host.session.setFollowUpMode("all")
-  await writeFile(join(host.directory, "one.txt"), "one native result")
-  await writeFile(join(host.directory, "two.txt"), "two native result")
+  });
+  host.session.setFollowUpMode("all");
+  await writeFile(join(host.directory, "one.txt"), "one native result");
+  await writeFile(join(host.directory, "two.txt"), "two native result");
   host.queueResponse(
     delta("Initial progress", "one.txt"),
     { pause: true },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Initial answer"), finish(), done)
-  host.queueResponse(
-    delta("Batched progress", "two.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Shared queued answer"), finish(), done)
-  await host.type("Initial request")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 1))
-  await host.session.followUp("Same batch text")
-  await host.session.followUp("Same batch text")
-  host.resumeResponse()
-  await host.settled()
-  const frame = await host.frame()
-  assert.equal(host.requests.length, 4)
-  assert.equal(
-    (JSON.stringify(host.requests[2]).match(/Same batch text/g) ?? []).length,
-    2,
-  )
-  assert.equal((frame.match(/Worked/g) ?? []).length, 2)
-  assert.equal((frame.match(/Same batch text/g) ?? []).length, 2)
-  assert.equal((frame.match(/Shared queued answer/g) ?? []).length, 1)
-  assert.match(frame, /Initial answer/)
-})
+  );
+  host.queueResponse(delta("Initial answer"), finish(), done);
+  host.queueResponse(delta("Batched progress", "two.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Shared queued answer"), finish(), done);
+  await host.type("Initial request");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 1));
+  await host.session.followUp("Same batch text");
+  await host.session.followUp("Same batch text");
+  host.resumeResponse();
+  await host.settled();
+  const frame = await host.frame();
+  assert.equal(host.requests.length, 4);
+  assert.equal((JSON.stringify(host.requests[2]).match(/Same batch text/g) ?? []).length, 2);
+  assert.equal((frame.match(/Worked/g) ?? []).length, 2);
+  assert.equal((frame.match(/Same batch text/g) ?? []).length, 2);
+  assert.equal((frame.match(/Shared queued answer/g) ?? []).length, 1);
+  assert.match(frame, /Initial answer/);
+});
 
 test("cancellation after agent_end stays expanded through the next request", async (t) => {
-  const gate = Promise.withResolvers<void>()
-  let waiting = false
-  t.after(() => gate.resolve())
+  const gate = Promise.withResolvers<void>();
+  let waiting = false;
+  t.after(() => gate.resolve());
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 38,
     extensionFactories: [
       (pi) => {
         pi.on("agent_before_settle", async () => {
-          if (waiting) return
-          waiting = true
-          await gate.promise
-        })
+          if (waiting) return;
+          waiting = true;
+          await gate.promise;
+        });
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Work before late cancellation", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Text before settlement"), finish(), done)
-  await host.type("First request")
-  await host.key("\r")
-  await t.waitFor(() => assert(waiting))
-  assert.equal(host.session.isStreaming, true)
-  assert.doesNotMatch(await host.frame(), /Worked/)
-  const abort = host.session.abort()
-  gate.resolve()
-  await abort
-  const cancelled = await host.frame()
-  assert.match(cancelled, /Work before late cancellation/)
-  assert.match(cancelled, /Text before settlement/)
-  assert.doesNotMatch(cancelled, /Worked/)
-  await host.type("Next request")
-  await host.key("\r")
-  await host.settled()
-  const next = await host.frame()
-  assert.match(next, /Work before late cancellation/)
-  assert.match(next, /Text before settlement/)
-  assert.doesNotMatch(next, /Worked/)
-})
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Work before late cancellation", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Text before settlement"), finish(), done);
+  await host.type("First request");
+  await host.key("\r");
+  await t.waitFor(() => assert(waiting));
+  assert.equal(host.session.isStreaming, true);
+  assert.doesNotMatch(await host.frame(), /Worked/);
+  const abort = host.session.abort();
+  gate.resolve();
+  await abort;
+  const cancelled = await host.frame();
+  assert.match(cancelled, /Work before late cancellation/);
+  assert.match(cancelled, /Text before settlement/);
+  assert.doesNotMatch(cancelled, /Worked/);
+  await host.type("Next request");
+  await host.key("\r");
+  await host.settled();
+  const next = await host.frame();
+  assert.match(next, /Work before late cancellation/);
+  assert.match(next, /Text before settlement/);
+  assert.doesNotMatch(next, /Worked/);
+});
 
 test("a terminal response without answer text leaves agent activity expanded", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 30,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Visible work without answer", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(finish(), done)
-  await host.type("No answer")
-  await host.key("\r")
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Visible work without answer/)
-  assert.match(frame, /Read one\.txt >/)
-  assert.doesNotMatch(frame, /Read files|read one\.txt/)
-  assert.doesNotMatch(frame, /Worked/)
-})
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Visible work without answer", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(finish(), done);
+  await host.type("No answer");
+  await host.key("\r");
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Visible work without answer/);
+  assert.match(frame, /Read one\.txt >/);
+  assert.doesNotMatch(frame, /Read files|read one\.txt/);
+  assert.doesNotMatch(frame, /Worked/);
+});
 
 test("a truncated terminal text can be the final answer without hiding its native notice", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 30,
     settings: { hideThinkingBlock: false },
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Work before truncated answer", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Work before truncated answer", "one.txt"), finish("tool_calls"), done);
   host.queueResponse(
     {
       event: {
@@ -873,34 +757,31 @@ test("a truncated terminal text can be the final answer without hiding its nativ
     delta("Truncated answer"),
     finish("length"),
     done,
-  )
-  await host.type("A length limit")
-  await host.key("\r")
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Truncated answer/)
-  assert.match(frame, /Response was truncated before completion/)
-  assert.doesNotMatch(
-    frame,
-    /Work before truncated answer|Thought before truncation/,
-  )
-})
+  );
+  await host.type("A length limit");
+  await host.key("\r");
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Truncated answer/);
+  assert.match(frame, /Response was truncated before completion/);
+  assert.doesNotMatch(frame, /Work before truncated answer|Thought before truncation/);
+});
 
 test("automatic collapse clears a selected progress range even while reading scrollback", async (t) => {
-  const clipboard = getNativeClipboard()
-  assertWritableClipboard(clipboard)
-  let copied = ""
+  const clipboard = getNativeClipboard();
+  assertWritableClipboard(clipboard);
+  let copied = "";
   t.mock.method(clipboard, "setText", async (text: string) => {
-    copied = text
-  })
+    copied = text;
+  });
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 16,
     keybindings: { "tui.altScreen.top": "home" },
     settings: { fullscreenCopyOnSelect: false },
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
   host.queueResponse(
     delta(
       "Selected progress\n\n" +
@@ -909,142 +790,121 @@ test("automatic collapse clears a selected progress range even while reading scr
     ),
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Visible final"), { pause: true }, finish(), done)
-  await host.type("Read old work")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 2))
-  await host.key("\x1b[H")
-  await host.frame()
-  const lines = host.screenLines().map(stripTerminalSequences)
-  const row = lines.findIndex((line) => line.includes("Selected progress"))
-  assert(row >= 0)
-  const column = lines[row]!.indexOf("Selected progress") + 1
-  await host.key(`\x1b[<0;${column};${row + 1}M`)
-  await host.key(`\x1b[<32;${column + 8};${row + 1}M`)
-  await host.key(`\x1b[<0;${column + 8};${row + 1}m`)
-  await host.key("\x18")
-  await t.waitFor(() => assert.equal(copied, "Selected"))
-  host.resumeResponse()
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Visible final/)
-  assert.doesNotMatch(frame, /Selected progress/)
-  await host.key("\x18")
-  await t.waitFor(() => assert.equal(copied, "Visible final"))
-})
+  );
+  host.queueResponse(delta("Visible final"), { pause: true }, finish(), done);
+  await host.type("Read old work");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 2));
+  await host.key("\x1b[H");
+  await host.frame();
+  const lines = host.screenLines().map(stripTerminalSequences);
+  const row = lines.findIndex((line) => line.includes("Selected progress"));
+  assert(row >= 0);
+  const column = lines[row]!.indexOf("Selected progress") + 1;
+  await host.key(`\x1b[<0;${column};${row + 1}M`);
+  await host.key(`\x1b[<32;${column + 8};${row + 1}M`);
+  await host.key(`\x1b[<0;${column + 8};${row + 1}m`);
+  await host.key("\x18");
+  await t.waitFor(() => assert.equal(copied, "Selected"));
+  host.resumeResponse();
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Visible final/);
+  assert.doesNotMatch(frame, /Selected progress/);
+  await host.key("\x18");
+  await t.waitFor(() => assert.equal(copied, "Visible final"));
+});
 
 test("certified agent activity relationships survive native journal reload", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Live progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Live answer"), finish(), done)
-  await host.type("Uncertain replay")
-  await host.key("\r")
-  await host.settled()
-  assert.doesNotMatch(await host.frame(), /Live progress/)
-  const entries = host.session.sessionManager.getEntries()
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Live progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Live answer"), finish(), done);
+  await host.type("Uncertain replay");
+  await host.key("\r");
+  await host.settled();
+  assert.doesNotMatch(await host.frame(), /Live progress/);
+  const entries = host.session.sessionManager.getEntries();
   const facts = entries.filter(
-    (entry) =>
-      entry.type === "custom" && entry.customType === "pi-chat.relationship",
-  )
-  assert(facts.length > 0)
-  assert.doesNotMatch(
-    JSON.stringify(facts),
-    /Live progress|Live answer|Uncertain replay/,
-  )
-  await host.key("\x1bg")
-  await host.key("\r")
-  await host.key("\x1b")
-  assert.match(await host.frame(), /Live progress/)
-  await host.reload()
-  const reloaded = await host.frame()
-  assert.doesNotMatch(reloaded, /Live progress/)
-  assert.match(reloaded, /Live answer/)
-  assert.match(reloaded, /Worked for \d+m \d+s ▶/)
-})
+    (entry) => entry.type === "custom" && entry.customType === "pi-chat.relationship",
+  );
+  assert(facts.length > 0);
+  assert.doesNotMatch(JSON.stringify(facts), /Live progress|Live answer|Uncertain replay/);
+  await host.key("\x1bg");
+  await host.key("\r");
+  await host.key("\x1b");
+  assert.match(await host.frame(), /Live progress/);
+  await host.reload();
+  const reloaded = await host.frame();
+  assert.doesNotMatch(reloaded, /Live progress/);
+  assert.match(reloaded, /Live answer/);
+  assert.match(reloaded, /Worked for \d+m \d+s ▶/);
+});
 
 test("history without delivery records leaves uncertain agent activity expanded", async (t) => {
-  const source = await openNativeHost(t, { persistSession: true, rows: 32 })
-  await writeFile(join(source.directory, "one.txt"), "native result")
-  source.queueResponse(
-    delta("Old progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  source.queueResponse(delta("Old answer"), finish(), done)
-  await source.type("Old request")
-  await source.key("\r")
-  await source.settled()
-  const sessionFile = source.session.sessionFile
-  assert(sessionFile)
-  await source.close()
+  const source = await openNativeHost(t, { persistSession: true, rows: 32 });
+  await writeFile(join(source.directory, "one.txt"), "native result");
+  source.queueResponse(delta("Old progress", "one.txt"), finish("tool_calls"), done);
+  source.queueResponse(delta("Old answer"), finish(), done);
+  await source.type("Old request");
+  await source.key("\r");
+  await source.settled();
+  const sessionFile = source.session.sessionFile;
+  assert(sessionFile);
+  await source.close();
 
   const restored = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     sessionFile,
     directory: source.directory,
     rows: 32,
-  })
-  const frame = await restored.frame()
-  assert.match(frame, /Old progress/)
-  assert.match(frame, /Old answer/)
-  assert.doesNotMatch(frame, /Worked/)
-})
+  });
+  const frame = await restored.frame();
+  assert.match(frame, /Old progress/);
+  assert.match(frame, /Old answer/);
+  assert.doesNotMatch(frame, /Worked/);
+});
 
 test("same-journal tree navigation restores only surviving relationships", async (t) => {
-  let target = ""
+  let target = "";
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 36,
     extensionFactories: [
       (pi) => {
-        pi.registerEntryRenderer(
-          "test.lifecycle-notice",
-          () => new Text("Tree notice", 0, 0),
-        )
-        pi.on("tool_execution_end", () =>
-          pi.appendEntry("test.lifecycle-notice", {}),
-        )
+        pi.registerEntryRenderer("test.lifecycle-notice", () => new Text("Tree notice", 0, 0));
+        pi.on("tool_execution_end", () => pi.appendEntry("test.lifecycle-notice", {}));
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
-            await ctx.navigateTree(target)
+            await ctx.navigateTree(target);
           },
-        })
+        });
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Tree progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Tree answer"), finish(), done)
-  await host.type("Tree request")
-  await host.key("\r")
-  await host.settled()
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Tree progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Tree answer"), finish(), done);
+  await host.type("Tree request");
+  await host.key("\r");
+  await host.settled();
 
-  const entries = host.session.sessionManager.getEntries()
+  const entries = host.session.sessionManager.getEntries();
   const assistant = entries.filter(
     (entry) => entry.type === "message" && entry.message.role === "assistant",
-  )
-  assert.equal(assistant.length, 2)
-  const progress = assistant[0]!
-  const answer = assistant[1]!
-  target = answer.id
-  await host.type("/test-tree")
-  await host.key("\r")
-  const selected = host.session.sessionManager.getBranch()
-  assert.equal(selected.at(-1)?.id, answer.id)
+  );
+  assert.equal(assistant.length, 2);
+  const progress = assistant[0]!;
+  const answer = assistant[1]!;
+  target = answer.id;
+  await host.type("/test-tree");
+  await host.key("\r");
+  const selected = host.session.sessionManager.getBranch();
+  assert.equal(selected.at(-1)?.id, answer.id);
   assert.equal(
     selected.some(
       (entry) =>
@@ -1053,29 +913,26 @@ test("same-journal tree navigation restores only surviving relationships", async
         entry.parentId === answer.id,
     ),
     false,
-  )
-  const restored = await host.frame()
-  assert.match(restored, /Worked for \d+m \d+s ▶/)
-  assert.match(restored, /Tree answer/)
-  assert.match(
-    restored,
-    /Worked for \d+m \d+s ▶[\s\S]*Tree notice[\s\S]*Tree answer/,
-  )
-  assert.equal((restored.match(/Tree notice/g) ?? []).length, 1)
-  assert.doesNotMatch(restored, /Tree progress/)
+  );
+  const restored = await host.frame();
+  assert.match(restored, /Worked for \d+m \d+s ▶/);
+  assert.match(restored, /Tree answer/);
+  assert.match(restored, /Worked for \d+m \d+s ▶[\s\S]*Tree notice[\s\S]*Tree answer/);
+  assert.equal((restored.match(/Tree notice/g) ?? []).length, 1);
+  assert.doesNotMatch(restored, /Tree progress/);
 
-  target = progress.id
-  await host.type("/test-tree")
-  await host.key("\r")
-  const partial = await host.frame()
-  assert.match(partial, /Tree progress/)
-  assert.doesNotMatch(partial, /Tree answer|Tree notice|Worked for \d+m \d+s ▶/)
+  target = progress.id;
+  await host.type("/test-tree");
+  await host.key("\r");
+  const partial = await host.frame();
+  assert.match(partial, /Tree progress/);
+  assert.doesNotMatch(partial, /Tree answer|Tree notice|Worked for \d+m \d+s ▶/);
 
-  target = answer.id
-  await host.type("/test-tree")
-  await host.key("\r")
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
-})
+  target = answer.id;
+  await host.type("/test-tree");
+  await host.key("\r");
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/);
+});
 
 test("native fork carries certified relationships whose sources survive", async (t) => {
   const host = await openNativeHost(t, {
@@ -1084,27 +941,18 @@ test("native fork carries certified relationships whose sources survive", async 
     rows: 36,
     extensionFactories: [
       (pi) => {
-        pi.registerEntryRenderer(
-          "test.lifecycle-notice",
-          () => new Text("Fork notice", 0, 0),
-        )
-        pi.on("tool_execution_end", () =>
-          pi.appendEntry("test.lifecycle-notice", {}),
-        )
+        pi.registerEntryRenderer("test.lifecycle-notice", () => new Text("Fork notice", 0, 0));
+        pi.on("tool_execution_end", () => pi.appendEntry("test.lifecycle-notice", {}));
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Fork progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Fork answer"), finish(), done)
-  await host.type("Fork request")
-  await host.key("\r")
-  await host.settled()
-  const originalFile = host.session.sessionFile
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Fork progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Fork answer"), finish(), done);
+  await host.type("Fork request");
+  await host.key("\r");
+  await host.settled();
+  const originalFile = host.session.sessionFile;
   const answer = host.session.sessionManager
     .getEntries()
     .find(
@@ -1112,57 +960,46 @@ test("native fork carries certified relationships whose sources survive", async 
         entry.type === "message" &&
         entry.message.role === "assistant" &&
         JSON.stringify(entry.message.content).includes("Fork answer"),
-    )
-  assert(answer)
-  host.queueResponse(delta("Sibling answer"), finish(), done)
-  await host.type("Sibling request")
-  await host.key("\r")
-  await host.settled()
-  const result = await host.runtime.fork(answer.id, { position: "at" })
-  assert.equal(result.cancelled, false)
-  assert.notEqual(host.session.sessionFile, originalFile)
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Fork answer/)
-  assert.match(
-    frame,
-    /Worked for \d+m \d+s ▶[\s\S]*Fork notice[\s\S]*Fork answer/,
-  )
-  assert.equal((frame.match(/Fork notice/g) ?? []).length, 1)
-  assert.doesNotMatch(frame, /Fork progress/)
-  assert.doesNotMatch(frame, /Sibling request|Sibling answer/)
+    );
+  assert(answer);
+  host.queueResponse(delta("Sibling answer"), finish(), done);
+  await host.type("Sibling request");
+  await host.key("\r");
+  await host.settled();
+  const result = await host.runtime.fork(answer.id, { position: "at" });
+  assert.equal(result.cancelled, false);
+  assert.notEqual(host.session.sessionFile, originalFile);
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Fork answer/);
+  assert.match(frame, /Worked for \d+m \d+s ▶[\s\S]*Fork notice[\s\S]*Fork answer/);
+  assert.equal((frame.match(/Fork notice/g) ?? []).length, 1);
+  assert.doesNotMatch(frame, /Fork progress/);
+  assert.doesNotMatch(frame, /Sibling request|Sibling answer/);
   assert.doesNotMatch(
     JSON.stringify(host.session.sessionManager.getEntries()),
     /Sibling request|Sibling answer/,
-  )
+  );
   assert(
     host.session.sessionManager
       .getEntries()
-      .some(
-        (entry) =>
-          entry.type === "custom" &&
-          entry.customType === "pi-chat.relationship",
-      ),
-  )
-})
+      .some((entry) => entry.type === "custom" && entry.customType === "pi-chat.relationship"),
+  );
+});
 
 test("a retained fork method cannot transfer a disposed adapter's relationships", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Stale progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Stale answer"), finish(), done)
-  await host.type("Stale request")
-  await host.key("\r")
-  await host.settled()
-  const retainedFork = host.runtime.fork
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Stale progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Stale answer"), finish(), done);
+  await host.type("Stale request");
+  await host.key("\r");
+  await host.settled();
+  const retainedFork = host.runtime.fork;
   const answer = host.session.sessionManager
     .getEntries()
     .find(
@@ -1170,16 +1007,16 @@ test("a retained fork method cannot transfer a disposed adapter's relationships"
         entry.type === "message" &&
         entry.message.role === "assistant" &&
         JSON.stringify(entry.message.content).includes("Stale answer"),
-    )
-  assert(answer)
-  await host.reload()
+    );
+  assert(answer);
+  await host.reload();
 
-  const result = await retainedFork(answer.id, { position: "at" })
-  assert.equal(result.cancelled, false)
-  const frame = await host.frame()
-  assert.match(frame, /Stale progress|read one\.txt/)
-  assert.match(frame, /Stale answer/)
-  assert.doesNotMatch(frame, /Worked for \d+m \d+s ▶/)
+  const result = await retainedFork(answer.id, { position: "at" });
+  assert.equal(result.cancelled, false);
+  const frame = await host.frame();
+  assert.match(frame, /Stale progress|read one\.txt/);
+  assert.match(frame, /Stale answer/);
+  assert.doesNotMatch(frame, /Worked for \d+m \d+s ▶/);
   assert.equal(
     host.session.sessionManager
       .getEntries()
@@ -1193,27 +1030,23 @@ test("a retained fork method cannot transfer a disposed adapter's relationships"
           entry.data.kind === "settled",
       ),
     false,
-  )
-})
+  );
+});
 
 test("a fork remains usable when relationship metadata fails to append", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Before fork", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Fork answer"), finish(), done)
-  await host.type("Fork request")
-  await host.key("\r")
-  await host.settled()
-  const oldManager = host.session.sessionManager
-  const oldFile = host.session.sessionFile
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Before fork", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Fork answer"), finish(), done);
+  await host.type("Fork request");
+  await host.key("\r");
+  await host.settled();
+  const oldManager = host.session.sessionManager;
+  const oldFile = host.session.sessionFile;
   const answer = oldManager
     .getEntries()
     .find(
@@ -1221,109 +1054,94 @@ test("a fork remains usable when relationship metadata fails to append", async (
         entry.type === "message" &&
         entry.message.role === "assistant" &&
         JSON.stringify(entry.message.content).includes("Fork answer"),
-    )
-  assert(answer)
-  const append = SessionManager.prototype.appendCustomEntry
-  let failedWrites = 0
+    );
+  assert(answer);
+  const append = SessionManager.prototype.appendCustomEntry;
+  let failedWrites = 0;
   SessionManager.prototype.appendCustomEntry = function (...args) {
-    const id = append.apply(this, args)
+    const id = append.apply(this, args);
     if (this !== oldManager && args[0] === "pi-chat.relationship") {
-      failedWrites++
-      throw new Error("Controlled metadata append failure")
+      failedWrites++;
+      throw new Error("Controlled metadata append failure");
     }
-    return id
-  }
+    return id;
+  };
   try {
-    const result = await host.runtime.fork(answer.id, { position: "at" })
-    assert.equal(result.cancelled, false)
+    const result = await host.runtime.fork(answer.id, { position: "at" });
+    assert.equal(result.cancelled, false);
   } finally {
-    SessionManager.prototype.appendCustomEntry = append
+    SessionManager.prototype.appendCustomEntry = append;
   }
-  assert.equal(failedWrites, 1)
-  assert.notEqual(host.session.sessionFile, oldFile)
-  const frame = await host.frame()
-  assert.match(frame, /Error: pi-chat could not persist fork relationships/)
-  assert.match(frame, /Fork answer/)
+  assert.equal(failedWrites, 1);
+  assert.notEqual(host.session.sessionFile, oldFile);
+  const frame = await host.frame();
+  assert.match(frame, /Error: pi-chat could not persist fork relationships/);
+  assert.match(frame, /Fork answer/);
 
-  await host.type("After failed metadata")
-  await host.key("\r")
-  await host.settled()
-  assert.match(JSON.stringify(host.requests.at(-1)), /After failed metadata/)
-})
+  await host.type("After failed metadata");
+  await host.key("\r");
+  await host.settled();
+  assert.match(JSON.stringify(host.requests.at(-1)), /After failed metadata/);
+});
 
 test("copied journal restores agent activity without changing provider context", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Copy progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Copy answer"), finish(), done)
-  await host.type("Copy request")
-  await host.key("\r")
-  await host.settled()
-  const sourceFile = host.session.sessionFile
-  assert(sourceFile)
-  const copiedFile = join(host.directory, "copied-session.jsonl")
-  await copyFile(sourceFile, copiedFile)
-  await host.runtime.switchSession(copiedFile)
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Copy progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Copy answer"), finish(), done);
+  await host.type("Copy request");
+  await host.key("\r");
+  await host.settled();
+  const sourceFile = host.session.sessionFile;
+  assert(sourceFile);
+  const copiedFile = join(host.directory, "copied-session.jsonl");
+  await copyFile(sourceFile, copiedFile);
+  await host.runtime.switchSession(copiedFile);
 
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Copy answer/)
-  assert.doesNotMatch(frame, /Copy progress/)
-  await host.type("Next request")
-  await host.key("\r")
-  await host.settled()
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Copy answer/);
+  assert.doesNotMatch(frame, /Copy progress/);
+  await host.type("Next request");
+  await host.key("\r");
+  await host.settled();
   const provider = JSON.stringify(
-    host.requests
-      .at(-1)
-      ?.messages.filter((message) => message.role !== "system"),
-  )
-  assert.match(provider, /Copy request|Copy answer|Next request/)
-  assert.doesNotMatch(provider, /pi-chat|Worked/)
-})
+    host.requests.at(-1)?.messages.filter((message) => message.role !== "system"),
+  );
+  assert.match(provider, /Copy request|Copy answer|Next request/);
+  assert.doesNotMatch(provider, /pi-chat|Worked/);
+});
 
 test("compaction keeps certified source relationships for later tree navigation", async (t) => {
-  let target = ""
+  let target = "";
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 36,
     extensionFactories: [
       (pi) => {
-        pi.registerEntryRenderer(
-          "test.lifecycle-notice",
-          () => new Text("Archived notice", 0, 0),
-        )
-        pi.on("tool_execution_end", () =>
-          pi.appendEntry("test.lifecycle-notice", {}),
-        )
+        pi.registerEntryRenderer("test.lifecycle-notice", () => new Text("Archived notice", 0, 0));
+        pi.on("tool_execution_end", () => pi.appendEntry("test.lifecycle-notice", {}));
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
-            await ctx.navigateTree(target)
+            await ctx.navigateTree(target);
           },
-        })
+        });
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Archived progress", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Archived answer"), finish(), done)
-  await host.type("Archived request")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile
-  assert(file)
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Archived progress", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Archived answer"), finish(), done);
+  await host.type("Archived request");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile;
+  assert(file);
   const answer = host.session.sessionManager
     .getEntries()
     .find(
@@ -1331,28 +1149,25 @@ test("compaction keeps certified source relationships for later tree navigation"
         entry.type === "message" &&
         entry.message.role === "assistant" &&
         JSON.stringify(entry.message.content).includes("Archived answer"),
-    )
-  assert(answer)
-  target = answer.id
-  host.session.sessionManager.appendCompaction("Archived context", null, 100)
-  await host.runtime.switchSession(file)
-  assert.match(await host.frame(), /Compacted from 100 tokens/)
+    );
+  assert(answer);
+  target = answer.id;
+  host.session.sessionManager.appendCompaction("Archived context", null, 100);
+  await host.runtime.switchSession(file);
+  assert.match(await host.frame(), /Compacted from 100 tokens/);
 
-  await host.type("/test-tree")
-  await host.key("\r")
-  const restored = await host.frame()
-  assert.match(restored, /Worked for \d+m \d+s ▶/)
-  assert.match(restored, /Archived answer/)
-  assert.match(
-    restored,
-    /Worked for \d+m \d+s ▶[\s\S]*Archived notice[\s\S]*Archived answer/,
-  )
-  assert.equal((restored.match(/Archived notice/g) ?? []).length, 1)
-  assert.doesNotMatch(restored, /Archived progress/)
-})
+  await host.type("/test-tree");
+  await host.key("\r");
+  const restored = await host.frame();
+  assert.match(restored, /Worked for \d+m \d+s ▶/);
+  assert.match(restored, /Archived answer/);
+  assert.match(restored, /Worked for \d+m \d+s ▶[\s\S]*Archived notice[\s\S]*Archived answer/);
+  assert.equal((restored.match(/Archived notice/g) ?? []).length, 1);
+  assert.doesNotMatch(restored, /Archived progress/);
+});
 
 test("a standalone native message after the final keeps its source position", async (t) => {
-  const appendNotice = { current: () => {} }
+  const appendNotice = { current: () => {} };
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 40,
@@ -1361,18 +1176,17 @@ test("a standalone native message after the final keeps its source position", as
         pi.registerEntryRenderer(
           "test.notice-only",
           () => new Text("Notice without earlier work", 0, 0),
-        )
-        appendNotice.current = () => pi.appendEntry("test.notice-only", {})
+        );
+        appendNotice.current = () => pi.appendEntry("test.notice-only", {});
         pi.registerMessageRenderer(
           "post-answer",
           () => new Text("Native post-answer notice", 0, 0),
-        )
+        );
         pi.on("message_end", (event) => {
           if (
             event.message.role === "assistant" &&
             event.message.content.some(
-              (part) =>
-                part.type === "text" && part.text === "Final before notice",
+              (part) => part.type === "text" && part.text === "Final before notice",
             )
           )
             pi.sendMessage(
@@ -1382,119 +1196,93 @@ test("a standalone native message after the final keeps its source position", as
                 display: true,
               },
               { triggerTurn: false },
-            )
-        })
+            );
+        });
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  host.queueResponse(
-    delta("Earlier native work", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Final before notice"), finish(), done)
-  await host.type("Keep native order")
-  await host.key("\r")
-  await host.settled()
-  const frame = await host.frame()
-  assert.match(frame, /Worked for \d+m \d+s ▶/)
-  assert.match(frame, /Final before notice[\s\S]*Native post-answer notice/)
-  assert.doesNotMatch(frame, /Earlier native work/)
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  host.queueResponse(delta("Earlier native work", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Final before notice"), finish(), done);
+  await host.type("Keep native order");
+  await host.key("\r");
+  await host.settled();
+  const frame = await host.frame();
+  assert.match(frame, /Worked for \d+m \d+s ▶/);
+  assert.match(frame, /Final before notice[\s\S]*Native post-answer notice/);
+  assert.doesNotMatch(frame, /Earlier native work/);
 
-  host.queueResponse(
-    delta("Answer without earlier work"),
-    { pause: true },
-    finish(),
-    done,
-  )
-  await host.type("Only answer")
-  await host.key("\r")
-  await t.waitFor(async () =>
-    assert.match(await host.frame(), /Answer without earlier work/),
-  )
-  appendNotice.current()
-  host.resumeResponse()
-  await host.settled()
-  const later = await host.frame()
-  assert.equal((later.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  host.queueResponse(delta("Answer without earlier work"), { pause: true }, finish(), done);
+  await host.type("Only answer");
+  await host.key("\r");
+  await t.waitFor(async () => assert.match(await host.frame(), /Answer without earlier work/));
+  appendNotice.current();
+  host.resumeResponse();
+  await host.settled();
+  const later = await host.frame();
+  assert.equal((later.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1);
   assert.match(
     later,
     /Final before notice[\s\S]*Native post-answer notice[\s\S]*Only answer[\s\S]*Notice without earlier work[\s\S]*Answer without earlier work/,
-  )
-  await host.reload()
-  const replayed = await host.frame()
-  assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  );
+  await host.reload();
+  const replayed = await host.frame();
+  assert.equal((replayed.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1);
   assert.match(
     replayed,
     /Final before notice[\s\S]*Native post-answer notice[\s\S]*Only answer[\s\S]*Notice without earlier work[\s\S]*Answer without earlier work/,
-  )
+  );
 
-  host.queueResponse(delta(""), { pause: true }, finish(), done)
-  host.queueResponse(
-    delta("Retained-only answer"),
-    { pause: true },
-    finish(),
-    done,
-  )
-  await host.type("Request without visible work")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 4))
-  await host.session.steer("Retained-only steering")
-  host.resumeResponse()
-  await t.waitFor(async () =>
-    assert.match(await host.frame(), /Retained-only answer/),
-  )
-  appendNotice.current()
-  host.resumeResponse()
-  await host.settled()
-  const retainedOnly = await host.frame()
-  assert.equal((retainedOnly.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  host.queueResponse(delta(""), { pause: true }, finish(), done);
+  host.queueResponse(delta("Retained-only answer"), { pause: true }, finish(), done);
+  await host.type("Request without visible work");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 4));
+  await host.session.steer("Retained-only steering");
+  host.resumeResponse();
+  await t.waitFor(async () => assert.match(await host.frame(), /Retained-only answer/));
+  appendNotice.current();
+  host.resumeResponse();
+  await host.settled();
+  const retainedOnly = await host.frame();
+  assert.equal((retainedOnly.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1);
   assert.match(
     retainedOnly,
     /Request without visible work[\s\S]*Retained-only steering[\s\S]*Notice without earlier work[\s\S]*Retained-only answer/,
-  )
-  await host.reload()
-  const retainedReplay = await host.frame()
-  assert.equal(
-    (retainedReplay.match(/Worked for \d+m \d+s ▶/g) ?? []).length,
-    1,
-  )
+  );
+  await host.reload();
+  const retainedReplay = await host.frame();
+  assert.equal((retainedReplay.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1);
   assert.match(
     retainedReplay,
     /Retained-only steering[\s\S]*Notice without earlier work[\s\S]*Retained-only answer/,
-  )
+  );
 
-  const boundaryRequest = host.requests.length + 2
+  const boundaryRequest = host.requests.length + 2;
   host.queueResponse(
     delta("Work before unidentified notice", "one.txt"),
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(
-    { pause: true },
-    delta("Answer after unidentified notice"),
-    finish(),
-    done,
-  )
-  await host.type("Preserve an unidentified native boundary")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, boundaryRequest))
-  host.ui.notify("Boundary without a session occurrence", "warning")
-  host.resumeResponse()
-  await host.settled()
-  const boundary = await host.frame()
+  );
+  host.queueResponse({ pause: true }, delta("Answer after unidentified notice"), finish(), done);
+  await host.type("Preserve an unidentified native boundary");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, boundaryRequest));
+  host.ui.notify("Boundary without a session occurrence", "warning");
+  host.resumeResponse();
+  await host.settled();
+  const boundary = await host.frame();
   assert.match(
     boundary,
     /Work before unidentified notice[\s\S]*Boundary without a session occurrence[\s\S]*Answer after unidentified notice/,
-  )
-  assert.equal((boundary.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1)
+  );
+  assert.equal((boundary.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 1);
   assert.doesNotMatch(
     JSON.stringify(host.session.messages),
     /Boundary without a session occurrence/,
-  )
+  );
   assert.doesNotMatch(
     JSON.stringify(host.requests.at(-1)),
     /Boundary without a session occurrence/,
-  )
-})
+  );
+});

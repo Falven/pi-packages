@@ -1,4 +1,4 @@
-import type { ActivityItem, CallFacts } from "./types.ts"
+import type { ActivityItem, CallFacts } from "./types.ts";
 
 export function fallbackItems(facts: CallFacts): ActivityItem[] {
   return [
@@ -15,5 +15,5 @@ export function fallbackItems(facts: CallFacts): ActivityItem[] {
         result: facts.result,
       },
     },
-  ]
+  ];
 }

@@ -1,9 +1,4 @@
-import type {
-  CopyControl,
-  CopyControls,
-  CopyProvider,
-  ItemCopyControls,
-} from "./copy-contract.ts"
+import type { CopyControl, CopyControls, CopyProvider, ItemCopyControls } from "./copy-contract.ts";
 import {
   InteractiveMode,
   ToolExecutionComponent,
@@ -13,7 +8,7 @@ import {
   type AgentSessionRuntime,
   type ExtensionContext,
   type SessionEntry,
-} from "@earendil-works/pi-coding-agent"
+} from "@earendil-works/pi-coding-agent";
 import {
   Container,
   HStack,
@@ -29,233 +24,203 @@ import {
   stripTerminalSequences,
   truncateToWidth,
   visibleWidth,
-} from "@earendil-works/pi-tui"
+} from "@earendil-works/pi-tui";
 import {
   AgentActivityHeader,
   AgentActivityIndex,
   type DeliveryKind,
   type AgentActivity,
-} from "./agent-activity.ts"
-import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js"
-import { GroupSummaries } from "./group-summaries.ts"
-import { ActivityItems } from "./activity-items.ts"
-import { itemSummary } from "./item-summary.ts"
-import {
-  type ActivityItem,
-  type ActivityResult,
-} from "./tool-adapters/types.ts"
-import { RelationshipJournal, carryObservedFork } from "./relationships.ts"
-import type { RelationshipFact } from "./relationships.ts"
-import { Thought, type ThoughtEnvironment } from "./thought.ts"
-import type { WorkingLabel } from "./working-label.ts"
-import { ProviderPhaseIndex } from "./provider-phase.ts"
-import {
-  SourceSearch,
-  type SearchField,
-  type SourceHit,
-} from "./source-search.ts"
+} from "./agent-activity.ts";
+import type { StackLayoutNode } from "@earendil-works/pi-tui/dist/layout-node.js";
+import { GroupSummaries } from "./group-summaries.ts";
+import { ActivityItems } from "./activity-items.ts";
+import { itemSummary } from "./item-summary.ts";
+import { type ActivityItem, type ActivityResult } from "./tool-adapters/types.ts";
+import { RelationshipJournal, carryObservedFork } from "./relationships.ts";
+import type { RelationshipFact } from "./relationships.ts";
+import { Thought, type ThoughtEnvironment } from "./thought.ts";
+import type { WorkingLabel } from "./working-label.ts";
+import { ProviderPhaseIndex } from "./provider-phase.ts";
+import { SourceSearch, type SearchField, type SourceHit } from "./source-search.ts";
 const { allocateStackSizes } = (await import(
-  new URL(
-    "./components/stack.js",
-    import.meta.resolve("@earendil-works/pi-tui"),
-  ).href
-)) as typeof import("@earendil-works/pi-tui/dist/components/stack.js")
-const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node")
+  new URL("./components/stack.js", import.meta.resolve("@earendil-works/pi-tui")).href
+)) as typeof import("@earendil-works/pi-tui/dist/components/stack.js");
+const LAYOUT_NODE = Symbol.for("@earendil-works/pi-tui/layout-node");
 const { dispatchMouseEvent } = (await import(
   new URL("./tui.js", import.meta.resolve("@earendil-works/pi-tui")).href
-)) as typeof import("@earendil-works/pi-tui/dist/tui.js")
+)) as typeof import("@earendil-works/pi-tui/dist/tui.js");
 const { getScrollViewBox } = (await import(
   new URL("./layout.js", import.meta.resolve("@earendil-works/pi-tui")).href
-)) as typeof import("@earendil-works/pi-tui/dist/layout.js")
+)) as typeof import("@earendil-works/pi-tui/dist/layout.js");
 const { isImageLine } = (await import(
-  new URL("./terminal-image.js", import.meta.resolve("@earendil-works/pi-tui"))
-    .href
-)) as typeof import("@earendil-works/pi-tui/dist/terminal-image.js")
+  new URL("./terminal-image.js", import.meta.resolve("@earendil-works/pi-tui")).href
+)) as typeof import("@earendil-works/pi-tui/dist/terminal-image.js");
 const { AltScreenSearchIndex } = (await import(
-  new URL(
-    "./alt-screen-search.js",
-    import.meta.resolve("@earendil-works/pi-tui"),
-  ).href
-)) as typeof import("@earendil-works/pi-tui/dist/alt-screen-search.js")
+  new URL("./alt-screen-search.js", import.meta.resolve("@earendil-works/pi-tui")).href
+)) as typeof import("@earendil-works/pi-tui/dist/alt-screen-search.js");
 
 /* oxlint-disable eslint/no-underscore-dangle -- Pi's persistence seams are private. */
 
-type Entry = SessionEntry
-type Message = AgentSession["messages"][number]
+type Entry = SessionEntry;
+type Message = AgentSession["messages"][number];
 type NativeAssistant = Component & {
-  contentContainer: Container
-  isStreaming: boolean
-  updateContent(message: Message, streaming?: boolean): void
-}
+  contentContainer: Container;
+  isStreaming: boolean;
+  updateContent(message: Message, streaming?: boolean): void;
+};
 type NativeMode = ThoughtEnvironment & {
   renderer: {
-    mode: string
-    layoutRoot?: Component
-    setLayoutRoot(root?: Component): void
-  }
-  fullscreenLayoutRoot: VStack & { [LAYOUT_NODE](): StackLayoutNode }
-  transcriptScrollView: ScrollView
-  chatContainer: Container
-  documentContainer: Container
-  sessionManager: AgentSession["sessionManager"]
-  runtimeHost: AgentSessionRuntime
+    mode: string;
+    layoutRoot?: Component;
+    setLayoutRoot(root?: Component): void;
+  };
+  fullscreenLayoutRoot: VStack & { [LAYOUT_NODE](): StackLayoutNode };
+  transcriptScrollView: ScrollView;
+  chatContainer: Container;
+  documentContainer: Container;
+  sessionManager: AgentSession["sessionManager"];
+  runtimeHost: AgentSessionRuntime;
   session: {
-    isStreaming: boolean
-    retryAttempt: number
+    isStreaming: boolean;
+    retryAttempt: number;
     agent: {
-      subscribe(listener: (event: unknown) => void): () => void
-      normalizePromptInput(...args: unknown[]): Message[]
-      steeringQueue: { drain(): Message[] }
-      followUpQueue: { drain(): Message[] }
-    }
-    _agentRunAbortRequested: boolean
-    extensionRunner: { getEntryRenderer(name: string): unknown }
-    _entryIdsByMessage: WeakMap<object, string>
-    recordBashResult: (...args: unknown[]) => unknown
-    _pendingBashMessages: object[]
-    _appendCustomMessage(message: Message): void
-  }
-  bashComponent?: Component
-  pendingBashComponents: Component[]
-  pendingTools: Map<string, Component>
+      subscribe(listener: (event: unknown) => void): () => void;
+      normalizePromptInput(...args: unknown[]): Message[];
+      steeringQueue: { drain(): Message[] };
+      followUpQueue: { drain(): Message[] };
+    };
+    _agentRunAbortRequested: boolean;
+    extensionRunner: { getEntryRenderer(name: string): unknown };
+    _entryIdsByMessage: WeakMap<object, string>;
+    recordBashResult: (...args: unknown[]) => unknown;
+    _pendingBashMessages: object[];
+    _appendCustomMessage(message: Message): void;
+  };
+  bashComponent?: Component;
+  pendingBashComponents: Component[];
+  pendingTools: Map<string, Component>;
   activeStatusIndicator?: Component & {
-    kind: string
-    getRenderedIndicator(): string
-    renderInBorder(width: number): string
-  }
-  activeWorkingIndicatorEmbedded: boolean
-  statusContainer: Container
-  setEditorWorkingStatusIndicator(indicator?: Component): boolean
+    kind: string;
+    getRenderedIndicator(): string;
+    renderInBorder(width: number): string;
+  };
+  activeWorkingIndicatorEmbedded: boolean;
+  statusContainer: Container;
+  setEditorWorkingStatusIndicator(indicator?: Component): boolean;
   settingsManager: {
-    getHideThinkingBlock(): boolean
-    getShowImages(): boolean
-    getImageWidthCells(): number
-  }
-  toolOutputExpanded: boolean
-  ui: ConstructorParameters<typeof ToolExecutionComponent>[5]
+    getHideThinkingBlock(): boolean;
+    getShowImages(): boolean;
+    getImageWidthCells(): number;
+  };
+  toolOutputExpanded: boolean;
+  ui: ConstructorParameters<typeof ToolExecutionComponent>[5];
   getRegisteredToolDefinition(
     name: string,
-  ): ConstructorParameters<typeof ToolExecutionComponent>[4]
-  streamingComponent?: NativeAssistant
-  renderSessionEntries(entries: Entry[], options?: unknown): void
-  renderSessionItems(items: Iterable<unknown>, options?: unknown): void
-  renderInitialMessages(): void
-  addCustomEntryToChat(entry: Entry): void
-  addMessageToChat(message: Message, options?: unknown): void
-  handleEvent(event: {
-    type: string
-    message?: Message
-    entry?: Entry
-  }): Promise<void>
-  editor: Component
-  keybindings: { matches(data: string, action: string): boolean }
-  toggleToolOutputExpansion(): void
+  ): ConstructorParameters<typeof ToolExecutionComponent>[4];
+  streamingComponent?: NativeAssistant;
+  renderSessionEntries(entries: Entry[], options?: unknown): void;
+  renderSessionItems(items: Iterable<unknown>, options?: unknown): void;
+  renderInitialMessages(): void;
+  addCustomEntryToChat(entry: Entry): void;
+  addMessageToChat(message: Message, options?: unknown): void;
+  handleEvent(event: { type: string; message?: Message; entry?: Entry }): Promise<void>;
+  editor: Component;
+  keybindings: { matches(data: string, action: string): boolean };
+  toggleToolOutputExpansion(): void;
   handleCopyCommand(options: {
-    flashConfirmation: boolean
-    preferSelection: boolean
-  }): Promise<void>
-  showError?(message: string): void
-}
+    flashConfirmation: boolean;
+    preferSelection: boolean;
+  }): Promise<void>;
+  showError?(message: string): void;
+};
 
 export type Occurrence = {
-  parent?: Occurrence
-  entry: Entry | undefined
-  message: Message | undefined
-  itemOrdinal?: number
-  contentIndex?: number
-  contentIndices?: number[]
-  component?: Component
-  resultEntry?: Entry
-  resultMessage?: Message
-  sourceCall?: Occurrence
-  parts: Map<number, Occurrence>
-}
+  parent?: Occurrence;
+  entry: Entry | undefined;
+  message: Message | undefined;
+  itemOrdinal?: number;
+  contentIndex?: number;
+  contentIndices?: number[];
+  component?: Component;
+  resultEntry?: Entry;
+  resultMessage?: Message;
+  sourceCall?: Occurrence;
+  parts: Map<number, Occurrence>;
+};
 
-type SourceZone = { withThinking: number; withoutThinking: number }
+type SourceZone = { withThinking: number; withoutThinking: number };
 
-const active = new WeakMap<InteractiveMode, NativeChatHost>()
+const active = new WeakMap<InteractiveMode, NativeChatHost>();
 
-function requireMethod<T extends Function>(
-  method: T | undefined,
-  name: string,
-): T {
+function requireMethod<T extends Function>(method: T | undefined, name: string): T {
   if (typeof method !== "function")
-    throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`)
-  return method
+    throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`);
+  return method;
 }
 
 class OwnedRoot extends VStack {
-  private readonly invalidateNative: () => void
-  private readonly layoutChat: () => void
+  private readonly invalidateNative: () => void;
+  private readonly layoutChat: () => void;
 
-  constructor(
-    layout: StackLayoutNode,
-    invalidateNative: () => void,
-    layoutChat: () => void,
-  ) {
-    super([...layout.entries], { gap: layout.gap, align: layout.align })
-    this.invalidateNative = invalidateNative
-    this.layoutChat = layoutChat
+  constructor(layout: StackLayoutNode, invalidateNative: () => void, layoutChat: () => void) {
+    super([...layout.entries], { gap: layout.gap, align: layout.align });
+    this.invalidateNative = invalidateNative;
+    this.layoutChat = layoutChat;
   }
 
   override invalidate() {
-    this.invalidateNative()
+    this.invalidateNative();
   }
 
   [LAYOUT_NODE](): StackLayoutNode {
-    this.layoutChat()
+    this.layoutChat();
     return {
       type: "vstack",
       entries: this.entries,
       gap: this.gap,
       align: this.align,
-    }
+    };
   }
 }
 
 type Leaf = {
-  component: Component
-  occurrence: Occurrence | undefined
-  rows: string[]
-  left: number
-  start: number
-  top: number
-  copyColumns?: ReadonlyMap<number, number>
-}
+  component: Component;
+  occurrence: Occurrence | undefined;
+  rows: string[];
+  left: number;
+  start: number;
+  top: number;
+  copyColumns?: ReadonlyMap<number, number>;
+};
 
 type VisibleInterval = {
-  leaf: Leaf
-  start: number
-  end: number
-  top: number
-}
-type PaintedInterval = VisibleInterval & { window: ScrollView }
+  leaf: Leaf;
+  start: number;
+  end: number;
+  top: number;
+};
+type PaintedInterval = VisibleInterval & { window: ScrollView };
 
 type NativeSearch = {
-  query: string
-  matches: unknown[]
-  selectedIndex: number
-  selectionMode: "query" | "next" | "previous" | "retain"
-  component: { setResult(index: number, count: number): void }
-}
+  query: string;
+  matches: unknown[];
+  selectedIndex: number;
+  selectionMode: "query" | "next" | "previous" | "retain";
+  component: { setResult(index: number, count: number): void };
+};
 
 type SelectionPoint = {
-  row: number
-  col: number
-  scrollView?: ScrollView
-  occurrence?: Occurrence
-  component?: Component
-  localRow?: number
-  boundary?: boolean
-}
+  row: number;
+  col: number;
+  scrollView?: ScrollView;
+  occurrence?: Occurrence;
+  component?: Component;
+  localRow?: number;
+  boundary?: boolean;
+};
 
-function rendererSelection(
-  renderer: TuiAltScreen,
-  name: "selectionAnchor" | "selectionFocus",
-) {
-  return (
-    renderer as unknown as Record<typeof name, SelectionPoint | undefined>
-  )[name]
+function rendererSelection(renderer: TuiAltScreen, name: "selectionAnchor" | "selectionFocus") {
+  return (renderer as unknown as Record<typeof name, SelectionPoint | undefined>)[name];
 }
 
 class RawLeaf extends Container {
@@ -266,69 +231,67 @@ class RawLeaf extends Container {
     readonly outputPad: number,
     readonly contentWidth: number,
   ) {
-    super()
-    this.children.push(component)
+    super();
+    this.children.push(component);
   }
 
   override render() {
-    return this.rows
+    return this.rows;
   }
 
   override invalidate() {}
 
-  override handleMouse(
-    event: Parameters<NonNullable<Component["handleMouse"]>>[0],
-  ) {
+  override handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
     if (
       event.x < Math.max(this.left, this.outputPad) ||
       event.x >= this.contentWidth - this.outputPad
     )
-      return
+      return;
     return dispatchMouseEvent(this.component, {
       ...event,
       x: event.x - this.left,
-    })
+    });
   }
 }
 
 class LayoutStack extends VStack {
-  private readonly rows: string[] = []
+  private readonly rows: string[] = [];
 
   setHeight(height: number) {
-    const previous = this.rows.length
-    this.rows.length = height
-    if (height > previous) this.rows.fill(" ", previous)
+    const previous = this.rows.length;
+    this.rows.length = height;
+    if (height > previous) this.rows.fill(" ", previous);
   }
 
   override render() {
     // Geometry only: leaf windows own image clipping and source-row access.
-    return this.rows
+    return this.rows;
   }
 }
 
 type ChatRow = {
-  component: Component
-  occurrence?: Occurrence
-  owner?: Occurrence
-  tool: boolean
-  activityItem?: ActivityItem
-  sourceCall?: Occurrence
-  agentActivity?: AgentActivity | undefined
-  zoneStart?: boolean
-  zoneEnd?: boolean
-  sourceZone?: number | undefined
-  spacing?: Spacer
-}
+  component: Component;
+  occurrence?: Occurrence;
+  owner?: Occurrence;
+  tool: boolean;
+  activityItem?: ActivityItem;
+  sourceCall?: Occurrence;
+  agentActivity?: AgentActivity | undefined;
+  zoneStart?: boolean;
+  zoneEnd?: boolean;
+  sourceZone?: number | undefined;
+  spacing?: Spacer;
+};
 type RenderGroup = {
-  items: ChatRow[]
-  expanded: boolean
-  header?: RenderGroupHeader
-}
+  items: ChatRow[];
+  expanded: boolean;
+  header?: RenderGroupHeader;
+};
 
 type NativeToolPresenter = Component & {
-  expanded: boolean
-  setExpanded(expanded: boolean): void
-}
+  expanded: boolean;
+  setExpanded(expanded: boolean): void;
+};
 
 function disclosureLine(
   width: number,
@@ -336,19 +299,19 @@ function disclosureLine(
   expanded: boolean,
   label: (width: number) => string,
 ) {
-  const padding = Math.min(outputPad, Math.floor((width - 1) / 2))
-  const available = Math.max(1, width - padding * 2)
-  const labelWidth = available > 2 ? available - 2 : available - 1
-  const chevron = expanded ? "▼" : ">"
+  const padding = Math.min(outputPad, Math.floor((width - 1) / 2));
+  const available = Math.max(1, width - padding * 2);
+  const labelWidth = available > 2 ? available - 2 : available - 1;
+  const chevron = expanded ? "▼" : ">";
   return {
     padding,
     line: `${available === 1 ? "" : label(labelWidth)}${available > 2 ? " " : ""}${chevron}`,
-  }
+  };
 }
 
 class RenderGroupHeader implements Component {
-  focused = false
-  readonly spacing = new Spacer(1)
+  focused = false;
+  readonly spacing = new Spacer(1);
 
   constructor(
     private readonly adapter: NativeChatHost,
@@ -365,59 +328,52 @@ class RenderGroupHeader implements Component {
       (labelWidth) =>
         this.adapter.workingGroup === this.group
           ? this.adapter.workingLine(labelWidth)
-          : truncateToWidth(
-              this.adapter.groupSummaries.summary(this.group),
-              labelWidth,
-            ),
-    )
+          : truncateToWidth(this.adapter.groupSummaries.summary(this.group), labelWidth),
+    );
     return new Text(
       line,
       padding,
       0,
-      this.focused
-        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
-        : undefined,
-    ).render(width)
+      this.focused ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text) : undefined,
+    ).render(width);
   }
 
   handleInput(data: string) {
-    this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleRenderGroup(this.group),
-    )
+    this.adapter.handleDisclosureInput(data, () => this.adapter.toggleRenderGroup(this.group));
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
-    if (event.type !== "click" || event.button !== "left") return undefined
-    this.adapter.toggleRenderGroup(this.group)
-    return { handled: true, focus: true }
+    if (event.type !== "click" || event.button !== "left") return undefined;
+    this.adapter.toggleRenderGroup(this.group);
+    return { handled: true, focus: true };
   }
 }
 
 class ActivityItemDisclosure extends Container {
-  focused = false
-  expanded = false
-  readonly spacing = new Spacer(1)
-  private body: ToolExecutionComponent | undefined
-  private initialBodyExpanded = false
-  private header = new Text("", 0, 0)
-  private copy: ItemCopyControls | undefined
-  copyColumns: ReadonlyMap<number, number> = new Map()
+  focused = false;
+  expanded = false;
+  readonly spacing = new Spacer(1);
+  private body: ToolExecutionComponent | undefined;
+  private initialBodyExpanded = false;
+  private header = new Text("", 0, 0);
+  private copy: ItemCopyControls | undefined;
+  copyColumns: ReadonlyMap<number, number> = new Map();
 
   get actions() {
-    return this.expanded ? (this.copy?.actions ?? []) : []
+    return this.expanded ? (this.copy?.actions ?? []) : [];
   }
 
   private createActions() {
-    this.copy = this.adapter.copy?.item(() => this.item, this)
+    this.copy = this.adapter.copy?.item(() => this.item, this);
   }
 
   dispose() {
-    this.copy?.dispose()
+    this.copy?.dispose();
   }
 
   private result() {
-    const { result, availability } = this.item.body
-    if (availability !== "omitted") return result
+    const { result, availability } = this.item.body;
+    if (availability !== "omitted") return result;
     return {
       ...result,
       content: [
@@ -425,7 +381,7 @@ class ActivityItemDisclosure extends Container {
         { type: "text" as const, text: "[Earlier activity body omitted]" },
       ],
       isError: result?.isError ?? this.item.status === "failed",
-    }
+    };
   }
 
   constructor(
@@ -433,81 +389,71 @@ class ActivityItemDisclosure extends Container {
     readonly occurrence: Occurrence,
     public item: ActivityItem,
   ) {
-    super()
-    this.createActions()
+    super();
+    this.createActions();
   }
 
   update(item: ActivityItem) {
-    if (item === this.item) return
+    if (item === this.item) return;
     if (
       item.kind !== this.item.kind ||
       item.body.name !== this.item.body.name ||
       Boolean(item.body.renderers) !== Boolean(this.item.body.renderers)
     ) {
-      this.initialBodyExpanded = this.bodyExpanded
-      this.body = undefined
+      this.initialBodyExpanded = this.bodyExpanded;
+      this.body = undefined;
     }
     if (item.kind !== this.item.kind) {
-      this.dispose()
-      this.copy = undefined
-      this.item = item
-      this.createActions()
+      this.dispose();
+      this.copy = undefined;
+      this.item = item;
+      this.createActions();
     }
-    this.item = item
+    this.item = item;
     if (this.body) {
-      this.body.updateArgs(item.body.args)
-      const result = this.result()
-      if (result) this.body.updateResult(result, item.status === "running")
+      this.body.updateArgs(item.body.args);
+      const result = this.result();
+      if (result) this.body.updateResult(result, item.status === "running");
     }
   }
 
   setExpanded(expanded: boolean) {
-    this.expanded = expanded
+    this.expanded = expanded;
   }
 
   get bodyExpanded() {
     return (
       (this.body as unknown as NativeToolPresenter | undefined)?.expanded ??
       this.initialBodyExpanded
-    )
+    );
   }
 
   setBodyExpanded(expanded: boolean) {
-    this.initialBodyExpanded = expanded
-    this.body?.setExpanded(expanded)
+    this.initialBodyExpanded = expanded;
+    this.body?.setExpanded(expanded);
   }
 
   override render(width: number) {
-    const pad = this.adapter.host.outputPad
-    const { line, padding } = disclosureLine(
-      width,
-      pad,
-      this.expanded,
-      (labelWidth) =>
-        truncateToWidth(
-          itemSummary(this.item, this.expanded && this.bodyExpanded),
-          labelWidth,
-        ),
-    )
+    const pad = this.adapter.host.outputPad;
+    const { line, padding } = disclosureLine(width, pad, this.expanded, (labelWidth) =>
+      truncateToWidth(itemSummary(this.item, this.expanded && this.bodyExpanded), labelWidth),
+    );
     this.header = new Text(
       line,
       padding,
       0,
-      this.focused
-        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
-        : undefined,
-    )
-    this.children = [this.header]
+      this.focused ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text) : undefined,
+    );
+    this.children = [this.header];
     if (this.expanded) {
       if (!this.body) {
         const options = {
           showImages: this.adapter.host.settingsManager.getShowImages(),
-          imageWidthCells:
-            this.adapter.host.settingsManager.getImageWidthCells(),
+          imageWidthCells: this.adapter.host.settingsManager.getImageWidthCells(),
           outputPad: pad,
-        }
-        const renderers = this.item.body.renderers?.() ?? {}
-        const definition = this.copy?.wrap(renderers) ?? renderers
+        };
+        const renderers = this.item.body.renderers?.() ?? {};
+        const definition = this.copy?.wrap(renderers) ?? renderers;
         this.body = new ToolExecutionComponent(
           this.item.body.name,
           this.item.id,
@@ -517,60 +463,52 @@ class ActivityItemDisclosure extends Container {
           definition,
           this.adapter.host.ui,
           this.item.body.cwd,
-        )
-        const result = this.result()
-        if (result)
-          this.body.updateResult(result, this.item.status === "running")
-        this.body.setExpanded(this.initialBodyExpanded)
+        );
+        const result = this.result();
+        if (result) this.body.updateResult(result, this.item.status === "running");
+        this.body.setExpanded(this.initialBodyExpanded);
       }
-      this.copy?.mount(this.body)
-      this.children.push(this.body)
+      this.copy?.mount(this.body);
+      this.children.push(this.body);
     }
-    const rows = super.render(width)
-    this.copyColumns = this.expanded
-      ? (this.copy?.measure(this) ?? new Map())
-      : new Map()
-    return rows
+    const rows = super.render(width);
+    this.copyColumns = this.expanded ? (this.copy?.measure(this) ?? new Map()) : new Map();
+    return rows;
   }
 
   contentPadding(row: number) {
-    if (row === 0) return this.adapter.host.outputPad
+    if (row === 0) return this.adapter.host.outputPad;
     // Native tool cells can keep an inset distinct from the current setting.
     const body = this.body as unknown as {
-      children: Component[]
-      contentBox: Component & { paddingX: number }
-      contentText: { paddingX: number }
-      contentTextRegion: Component
-    }
-    if (body.children.includes(body.contentBox)) return body.contentBox.paddingX
-    if (body.children.includes(body.contentTextRegion))
-      return body.contentText.paddingX
-    return 0
+      children: Component[];
+      contentBox: Component & { paddingX: number };
+      contentText: { paddingX: number };
+      contentTextRegion: Component;
+    };
+    if (body.children.includes(body.contentBox)) return body.contentBox.paddingX;
+    if (body.children.includes(body.contentTextRegion)) return body.contentText.paddingX;
+    return 0;
   }
 
   syncSettings() {
-    if (!this.body) return
-    this.body.setShowImages(this.adapter.host.settingsManager.getShowImages())
-    this.body.setImageWidthCells(
-      this.adapter.host.settingsManager.getImageWidthCells(),
-    )
+    if (!this.body) return;
+    this.body.setShowImages(this.adapter.host.settingsManager.getShowImages());
+    this.body.setImageWidthCells(this.adapter.host.settingsManager.getImageWidthCells());
     const body = this.body as ToolExecutionComponent & {
-      setOutputPad?: (pad: number) => void
-    }
-    body.setOutputPad?.(this.adapter.host.outputPad)
+      setOutputPad?: (pad: number) => void;
+    };
+    body.setOutputPad?.(this.adapter.host.outputPad);
   }
 
   handleInput(data: string) {
-    this.adapter.handleDisclosureInput(data, () =>
-      this.adapter.toggleToolDisclosure(this),
-    )
+    this.adapter.handleDisclosureInput(data, () => this.adapter.toggleToolDisclosure(this));
   }
 
   override handleMouse(
     event: Parameters<NonNullable<Component["handleMouse"]>>[0],
   ): ReturnType<Container["handleMouse"]> {
     if (event.type === "click" && event.button === "left" && event.y === 0) {
-      this.adapter.toggleToolDisclosure(this)
+      this.adapter.toggleToolDisclosure(this);
       return {
         handled: true,
         focus: true,
@@ -581,147 +519,129 @@ class ActivityItemDisclosure extends Container {
           width: event.width,
           height: event.height,
         },
-      }
+      };
     }
-    const expanded = this.bodyExpanded
-    const result = super.handleMouse(event)
-    if (this.bodyExpanded !== expanded) this.adapter.clearChatSelection()
+    const expanded = this.bodyExpanded;
+    const result = super.handleMouse(event);
+    if (this.bodyExpanded !== expanded) this.adapter.clearChatSelection();
     if (result?.target && this.adapter.isCopyAction(result.target.component))
-      return { ...result, focusTarget: result.target.component }
-    return result
+      return { ...result, focusTarget: result.target.component };
+    return result;
   }
 }
 
 export class NativeChatHost {
-  readonly copy: CopyControls | undefined
+  readonly copy: CopyControls | undefined;
 
   isCopyAction(value: unknown): value is CopyControl {
-    return this.copy?.isAction(value) ?? false
+    return this.copy?.isAction(value) ?? false;
   }
-  readonly host: NativeMode
+  readonly host: NativeMode;
   get extensionUI(): ExtensionContext["ui"] {
-    return this.host.runtimeHost.session.extensionRunner.getUIContext()
+    return this.host.runtimeHost.session.extensionRunner.getUIContext();
   }
-  readonly agentActivity = new AgentActivityIndex()
-  readonly groupSummaries = new GroupSummaries()
-  private readonly providerPhases = new ProviderPhaseIndex()
-  private activityLeaf: string | undefined
-  private activitySession: string | undefined
-  private activityEntries = new WeakSet<Entry>()
-  readonly relationships: RelationshipJournal
-  private readonly deliveryCleanup: (() => void)[] = []
-  private forkCleanup?: () => void
-  private deliveringUser: Occurrence | undefined
-  readonly occurrences: Occurrence[] = []
-  readonly byEntryId = new Map<string, Occurrence>()
-  readonly byComponent = new Map<Component, Occurrence>()
-  private readonly projections = new Map<string, Map<number, Occurrence>>()
-  readonly root: OwnedRoot
-  readonly transcript: ScrollView
-  private readonly painting = new LayoutStack()
-  private readonly scrollContent = new LayoutStack()
-  private readonly paintingWidth = new HStack()
-  private readonly layoutSpace = new Spacer(0)
-  private leaves: Leaf[] = []
-  private intervals: PaintedInterval[] = []
-  private viewportHeight = 0
-  private layoutWidth = 0
-  private boundRenderer: TuiAltScreen | undefined
-  private selectionTimer: NodeJS.Timeout | undefined
+  readonly agentActivity = new AgentActivityIndex();
+  readonly groupSummaries = new GroupSummaries();
+  private readonly providerPhases = new ProviderPhaseIndex();
+  private activityLeaf: string | undefined;
+  private activitySession: string | undefined;
+  private activityEntries = new WeakSet<Entry>();
+  readonly relationships: RelationshipJournal;
+  private readonly deliveryCleanup: (() => void)[] = [];
+  private forkCleanup?: () => void;
+  private deliveringUser: Occurrence | undefined;
+  readonly occurrences: Occurrence[] = [];
+  readonly byEntryId = new Map<string, Occurrence>();
+  readonly byComponent = new Map<Component, Occurrence>();
+  private readonly projections = new Map<string, Map<number, Occurrence>>();
+  readonly root: OwnedRoot;
+  readonly transcript: ScrollView;
+  private readonly painting = new LayoutStack();
+  private readonly scrollContent = new LayoutStack();
+  private readonly paintingWidth = new HStack();
+  private readonly layoutSpace = new Spacer(0);
+  private leaves: Leaf[] = [];
+  private intervals: PaintedInterval[] = [];
+  private viewportHeight = 0;
+  private layoutWidth = 0;
+  private boundRenderer: TuiAltScreen | undefined;
+  private selectionTimer: NodeJS.Timeout | undefined;
   private readonly rendererMethods = new Map<
     string,
     { original: Function; wrapped: Function; descriptor?: PropertyDescriptor }
-  >()
-  private readonly oldRoot: NativeMode["fullscreenLayoutRoot"]
-  private readonly historical = new Map<string, Component[]>()
-  private imageSettings: { show: boolean; width: number }
-  private outputPad: number
-  private readonly originals = new Map<string, (...args: never[]) => unknown>()
-  private readonly wrappers = new Map<string, (...args: never[]) => unknown>()
-  private readonly ownDescriptors = new Map<
-    string,
-    PropertyDescriptor | undefined
-  >()
-  private readonly chatMethods = new Map<
-    string,
-    (...args: never[]) => unknown
-  >()
-  private readonly chatWrappers = new Map<
-    string,
-    (...args: never[]) => unknown
-  >()
-  private readonly chatDescriptors = new Map<
-    string,
-    PropertyDescriptor | undefined
-  >()
+  >();
+  private readonly oldRoot: NativeMode["fullscreenLayoutRoot"];
+  private readonly historical = new Map<string, Component[]>();
+  private imageSettings: { show: boolean; width: number };
+  private outputPad: number;
+  private readonly originals = new Map<string, (...args: never[]) => unknown>();
+  private readonly wrappers = new Map<string, (...args: never[]) => unknown>();
+  private readonly ownDescriptors = new Map<string, PropertyDescriptor | undefined>();
+  private readonly chatMethods = new Map<string, (...args: never[]) => unknown>();
+  private readonly chatWrappers = new Map<string, (...args: never[]) => unknown>();
+  private readonly chatDescriptors = new Map<string, PropertyDescriptor | undefined>();
   private readonly assistantMethods = new Map<
     NativeAssistant,
     {
-      original: NativeAssistant["updateContent"]
-      wrapped: NativeAssistant["updateContent"]
-      descriptor?: PropertyDescriptor
+      original: NativeAssistant["updateContent"];
+      wrapped: NativeAssistant["updateContent"];
+      descriptor?: PropertyDescriptor;
     }
-  >()
-  private readonly assistantChildren = new Map<
-    NativeAssistant,
-    Set<Component>
-  >()
-  private readonly assistantIndices = new Map<NativeAssistant, Set<number>>()
-  private readonly liveMessages = new WeakMap<object, Occurrence>()
-  private readonly bashMessages = new WeakMap<object, Component>()
-  private readonly toolResults = new WeakMap<object, Component>()
-  private readonly renderGroups = new Map<Occurrence, RenderGroup>()
-  workingGroup: RenderGroup | undefined
-  private borrowedWorking: NativeMode["activeStatusIndicator"]
-  private readonly standaloneWorking = new Text("", 0, 0)
-  private readonly standaloneWorkingSpacing = new Spacer(1)
-  private readonly activityDisclosures = new Map<
-    Occurrence,
-    Map<string, ActivityItemDisclosure>
-  >()
+  >();
+  private readonly assistantChildren = new Map<NativeAssistant, Set<Component>>();
+  private readonly assistantIndices = new Map<NativeAssistant, Set<number>>();
+  private readonly liveMessages = new WeakMap<object, Occurrence>();
+  private readonly bashMessages = new WeakMap<object, Component>();
+  private readonly toolResults = new WeakMap<object, Component>();
+  private readonly renderGroups = new Map<Occurrence, RenderGroup>();
+  workingGroup: RenderGroup | undefined;
+  private borrowedWorking: NativeMode["activeStatusIndicator"];
+  private readonly standaloneWorking = new Text("", 0, 0);
+  private readonly standaloneWorkingSpacing = new Spacer(1);
+  private readonly activityDisclosures = new Map<Occurrence, Map<string, ActivityItemDisclosure>>();
   private disclosureChoices = new WeakMap<
     Entry,
     Map<
       number,
       {
-        group: boolean | undefined
-        items: Map<string, { expanded: boolean; bodyExpanded: boolean }>
+        group: boolean | undefined;
+        items: Map<string, { expanded: boolean; bodyExpanded: boolean }>;
       }
     >
-  >()
-  private readonly thoughts = new Map<Occurrence, Thought>()
-  private readonly answerParts = new WeakMap<Component, Container>()
-  private readonly responseActions = new Map<Occurrence, CopyControl>()
+  >();
+  private readonly thoughts = new Map<Occurrence, Thought>();
+  private readonly answerParts = new WeakMap<Component, Container>();
+  private readonly responseActions = new Map<Occurrence, CopyControl>();
   private visibleDisclosures: (
     | RenderGroupHeader
     | ActivityItemDisclosure
     | AgentActivityHeader
     | CopyControl
-  )[] = []
-  private unsubscribe?: () => void
-  private source: Occurrence | undefined
-  private streaming: Occurrence | undefined
-  private active = true
-  private relationshipWriteFailed = false
-  private indexedIds: string[] = []
-  private readonly sourceRanks = new Map<string, number>()
-  private readonly sourceZones = new Map<string, SourceZone[]>()
-  private lastSourceZone: SourceZone = { withThinking: 0, withoutThinking: 0 }
-  private sourceRevision = 0
-  private readonly sourceSearch = new SourceSearch<Occurrence>()
+  )[] = [];
+  private unsubscribe?: () => void;
+  private source: Occurrence | undefined;
+  private streaming: Occurrence | undefined;
+  private active = true;
+  private relationshipWriteFailed = false;
+  private indexedIds: string[] = [];
+  private readonly sourceRanks = new Map<string, number>();
+  private readonly sourceZones = new Map<string, SourceZone[]>();
+  private lastSourceZone: SourceZone = { withThinking: 0, withoutThinking: 0 };
+  private sourceRevision = 0;
+  private readonly sourceSearch = new SourceSearch<Occurrence>();
   private readonly renderedSearch = new WeakMap<
     Component,
     InstanceType<typeof AltScreenSearchIndex>
-  >()
+  >();
   private searchState:
     | {
-        query: string
-        revision: number
-        hits: SourceHit<Occurrence>[]
-        counts: Map<Occurrence, number>
-        selected: number
+        query: string;
+        revision: number;
+        hits: SourceHit<Occurrence>[];
+        counts: Map<Occurrence, number>;
+        selected: number;
       }
-    | undefined
+    | undefined;
 
   private constructor(
     host: NativeMode,
@@ -729,22 +649,21 @@ export class NativeChatHost {
     private readonly working: WorkingLabel,
     copyProvider?: CopyProvider,
   ) {
-    this.host = host
+    this.host = host;
     this.copy = copyProvider?.({
       theme: () => this.extensionUI.theme,
       outputPad: () => host.outputPad,
-      handleInput: (data, activate) =>
-        this.handleDisclosureInput(data, activate),
+      handleInput: (data, activate) => this.handleDisclosureInput(data, activate),
       requestRender: () => host.ui.requestRender(),
       setStatus: (text) => this.extensionUI.setStatus("pi-copy", text),
-    })
-    this.outputPad = host.outputPad
+    });
+    this.outputPad = host.outputPad;
     this.imageSettings = {
       show: host.settingsManager.getShowImages(),
       width: host.settingsManager.getImageWidthCells(),
-    }
-    this.relationships = new RelationshipJournal(host.sessionManager)
-    this.oldRoot = host.fullscreenLayoutRoot
+    };
+    this.relationships = new RelationshipJournal(host.sessionManager);
+    this.oldRoot = host.fullscreenLayoutRoot;
     this.transcript = new ScrollView(this.scrollContent, {
       follow: "end",
       primary: true,
@@ -752,24 +671,23 @@ export class NativeChatHost {
       scrollbar: host.transcriptScrollView.scrollbar,
       scrollbarTrackStyle: host.transcriptScrollView.scrollbarTrackStyle,
       scrollbarThumbStyle: host.transcriptScrollView.scrollbarThumbStyle,
-    })
-    const layout = requireMethod(
-      this.oldRoot[LAYOUT_NODE],
-      "fullscreen layout node",
-    ).call(this.oldRoot)
-    const entries = [...layout.entries]
-    entries[0] = { ...entries[0]!, component: this.transcript }
+    });
+    const layout = requireMethod(this.oldRoot[LAYOUT_NODE], "fullscreen layout node").call(
+      this.oldRoot,
+    );
+    const entries = [...layout.entries];
+    entries[0] = { ...entries[0]!, component: this.transcript };
     this.root = new OwnedRoot(
       { ...layout, entries },
       () => {
-        this.oldRoot.invalidate()
+        this.oldRoot.invalidate();
         for (const items of this.activityDisclosures.values())
-          for (const disclosure of items.values()) disclosure.invalidate()
+          for (const disclosure of items.values()) disclosure.invalidate();
         for (const components of this.historical.values())
-          for (const component of components) component.invalidate()
+          for (const component of components) component.invalidate();
       },
       () => this.layoutChat(),
-    )
+    );
   }
 
   static install(
@@ -778,205 +696,168 @@ export class NativeChatHost {
     working: WorkingLabel,
     copyProvider?: CopyProvider,
   ): NativeChatHost {
-    const mode = host as unknown as NativeMode
+    const mode = host as unknown as NativeMode;
     if (
       active.has(host) ||
       mode.fullscreenLayoutRoot.children[0] !== mode.transcriptScrollView ||
       (mode.renderer.mode === "fullscreen" &&
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
-      throw new Error("pi-chat chat root is already owned")
-    const adapter = new NativeChatHost(
-      mode,
-      activityItems,
-      working,
-      copyProvider,
-    )
+      throw new Error("pi-chat chat root is already owned");
+    const adapter = new NativeChatHost(mode, activityItems, working, copyProvider);
     try {
-      requireMethod(
-        mode.setEditorWorkingStatusIndicator,
-        "setEditorWorkingStatusIndicator",
-      )
-      adapter.wrapNativeConstruction()
-      adapter.forkCleanup = carryObservedFork(
-        mode.runtimeHost,
-        adapter.relationships,
-        (error) => mode.showError?.(error.message),
-      )
-      adapter.bindRenderer()
-      mode.fullscreenLayoutRoot = adapter.root
-      if (mode.renderer.mode === "fullscreen")
-        mode.renderer.setLayoutRoot(adapter.root)
-      adapter.indexBranch()
-      adapter.restoreRelationships()
+      requireMethod(mode.setEditorWorkingStatusIndicator, "setEditorWorkingStatusIndicator");
+      adapter.wrapNativeConstruction();
+      adapter.forkCleanup = carryObservedFork(mode.runtimeHost, adapter.relationships, (error) =>
+        mode.showError?.(error.message),
+      );
+      adapter.bindRenderer();
+      mode.fullscreenLayoutRoot = adapter.root;
+      if (mode.renderer.mode === "fullscreen") mode.renderer.setLayoutRoot(adapter.root);
+      adapter.indexBranch();
+      adapter.restoreRelationships();
       adapter.unsubscribe = mode.session.agent.subscribe((event) => {
-        adapter.promotePersistedMessage(event)
-      })
-      active.set(host, adapter)
-      return adapter
+        adapter.promotePersistedMessage(event);
+      });
+      active.set(host, adapter);
+      return adapter;
     } catch (error) {
-      adapter.dispose()
-      throw error
+      adapter.dispose();
+      throw error;
     }
   }
 
   workingLine(width: number) {
     return this.host.activeStatusIndicator?.kind === "working"
       ? this.host.activeStatusIndicator.renderInBorder(Math.max(1, width))
-      : ""
+      : "";
   }
 
   private detachWorkingIndicator() {
-    const indicator = this.host.activeStatusIndicator
-    if (indicator?.kind !== "working") return
-    requireMethod(
-      indicator.renderInBorder,
-      "activeStatusIndicator.renderInBorder",
-    )
-    this.borrowedWorking = indicator
-    this.host.statusContainer.removeChild(indicator)
-    this.host.setEditorWorkingStatusIndicator(undefined)
-    this.host.activeWorkingIndicatorEmbedded = false
+    const indicator = this.host.activeStatusIndicator;
+    if (indicator?.kind !== "working") return;
+    requireMethod(indicator.renderInBorder, "activeStatusIndicator.renderInBorder");
+    this.borrowedWorking = indicator;
+    this.host.statusContainer.removeChild(indicator);
+    this.host.setEditorWorkingStatusIndicator(undefined);
+    this.host.activeWorkingIndicatorEmbedded = false;
   }
 
   private restoreWorkingIndicator() {
-    const indicator = this.borrowedWorking
-    this.borrowedWorking = undefined
+    const indicator = this.borrowedWorking;
+    this.borrowedWorking = undefined;
     if (
       !indicator ||
       this.host.fullscreenLayoutRoot !== this.root ||
       this.host.activeStatusIndicator !== indicator
     )
-      return
-    this.host.statusContainer.removeChild(indicator)
-    this.host.activeWorkingIndicatorEmbedded =
-      this.host.setEditorWorkingStatusIndicator(indicator)
-    if (!this.host.activeWorkingIndicatorEmbedded)
-      this.host.statusContainer.addChild(indicator)
+      return;
+    this.host.statusContainer.removeChild(indicator);
+    this.host.activeWorkingIndicatorEmbedded = this.host.setEditorWorkingStatusIndicator(indicator);
+    if (!this.host.activeWorkingIndicatorEmbedded) this.host.statusContainer.addChild(indicator);
   }
 
   private layoutChat() {
-    this.transcript.setScrollbar(this.host.transcriptScrollView.scrollbar)
+    this.transcript.setScrollbar(this.host.transcriptScrollView.scrollbar);
     if (this.outputPad !== this.host.outputPad) {
       for (const components of this.historical.values())
         for (const component of components)
-          if (
-            "setOutputPad" in component &&
-            typeof component.setOutputPad === "function"
-          )
-            component.setOutputPad(this.host.outputPad)
+          if ("setOutputPad" in component && typeof component.setOutputPad === "function")
+            component.setOutputPad(this.host.outputPad);
       for (const items of this.activityDisclosures.values())
-        for (const disclosure of items.values()) disclosure.syncSettings()
-      this.outputPad = this.host.outputPad
+        for (const disclosure of items.values()) disclosure.syncSettings();
+      this.outputPad = this.host.outputPad;
     }
-    const show = this.host.settingsManager.getShowImages()
-    const widthCells = this.host.settingsManager.getImageWidthCells()
-    if (
-      show !== this.imageSettings.show ||
-      widthCells !== this.imageSettings.width
-    ) {
+    const show = this.host.settingsManager.getShowImages();
+    const widthCells = this.host.settingsManager.getImageWidthCells();
+    if (show !== this.imageSettings.show || widthCells !== this.imageSettings.width) {
       for (const components of this.historical.values())
         for (const component of components)
           if (component instanceof ToolExecutionComponent) {
-            if (show !== this.imageSettings.show) component.setShowImages(show)
-            if (widthCells !== this.imageSettings.width)
-              component.setImageWidthCells(widthCells)
+            if (show !== this.imageSettings.show) component.setShowImages(show);
+            if (widthCells !== this.imageSettings.width) component.setImageWidthCells(widthCells);
           }
       for (const items of this.activityDisclosures.values())
-        for (const disclosure of items.values()) disclosure.syncSettings()
-      this.imageSettings = { show, width: widthCells }
+        for (const disclosure of items.values()) disclosure.syncSettings();
+      this.imageSettings = { show, width: widthCells };
     }
-    const renderer = this.host.renderer as unknown as TuiAltScreen
-    const width = Math.max(1, renderer.terminal.columns)
-    const height = Math.max(1, renderer.terminal.rows)
-    this.detachWorkingIndicator()
-    const contentWidth = this.transcript.getContentWidth(width)
-    const oldLeaves = this.leaves
-    const oldAnchor = rendererSelection(renderer, "selectionAnchor")
-    const oldFocus = rendererSelection(renderer, "selectionFocus")
-    const selectedStart =
-      oldAnchor && oldFocus ? Math.min(oldAnchor.row, oldFocus.row) : -1
-    const selectedEnd =
-      oldAnchor && oldFocus ? Math.max(oldAnchor.row, oldFocus.row) : -1
-    const wasFollowing = this.transcript.isFollowingEnd
-    const previousTop = this.transcript.scrollTop
+    const renderer = this.host.renderer as unknown as TuiAltScreen;
+    const width = Math.max(1, renderer.terminal.columns);
+    const height = Math.max(1, renderer.terminal.rows);
+    this.detachWorkingIndicator();
+    const contentWidth = this.transcript.getContentWidth(width);
+    const oldLeaves = this.leaves;
+    const oldAnchor = rendererSelection(renderer, "selectionAnchor");
+    const oldFocus = rendererSelection(renderer, "selectionFocus");
+    const selectedStart = oldAnchor && oldFocus ? Math.min(oldAnchor.row, oldFocus.row) : -1;
+    const selectedEnd = oldAnchor && oldFocus ? Math.max(oldAnchor.row, oldFocus.row) : -1;
+    const wasFollowing = this.transcript.isFollowingEnd;
+    const previousTop = this.transcript.scrollTop;
     const anchor = !wasFollowing
       ? oldLeaves.find(
-          (leaf) =>
-            previousTop >= leaf.top &&
-            previousTop < leaf.top + leaf.rows.length,
+          (leaf) => previousTop >= leaf.top && previousTop < leaf.top + leaf.rows.length,
         )
-      : undefined
-    const anchorRow = anchor ? previousTop - anchor.top : 0
-    let start = 0
+      : undefined;
+    const anchorRow = anchor ? previousTop - anchor.top : 0;
+    let start = 0;
     const missing = [...this.historical].toSorted(
       ([left], [right]) =>
-        (this.sourceRanks.get(left) ?? Infinity) -
-        (this.sourceRanks.get(right) ?? Infinity),
-    )
-    const components: Component[] = []
-    let nextMissing = 0
+        (this.sourceRanks.get(left) ?? Infinity) - (this.sourceRanks.get(right) ?? Infinity),
+    );
+    const components: Component[] = [];
+    let nextMissing = 0;
     for (const section of this.host.documentContainer.children) {
       if (section !== this.host.chatContainer) {
-        components.push(section)
-        continue
+        components.push(section);
+        continue;
       }
       for (const component of this.host.chatContainer.children) {
-        const position = this.sourceRanks.get(
-          this.byComponent.get(component)?.entry?.id ?? "",
-        )
+        const position = this.sourceRanks.get(this.byComponent.get(component)?.entry?.id ?? "");
         if (position !== undefined)
           while (
             nextMissing < missing.length &&
-            (this.sourceRanks.get(missing[nextMissing]![0]) ?? Infinity) <
-              position
+            (this.sourceRanks.get(missing[nextMissing]![0]) ?? Infinity) < position
           )
-            components.push(...missing[nextMissing++]![1])
-        components.push(component)
+            components.push(...missing[nextMissing++]![1]);
+        components.push(component);
       }
-      while (nextMissing < missing.length)
-        components.push(...missing[nextMissing++]![1])
+      while (nextMissing < missing.length) components.push(...missing[nextMissing++]![1]);
     }
-    const chatRows = this.orderedChatRows(components)
-    const current = this.agentActivity.currentActivity()
+    const chatRows = this.orderedChatRows(components);
+    const current = this.agentActivity.currentActivity();
     const hasVisibleContent = (row: ChatRow) => {
-      const occurrence = row.occurrence
-      const message = (occurrence?.parent ?? occurrence)?.message
-      if (row.tool || message?.role !== "assistant") return true
+      const occurrence = row.occurrence;
+      const message = (occurrence?.parent ?? occurrence)?.message;
+      if (row.tool || message?.role !== "assistant") return true;
       return message.content.some(
         (part, index) =>
           (occurrence?.contentIndex === undefined ||
-            (occurrence.contentIndices ?? [occurrence.contentIndex]).includes(
-              index,
-            )) &&
+            (occurrence.contentIndices ?? [occurrence.contentIndex]).includes(index)) &&
           ((part.type === "text" && part.text.trim()) ||
             (part.type === "thinking" && part.thinking.trim())),
-      )
-    }
+      );
+    };
     const emptyThoughtBody = (row: ChatRow) =>
       row.occurrence !== undefined &&
       this.thoughts.has(row.occurrence) &&
-      row.component.render(contentWidth).length === 0
-    const latest = new Map<AgentActivity, ChatRow>()
-    let latestDisplayedWorking: ChatRow | undefined
+      row.component.render(contentWidth).length === 0;
+    const latest = new Map<AgentActivity, ChatRow>();
+    let latestDisplayedWorking: ChatRow | undefined;
     for (const chatRow of chatRows) {
-      if (!hasVisibleContent(chatRow)) continue
-      const activity = this.agentActivity.find(chatRow.occurrence)
+      if (!hasVisibleContent(chatRow)) continue;
+      const activity = this.agentActivity.find(chatRow.occurrence);
       if (
         activity &&
         !(chatRow.component instanceof Spacer) &&
         !this.agentActivity.isFinal(chatRow.occurrence, activity) &&
         !this.agentActivity.isRequest(chatRow.occurrence, activity)
       ) {
-        latest.set(activity, chatRow)
-        if (activity === current && !emptyThoughtBody(chatRow))
-          latestDisplayedWorking = chatRow
+        latest.set(activity, chatRow);
+        if (activity === current && !emptyThoughtBody(chatRow)) latestDisplayedWorking = chatRow;
       }
     }
     const latestWorking =
-      current && !current.settled && !current.final
-        ? latestDisplayedWorking
-        : undefined
+      current && !current.settled && !current.final ? latestDisplayedWorking : undefined;
     const laterVisible =
       latestWorking &&
       chatRows
@@ -986,20 +867,19 @@ export class NativeChatHost {
             !(row.component instanceof Spacer) &&
             hasVisibleContent(row) &&
             !emptyThoughtBody(row) &&
-            (row.agentActivity ??
-              this.agentActivity.find(row.occurrence ?? row.owner)) === current,
-        )
-    const unwrapped = new Map<Component, Component>()
-    let currentGroup: RenderGroup | undefined
-    let composed: ChatRow[] = []
+            (row.agentActivity ?? this.agentActivity.find(row.occurrence ?? row.owner)) === current,
+        );
+    const unwrapped = new Map<Component, Component>();
+    let currentGroup: RenderGroup | undefined;
+    let composed: ChatRow[] = [];
     for (let index = 0; index < chatRows.length;) {
-      const chatRow = chatRows[index]!
+      const chatRow = chatRows[index]!;
       if (!chatRow.tool) {
-        composed.push(chatRow)
-        index++
-        continue
+        composed.push(chatRow);
+        index++;
+        continue;
       }
-      const items: ChatRow[] = []
+      const items: ChatRow[] = [];
       while (
         chatRows[index]?.tool &&
         (!items.length ||
@@ -1007,83 +887,70 @@ export class NativeChatHost {
           items.at(-1)?.sourceZone === undefined ||
           chatRows[index]?.sourceZone === items.at(-1)?.sourceZone)
       )
-        items.push(chatRows[index++]!)
-      const first = items[0]!.sourceCall ?? items[0]!.occurrence
+        items.push(chatRows[index++]!);
+      const first = items[0]!.sourceCall ?? items[0]!.occurrence;
       if (!first) {
-        composed.push(...items)
-        continue
+        composed.push(...items);
+        continue;
       }
-      let group = this.renderGroups.get(first)
+      let group = this.renderGroups.get(first);
       if (!group) {
         group = {
           items,
-          expanded:
-            this.retainedDisclosures(first)?.group ??
-            this.host.toolOutputExpanded,
-        }
-        group.header = new RenderGroupHeader(this, group)
-        this.renderGroups.set(first, group)
+          expanded: this.retainedDisclosures(first)?.group ?? this.host.toolOutputExpanded,
+        };
+        group.header = new RenderGroupHeader(this, group);
+        this.renderGroups.set(first, group);
       }
-      group.items = items
-      if (latestWorking && !laterVisible && items.includes(latestWorking))
-        currentGroup = group
-      const activity = this.agentActivity.find(first)
-      const item = items.length === 1 ? items[0]!.activityItem : undefined
-      const status =
-        item?.kind === "edit" ? item.editOperation?.status : item?.status
+      group.items = items;
+      if (latestWorking && !laterVisible && items.includes(latestWorking)) currentGroup = group;
+      const activity = this.agentActivity.find(first);
+      const item = items.length === 1 ? items[0]!.activityItem : undefined;
+      const status = item?.kind === "edit" ? item.editOperation?.status : item?.status;
       if (
         item &&
         (item.kind !== "edit" || item.editOperation?.fileCount === 1) &&
         (status === "completed" || status === "failed") &&
         activity &&
-        (activity.settled ||
-          activity.final ||
-          !items.includes(latest.get(activity)!))
+        (activity.settled || activity.final || !items.includes(latest.get(activity)!))
       ) {
-        unwrapped.set(group.header!, items[0]!.component)
-        composed.push({ ...items[0]!, spacing: group.header!.spacing })
-        continue
+        unwrapped.set(group.header!, items[0]!.component);
+        composed.push({ ...items[0]!, spacing: group.header!.spacing });
+        continue;
       }
       composed.push({
         component: group.header!,
         tool: false,
         agentActivity: activity,
-      })
-      if (group.expanded) composed.push(...items)
+      });
+      if (group.expanded) composed.push(...items);
     }
-    composed = this.composeAgentActivity(composed).flatMap(
-      (chatRow, index, all) => {
-        const { component } = chatRow
-        const previous = all[index - 1]?.component
-        const spacing =
-          component instanceof AgentActivityHeader
-            ? component.beforeSpacing
-            : component instanceof RenderGroupHeader
-              ? component.spacing
-              : chatRow.spacing
-                ? chatRow.spacing
-                : previous instanceof AgentActivityHeader
-                  ? previous.afterSpacing
-                  : component instanceof ActivityItemDisclosure &&
-                      previous instanceof ActivityItemDisclosure &&
-                      previous.expanded
-                    ? previous.spacing
-                    : chatRow.occurrence &&
-                      this.thoughts.get(chatRow.occurrence)?.spacing
-        return index > 0 &&
-          spacing &&
-          !(component instanceof Spacer) &&
-          !(previous instanceof Spacer)
-          ? [{ component: spacing, tool: false }, chatRow]
-          : [chatRow]
-      },
-    )
+    composed = this.composeAgentActivity(composed).flatMap((chatRow, index, all) => {
+      const { component } = chatRow;
+      const previous = all[index - 1]?.component;
+      const spacing =
+        component instanceof AgentActivityHeader
+          ? component.beforeSpacing
+          : component instanceof RenderGroupHeader
+            ? component.spacing
+            : chatRow.spacing
+              ? chatRow.spacing
+              : previous instanceof AgentActivityHeader
+                ? previous.afterSpacing
+                : component instanceof ActivityItemDisclosure &&
+                    previous instanceof ActivityItemDisclosure &&
+                    previous.expanded
+                  ? previous.spacing
+                  : chatRow.occurrence && this.thoughts.get(chatRow.occurrence)?.spacing;
+      return index > 0 && spacing && !(component instanceof Spacer) && !(previous instanceof Spacer)
+        ? [{ component: spacing, tool: false }, chatRow]
+        : [chatRow];
+    });
     this.workingGroup =
-      currentGroup &&
-      composed.some((row) => row.component === currentGroup.header)
+      currentGroup && composed.some((row) => row.component === currentGroup.header)
         ? currentGroup
-        : undefined
-    const indicator = this.host.activeStatusIndicator
+        : undefined;
+    const indicator = this.host.activeStatusIndicator;
     if (indicator?.kind === "working") {
       this.working.refresh(
         Math.max(
@@ -1094,128 +961,117 @@ export class NativeChatHost {
             1 -
             (this.workingGroup ? 2 : 0),
         ),
-      )
+      );
     }
-    this.detachWorkingIndicator()
+    this.detachWorkingIndicator();
     if (this.host.activeStatusIndicator?.kind === "working") {
       if (!this.workingGroup) {
         if (!(composed.at(-1)?.component instanceof Spacer))
           composed.push({
             component: this.standaloneWorkingSpacing,
             tool: false,
-          })
-        this.standaloneWorking.setPaddingX(this.host.outputPad)
-        this.standaloneWorking.setText(
-          this.workingLine(contentWidth - this.host.outputPad * 2),
-        )
+          });
+        this.standaloneWorking.setPaddingX(this.host.outputPad);
+        this.standaloneWorking.setText(this.workingLine(contentWidth - this.host.outputPad * 2));
         composed.push({
           component: this.standaloneWorking,
           tool: false,
-        })
+        });
       }
-    } else this.workingGroup = undefined
-    const { entries, gap } = this.oldRoot[LAYOUT_NODE]()
+    } else this.workingGroup = undefined;
+    const { entries, gap } = this.oldRoot[LAYOUT_NODE]();
     const [available] = allocateStackSizes(
       entries,
-      entries.map(({ component }, index) =>
-        index === 0 ? 0 : component.render(width).length,
-      ),
+      entries.map(({ component }, index) => (index === 0 ? 0 : component.render(width).length)),
       height,
       gap,
-    )
-    let previousLine = ""
-    const leaves = composed.map(
-      ({ component, occurrence, zoneStart, zoneEnd }) => {
-        let rows = component.render(contentWidth)
-        if (this.isCopyAction(component)) {
-          // Keep the separator with the control, outside selected response text.
-          component.row = stripTerminalSequences(previousLine).trim() ? 1 : 0
-          if (component.row) rows = ["", ...rows]
-        }
-        previousLine = rows.at(-1) ?? previousLine
-        let left = 0
-        if (component instanceof UserMessageComponent) {
-          const textWidth = Math.min(
-            contentWidth,
-            rows.reduce(
-              (max, line) =>
-                Math.max(
-                  max,
-                  visibleWidth(stripTerminalSequences(line).trimEnd()) +
-                    this.host.outputPad,
-                ),
-              1,
-            ),
-          )
-          left = contentWidth - textWidth
-          if (left) {
-            // Keep native prompt markers at column zero for prompt navigation.
-            // oxlint-disable-next-line eslint/no-control-regex -- Pi's native semantic markers.
-            const marker = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/
-            const background = rows[0]?.replace(marker, "") ?? ""
-            rows = rows.map((line) => {
-              const markers = line.match(marker)?.[0] ?? ""
-              return (
-                markers +
-                compositeTuiLine(
-                  background,
-                  line.slice(markers.length),
-                  left,
-                  textWidth,
-                  contentWidth,
-                )
+    );
+    let previousLine = "";
+    const leaves = composed.map(({ component, occurrence, zoneStart, zoneEnd }) => {
+      let rows = component.render(contentWidth);
+      if (this.isCopyAction(component)) {
+        // Keep the separator with the control, outside selected response text.
+        component.row = stripTerminalSequences(previousLine).trim() ? 1 : 0;
+        if (component.row) rows = ["", ...rows];
+      }
+      previousLine = rows.at(-1) ?? previousLine;
+      let left = 0;
+      if (component instanceof UserMessageComponent) {
+        const textWidth = Math.min(
+          contentWidth,
+          rows.reduce(
+            (max, line) =>
+              Math.max(
+                max,
+                visibleWidth(stripTerminalSequences(line).trimEnd()) + this.host.outputPad,
+              ),
+            1,
+          ),
+        );
+        left = contentWidth - textWidth;
+        if (left) {
+          // Keep native prompt markers at column zero for prompt navigation.
+          // oxlint-disable-next-line eslint/no-control-regex -- Pi's native semantic markers.
+          const marker = /^(?:\x1b\]133;[ABC](?:\x07|\x1b\\))+/;
+          const background = rows[0]?.replace(marker, "") ?? "";
+          rows = rows.map((line) => {
+            const markers = line.match(marker)?.[0] ?? "";
+            return (
+              markers +
+              compositeTuiLine(
+                background,
+                line.slice(markers.length),
+                left,
+                textWidth,
+                contentWidth,
               )
-            })
-          }
+            );
+          });
         }
-        if (rows.length && (zoneStart || zoneEnd)) {
-          rows = [...rows]
-          // Split native assistants retain the same semantic navigation zones.
-          if (zoneStart) rows[0] = "\x1b]133;A\x07" + rows[0]
-          if (zoneEnd)
-            rows[rows.length - 1] = "\x1b]133;B\x07\x1b]133;C\x07" + rows.at(-1)
-        }
-        const leaf: Leaf = {
-          component,
-          occurrence,
-          rows,
-          left,
-          start,
-          top: 0,
-          ...(component instanceof ActivityItemDisclosure
-            ? { copyColumns: component.copyColumns }
-            : this.isCopyAction(component)
-              ? { copyColumns: new Map(rows.map((_, row) => [row, 0])) }
-              : {}),
-        }
-        start += rows.length
-        return leaf
-      },
-    )
-    let contentHeight = 0
+      }
+      if (rows.length && (zoneStart || zoneEnd)) {
+        rows = [...rows];
+        // Split native assistants retain the same semantic navigation zones.
+        if (zoneStart) rows[0] = "\x1b]133;A\x07" + rows[0];
+        if (zoneEnd) rows[rows.length - 1] = "\x1b]133;B\x07\x1b]133;C\x07" + rows.at(-1);
+      }
+      const leaf: Leaf = {
+        component,
+        occurrence,
+        rows,
+        left,
+        start,
+        top: 0,
+        ...(component instanceof ActivityItemDisclosure
+          ? { copyColumns: component.copyColumns }
+          : this.isCopyAction(component)
+            ? { copyColumns: new Map(rows.map((_, row) => [row, 0])) }
+            : {}),
+      };
+      start += rows.length;
+      return leaf;
+    });
+    let contentHeight = 0;
     for (const leaf of leaves) {
-      leaf.top = contentHeight
-      contentHeight += leaf.rows.length
+      leaf.top = contentHeight;
+      contentHeight += leaf.rows.length;
     }
-    this.leaves = leaves
+    this.leaves = leaves;
     this.visibleDisclosures = composed.flatMap<
-      | RenderGroupHeader
-      | ActivityItemDisclosure
-      | AgentActivityHeader
-      | CopyControl
+      RenderGroupHeader | ActivityItemDisclosure | AgentActivityHeader | CopyControl
     >(({ component }) => {
       if (component instanceof ActivityItemDisclosure) {
-        const controls: (ActivityItemDisclosure | CopyControl)[] = [component]
-        controls.push(...component.actions)
-        return controls
+        const controls: (ActivityItemDisclosure | CopyControl)[] = [component];
+        controls.push(...component.actions);
+        return controls;
       }
       return component instanceof AgentActivityHeader ||
         component instanceof RenderGroupHeader ||
         (this.isCopyAction(component) && component.enabled)
         ? [component]
-        : []
-    })
-    const focused = renderer.getFocusedComponent()
+        : [];
+    });
+    const focused = renderer.getFocusedComponent();
     if (
       (focused instanceof RenderGroupHeader ||
         focused instanceof ActivityItemDisclosure ||
@@ -1223,68 +1079,52 @@ export class NativeChatHost {
         this.isCopyAction(focused)) &&
       !this.visibleDisclosures.includes(focused)
     ) {
-      const surviving = unwrapped.get(focused)
+      const surviving = unwrapped.get(focused);
       if (
         surviving instanceof ActivityItemDisclosure &&
         this.visibleDisclosures.includes(surviving)
       )
-        renderer.setFocus(surviving)
-      else this.returnToComposer()
+        renderer.setFocus(surviving);
+      else this.returnToComposer();
     }
-    this.viewportHeight = available ?? 0
+    this.viewportHeight = available ?? 0;
     this.transcript.updateLayout(contentHeight, this.viewportHeight, () =>
       renderer.requestRender(),
-    )
+    );
     if (anchor) {
       const next = leaves.find((leaf) =>
         anchor.occurrence
           ? leaf.occurrence === anchor.occurrence
-          : leaf.component ===
-            (unwrapped.get(anchor.component) ?? anchor.component),
-      )
+          : leaf.component === (unwrapped.get(anchor.component) ?? anchor.component),
+      );
       if (next)
         this.transcript.scrollTo(
-          Math.max(
-            0,
-            next.top + Math.min(anchorRow, Math.max(0, next.rows.length - 1)),
-          ),
+          Math.max(0, next.top + Math.min(anchorRow, Math.max(0, next.rows.length - 1))),
           { disableFollow: true },
-        )
-      else this.transcript.scrollTo(previousTop, { disableFollow: true })
-    } else if (!wasFollowing)
-      this.transcript.scrollTo(previousTop, { disableFollow: true })
-    const widthChanged =
-      this.layoutWidth !== 0 && this.layoutWidth !== contentWidth
-    this.layoutWidth = contentWidth
+        );
+      else this.transcript.scrollTo(previousTop, { disableFollow: true });
+    } else if (!wasFollowing) this.transcript.scrollTo(previousTop, { disableFollow: true });
+    const widthChanged = this.layoutWidth !== 0 && this.layoutWidth !== contentWidth;
+    this.layoutWidth = contentWidth;
     for (const point of [oldAnchor, oldFocus]) {
-      if (point?.scrollView !== this.transcript || !point.component) continue
+      if (point?.scrollView !== this.transcript || !point.component) continue;
       const leaf = leaves.find((candidate) =>
         point.occurrence
           ? candidate.occurrence === point.occurrence
           : candidate.component === point.component,
-      )
-      if (
-        leaf &&
-        point.localRow !== undefined &&
-        point.localRow < leaf.rows.length
-      ) {
-        point.row = leaf.start + point.localRow
-        point.component = leaf.component
-      } else this.clearSelection(renderer)
+      );
+      if (leaf && point.localRow !== undefined && point.localRow < leaf.rows.length) {
+        point.row = leaf.start + point.localRow;
+        point.component = leaf.component;
+      } else this.clearSelection(renderer);
     }
-    if (widthChanged) this.clearSelection(renderer)
+    if (widthChanged) this.clearSelection(renderer);
     else if (selectedStart >= 0 && oldAnchor?.scrollView === this.transcript) {
       for (const old of oldLeaves) {
-        if (
-          old.start > selectedEnd ||
-          old.start + old.rows.length <= selectedStart
-        )
-          continue
+        if (old.start > selectedEnd || old.start + old.rows.length <= selectedStart) continue;
         const next = leaves.find((leaf) =>
-          old.occurrence
-            ? leaf.occurrence === old.occurrence
-            : leaf.component === old.component,
-        )
+          old.occurrence ? leaf.occurrence === old.occurrence : leaf.component === old.component,
+        );
         if (
           !next ||
           next.rows.length !== old.rows.length ||
@@ -1294,81 +1134,75 @@ export class NativeChatHost {
               stripTerminalSequences(this.contentLine(old, row)),
           )
         ) {
-          this.clearSelection(renderer)
-          break
+          this.clearSelection(renderer);
+          break;
         }
       }
     }
-    this.painting.clear()
-    this.intervals = []
-    const top = this.transcript.scrollTop
-    const bottom = top + this.viewportHeight
+    this.painting.clear();
+    this.intervals = [];
+    const top = this.transcript.scrollTop;
+    const bottom = top + this.viewportHeight;
     for (const leaf of leaves) {
-      const sourceStart = Math.max(0, top - leaf.top)
-      const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.top)
-      if (sourceEnd <= sourceStart) continue
+      const sourceStart = Math.max(0, top - leaf.top);
+      const sourceEnd = Math.min(leaf.rows.length, bottom - leaf.top);
+      if (sourceEnd <= sourceStart) continue;
       const raw = new RawLeaf(
         leaf.component,
         leaf.rows,
         leaf.left,
         this.host.outputPad,
         contentWidth,
-      )
+      );
       const window = new ScrollView(raw, {
         follow: "none",
         scrollbar: "hidden",
-      })
+      });
       window.updateLayout(leaf.rows.length, sourceEnd - sourceStart, () =>
         renderer.requestRender(),
-      )
-      window.scrollTo(sourceStart, { disableFollow: true })
+      );
+      window.scrollTo(sourceStart, { disableFollow: true });
       this.intervals.push({
         leaf,
         start: sourceStart,
         end: sourceEnd,
         top: leaf.top + sourceStart - top,
         window,
-      })
+      });
       this.painting.addChild(window, {
         basis: sourceEnd - sourceStart,
         grow: 0,
         shrink: 0,
-      })
+      });
     }
-    const visibleHeight = Math.min(this.viewportHeight, contentHeight - top)
-    this.paintingWidth.clear()
+    const visibleHeight = Math.min(this.viewportHeight, contentHeight - top);
+    this.paintingWidth.clear();
     // Native image recovery needs full-width windows, including with a gutter.
     this.paintingWidth.addChild(this.painting, {
       basis: width,
       grow: 0,
       shrink: 0,
-    })
-    this.scrollContent.setHeight(contentHeight)
-    this.scrollContent.clear()
+    });
+    this.scrollContent.setHeight(contentHeight);
+    this.scrollContent.clear();
     for (const [component, basis] of [
       [this.layoutSpace, top],
       [this.paintingWidth, visibleHeight],
       [this.layoutSpace, contentHeight - top - visibleHeight],
     ] as const)
-      this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 })
+      this.scrollContent.addChild(component, { basis, grow: 0, shrink: 0 });
   }
 
-  private projectActivityItems(
-    source: Occurrence,
-    revealSource = true,
-  ): ChatRow[] {
-    let disclosures = this.activityDisclosures.get(source)
+  private projectActivityItems(source: Occurrence, revealSource = true): ChatRow[] {
+    let disclosures = this.activityDisclosures.get(source);
     if (!disclosures) {
-      disclosures = new Map()
-      this.activityDisclosures.set(source, disclosures)
+      disclosures = new Map();
+      this.activityDisclosures.set(source, disclosures);
     }
-    const nativeResult = (
-      source.component as (Component & { result?: ActivityResult }) | undefined
-    )?.result
+    const nativeResult = (source.component as (Component & { result?: ActivityResult }) | undefined)
+      ?.result;
     const messageResult =
-      source.resultMessage?.role === "toolResult"
-        ? source.resultMessage
-        : undefined
+      source.resultMessage?.role === "toolResult" ? source.resultMessage : undefined;
     // Native execution retains structured output that history omits. Reuse it only
     // while it shares the processed message's content, details, and error state.
     const result =
@@ -1378,102 +1212,90 @@ export class NativeChatHost {
         nativeResult.details === messageResult.details &&
         nativeResult.isError === messageResult.isError)
         ? (nativeResult ?? messageResult)
-        : messageResult
-    let items = this.activityItems.items(source, result)
-    const hit = this.searchState?.hits[this.searchState.selected]
+        : messageResult;
+    let items = this.activityItems.items(source, result);
+    const hit = this.searchState?.hits[this.searchState.selected];
     if (revealSource && hit?.field.owner === source && this.sourceHit(hit))
-      items = [...items, ...this.activityItems.sourceItems(source)]
-    const present = new Set(items.map((item) => item.id))
+      items = [...items, ...this.activityItems.sourceItems(source)];
+    const present = new Set(items.map((item) => item.id));
     for (const [id, disclosure] of disclosures)
       if (revealSource && !present.has(id)) {
-        disclosure.dispose()
-        this.byComponent.delete(disclosure)
-        disclosures.delete(id)
+        disclosure.dispose();
+        this.byComponent.delete(disclosure);
+        disclosures.delete(id);
       }
     return items.map((item) => {
-      let disclosure = disclosures.get(item.id)
+      let disclosure = disclosures.get(item.id);
       if (!disclosure) {
-        const occurrence = this.newOccurrence(source.entry)
-        if (source.parent) occurrence.parent = source.parent
-        occurrence.message = source.message
-        if (source.contentIndex !== undefined)
-          occurrence.contentIndex = source.contentIndex
-        occurrence.sourceCall = source
-        disclosure = new ActivityItemDisclosure(this, occurrence, item)
-        const choice = this.retainedDisclosures(source)?.items.get(item.id)
-        disclosure.setExpanded(choice?.expanded ?? this.host.toolOutputExpanded)
-        disclosure.setBodyExpanded(
-          choice?.bodyExpanded ?? this.host.toolOutputExpanded,
-        )
-        occurrence.component = disclosure
-        disclosures.set(item.id, disclosure)
-        this.byComponent.set(disclosure, occurrence)
-      } else disclosure.update(item)
-      disclosure.occurrence.entry = source.entry
-      if (source.resultEntry)
-        disclosure.occurrence.resultEntry = source.resultEntry
-      if (source.resultMessage)
-        disclosure.occurrence.resultMessage = source.resultMessage
+        const occurrence = this.newOccurrence(source.entry);
+        if (source.parent) occurrence.parent = source.parent;
+        occurrence.message = source.message;
+        if (source.contentIndex !== undefined) occurrence.contentIndex = source.contentIndex;
+        occurrence.sourceCall = source;
+        disclosure = new ActivityItemDisclosure(this, occurrence, item);
+        const choice = this.retainedDisclosures(source)?.items.get(item.id);
+        disclosure.setExpanded(choice?.expanded ?? this.host.toolOutputExpanded);
+        disclosure.setBodyExpanded(choice?.bodyExpanded ?? this.host.toolOutputExpanded);
+        occurrence.component = disclosure;
+        disclosures.set(item.id, disclosure);
+        this.byComponent.set(disclosure, occurrence);
+      } else disclosure.update(item);
+      disclosure.occurrence.entry = source.entry;
+      if (source.resultEntry) disclosure.occurrence.resultEntry = source.resultEntry;
+      if (source.resultMessage) disclosure.occurrence.resultMessage = source.resultMessage;
       return {
         component: disclosure,
         occurrence: disclosure.occurrence,
         sourceCall: source,
         activityItem: item,
         tool: true,
-      }
-    })
+      };
+    });
   }
 
   private retainedDisclosures(source: Occurrence) {
     return source.entry && source.contentIndex !== undefined
       ? this.disclosureChoices.get(source.entry)?.get(source.contentIndex)
-      : undefined
+      : undefined;
   }
 
   private rememberDisclosures() {
     for (const [source, items] of this.activityDisclosures) {
-      if (!source.entry || source.contentIndex === undefined) continue
-      const choices = this.disclosureChoices.get(source.entry) ?? new Map()
+      if (!source.entry || source.contentIndex === undefined) continue;
+      const choices = this.disclosureChoices.get(source.entry) ?? new Map();
       choices.set(source.contentIndex, {
-        group:
-          this.renderGroups.get(source)?.expanded ??
-          choices.get(source.contentIndex)?.group,
+        group: this.renderGroups.get(source)?.expanded ?? choices.get(source.contentIndex)?.group,
         items: new Map(
           [...items].map(([id, item]) => [
             id,
             { expanded: item.expanded, bodyExpanded: item.bodyExpanded },
           ]),
         ),
-      })
-      this.disclosureChoices.set(source.entry, choices)
+      });
+      this.disclosureChoices.set(source.entry, choices);
     }
   }
 
   private orderedChatRows(components: Component[]): ChatRow[] {
-    const chatRows: ChatRow[] = []
-    const hideThinking = this.host.settingsManager.getHideThinkingBlock()
-    const revealed =
-      this.searchState?.hits[this.searchState.selected]?.field.owner
-    const toolChildren = new Set<Component>()
+    const chatRows: ChatRow[] = [];
+    const hideThinking = this.host.settingsManager.getHideThinkingBlock();
+    const revealed = this.searchState?.hits[this.searchState.selected]?.field.owner;
+    const toolChildren = new Set<Component>();
     for (const component of components) {
-      const owner = this.byComponent.get(component)
-      if (
-        owner?.message?.role !== "assistant" ||
-        !("contentContainer" in component)
-      )
-        continue
+      const owner = this.byComponent.get(component);
+      if (owner?.message?.role !== "assistant" || !("contentContainer" in component)) continue;
       for (const part of owner.parts.values()) {
         if (
           part.contentIndex !== undefined &&
           owner.message.content[part.contentIndex]?.type === "toolCall" &&
           part.component
         )
-          toolChildren.add(part.component)
+          toolChildren.add(part.component);
       }
     }
     for (const component of components) {
-      if (toolChildren.has(component)) continue
-      const owner = this.byComponent.get(component)
+      if (toolChildren.has(component)) continue;
+      const owner = this.byComponent.get(component);
       if (
         owner?.message?.role !== "assistant" ||
         !("contentContainer" in component) ||
@@ -1486,18 +1308,18 @@ export class NativeChatHost {
           component,
           ...(owner ? { occurrence: owner } : {}),
           tool: false,
-        })
-        continue
+        });
+        continue;
       }
-      const chatRowStart = chatRows.length
-      const children = (component as NativeAssistant).contentContainer.children
+      const chatRowStart = chatRows.length;
+      const children = (component as NativeAssistant).contentContainer.children;
       const hasVisibleContent = owner.message.content.some(
         (part) =>
           (part.type === "text" && part.text.trim()) ||
           (part.type === "thinking" && part.thinking.trim()),
-      )
-      let leading = hasVisibleContent ? children[0] : undefined
-      let position = leading ? 1 : 0
+      );
+      let leading = hasVisibleContent ? children[0] : undefined;
+      let position = leading ? 1 : 0;
       const flush = () => {
         while (children[position] && !this.byComponent.has(children[position]!))
           chatRows.push({
@@ -1505,13 +1327,13 @@ export class NativeChatHost {
             owner,
             tool: false,
             agentActivity: this.agentActivity.find(owner),
-          })
-      }
+          });
+      };
       for (let index = 0; index < owner.message.content.length; index++) {
-        const part = owner.message.content[index]!
-        const occurrence = owner.parts.get(index)
+        const part = owner.message.content[index]!;
+        const occurrence = owner.parts.get(index);
         if (part.type === "toolCall") {
-          flush()
+          flush();
           if (occurrence?.component)
             for (const row of this.projectActivityItems(occurrence))
               chatRows.push({
@@ -1521,34 +1343,31 @@ export class NativeChatHost {
                       hideThinking ? "withoutThinking" : "withThinking"
                     ]
                   : undefined,
-              })
+              });
         } else if (occurrence?.contentIndex === index && occurrence.component) {
           if (part.type === "text" && !part.text.trim()) {
-            const agentActivity = this.agentActivity.find(owner)
-            if (
-              agentActivity &&
-              this.agentActivity.isFinal(occurrence, agentActivity)
-            )
+            const agentActivity = this.agentActivity.find(owner);
+            if (agentActivity && this.agentActivity.isFinal(occurrence, agentActivity))
               chatRows.push({
                 component: occurrence.component,
                 occurrence,
                 tool: false,
-              })
-            continue
+              });
+            continue;
           }
-          flush()
-          if (children[position] === occurrence.component) position++
-          const thought = this.thoughts.get(occurrence)
+          flush();
+          if (children[position] === occurrence.component) position++;
+          const thought = this.thoughts.get(occurrence);
           if (thought && hideThinking && occurrence !== revealed) {
             if (
               children[position] instanceof Spacer &&
               this.byComponent.has(children[position + 1]!)
             ) {
               // Keep spacing with the next visible prose, not intervening tools.
-              leading ??= children[position]
-              position++
+              leading ??= children[position];
+              position++;
             }
-            continue
+            continue;
           }
           if (leading) {
             chatRows.push({
@@ -1556,8 +1375,8 @@ export class NativeChatHost {
               owner,
               tool: false,
               agentActivity: this.agentActivity.find(owner),
-            })
-            leading = undefined
+            });
+            leading = undefined;
           }
           if (thought) {
             if (thought.body)
@@ -1565,37 +1384,35 @@ export class NativeChatHost {
                 component: thought.body,
                 occurrence,
                 tool: false,
-              })
+              });
           } else
             chatRows.push({
               component: occurrence.component,
               occurrence,
               tool: false,
-            })
+            });
         }
       }
-      const agentActivity = this.agentActivity.find(owner)
+      const agentActivity = this.agentActivity.find(owner);
       if (agentActivity && this.agentActivity.needsParts(owner)) {
         const final = chatRows
           .slice(chatRowStart)
-          .filter((chatRow) =>
-            this.agentActivity.isFinal(chatRow.occurrence, agentActivity),
-          )
+          .filter((chatRow) => this.agentActivity.isFinal(chatRow.occurrence, agentActivity));
         for (const [index, chatRow] of final.entries()) {
-          let part = this.answerParts.get(chatRow.component)
+          let part = this.answerParts.get(chatRow.component);
           if (!part) {
-            part = new Container()
-            part.addChild(chatRow.component)
-            this.answerParts.set(chatRow.component, part)
+            part = new Container();
+            part.addChild(chatRow.component);
+            this.answerParts.set(chatRow.component, part);
           }
-          chatRow.zoneStart = index === 0
-          chatRow.zoneEnd = index === final.length - 1
+          chatRow.zoneStart = index === 0;
+          chatRow.zoneEnd = index === final.length - 1;
           part.children.splice(
             1,
             part.children.length - 1,
             ...(chatRow.zoneEnd ? children.slice(position) : []),
-          )
-          chatRow.component = part
+          );
+          chatRow.component = part;
         }
       } else {
         for (; position < children.length; position++)
@@ -1603,195 +1420,178 @@ export class NativeChatHost {
             component: children[position]!,
             tool: false,
             agentActivity,
-          })
+          });
         if (!owner.message.content.some((part) => part.type === "toolCall")) {
-          const first = chatRows[chatRowStart]
-          const last = chatRows.at(-1)
+          const first = chatRows[chatRowStart];
+          const last = chatRows.at(-1);
           if (first && last) {
-            first.zoneStart = true
-            last.zoneEnd = true
+            first.zoneStart = true;
+            last.zoneEnd = true;
           }
         }
       }
     }
-    return chatRows
+    return chatRows;
   }
 
   handleDisclosureInput(data: string, toggle: () => void) {
-    const keys = getKeybindings()
-    if (keys.matches(data, "tui.select.up")) this.moveDisclosure(-1)
-    else if (keys.matches(data, "tui.select.down")) this.moveDisclosure(1)
-    else if (keys.matches(data, "tui.select.confirm")) toggle()
-    else if (keys.matches(data, "tui.select.cancel")) this.returnToComposer()
+    const keys = getKeybindings();
+    if (keys.matches(data, "tui.select.up")) this.moveDisclosure(-1);
+    else if (keys.matches(data, "tui.select.down")) this.moveDisclosure(1);
+    else if (keys.matches(data, "tui.select.confirm")) toggle();
+    else if (keys.matches(data, "tui.select.cancel")) this.returnToComposer();
     else if (this.host.keybindings.matches(data, "app.tools.expand"))
-      this.host.toggleToolOutputExpansion()
+      this.host.toggleToolOutputExpansion();
     else if (this.host.keybindings.matches(data, "app.message.copy"))
       void this.host.handleCopyCommand({
         flashConfirmation: true,
         preferSelection: true,
-      })
-    else if (keys.matches(data, "tui.altScreen.pageUp")) this.scrollChat(-1)
-    else if (keys.matches(data, "tui.altScreen.pageDown")) this.scrollChat(1)
+      });
+    else if (keys.matches(data, "tui.altScreen.pageUp")) this.scrollChat(-1);
+    else if (keys.matches(data, "tui.altScreen.pageDown")) this.scrollChat(1);
   }
 
   focusNearestDisclosure() {
-    const renderer = this.host.renderer as unknown as TuiAltScreen
+    const renderer = this.host.renderer as unknown as TuiAltScreen;
     if (
       !this.ownsRenderer(renderer) ||
-      (
-        renderer as unknown as { isOverlayFocused(): boolean }
-      ).isOverlayFocused()
+      (renderer as unknown as { isOverlayFocused(): boolean }).isOverlayFocused()
     )
-      return
+      return;
     const nearest =
       this.visibleDisclosures.findLast((disclosure) => {
-        if (this.isCopyAction(disclosure)) return false
-        const leaf = this.leaves.find((item) => item.component === disclosure)
-        return leaf && this.visibleInterval(leaf)?.start === 0
+        if (this.isCopyAction(disclosure)) return false;
+        const leaf = this.leaves.find((item) => item.component === disclosure);
+        return leaf && this.visibleInterval(leaf)?.start === 0;
       }) ??
       this.visibleDisclosures.findLast((disclosure) => {
-        if (!this.isCopyAction(disclosure)) return false
+        if (!this.isCopyAction(disclosure)) return false;
         const leaf = this.leaves.find(
           (item) => item.component === (disclosure.owner ?? disclosure),
-        )
-        if (!leaf) return false
-        const top = leaf.top + disclosure.row
+        );
+        if (!leaf) return false;
+        const top = leaf.top + disclosure.row;
         return (
           top + disclosure.height > this.transcript.scrollTop &&
           top < this.transcript.scrollTop + this.viewportHeight
-        )
-      })
-    if (!nearest) return
-    renderer.setFocus(nearest)
-    this.revealDisclosure(nearest)
+        );
+      });
+    if (!nearest) return;
+    renderer.setFocus(nearest);
+    this.revealDisclosure(nearest);
   }
 
   moveDisclosure(direction: number) {
-    const renderer = this.host.renderer as unknown as TuiAltScreen
+    const renderer = this.host.renderer as unknown as TuiAltScreen;
     const index = this.visibleDisclosures.indexOf(
       renderer.getFocusedComponent() as RenderGroupHeader,
-    )
-    const next = this.visibleDisclosures[index + direction]
-    if (!next) return
-    renderer.setFocus(next)
-    this.revealDisclosure(next)
+    );
+    const next = this.visibleDisclosures[index + direction];
+    if (!next) return;
+    renderer.setFocus(next);
+    this.revealDisclosure(next);
   }
 
   private revealDisclosure(
-    component:
-      | RenderGroupHeader
-      | ActivityItemDisclosure
-      | AgentActivityHeader
-      | CopyControl,
+    component: RenderGroupHeader | ActivityItemDisclosure | AgentActivityHeader | CopyControl,
   ) {
-    const owner = this.isCopyAction(component)
-      ? (component.owner ?? component)
-      : component
-    const leaf = this.leaves.find((item) => item.component === owner)
-    if (!leaf) return
-    const top = leaf.top + (this.isCopyAction(component) ? component.row : 0)
-    if (top < this.transcript.scrollTop) this.transcript.scrollTo(top)
+    const owner = this.isCopyAction(component) ? (component.owner ?? component) : component;
+    const leaf = this.leaves.find((item) => item.component === owner);
+    if (!leaf) return;
+    const top = leaf.top + (this.isCopyAction(component) ? component.row : 0);
+    if (top < this.transcript.scrollTop) this.transcript.scrollTo(top);
     else if (top >= this.transcript.scrollTop + this.viewportHeight)
-      this.transcript.scrollTo(top - this.viewportHeight + 1)
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+      this.transcript.scrollTo(top - this.viewportHeight + 1);
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   returnToComposer() {
-    const renderer = this.host.renderer as unknown as TuiAltScreen
-    renderer.setFocus(this.host.editor)
-    renderer.requestRender()
+    const renderer = this.host.renderer as unknown as TuiAltScreen;
+    renderer.setFocus(this.host.editor);
+    renderer.requestRender();
   }
 
   scrollChat(direction: number) {
-    this.transcript.scrollBy(direction * this.viewportHeight)
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+    this.transcript.scrollBy(direction * this.viewportHeight);
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   toggleRenderGroup(group: RenderGroup) {
-    group.expanded = !group.expanded
-    if (group.expanded) this.agentActivity.inspect(group.items[0]?.occurrence)
-    this.clearSelection(this.host.renderer as unknown as TuiAltScreen)
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+    group.expanded = !group.expanded;
+    if (group.expanded) this.agentActivity.inspect(group.items[0]?.occurrence);
+    this.clearSelection(this.host.renderer as unknown as TuiAltScreen);
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   toggleToolDisclosure(tool: NativeToolPresenter) {
-    tool.setExpanded(!tool.expanded)
-    if (tool.expanded) this.inspectTool(tool)
-    this.clearChatSelection()
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+    tool.setExpanded(!tool.expanded);
+    if (tool.expanded) this.inspectTool(tool);
+    this.clearChatSelection();
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   toggleAgentActivity(agentActivity: AgentActivity) {
-    if (!agentActivity.final || agentActivity.cancelled) return
-    agentActivity.manualExpanded = !this.agentActivity.expanded(agentActivity)
-    this.clearChatSelection()
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+    if (!agentActivity.final || agentActivity.cancelled) return;
+    agentActivity.manualExpanded = !this.agentActivity.expanded(agentActivity);
+    this.clearChatSelection();
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   inspectTool(tool: Component) {
-    this.agentActivity.inspect(this.byComponent.get(tool))
+    this.agentActivity.inspect(this.byComponent.get(tool));
   }
 
   private composeAgentActivity(chatRows: ChatRow[]): ChatRow[] {
-    const result: ChatRow[] = []
-    const answers = new Set<Occurrence>()
+    const result: ChatRow[] = [];
+    const answers = new Set<Occurrence>();
     for (let index = 0; index < chatRows.length;) {
-      const chatRow = chatRows[index]!
-      const agentActivity =
-        chatRow.agentActivity ?? this.agentActivity.find(chatRow.occurrence)
+      const chatRow = chatRows[index]!;
+      const agentActivity = chatRow.agentActivity ?? this.agentActivity.find(chatRow.occurrence);
       if (
         !agentActivity ||
         !agentActivity.final ||
         agentActivity.cancelled ||
         this.agentActivity.isRequest(chatRow.occurrence, agentActivity)
       ) {
-        result.push(chatRow)
-        index++
-        continue
+        result.push(chatRow);
+        index++;
+        continue;
       }
-      const body: ChatRow[] = []
-      const final: ChatRow[] = []
+      const body: ChatRow[] = [];
+      const final: ChatRow[] = [];
       const standaloneNotice = (item: ChatRow) =>
         !item.agentActivity &&
         !this.agentActivity.find(item.occurrence) &&
-        (item.occurrence?.entry?.type === "custom" ||
-          item.occurrence?.message?.role === "custom")
+        (item.occurrence?.entry?.type === "custom" || item.occurrence?.message?.role === "custom");
       const retained = (item: ChatRow) =>
-        item.occurrence?.message?.role === "user" || standaloneNotice(item)
+        item.occurrence?.message?.role === "user" || standaloneNotice(item);
       for (; index < chatRows.length; index++) {
-        const next = chatRows[index]!
-        const nextAgentActivity =
-          next.agentActivity ?? this.agentActivity.find(next.occurrence)
-        if (nextAgentActivity !== agentActivity && !standaloneNotice(next))
-          break
+        const next = chatRows[index]!;
+        const nextAgentActivity = next.agentActivity ?? this.agentActivity.find(next.occurrence);
+        if (nextAgentActivity !== agentActivity && !standaloneNotice(next)) break;
         if (
           final.length &&
-          !this.agentActivity.isFinalMessage(
-            next.occurrence ?? next.owner,
-            agentActivity,
-          )
+          !this.agentActivity.isFinalMessage(next.occurrence ?? next.owner, agentActivity)
         )
-          break
+          break;
         if (
           this.agentActivity.isFinal(next.occurrence, agentActivity) ||
           // Native notices appended after the final stay outside its activity.
           (final.length && next.occurrence?.contentIndex === undefined)
         )
-          final.push(next)
-        else body.push(next)
+          final.push(next);
+        else body.push(next);
       }
       if (
-        body.some(
-          (item) => !retained(item) && !(item.component instanceof Spacer),
-        ) &&
+        body.some((item) => !retained(item) && !(item.component instanceof Spacer)) &&
         final.length
       ) {
-        agentActivity.header ??= new AgentActivityHeader(this, agentActivity)
-        result.push({ component: agentActivity.header, tool: false })
-        if (this.agentActivity.expanded(agentActivity)) result.push(...body)
+        agentActivity.header ??= new AgentActivityHeader(this, agentActivity);
+        result.push({ component: agentActivity.header, tool: false });
+        if (this.agentActivity.expanded(agentActivity)) result.push(...body);
         else {
-          const visible = body.filter(retained)
-          result.push(...visible)
+          const visible = body.filter(retained);
+          result.push(...visible);
           // Split final parts omit the native assistant's leading spacer.
           if (
             visible.at(-1)?.occurrence?.message?.role === "user" &&
@@ -1800,75 +1600,63 @@ export class NativeChatHost {
             result.push({
               component: agentActivity.header.beforeFinalSpacing,
               tool: false,
-            })
+            });
         }
-      } else result.push(...body)
-      result.push(...final)
-      const source = agentActivity.final
-      if (
-        final.length &&
-        agentActivity.settled &&
-        source &&
-        !answers.has(source) &&
-        this.copy
-      ) {
-        answers.add(source)
-        let action = this.responseActions.get(source)
+      } else result.push(...body);
+      result.push(...final);
+      const source = agentActivity.final;
+      if (final.length && agentActivity.settled && source && !answers.has(source) && this.copy) {
+        answers.add(source);
+        let action = this.responseActions.get(source);
         if (!action) {
           action = this.copy.response(() => {
-            const activity = this.agentActivity.find(source)
-            const message = source.message
+            const activity = this.agentActivity.find(source);
+            const message = source.message;
             return activity?.settled &&
               this.agentActivity.isFinalMessage(source, activity) &&
               message?.role === "assistant"
               ? message.content.flatMap((part, contentIndex) =>
                   part.type === "text" &&
-                  (!activity.finalParts ||
-                    activity.finalParts.includes(contentIndex))
+                  (!activity.finalParts || activity.finalParts.includes(contentIndex))
                     ? [part.text]
                     : [],
                 )
-              : []
-          })
-          this.responseActions.set(source, action)
+              : [];
+          });
+          this.responseActions.set(source, action);
         }
-        result.push({ component: action, tool: false })
+        result.push({ component: action, tool: false });
       }
     }
     for (const [source, action] of this.responseActions)
       if (!answers.has(source)) {
-        action.dispose()
-        this.responseActions.delete(source)
+        action.dispose();
+        this.responseActions.delete(source);
       }
-    return result
+    return result;
   }
 
   clearChatSelection() {
-    this.clearSelection(this.host.renderer as unknown as TuiAltScreen)
+    this.clearSelection(this.host.renderer as unknown as TuiAltScreen);
   }
 
   private leafAt(row: number) {
-    return this.leaves.find(
-      (leaf) => row >= leaf.start && row < leaf.start + leaf.rows.length,
-    )
+    return this.leaves.find((leaf) => row >= leaf.start && row < leaf.start + leaf.rows.length);
   }
 
   private visibleInterval(leaf: Leaf): VisibleInterval | undefined {
-    const top = leaf.top
-    const start = Math.max(0, this.transcript.scrollTop - top)
-    const end = Math.min(
-      leaf.rows.length,
-      this.transcript.scrollTop + this.viewportHeight - top,
-    )
+    const top = leaf.top;
+    const start = Math.max(0, this.transcript.scrollTop - top);
+    const end = Math.min(leaf.rows.length, this.transcript.scrollTop + this.viewportHeight - top);
     return end > start
       ? { leaf, start, end, top: top + start - this.transcript.scrollTop }
-      : undefined
+      : undefined;
   }
 
   private searchFields(): SearchField<Occurrence>[] {
-    const fields: SearchField<Occurrence>[] = []
-    const pending = new Map<string, Occurrence[]>()
-    const toolCalls = new Set<Occurrence>()
+    const fields: SearchField<Occurrence>[] = [];
+    const pending = new Map<string, Occurrence[]>();
+    const toolCalls = new Set<Occurrence>();
     const add = (
       owner: Occurrence | undefined,
       key: string,
@@ -1887,9 +1675,7 @@ export class NativeChatHost {
               ? { entryId: sourceEntry?.id ?? owner.entry!.id }
               : {}),
             ...(sourceIndex !== undefined ? { contentIndex: sourceIndex } : {}),
-            ...(owner.itemOrdinal !== undefined
-              ? { itemOrdinal: owner.itemOrdinal }
-              : {}),
+            ...(owner.itemOrdinal !== undefined ? { itemOrdinal: owner.itemOrdinal } : {}),
           },
           ...(tool && owner.entry?.id && owner.contentIndex !== undefined
             ? {
@@ -1902,41 +1688,25 @@ export class NativeChatHost {
           source,
           markdown,
           tool,
-        })
-    }
+        });
+    };
     const addAssistant = (
       owner: Occurrence | undefined,
       message: Extract<Message, { role: "assistant" }>,
     ) => {
       for (const [index, part] of message.content.entries()) {
-        let occurrence = owner?.parts.get(index)
+        let occurrence = owner?.parts.get(index);
         if (!occurrence && owner) {
-          occurrence = this.newOccurrence(owner.entry)
-          occurrence.parent = owner
-          occurrence.message = message
-          occurrence.contentIndex = index
-          owner.parts.set(index, occurrence)
+          occurrence = this.newOccurrence(owner.entry);
+          occurrence.parent = owner;
+          occurrence.message = message;
+          occurrence.contentIndex = index;
+          owner.parts.set(index, occurrence);
         }
         if (part.type === "text")
-          add(
-            occurrence ?? owner,
-            `text:${index}`,
-            part.text,
-            true,
-            false,
-            owner?.entry,
-            index,
-          )
+          add(occurrence ?? owner, `text:${index}`, part.text, true, false, owner?.entry, index);
         else if (part.type === "thinking")
-          add(
-            occurrence,
-            `thought:${index}`,
-            part.thinking,
-            true,
-            false,
-            owner?.entry,
-            index,
-          )
+          add(occurrence, `thought:${index}`, part.thinking, true, false, owner?.entry, index);
         else if (part.type === "toolCall") {
           if (occurrence) {
             this.activityItems.bind(
@@ -1947,28 +1717,19 @@ export class NativeChatHost {
               this.host.sessionManager.getSessionId(),
               owner?.entry,
               index,
-            )
-            toolCalls.add(occurrence)
-            const calls = pending.get(part.id) ?? []
-            calls.push(occurrence)
-            pending.set(part.id, calls)
+            );
+            toolCalls.add(occurrence);
+            const calls = pending.get(part.id) ?? [];
+            calls.push(occurrence);
+            pending.set(part.id, calls);
           }
-          add(
-            occurrence,
-            `name:${index}`,
-            part.name,
-            false,
-            true,
-            owner?.entry,
-            index,
-          )
+          add(occurrence, `name:${index}`, part.name, false, true, owner?.entry, index);
           const addArgument = (value: unknown, path: (string | number)[]) => {
             if (Array.isArray(value)) {
               for (const [position, item] of value.entries())
-                addArgument(item, [...path, position])
+                addArgument(item, [...path, position]);
             } else if (value && typeof value === "object") {
-              for (const [key, item] of Object.entries(value))
-                addArgument(item, [...path, key])
+              for (const [key, item] of Object.entries(value)) addArgument(item, [...path, key]);
             } else {
               add(
                 occurrence,
@@ -1978,81 +1739,71 @@ export class NativeChatHost {
                 true,
                 owner?.entry,
                 index,
-              )
+              );
             }
-          }
-          addArgument(part.arguments, [])
+          };
+          addArgument(part.arguments, []);
         }
       }
-    }
+    };
     for (const id of this.indexedIds) {
-      const entry = this.host.sessionManager.getEntry(id)
-      if (!entry) continue
+      const entry = this.host.sessionManager.getEntry(id);
+      if (!entry) continue;
       const message =
         entry.type === "message"
           ? entry.message
           : entry.type === "custom_message"
             ? sessionEntryToContextMessages(entry)[0]
-            : undefined
-      if (!message) continue
-      const owner = this.byEntryId.get(id)
-      if (owner && !owner.message) owner.message = message
+            : undefined;
+      if (!message) continue;
+      const owner = this.byEntryId.get(id);
+      if (owner && !owner.message) owner.message = message;
       if (message.role === "assistant") {
-        addAssistant(owner, message)
+        addAssistant(owner, message);
       } else if (message.role === "toolResult") {
-        const call = pending.get(message.toolCallId)?.shift()
+        const call = pending.get(message.toolCallId)?.shift();
         if (call) {
-          call.resultEntry = entry
-          call.resultMessage = message
+          call.resultEntry = entry;
+          call.resultMessage = message;
         }
         for (const [index, part] of message.content.entries())
           if (part.type === "text")
-            add(
-              call,
-              `result:${id}:${index}`,
-              part.text,
-              false,
-              true,
-              entry,
-              index,
-            )
+            add(call, `result:${id}:${index}`, part.text, false, true, entry, index);
       } else if (message.role === "user") {
         const content =
           typeof message.content === "string"
             ? [{ type: "text", text: message.content }]
-            : message.content
+            : message.content;
         for (const [index, part] of content.entries())
           if (part.type === "text")
-            add(owner, `user:${index}`, part.text, true, false, entry, index)
+            add(owner, `user:${index}`, part.text, true, false, entry, index);
       } else if (message.role === "bashExecution") {
-        add(owner, "command", message.command, false, false, entry)
-        add(owner, "output", message.output, false, false, entry)
+        add(owner, "command", message.command, false, false, entry);
+        add(owner, "output", message.output, false, false, entry);
       } else if (message.role === "custom" && message.display) {
         const content =
           typeof message.content === "string"
             ? [{ type: "text", text: message.content }]
-            : message.content
+            : message.content;
         for (const [index, part] of content.entries())
           if (part.type === "text")
-            add(owner, `custom:${index}`, part.text, true, false, entry, index)
+            add(owner, `custom:${index}`, part.text, true, false, entry, index);
       }
     }
     if (this.streaming?.message?.role === "assistant")
-      addAssistant(this.streaming, this.streaming.message)
-    const projected = new Map<Occurrence, ChatRow[]>()
+      addAssistant(this.streaming, this.streaming.message);
+    const projected = new Map<Occurrence, ChatRow[]>();
     for (const call of toolCalls) {
-      const rows = this.projectActivityItems(call, false)
-      projected.set(call, rows)
-      if (rows.length === 1 && rows[0]?.activityItem?.body.source) continue
+      const rows = this.projectActivityItems(call, false);
+      projected.set(call, rows);
+      if (rows.length === 1 && rows[0]?.activityItem?.body.source) continue;
       for (const row of rows) {
-        const body = row.activityItem!.body
+        const body = row.activityItem!.body;
         const addValue = (value: unknown, path: (string | number)[]) => {
           if (Array.isArray(value))
-            value.forEach((item, index) => addValue(item, [...path, index]))
+            value.forEach((item, index) => addValue(item, [...path, index]));
           else if (value && typeof value === "object")
-            Object.entries(value).forEach(([key, item]) =>
-              addValue(item, [...path, key]),
-            )
+            Object.entries(value).forEach(([key, item]) => addValue(item, [...path, key]));
           else if (value !== undefined)
             add(
               row.occurrence,
@@ -2062,9 +1813,9 @@ export class NativeChatHost {
               true,
               call.entry,
               call.contentIndex,
-            )
-        }
-        addValue(body.args, [])
+            );
+        };
+        addValue(body.args, []);
         for (const [index, part] of (body.result?.content ?? []).entries())
           if (part.type === "text")
             add(
@@ -2075,47 +1826,43 @@ export class NativeChatHost {
               true,
               call.resultEntry,
               undefined,
-            )
+            );
       }
     }
     return fields.flatMap((field) => {
-      const rows = projected.get(field.owner)
-      if (!rows?.length) return [field]
-      const row = rows[0]
+      const rows = projected.get(field.owner);
+      if (!rows?.length) return [field];
+      const row = rows[0];
       if (rows.length === 1 && row?.occurrence && row.activityItem?.body.source)
-        return [{ ...field, owner: row.occurrence }]
+        return [{ ...field, owner: row.occurrence }];
       // Raw processed results remain searchable alongside their operation bodies.
-      return [field]
-    })
+      return [field];
+    });
   }
 
   private searchLeaf(hit: SourceHit<Occurrence>): Leaf | undefined {
-    const region = this.callRegionLeaves(hit)
-    if (region?.length) return region[0]
+    const region = this.callRegionLeaves(hit);
+    if (region?.length) return region[0];
     for (
-      let owner: Occurrence | undefined =
-        this.searchDisclosure(hit)?.occurrence ?? hit.field.owner;
+      let owner: Occurrence | undefined = this.searchDisclosure(hit)?.occurrence ?? hit.field.owner;
       owner;
       owner = owner.parent
     ) {
-      const leaf = this.leaves.find(
-        (candidate) => candidate.occurrence === owner,
-      )
-      if (leaf) return leaf
+      const leaf = this.leaves.find((candidate) => candidate.occurrence === owner);
+      if (leaf) return leaf;
     }
-    return undefined
+    return undefined;
   }
 
   private searchDisclosure(hit: SourceHit<Occurrence>) {
-    const owner = hit.field.owner
-    if (owner.component instanceof ActivityItemDisclosure)
-      return owner.component
-    const items = this.activityDisclosures.get(owner)
+    const owner = hit.field.owner;
+    if (owner.component instanceof ActivityItemDisclosure) return owner.component;
+    const items = this.activityDisclosures.get(owner);
     if (this.sourceHit(hit)) {
-      const source = this.activityItems.sourceItems(owner)[0]
-      return source ? items?.get(source.id) : undefined
+      const source = this.activityItems.sourceItems(owner)[0];
+      return source ? items?.get(source.id) : undefined;
     }
-    return items?.size === 1 ? items.values().next().value : undefined
+    return items?.size === 1 ? items.values().next().value : undefined;
   }
 
   private sourceHit(hit: SourceHit<Occurrence> | undefined) {
@@ -2124,7 +1871,7 @@ export class NativeChatHost {
       !hit.field.owner.sourceCall &&
       (hit.field.key.startsWith("result:") ||
         this.activityItems.items(hit.field.owner).length === 0),
-    )
+    );
   }
 
   private callRegionLeaves(hit: SourceHit<Occurrence>): Leaf[] | undefined {
@@ -2133,93 +1880,87 @@ export class NativeChatHost {
       hit.field.owner.component instanceof ActivityItemDisclosure ||
       this.sourceHit(hit)
     )
-      return
-    const items = this.activityDisclosures.get(hit.field.owner)
-    if (!items || items.size < 2) return
+      return;
+    const items = this.activityDisclosures.get(hit.field.owner);
+    if (!items || items.size < 2) return;
     const leaves = [...items.values()].flatMap((disclosure) => {
-      const leaf = this.leaves.find(
-        (candidate) => candidate.component === disclosure,
-      )
-      return leaf ? [leaf] : []
-    })
-    if (leaves.length) return leaves
+      const leaf = this.leaves.find((candidate) => candidate.component === disclosure);
+      return leaf ? [leaf] : [];
+    });
+    if (leaves.length) return leaves;
     const group = [...this.renderGroups.values()].find((candidate) =>
       candidate.items.some((item) => item.sourceCall === hit.field.owner),
-    )
-    const header =
-      group?.header &&
-      this.leaves.find((leaf) => leaf.component === group.header)
-    return header ? [header] : []
+    );
+    const header = group?.header && this.leaves.find((leaf) => leaf.component === group.header);
+    return header ? [header] : [];
   }
 
   private searchSegments(hit: SourceHit<Occurrence>, leaf: Leaf) {
-    if (this.callRegionLeaves(hit)) return undefined
-    let index = this.renderedSearch.get(leaf.component)
+    if (this.callRegionLeaves(hit)) return undefined;
+    let index = this.renderedSearch.get(leaf.component);
     if (!index) {
-      index = new AltScreenSearchIndex()
-      this.renderedSearch.set(leaf.component, index)
+      index = new AltScreenSearchIndex();
+      this.renderedSearch.set(leaf.component, index);
     }
     const matching = index.search(
       leaf.rows.map((_, row) => this.contentLine(leaf, row)),
       hit.query,
-    ).matches
-    const sourceCount = this.searchState?.counts.get(hit.field.owner)
-    if (matching.length === sourceCount) return matching[hit.ordinal]?.segments
-    if (!hit.field.tool) return undefined
-    const row = leaf.rows.findIndex((line) =>
-      stripTerminalSequences(line).trim(),
-    )
-    const fallbackRow = Math.max(0, row)
+    ).matches;
+    const sourceCount = this.searchState?.counts.get(hit.field.owner);
+    if (matching.length === sourceCount) return matching[hit.ordinal]?.segments;
+    if (!hit.field.tool) return undefined;
+    const row = leaf.rows.findIndex((line) => stripTerminalSequences(line).trim());
+    const fallbackRow = Math.max(0, row);
     return [
       {
         row: fallbackRow,
         startCol: 0,
         endCol: visibleWidth(leaf.rows[fallbackRow] ?? ""),
       },
-    ]
+    ];
   }
 
   private materializeSearchHit(hit: SourceHit<Occurrence>) {
-    const selected = hit.field.owner.sourceCall ?? hit.field.owner
-    const owner = selected.parent ?? selected
-    const entry = owner.entry
-    if (!entry?.id || !owner.message) return false
-    const retained = this.historical.get(entry.id)
-    if (retained && (!hit.field.tool || selected.component)) return false
-    if (!retained && owner.component) return false
-    let components = retained
+    const selected = hit.field.owner.sourceCall ?? hit.field.owner;
+    const owner = selected.parent ?? selected;
+    const entry = owner.entry;
+    if (!entry?.id || !owner.message) return false;
+    const retained = this.historical.get(entry.id);
+    if (retained && (!hit.field.tool || selected.component)) return false;
+    if (!retained && owner.component) return false;
+    let components = retained;
     if (!components) {
-      const receiver = Object.create(this.host) as NativeMode
-      receiver.chatContainer = new Container()
-      ;(
-        InteractiveMode.prototype as unknown as NativeMode
-      ).addMessageToChat.call(receiver, owner.message, {
-        populateHistory: false,
-      })
-      components = [...receiver.chatContainer.children]
+      const receiver = Object.create(this.host) as NativeMode;
+      receiver.chatContainer = new Container();
+      (InteractiveMode.prototype as unknown as NativeMode).addMessageToChat.call(
+        receiver,
+        owner.message,
+        {
+          populateHistory: false,
+        },
+      );
+      components = [...receiver.chatContainer.children];
     }
     if (owner.message.role === "assistant") {
       const presenter =
         !retained &&
         components.find(
-          (component): component is NativeAssistant =>
-            "contentContainer" in component,
-        )
+          (component): component is NativeAssistant => "contentContainer" in component,
+        );
       if (presenter) {
-        owner.component = presenter
-        this.byComponent.set(presenter, owner)
-        this.bindAssistant(presenter, owner)
+        owner.component = presenter;
+        this.byComponent.set(presenter, owner);
+        this.bindAssistant(presenter, owner);
       }
       if (hit.field.tool) {
-        const index = hit.field.callRef?.contentIndex
-        const call =
-          index === undefined ? undefined : owner.message.content[index]
+        const index = hit.field.callRef?.contentIndex;
+        const call = index === undefined ? undefined : owner.message.content[index];
         if (call?.type === "toolCall") {
           const options = {
             showImages: this.host.settingsManager.getShowImages(),
             imageWidthCells: this.host.settingsManager.getImageWidthCells(),
             outputPad: this.host.outputPad,
-          }
+          };
           const tool = new ToolExecutionComponent(
             call.name,
             call.id,
@@ -2228,118 +1969,103 @@ export class NativeChatHost {
             undefined,
             this.host.ui,
             this.host.sessionManager.getCwd(),
-          )
-          tool.setExpanded(this.host.toolOutputExpanded)
-          if (
-            owner.message.stopReason === "aborted" ||
-            owner.message.stopReason === "error"
-          ) {
-            const retries = this.host.session.retryAttempt
+          );
+          tool.setExpanded(this.host.toolOutputExpanded);
+          if (owner.message.stopReason === "aborted" || owner.message.stopReason === "error") {
+            const retries = this.host.session.retryAttempt;
             const error =
               owner.message.stopReason === "aborted"
                 ? retries > 0
                   ? `Aborted after ${retries} retry attempt${retries > 1 ? "s" : ""}`
                   : "Operation aborted"
-                : owner.message.errorMessage || "Error"
+                : owner.message.errorMessage || "Error";
             tool.updateResult({
               content: [{ type: "text", text: error }],
               isError: true,
-            })
+            });
           } else if (selected.resultMessage?.role === "toolResult")
-            tool.updateResult(selected.resultMessage)
-          this.bindPart(owner, index!, tool)
-          components.push(tool)
+            tool.updateResult(selected.resultMessage);
+          this.bindPart(owner, index!, tool);
+          components.push(tool);
         }
       }
     } else if (!retained) {
-      const presenter = components.at(-1)
+      const presenter = components.at(-1);
       if (presenter) {
-        owner.component = presenter
-        this.byComponent.set(presenter, owner)
+        owner.component = presenter;
+        this.byComponent.set(presenter, owner);
       }
     }
-    if (!components.length) return false
-    this.historical.set(entry.id, components)
-    return true
+    if (!components.length) return false;
+    this.historical.set(entry.id, components);
+    return true;
   }
 
   private revealSearchHit(hit: SourceHit<Occurrence>) {
-    const owner = hit.field.owner
-    let changed = this.materializeSearchHit(hit)
-    const agentActivity = this.agentActivity.find(owner)
+    const owner = hit.field.owner;
+    let changed = this.materializeSearchHit(hit);
+    const agentActivity = this.agentActivity.find(owner);
     if (agentActivity && agentActivity.manualExpanded !== true) {
-      agentActivity.manualExpanded = true
-      changed = true
+      agentActivity.manualExpanded = true;
+      changed = true;
     }
-    if (changed) this.layoutChat()
-    const disclosure = hit.field.tool ? this.searchDisclosure(hit) : undefined
+    if (changed) this.layoutChat();
+    const disclosure = hit.field.tool ? this.searchDisclosure(hit) : undefined;
     if (disclosure && (!disclosure.expanded || !disclosure.bodyExpanded)) {
-      disclosure.setExpanded(true)
-      disclosure.setBodyExpanded(true)
-      changed = true
+      disclosure.setExpanded(true);
+      disclosure.setBodyExpanded(true);
+      changed = true;
     }
     for (const group of this.renderGroups.values()) {
       if (
         group.header &&
         this.visibleDisclosures.includes(group.header) &&
         group.items.some(
-          (item) =>
-            item.occurrence === disclosure?.occurrence ||
-            item.sourceCall === owner,
+          (item) => item.occurrence === disclosure?.occurrence || item.sourceCall === owner,
         ) &&
         !group.expanded
       ) {
-        group.expanded = true
-        changed = true
-        break
+        group.expanded = true;
+        changed = true;
+        break;
       }
     }
-    if (changed) this.layoutChat()
-    const leaf = this.searchLeaf(hit)
-    if (!leaf) return changed
-    const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0
-    const top = leaf.top + row
-    const before = this.transcript.scrollTop
+    if (changed) this.layoutChat();
+    const leaf = this.searchLeaf(hit);
+    if (!leaf) return changed;
+    const row = this.searchSegments(hit, leaf)?.[0]?.row ?? 0;
+    const top = leaf.top + row;
+    const before = this.transcript.scrollTop;
     if (top < before || top >= before + this.viewportHeight)
-      this.transcript.scrollTo(
-        Math.max(0, top - Math.floor(this.viewportHeight / 3)),
-        {
-          disableFollow: true,
-        },
-      )
-    return changed || this.transcript.scrollTop !== before
+      this.transcript.scrollTo(Math.max(0, top - Math.floor(this.viewportHeight / 3)), {
+        disableFollow: true,
+      });
+    return changed || this.transcript.scrollTop !== before;
   }
 
   private refreshSourceSearch(renderer: TuiAltScreen) {
-    const native = (renderer as unknown as { activeSearch?: NativeSearch })
-      .activeSearch
+    const native = (renderer as unknown as { activeSearch?: NativeSearch }).activeSearch;
     if (!native) {
-      this.searchState = undefined
-      return false
+      this.searchState = undefined;
+      return false;
     }
-    native.matches = []
-    native.selectedIndex = -1
-    const mode = native.selectionMode
-    if (
-      mode !== "retain" &&
-      this.host.sessionManager.getLeafId() !== this.indexedIds.at(-1)
-    )
-      this.indexBranch()
-    const previous = this.searchState
+    native.matches = [];
+    native.selectedIndex = -1;
+    const mode = native.selectionMode;
+    if (mode !== "retain" && this.host.sessionManager.getLeafId() !== this.indexedIds.at(-1))
+      this.indexBranch();
+    const previous = this.searchState;
     const rebuild =
-      !previous ||
-      previous.query !== native.query ||
-      previous.revision !== this.sourceRevision
+      !previous || previous.query !== native.query || previous.revision !== this.sourceRevision;
     const hits = rebuild
       ? this.sourceSearch.find(this.searchFields(), native.query)
-      : previous.hits
-    const counts = rebuild ? new Map<Occurrence, number>() : previous.counts
+      : previous.hits;
+    const counts = rebuild ? new Map<Occurrence, number>() : previous.counts;
     if (rebuild)
-      for (const hit of hits)
-        counts.set(hit.field.owner, (counts.get(hit.field.owner) ?? 0) + 1)
-    let selected = previous?.selected ?? -1
+      for (const hit of hits) counts.set(hit.field.owner, (counts.get(hit.field.owner) ?? 0) + 1);
+    let selected = previous?.selected ?? -1;
     if (rebuild) {
-      const old = previous?.hits[previous.selected]
+      const old = previous?.hits[previous.selected];
       selected = old
         ? hits.findIndex(
             (hit) =>
@@ -2349,24 +2075,23 @@ export class NativeChatHost {
               hit.field.key === old.field.key &&
               hit.from === old.from,
           )
-        : -1
-      if (selected < 0 && hits.length) selected = 0
-    } else if (hits.length && mode === "next")
-      selected = (selected + 1) % hits.length
+        : -1;
+      if (selected < 0 && hits.length) selected = 0;
+    } else if (hits.length && mode === "next") selected = (selected + 1) % hits.length;
     else if (hits.length && mode === "previous")
-      selected = (selected - 1 + hits.length) % hits.length
+      selected = (selected - 1 + hits.length) % hits.length;
     this.searchState = {
       query: native.query,
       revision: this.sourceRevision,
       hits,
       counts,
       selected,
-    }
-    native.component.setResult(selected, hits.length)
-    native.selectionMode = "retain"
-    const hit = hits[selected]
-    const previousHit = previous?.hits[previous.selected]
-    const previousOwner = previousHit?.field.owner
+    };
+    native.component.setResult(selected, hits.length);
+    native.selectionMode = "retain";
+    const hit = hits[selected];
+    const previousHit = previous?.hits[previous.selected];
+    const previousOwner = previousHit?.field.owner;
     const visibilityChanged =
       (previousOwner !== hit?.field.owner &&
         this.host.settingsManager.getHideThinkingBlock() &&
@@ -2374,11 +2099,10 @@ export class NativeChatHost {
           (hit && this.thoughts.has(hit.field.owner)))) ||
       ((previousOwner !== hit?.field.owner ||
         this.sourceHit(previousHit) !== this.sourceHit(hit)) &&
-        (this.sourceHit(previousHit) || this.sourceHit(hit)))
-    if (visibilityChanged) this.layoutChat()
-    const revealed =
-      hit && (rebuild || mode !== "retain") ? this.revealSearchHit(hit) : false
-    return Boolean(visibilityChanged) || revealed
+        (this.sourceHit(previousHit) || this.sourceHit(hit)));
+    if (visibilityChanged) this.layoutChat();
+    const revealed = hit && (rebuild || mode !== "retain") ? this.revealSearchHit(hit) : false;
+    return Boolean(visibilityChanged) || revealed;
   }
 
   private paintSourceSearch(
@@ -2386,99 +2110,87 @@ export class NativeChatHost {
     screen: string[],
     layout: Parameters<typeof getScrollViewBox>[0],
   ) {
-    const state = this.searchState
-    if (!state?.hits.length) return screen
-    const ranges = new Map<
-      number,
-      { start: number; end: number; current: boolean }[]
-    >()
+    const state = this.searchState;
+    if (!state?.hits.length) return screen;
+    const ranges = new Map<number, { start: number; end: number; current: boolean }[]>();
     for (const [index, hit] of state.hits.entries()) {
-      const region = this.callRegionLeaves(hit)
+      const region = this.callRegionLeaves(hit);
       for (const leaf of region ?? [this.searchLeaf(hit)]) {
-        if (!leaf) continue
-        const interval = this.intervals.find((item) => item.leaf === leaf)
-        if (!interval) continue
-        const box = getScrollViewBox(layout, interval.window)
-        if (!box) continue
+        if (!leaf) continue;
+        const interval = this.intervals.find((item) => item.leaf === leaf);
+        if (!interval) continue;
+        const box = getScrollViewBox(layout, interval.window);
+        if (!box) continue;
         const segments = region
           ? [{ row: 0, startCol: 0, endCol: visibleWidth(leaf.rows[0] ?? "") }]
-          : (this.searchSegments(hit, leaf) ?? [])
+          : (this.searchSegments(hit, leaf) ?? []);
         for (const segment of segments) {
-          if (segment.row < interval.start || segment.row >= interval.end)
-            continue
-          const row = box.rect.y + segment.row - interval.window.scrollTop
-          const content = this.contentBounds(leaf, segment.row)
+          if (segment.row < interval.start || segment.row >= interval.end) continue;
+          const row = box.rect.y + segment.row - interval.window.scrollTop;
+          const content = this.contentBounds(leaf, segment.row);
           const start = Math.max(
             box.rect.x + content.start,
             box.clip.x,
             box.rect.x + segment.startCol,
-          )
+          );
           const end = Math.min(
             box.rect.x + content.end,
             box.clip.x + box.clip.width,
             box.rect.x + segment.endCol,
-            renderer.terminal.columns -
-              (this.transcript.isScrollbarVisible ? 1 : 0),
-          )
-          if (
-            row < box.clip.y ||
-            row >= box.clip.y + box.clip.height ||
-            end <= start
-          )
-            continue
-          const rowRanges = ranges.get(row) ?? []
-          rowRanges.push({ start, end, current: index === state.selected })
-          ranges.set(row, rowRanges)
+            renderer.terminal.columns - (this.transcript.isScrollbarVisible ? 1 : 0),
+          );
+          if (row < box.clip.y || row >= box.clip.y + box.clip.height || end <= start) continue;
+          const rowRanges = ranges.get(row) ?? [];
+          rowRanges.push({ start, end, current: index === state.selected });
+          ranges.set(row, rowRanges);
         }
       }
     }
-    const painted = [...screen]
+    const painted = [...screen];
     const highlight = (
       renderer as unknown as {
-        applySearchTextHighlight(text: string, current: boolean): string
+        applySearchTextHighlight(text: string, current: boolean): string;
       }
-    ).applySearchTextHighlight
+    ).applySearchTextHighlight;
     for (const [row, rowRanges] of ranges) {
-      const line = painted[row] ?? ""
-      if (isImageLine(line)) continue
-      const width = visibleWidth(line)
-      const merged: typeof rowRanges = []
-      for (const range of rowRanges.toSorted(
-        (left, right) => left.start - right.start,
-      )) {
-        const last = merged.at(-1)
+      const line = painted[row] ?? "";
+      if (isImageLine(line)) continue;
+      const width = visibleWidth(line);
+      const merged: typeof rowRanges = [];
+      for (const range of rowRanges.toSorted((left, right) => left.start - right.start)) {
+        const last = merged.at(-1);
         if (last && range.start < last.end) {
-          last.end = Math.max(last.end, range.end)
-          last.current ||= range.current
-        } else merged.push({ ...range })
+          last.end = Math.max(last.end, range.end);
+          last.current ||= range.current;
+        } else merged.push({ ...range });
       }
-      let output = ""
-      let cursor = 0
+      let output = "";
+      let cursor = 0;
       for (const range of merged) {
-        const start = Math.min(range.start, width)
-        const end = Math.min(range.end, width)
-        if (end <= start) continue
-        output += sliceByColumn(line, cursor, start - cursor, true)
+        const start = Math.min(range.start, width);
+        const end = Math.min(range.end, width);
+        if (end <= start) continue;
+        output += sliceByColumn(line, cursor, start - cursor, true);
         output += highlight.call(
           renderer,
           sliceByColumn(line, start, end - start, true),
           range.current,
-        )
-        cursor = end
+        );
+        cursor = end;
       }
-      painted[row] = output + sliceByColumn(line, cursor, width - cursor, true)
+      painted[row] = output + sliceByColumn(line, cursor, width - cursor, true);
     }
-    return painted
+    return painted;
   }
 
   private contentLine(leaf: Leaf, row: number) {
-    const line = leaf.rows[row] ?? ""
-    const end = leaf.copyColumns?.get(row)
-    return end === undefined ? line : sliceByColumn(line, 0, end, true)
+    const line = leaf.rows[row] ?? "";
+    const end = leaf.copyColumns?.get(row);
+    return end === undefined ? line : sliceByColumn(line, 0, end, true);
   }
 
   private contentBounds(leaf: Leaf, row: number) {
-    const { component, occurrence } = leaf
+    const { component, occurrence } = leaf;
     const padding =
       component instanceof ActivityItemDisclosure
         ? component.contentPadding(row)
@@ -2487,38 +2199,29 @@ export class NativeChatHost {
             component instanceof AgentActivityHeader ||
             occurrence?.message?.role === "assistant"
           ? this.host.outputPad
-          : 0
-    const start = Math.min(this.layoutWidth, leaf.left + padding)
+          : 0;
+    const start = Math.min(this.layoutWidth, leaf.left + padding);
     return {
       start,
       end: Math.max(
         start,
-        Math.min(
-          this.layoutWidth - padding,
-          leaf.copyColumns?.get(row) ?? this.layoutWidth,
-        ),
+        Math.min(this.layoutWidth - padding, leaf.copyColumns?.get(row) ?? this.layoutWidth),
       ),
-    }
+    };
   }
 
   private pointAt(x: number, y: number): SelectionPoint {
     const visible = this.leaves.flatMap((leaf) => {
-      const interval = this.visibleInterval(leaf)
-      return interval ? [interval] : []
-    })
-    const interval =
-      visible.find((item) => y < item.top + item.end - item.start) ??
-      visible.at(-1)
-    const leaf = interval?.leaf
+      const interval = this.visibleInterval(leaf);
+      return interval ? [interval] : [];
+    });
+    const interval = visible.find((item) => y < item.top + item.end - item.start) ?? visible.at(-1);
+    const leaf = interval?.leaf;
     const localRow = interval
-      ? interval.start +
-        Math.max(
-          0,
-          Math.min(interval.end - interval.start - 1, y - interval.top),
-        )
-      : 0
-    const row = leaf ? leaf.start + localRow : 0
-    const bounds = leaf ? this.contentBounds(leaf, localRow) : undefined
+      ? interval.start + Math.max(0, Math.min(interval.end - interval.start - 1, y - interval.top))
+      : 0;
+    const row = leaf ? leaf.start + localRow : 0;
+    const bounds = leaf ? this.contentBounds(leaf, localRow) : undefined;
     return {
       row,
       col: Math.max(
@@ -2536,57 +2239,53 @@ export class NativeChatHost {
             localRow,
           }
         : {}),
-    }
+    };
   }
 
   private selectedText(renderer: TuiAltScreen): string | undefined {
     const bounds = (
       renderer as unknown as {
-        getSelectionBounds():
-          | { start: SelectionPoint; end: SelectionPoint }
-          | undefined
+        getSelectionBounds(): { start: SelectionPoint; end: SelectionPoint } | undefined;
       }
-    ).getSelectionBounds()
-    if (!bounds || bounds.start.scrollView !== this.transcript) return undefined
+    ).getSelectionBounds();
+    if (!bounds || bounds.start.scrollView !== this.transcript) return undefined;
     const columns = (
       renderer as unknown as {
         getSelectionColumns(
           line: string,
           row: number,
           selection: { start: SelectionPoint; end: SelectionPoint },
-        ): { start: number; end: number }
+        ): { start: number; end: number };
       }
-    ).getSelectionColumns
-    const lines: string[] = []
+    ).getSelectionColumns;
+    const lines: string[] = [];
     for (const leaf of this.leaves) {
-      const first = Math.max(bounds.start.row, leaf.start)
-      const last = Math.min(bounds.end.row, leaf.start + leaf.rows.length - 1)
+      const first = Math.max(bounds.start.row, leaf.start);
+      const last = Math.min(bounds.end.row, leaf.start + leaf.rows.length - 1);
       for (let row = first; row <= last; row++) {
-        if (leaf.copyColumns?.get(row - leaf.start) === 0) continue
-        const line = leaf.rows[row - leaf.start]!
-        const range = columns.call(renderer, line, row, bounds)
-        const content = this.contentBounds(leaf, row - leaf.start)
-        const start = Math.max(content.start, range.start)
-        const end = Math.min(content.end, range.end)
+        if (leaf.copyColumns?.get(row - leaf.start) === 0) continue;
+        const line = leaf.rows[row - leaf.start]!;
+        const range = columns.call(renderer, line, row, bounds);
+        const content = this.contentBounds(leaf, row - leaf.start);
+        const start = Math.max(content.start, range.start);
+        const end = Math.min(content.end, range.end);
         lines.push(
           stripTerminalSequences(
             sliceByColumn(line, start, Math.max(0, end - start), true),
           ).trimEnd(),
-        )
+        );
       }
     }
-    const text = lines.join("\n")
-    return text || undefined
+    const text = lines.join("\n");
+    return text || undefined;
   }
 
   private clearSelection(renderer: TuiAltScreen) {
     const selection = renderer as unknown as {
-      resetTextSelection?(): void
-      clearTextSelection(): void
-    }
-    ;(selection.resetTextSelection ?? selection.clearTextSelection).call(
-      renderer,
-    )
+      resetTextSelection?(): void;
+      clearTextSelection(): void;
+    };
+    (selection.resetTextSelection ?? selection.clearTextSelection).call(renderer);
   }
 
   private ownsRenderer(renderer: TuiAltScreen) {
@@ -2594,430 +2293,375 @@ export class NativeChatHost {
       this.active &&
       (this.host.renderer as unknown) === renderer &&
       this.host.fullscreenLayoutRoot === this.root &&
-      (renderer as unknown as { layoutRoot?: Component }).layoutRoot ===
-        this.root
-    )
+      (renderer as unknown as { layoutRoot?: Component }).layoutRoot === this.root
+    );
   }
 
   private bindRenderer() {
     if (this.host.renderer.mode !== "fullscreen") {
-      this.restoreWorkingIndicator()
-      return
+      this.restoreWorkingIndicator();
+      return;
     }
-    const renderer = this.host.renderer as unknown as TuiAltScreen
-    if (this.boundRenderer === renderer) return
-    this.unbindRenderer()
-    this.boundRenderer = renderer
-    const methods = renderer as unknown as Record<string, Function | undefined>
+    const renderer = this.host.renderer as unknown as TuiAltScreen;
+    if (this.boundRenderer === renderer) return;
+    this.unbindRenderer();
+    this.boundRenderer = renderer;
+    const methods = renderer as unknown as Record<string, Function | undefined>;
     for (const name of ["getSelectionBounds", "getSelectionColumns"])
-      requireMethod(methods[name], `renderer.${name}`)
+      requireMethod(methods[name], `renderer.${name}`);
     requireMethod(
       methods["resetTextSelection"] ?? methods["clearTextSelection"],
       "renderer.resetTextSelection or renderer.clearTextSelection",
-    )
-    const bind = (
-      name: string,
-      replacement: (original: Function) => Function,
-    ) => {
-      const original = requireMethod(methods[name], `renderer.${name}`)
-      const descriptor = Object.getOwnPropertyDescriptor(renderer, name)
-      const wrapped = replacement(original)
-      methods[name] = wrapped
+    );
+    const bind = (name: string, replacement: (original: Function) => Function) => {
+      const original = requireMethod(methods[name], `renderer.${name}`);
+      const descriptor = Object.getOwnPropertyDescriptor(renderer, name);
+      const wrapped = replacement(original);
+      methods[name] = wrapped;
       this.rendererMethods.set(name, {
         original,
         wrapped,
         ...(descriptor ? { descriptor } : {}),
-      })
-    }
+      });
+    };
     bind(
       "refreshSearch",
       (original) => (layout: unknown) =>
         this.ownsRenderer(renderer)
           ? this.refreshSourceSearch(renderer)
           : original.call(renderer, layout),
-    )
+    );
     bind(
       "applySearchHighlights",
-      (original) =>
-        (screen: string[], layout: Parameters<typeof getScrollViewBox>[0]) =>
-          this.ownsRenderer(renderer)
-            ? this.paintSourceSearch(renderer, screen, layout)
-            : original.call(renderer, screen, layout),
-    )
+      (original) => (screen: string[], layout: Parameters<typeof getScrollViewBox>[0]) =>
+        this.ownsRenderer(renderer)
+          ? this.paintSourceSearch(renderer, screen, layout)
+          : original.call(renderer, screen, layout),
+    );
     bind("closeSearch", (original) => () => {
-      const result = original.call(renderer)
-      this.searchState = undefined
-      return result
-    })
-    bind(
-      "routeWheel",
-      (original) => (event: { x: number; y: number }, delta: number) => {
-        if (!this.ownsRenderer(renderer) || event.y >= this.viewportHeight)
-          return original.call(renderer, event, delta)
-        this.transcript.scrollBy(delta)
-        original.call(renderer, event, 0)
-      },
-    )
+      const result = original.call(renderer);
+      this.searchState = undefined;
+      return result;
+    });
+    bind("routeWheel", (original) => (event: { x: number; y: number }, delta: number) => {
+      if (!this.ownsRenderer(renderer) || event.y >= this.viewportHeight)
+        return original.call(renderer, event, delta);
+      this.transcript.scrollBy(delta);
+      original.call(renderer, event, 0);
+    });
     bind("scrollToPrompt", (original) => (direction: number) => {
-      if (!this.ownsRenderer(renderer))
-        return original.call(renderer, direction)
+      if (!this.ownsRenderer(renderer)) return original.call(renderer, direction);
       // oxlint-disable-next-line eslint/no-control-regex -- Pi marks prompt rows with OSC 133.
-      const marker = /^\x1b\]133;A(?:\x07|\x1b\\)/
-      for (const leaf of direction < 0
-        ? this.leaves.toReversed()
-        : this.leaves) {
-        const top = leaf.top
-        if (direction < 0 && top >= this.transcript.scrollTop) continue
-        if (
-          direction > 0 &&
-          top + leaf.rows.length <= this.transcript.scrollTop
-        )
-          continue
+      const marker = /^\x1b\]133;A(?:\x07|\x1b\\)/;
+      for (const leaf of direction < 0 ? this.leaves.toReversed() : this.leaves) {
+        const top = leaf.top;
+        if (direction < 0 && top >= this.transcript.scrollTop) continue;
+        if (direction > 0 && top + leaf.rows.length <= this.transcript.scrollTop) continue;
         const first =
           direction < 0
-            ? Math.min(
-                leaf.rows.length - 1,
-                this.transcript.scrollTop - top - 1,
-              )
-            : Math.max(0, this.transcript.scrollTop - top + 1)
-        for (
-          let local = first;
-          local >= 0 && local < leaf.rows.length;
-          local += direction
-        ) {
-          if (!marker.test(leaf.rows[local] ?? "")) continue
-          const row = top + local
-          this.transcript.scrollTo(row)
-          renderer.requestRender()
-          return
+            ? Math.min(leaf.rows.length - 1, this.transcript.scrollTop - top - 1)
+            : Math.max(0, this.transcript.scrollTop - top + 1);
+        for (let local = first; local >= 0 && local < leaf.rows.length; local += direction) {
+          if (!marker.test(leaf.rows[local] ?? "")) continue;
+          const row = top + local;
+          this.transcript.scrollTo(row);
+          renderer.requestRender();
+          return;
         }
       }
-    })
+    });
     bind(
       "getSelectionPoint",
-      (original) =>
-        (event: { x: number; y: number }, scrollView?: ScrollView) => {
-          if (
-            !this.ownsRenderer(renderer) ||
-            (event.y >= this.viewportHeight && scrollView !== this.transcript)
-          )
-            return original.call(renderer, event, scrollView)
-          return this.pointAt(event.x, event.y)
-        },
-    )
+      (original) => (event: { x: number; y: number }, scrollView?: ScrollView) => {
+        if (
+          !this.ownsRenderer(renderer) ||
+          (event.y >= this.viewportHeight && scrollView !== this.transcript)
+        )
+          return original.call(renderer, event, scrollView);
+        return this.pointAt(event.x, event.y);
+      },
+    );
     bind(
       "getScrollSelectionPoint",
       (original) => (scrollView: ScrollView, x: number, y: number) =>
         this.ownsRenderer(renderer) && scrollView === this.transcript
           ? this.pointAt(x, y)
           : original.call(renderer, scrollView, x, y),
-    )
+    );
     bind("getSelectionSourceLine", (original) => (point: SelectionPoint) => {
       if (!this.ownsRenderer(renderer) || point.scrollView !== this.transcript)
-        return original.call(renderer, point)
-      const leaf = this.leafAt(point.row)
-      return leaf ? this.contentLine(leaf, point.row - leaf.start) : ""
-    })
-    bind(
-      "updateSelectionAutoScroll",
-      (original) => (event: { x: number; y: number }) => {
-        const state = renderer as unknown as {
-          selectionAnchor?: SelectionPoint
-          selectionDragPointer?: { x: number; y: number }
-          selectionAutoScrollDirection: number
-          selectionAutoScrollTimer?: NodeJS.Timeout
-          stopSelectionAutoScroll(): void
-          autoScrollSelection(): void
-        }
-        if (
-          !this.ownsRenderer(renderer) ||
-          state.selectionAnchor?.scrollView !== this.transcript
-        )
-          return original.call(renderer, event)
-        const direction =
-          event.y <= 0 ? -1 : event.y >= this.viewportHeight - 1 ? 1 : 0
-        if (!direction) {
-          state.stopSelectionAutoScroll()
-          return
-        }
-        state.selectionDragPointer = { x: event.x, y: event.y }
-        state.selectionAutoScrollDirection = direction
-        if (state.selectionAutoScrollTimer) return
-        const timer = setInterval(() => state.autoScrollSelection(), 50)
-        timer.unref()
-        state.selectionAutoScrollTimer = timer
-        this.selectionTimer = timer
-      },
-    )
+        return original.call(renderer, point);
+      const leaf = this.leafAt(point.row);
+      return leaf ? this.contentLine(leaf, point.row - leaf.start) : "";
+    });
+    bind("updateSelectionAutoScroll", (original) => (event: { x: number; y: number }) => {
+      const state = renderer as unknown as {
+        selectionAnchor?: SelectionPoint;
+        selectionDragPointer?: { x: number; y: number };
+        selectionAutoScrollDirection: number;
+        selectionAutoScrollTimer?: NodeJS.Timeout;
+        stopSelectionAutoScroll(): void;
+        autoScrollSelection(): void;
+      };
+      if (!this.ownsRenderer(renderer) || state.selectionAnchor?.scrollView !== this.transcript)
+        return original.call(renderer, event);
+      const direction = event.y <= 0 ? -1 : event.y >= this.viewportHeight - 1 ? 1 : 0;
+      if (!direction) {
+        state.stopSelectionAutoScroll();
+        return;
+      }
+      state.selectionDragPointer = { x: event.x, y: event.y };
+      state.selectionAutoScrollDirection = direction;
+      if (state.selectionAutoScrollTimer) return;
+      const timer = setInterval(() => state.autoScrollSelection(), 50);
+      timer.unref();
+      state.selectionAutoScrollTimer = timer;
+      this.selectionTimer = timer;
+    });
     bind("autoScrollSelection", (original) => () => {
       const state = renderer as unknown as {
-        selectionAnchor?: SelectionPoint
-        selectionDragPointer?: { x: number; y: number }
-        selectionAutoScrollDirection: number
-        stopSelectionAutoScroll(): void
-        updateSelectionFocus(point: SelectionPoint): void
-      }
-      if (
-        !this.ownsRenderer(renderer) ||
-        state.selectionAnchor?.scrollView !== this.transcript
-      )
-        return original.call(renderer)
-      const pointer = state.selectionDragPointer
-      const direction = state.selectionAutoScrollDirection
-      if (!pointer || !direction) return state.stopSelectionAutoScroll()
-      if (this.transcript.scrollBy(direction) === direction)
-        return state.stopSelectionAutoScroll()
-      state.updateSelectionFocus(this.pointAt(pointer.x, pointer.y))
-      renderer.requestRender()
-    })
+        selectionAnchor?: SelectionPoint;
+        selectionDragPointer?: { x: number; y: number };
+        selectionAutoScrollDirection: number;
+        stopSelectionAutoScroll(): void;
+        updateSelectionFocus(point: SelectionPoint): void;
+      };
+      if (!this.ownsRenderer(renderer) || state.selectionAnchor?.scrollView !== this.transcript)
+        return original.call(renderer);
+      const pointer = state.selectionDragPointer;
+      const direction = state.selectionAutoScrollDirection;
+      if (!pointer || !direction) return state.stopSelectionAutoScroll();
+      if (this.transcript.scrollBy(direction) === direction) return state.stopSelectionAutoScroll();
+      state.updateSelectionFocus(this.pointAt(pointer.x, pointer.y));
+      renderer.requestRender();
+    });
     bind(
       "getActiveSelectionText",
       (original) => () =>
         this.ownsRenderer(renderer)
           ? (this.selectedText(renderer) ?? original.call(renderer))
           : original.call(renderer),
-    )
-    bind(
-      "applySelection",
-      (original) => (screen: string[], layout: unknown) => {
-        const anchor = rendererSelection(renderer, "selectionAnchor")
-        const focus = rendererSelection(renderer, "selectionFocus")
-        if (
-          !this.ownsRenderer(renderer) ||
-          anchor?.scrollView !== this.transcript ||
-          focus?.scrollView !== this.transcript
-        )
-          return original.call(renderer, screen, layout)
-        const target = renderer as unknown as Record<string, unknown>
-        try {
-          const highlighted = [...screen]
-          for (const interval of this.intervals) {
-            const sourceStart = interval.leaf.start + interval.start
-            target["selectionAnchor"] = {
-              ...anchor,
-              row: anchor.row - sourceStart,
-              scrollView: undefined,
-            }
-            target["selectionFocus"] = {
-              ...focus,
-              row: focus.row - sourceStart,
-              scrollView: undefined,
-            }
-            const rows = original.call(
-              renderer,
-              screen.slice(
-                interval.top,
-                interval.top + interval.end - interval.start,
-              ),
-              layout,
-            ) as string[]
-            const width = renderer.terminal.columns
-            highlighted.splice(
-              interval.top,
-              rows.length,
-              ...rows.map((line, row) => {
-                if (isImageLine(line)) return line
-                const { start, end } = this.contentBounds(
-                  interval.leaf,
-                  interval.start + row,
-                )
-                const length = Math.max(
-                  0,
-                  Math.min(
-                    end,
-                    width - (this.transcript.isScrollbarVisible ? 1 : 0),
-                  ) - start,
-                )
-                return compositeTuiLine(
-                  screen[interval.top + row] ?? "",
-                  sliceByColumn(line, start, length, true),
-                  start,
-                  length,
-                  width,
-                )
-              }),
-            )
-          }
-          return highlighted
-        } finally {
-          target["selectionAnchor"] = anchor
-          target["selectionFocus"] = focus
+    );
+    bind("applySelection", (original) => (screen: string[], layout: unknown) => {
+      const anchor = rendererSelection(renderer, "selectionAnchor");
+      const focus = rendererSelection(renderer, "selectionFocus");
+      if (
+        !this.ownsRenderer(renderer) ||
+        anchor?.scrollView !== this.transcript ||
+        focus?.scrollView !== this.transcript
+      )
+        return original.call(renderer, screen, layout);
+      const target = renderer as unknown as Record<string, unknown>;
+      try {
+        const highlighted = [...screen];
+        for (const interval of this.intervals) {
+          const sourceStart = interval.leaf.start + interval.start;
+          target["selectionAnchor"] = {
+            ...anchor,
+            row: anchor.row - sourceStart,
+            scrollView: undefined,
+          };
+          target["selectionFocus"] = {
+            ...focus,
+            row: focus.row - sourceStart,
+            scrollView: undefined,
+          };
+          const rows = original.call(
+            renderer,
+            screen.slice(interval.top, interval.top + interval.end - interval.start),
+            layout,
+          ) as string[];
+          const width = renderer.terminal.columns;
+          highlighted.splice(
+            interval.top,
+            rows.length,
+            ...rows.map((line, row) => {
+              if (isImageLine(line)) return line;
+              const { start, end } = this.contentBounds(interval.leaf, interval.start + row);
+              const length = Math.max(
+                0,
+                Math.min(end, width - (this.transcript.isScrollbarVisible ? 1 : 0)) - start,
+              );
+              return compositeTuiLine(
+                screen[interval.top + row] ?? "",
+                sliceByColumn(line, start, length, true),
+                start,
+                length,
+                width,
+              );
+            }),
+          );
         }
-      },
-    )
+        return highlighted;
+      } finally {
+        target["selectionAnchor"] = anchor;
+        target["selectionFocus"] = focus;
+      }
+    });
   }
 
   private unbindRenderer() {
-    const renderer = this.boundRenderer
-    if (!renderer) return
+    const renderer = this.boundRenderer;
+    if (!renderer) return;
     if (this.selectionTimer) {
-      clearInterval(this.selectionTimer)
+      clearInterval(this.selectionTimer);
       const state = renderer as unknown as {
-        selectionAutoScrollTimer?: NodeJS.Timeout
-      }
+        selectionAutoScrollTimer?: NodeJS.Timeout;
+      };
       if (state.selectionAutoScrollTimer === this.selectionTimer)
-        delete state.selectionAutoScrollTimer
-      this.selectionTimer = undefined
+        delete state.selectionAutoScrollTimer;
+      this.selectionTimer = undefined;
     }
     for (const [name, method] of this.rendererMethods) {
-      const target = renderer as unknown as Record<string, unknown>
-      if (target[name] !== method.wrapped) continue
-      if (method.descriptor)
-        Object.defineProperty(renderer, name, method.descriptor)
-      else delete target[name]
+      const target = renderer as unknown as Record<string, unknown>;
+      if (target[name] !== method.wrapped) continue;
+      if (method.descriptor) Object.defineProperty(renderer, name, method.descriptor);
+      else delete target[name];
     }
-    this.rendererMethods.clear()
-    this.boundRenderer = undefined
+    this.rendererMethods.clear();
+    this.boundRenderer = undefined;
   }
 
   static current(host: InteractiveMode): NativeChatHost | undefined {
-    return active.get(host)
+    return active.get(host);
   }
 
   rebaseRelationships() {
-    if (!this.active) return
-    this.indexBranch()
-    this.restoreRelationships()
-    this.clearChatSelection()
+    if (!this.active) return;
+    this.indexBranch();
+    this.restoreRelationships();
+    this.clearChatSelection();
   }
 
   observeActivity(type: string, data: unknown) {
-    if (!this.active || !this.activityItems.observe(type, data, true)) return
-    this.sourceRevision++
-    ;(this.host.renderer as unknown as TuiAltScreen).requestRender()
+    if (!this.active || !this.activityItems.observe(type, data, true)) return;
+    this.sourceRevision++;
+    (this.host.renderer as unknown as TuiAltScreen).requestRender();
   }
 
   beginProviderRequest() {
-    this.providerPhases.beginRequest()
+    this.providerPhases.beginRequest();
   }
 
   observeProviderEvent(event: unknown) {
-    this.providerPhases.observe(event)
+    this.providerPhases.observe(event);
   }
 
   private applyProviderPhases(owner: Occurrence) {
-    if (owner.message?.role !== "assistant") return
-    const phases = new Map<number, "commentary" | "final_answer">()
-    const completed = new Set<number>()
+    if (owner.message?.role !== "assistant") return;
+    const phases = new Map<number, "commentary" | "final_answer">();
+    const completed = new Set<number>();
     for (let index = 0; index < owner.message.content.length; index++) {
-      const part = owner.message.content[index]
-      if (part?.type !== "text") continue
-      const evidence = this.providerPhases.evidenceFor(index, part)
-      if (evidence?.phase) phases.set(index, evidence.phase)
-      if (evidence?.completed) completed.add(index)
+      const part = owner.message.content[index];
+      if (part?.type !== "text") continue;
+      const evidence = this.providerPhases.evidenceFor(index, part);
+      if (evidence?.phase) phases.set(index, evidence.phase);
+      if (evidence?.completed) completed.add(index);
     }
     this.agentActivity.reconcilePhases(
       owner,
       phases,
       this.providerPhases.hasPhaseEvidence(),
       completed,
-    )
+    );
   }
 
   private restoreRelationships() {
     this.agentActivity.restore(
       this.relationships.active(this.host.sessionManager.getBranch()),
       (id) => this.byEntryId.get(id),
-    )
+    );
   }
 
   private recordRelationship(fact: RelationshipFact) {
     try {
-      this.relationships.record(fact)
+      this.relationships.record(fact);
     } catch (error) {
       if (!this.relationshipWriteFailed) {
-        this.relationshipWriteFailed = true
-        this.host.showError?.(
-          error instanceof Error ? error.message : String(error),
-        )
+        this.relationshipWriteFailed = true;
+        this.host.showError?.(error instanceof Error ? error.message : String(error));
       }
-      throw error
+      throw error;
     }
   }
 
   private clearHistorical() {
     for (const [id, components] of this.historical) {
-      const owned = new Set(components)
-      const owner = this.byEntryId.get(id)
-      if (owner?.component && owned.has(owner.component)) delete owner.component
+      const owned = new Set(components);
+      const owner = this.byEntryId.get(id);
+      if (owner?.component && owned.has(owner.component)) delete owner.component;
       for (const part of new Set(owner?.parts.values() ?? [])) {
-        if (part.component && owned.has(part.component)) delete part.component
-        this.thoughts.delete(part)
-        this.renderGroups.delete(part)
+        if (part.component && owned.has(part.component)) delete part.component;
+        this.thoughts.delete(part);
+        this.renderGroups.delete(part);
       }
       for (const component of components) {
         if (this.assistantMethods.has(component as NativeAssistant))
-          this.releaseAssistant(component as NativeAssistant)
-        const source = this.byComponent.get(component)
-        const disclosures = source && this.activityDisclosures.get(source)
+          this.releaseAssistant(component as NativeAssistant);
+        const source = this.byComponent.get(component);
+        const disclosures = source && this.activityDisclosures.get(source);
         if (disclosures) {
           for (const disclosure of disclosures.values()) {
-            disclosure.dispose()
-            this.byComponent.delete(disclosure)
+            disclosure.dispose();
+            this.byComponent.delete(disclosure);
           }
-          this.activityDisclosures.delete(source)
+          this.activityDisclosures.delete(source);
         }
-        this.byComponent.delete(component)
+        this.byComponent.delete(component);
       }
     }
-    this.historical.clear()
+    this.historical.clear();
   }
 
   private indexBranch() {
-    const branch = this.host.sessionManager.getBranch()
-    const session = this.host.sessionManager.getSessionId()
+    const branch = this.host.sessionManager.getBranch();
+    const session = this.host.sessionManager.getSessionId();
     if (
       session !== this.activitySession ||
-      (this.activityLeaf &&
-        !branch.some((entry) => entry.id === this.activityLeaf))
+      (this.activityLeaf && !branch.some((entry) => entry.id === this.activityLeaf))
     ) {
-      this.activityItems.rebase()
-      this.activityEntries = new WeakSet()
-      this.activityLeaf = undefined
+      this.activityItems.rebase();
+      this.activityEntries = new WeakSet();
+      this.activityLeaf = undefined;
     }
-    this.activitySession = session
-    const previous = this.indexedIds.join("\0")
-    const common = Math.min(this.indexedIds.length, branch.length)
+    this.activitySession = session;
+    const previous = this.indexedIds.join("\0");
+    const common = Math.min(this.indexedIds.length, branch.length);
     if (
-      this.indexedIds.some(
-        (id, index) => index < common && id !== branch[index]?.id,
-      ) ||
+      this.indexedIds.some((id, index) => index < common && id !== branch[index]?.id) ||
       branch.length < this.indexedIds.length
     ) {
-      this.clearHistorical()
-      this.byEntryId.clear()
-      this.projections.clear()
-      this.indexedIds = []
-      this.sourceRanks.clear()
-      this.sourceZones.clear()
-      this.lastSourceZone = { withThinking: 0, withoutThinking: 0 }
+      this.clearHistorical();
+      this.byEntryId.clear();
+      this.projections.clear();
+      this.indexedIds = [];
+      this.sourceRanks.clear();
+      this.sourceZones.clear();
+      this.lastSourceZone = { withThinking: 0, withoutThinking: 0 };
     }
     for (let index = this.indexedIds.length; index < branch.length; index++) {
-      const entry = branch[index]!
-      this.indexEntry(entry)
-      if (!this.byEntryId.has(entry.id))
-        this.byEntryId.set(entry.id, this.newOccurrence(entry))
+      const entry = branch[index]!;
+      this.indexEntry(entry);
+      if (!this.byEntryId.has(entry.id)) this.byEntryId.set(entry.id, this.newOccurrence(entry));
     }
-    if (this.indexedIds.join("\0") !== previous) this.sourceRevision++
+    if (this.indexedIds.join("\0") !== previous) this.sourceRevision++;
   }
 
   private indexEntry(entry: Entry) {
     if (!this.activityEntries.has(entry)) {
-      if (entry.type === "custom")
-        this.activityItems.observe(entry.customType, entry.data, false)
-      this.activityEntries.add(entry)
+      if (entry.type === "custom") this.activityItems.observe(entry.customType, entry.data, false);
+      this.activityEntries.add(entry);
     }
-    this.activityLeaf = entry.id
-    const zones: SourceZone[] = []
+    this.activityLeaf = entry.id;
+    const zones: SourceZone[] = [];
     if (entry.type === "message" && entry.message.role === "assistant") {
       for (const [index, part] of entry.message.content.entries()) {
         if (part.type === "text" && part.text.trim()) {
-          this.lastSourceZone.withThinking++
-          this.lastSourceZone.withoutThinking++
+          this.lastSourceZone.withThinking++;
+          this.lastSourceZone.withoutThinking++;
         } else if (part.type === "thinking" && part.thinking.trim())
-          this.lastSourceZone.withThinking++
-        else if (part.type === "toolCall")
-          zones[index] = { ...this.lastSourceZone }
+          this.lastSourceZone.withThinking++;
+        else if (part.type === "toolCall") zones[index] = { ...this.lastSourceZone };
       }
     } else if (
       entry.type === "compaction" ||
@@ -3028,16 +2672,16 @@ export class NativeChatHost {
           (entry.message.role === "custom" && entry.message.display))) ||
       (entry.type === "custom_message" && entry.display)
     ) {
-      this.lastSourceZone.withThinking++
-      this.lastSourceZone.withoutThinking++
+      this.lastSourceZone.withThinking++;
+      this.lastSourceZone.withoutThinking++;
     }
-    this.sourceRanks.set(entry.id, this.indexedIds.length)
-    if (zones.length) this.sourceZones.set(entry.id, zones)
-    this.indexedIds.push(entry.id)
+    this.sourceRanks.set(entry.id, this.indexedIds.length);
+    if (zones.length) this.sourceZones.set(entry.id, zones);
+    this.indexedIds.push(entry.id);
   }
 
   private recordNative(component: Component) {
-    if (!this.byComponent.has(component)) this.associate(component)
+    if (!this.byComponent.has(component)) this.associate(component);
   }
 
   private newOccurrence(entry?: Entry): Occurrence {
@@ -3045,65 +2689,61 @@ export class NativeChatHost {
       entry,
       message: undefined,
       parts: new Map(),
-    }
-    this.occurrences.push(occurrence)
-    return occurrence
+    };
+    this.occurrences.push(occurrence);
+    return occurrence;
   }
 
   private forEntry(entry: Entry): Occurrence {
-    let occurrence = this.byEntryId.get(entry.id)
+    let occurrence = this.byEntryId.get(entry.id);
     if (!occurrence) {
-      occurrence = this.newOccurrence(entry)
-      this.byEntryId.set(entry.id, occurrence)
+      occurrence = this.newOccurrence(entry);
+      this.byEntryId.set(entry.id, occurrence);
     }
-    return occurrence
+    return occurrence;
   }
 
   private forProjectedItem(entry: Entry, ordinal: number): Occurrence {
-    let items = this.projections.get(entry.id)
+    let items = this.projections.get(entry.id);
     if (!items) {
-      items = new Map()
-      this.projections.set(entry.id, items)
+      items = new Map();
+      this.projections.set(entry.id, items);
     }
-    let occurrence = items.get(ordinal)
+    let occurrence = items.get(ordinal);
     if (!occurrence) {
-      occurrence =
-        ordinal === 0 ? this.forEntry(entry) : this.newOccurrence(entry)
-      occurrence.itemOrdinal = ordinal
-      items.set(ordinal, occurrence)
+      occurrence = ordinal === 0 ? this.forEntry(entry) : this.newOccurrence(entry);
+      occurrence.itemOrdinal = ordinal;
+      items.set(ordinal, occurrence);
     }
-    return occurrence
+    return occurrence;
   }
 
   private forMessage(message: Message): Occurrence {
-    let occurrence = this.liveMessages.get(message)
+    let occurrence = this.liveMessages.get(message);
     if (!occurrence) {
-      occurrence = this.newOccurrence()
-      this.liveMessages.set(message, occurrence)
+      occurrence = this.newOccurrence();
+      this.liveMessages.set(message, occurrence);
     }
-    occurrence.message = message
-    return occurrence
+    occurrence.message = message;
+    return occurrence;
   }
 
   private withSource<T>(source: Occurrence | undefined, run: () => T): T {
-    const previous = this.source
-    this.source = source
+    const previous = this.source;
+    this.source = source;
     try {
-      return run()
+      return run();
     } finally {
-      this.source = previous
+      this.source = previous;
     }
   }
 
   private associate(component: Component) {
-    if (!this.active || !this.source) return
-    if (
-      this.source.message?.role === "assistant" &&
-      "contentContainer" in component
-    ) {
-      this.source.component = component
-      this.byComponent.set(component, this.source)
-      this.bindAssistant(component as NativeAssistant, this.source)
+    if (!this.active || !this.source) return;
+    if (this.source.message?.role === "assistant" && "contentContainer" in component) {
+      this.source.component = component;
+      this.byComponent.set(component, this.source);
+      this.bindAssistant(component as NativeAssistant, this.source);
     } else if (
       "toolCallId" in component &&
       typeof component.toolCallId === "string" &&
@@ -3111,43 +2751,39 @@ export class NativeChatHost {
     ) {
       const index = this.source.message.content.findIndex(
         (part) => part.type === "toolCall" && part.id === component.toolCallId,
-      )
-      if (index >= 0) this.bindPart(this.source, index, component)
+      );
+      if (index >= 0) this.bindPart(this.source, index, component);
     } else {
-      const notice = this.newOccurrence(this.source.entry)
-      notice.parent = this.source
-      notice.message = this.source.message
-      if (this.source.itemOrdinal !== undefined)
-        notice.itemOrdinal = this.source.itemOrdinal
-      notice.component = component
-      this.byComponent.set(component, notice)
+      const notice = this.newOccurrence(this.source.entry);
+      notice.parent = this.source;
+      notice.message = this.source.message;
+      if (this.source.itemOrdinal !== undefined) notice.itemOrdinal = this.source.itemOrdinal;
+      notice.component = component;
+      this.byComponent.set(component, notice);
     }
   }
 
   private bindPart(owner: Occurrence, index: number, component: Component) {
-    let part = owner.parts.get(index)
+    let part = owner.parts.get(index);
     if (!part) {
-      part = this.newOccurrence(owner.entry)
-      part.parent = owner
-      part.contentIndex = index
-      owner.parts.set(index, part)
+      part = this.newOccurrence(owner.entry);
+      part.parent = owner;
+      part.contentIndex = index;
+      owner.parts.set(index, part);
     }
-    this.thoughts.delete(part)
-    delete part.contentIndices
+    this.thoughts.delete(part);
+    delete part.contentIndices;
     if (
       part.component &&
       part.component !== component &&
       this.byComponent.get(part.component) === part
     ) {
-      this.byComponent.delete(part.component)
+      this.byComponent.delete(part.component);
     }
-    part.message = owner.message
-    part.component = component
-    this.byComponent.set(component, part)
-    const content =
-      owner.message?.role === "assistant"
-        ? owner.message.content[index]
-        : undefined
+    part.message = owner.message;
+    part.component = component;
+    this.byComponent.set(component, part);
+    const content = owner.message?.role === "assistant" ? owner.message.content[index] : undefined;
     if (content?.type === "toolCall")
       this.activityItems.bind(
         part,
@@ -3157,110 +2793,95 @@ export class NativeChatHost {
         this.host.sessionManager.getSessionId(),
         part.entry,
         index,
-      )
+      );
   }
 
-  private bindThinkingRun(
-    owner: Occurrence,
-    start: number,
-    end: number,
-    component: Component,
-  ) {
-    const part = owner.parts.get(start) ?? this.newOccurrence(owner.entry)
+  private bindThinkingRun(owner: Occurrence, start: number, end: number, component: Component) {
+    const part = owner.parts.get(start) ?? this.newOccurrence(owner.entry);
     if (
       part.component &&
       part.component !== component &&
       this.byComponent.get(part.component) === part
     ) {
-      this.byComponent.delete(part.component)
+      this.byComponent.delete(part.component);
     }
-    part.parent = owner
-    part.contentIndex = start
-    part.contentIndices = Array.from(
-      { length: end - start + 1 },
-      (_, offset) => start + offset,
-    )
-    part.message = owner.message
-    part.component = component
-    for (let index = start; index <= end; index++) owner.parts.set(index, part)
-    this.byComponent.set(component, part)
-    let thought = this.thoughts.get(part)
+    part.parent = owner;
+    part.contentIndex = start;
+    part.contentIndices = Array.from({ length: end - start + 1 }, (_, offset) => start + offset);
+    part.message = owner.message;
+    part.component = component;
+    for (let index = start; index <= end; index++) owner.parts.set(index, part);
+    this.byComponent.set(component, part);
+    let thought = this.thoughts.get(part);
     if (!thought) {
-      thought = new Thought(this, part)
-      this.thoughts.set(part, thought)
+      thought = new Thought(this, part);
+      this.thoughts.set(part, thought);
     }
-    thought.bind(
-      component,
-      Boolean((owner.component as NativeAssistant | undefined)?.isStreaming),
-    )
+    thought.bind(component, Boolean((owner.component as NativeAssistant | undefined)?.isStreaming));
   }
 
   private bindAssistant(component: NativeAssistant, owner: Occurrence) {
-    const isActive = () => this.active
+    const isActive = () => this.active;
     const bind = () => {
-      if (!this.active || owner.message?.role !== "assistant") return
-      const previousParts = new Set(owner.parts.values())
+      if (!this.active || owner.message?.role !== "assistant") return;
+      const previousParts = new Set(owner.parts.values());
       // Adjacent thinking indices alias one run; a replacement can split them.
       for (const [index, part] of owner.parts) {
-        if (part.contentIndices && index !== part.contentIndex)
-          owner.parts.delete(index)
+        if (part.contentIndices && index !== part.contentIndex) owner.parts.delete(index);
       }
-      const oldChildren = this.assistantChildren.get(component)
-      const oldIndices = this.assistantIndices.get(component)
+      const oldChildren = this.assistantChildren.get(component);
+      const oldIndices = this.assistantIndices.get(component);
       if (oldChildren) {
         for (const child of oldChildren) {
-          this.byComponent.delete(child)
+          this.byComponent.delete(child);
           for (const index of oldIndices ?? []) {
-            const part = owner.parts.get(index)
+            const part = owner.parts.get(index);
             if (part?.component === child) {
-              delete part.component
-              part.message = owner.message
+              delete part.component;
+              part.message = owner.message;
             }
           }
         }
       }
-      const bound = new Set<Component>()
-      const boundIndices = new Set<number>()
-      const content = owner.message.content
-      const children = component.contentContainer.children
+      const bound = new Set<Component>();
+      const boundIndices = new Set<number>();
+      const content = owner.message.content;
+      const children = component.contentContainer.children;
       let child = content.some(
         (part) =>
           (part.type === "text" && part.text.trim()) ||
           (part.type === "thinking" && part.thinking.trim()),
       )
         ? 1
-        : 0
+        : 0;
       for (let index = 0; index < content.length; index++) {
-        const part = content[index]!
+        const part = content[index]!;
         if (part.type === "text") {
           // A blank final still has a source boundary, but no native text rows.
-          const text = part.text.trim() ? children[child++] : new Container()
+          const text = part.text.trim() ? children[child++] : new Container();
           if (text) {
-            this.bindPart(owner, index, text)
-            bound.add(text)
-            boundIndices.add(index)
+            this.bindPart(owner, index, text);
+            bound.add(text);
+            boundIndices.add(index);
           }
         } else if (part.type === "thinking") {
-          const start = index
-          let visible = false
-          while (
-            index < content.length &&
-            content[index]?.type === "thinking"
-          ) {
-            const thinkingPart = content[index]
+          const start = index;
+          let visible = false;
+          while (index < content.length && content[index]?.type === "thinking") {
+            const thinkingPart = content[index];
             if (thinkingPart?.type === "thinking")
-              visible ||= Boolean(thinkingPart.thinking.trim())
-            index++
+              visible ||= Boolean(thinkingPart.thinking.trim());
+            index++;
           }
-          index--
+          index--;
           if (visible) {
             if (children[child]) {
-              this.bindThinkingRun(owner, start, index, children[child]!)
-              bound.add(children[child]!)
+              this.bindThinkingRun(owner, start, index, children[child]!);
+              bound.add(children[child]!);
               for (let partIndex = start; partIndex <= index; partIndex++)
-                boundIndices.add(partIndex)
+                boundIndices.add(partIndex);
             }
-            child++
+            child++;
             if (
               content
                 .slice(index + 1)
@@ -3270,532 +2891,424 @@ export class NativeChatHost {
                     (next.type === "thinking" && next.thinking.trim()),
                 )
             )
-              child++
+              child++;
           }
         }
       }
       for (const index of oldIndices ?? []) {
-        if (!boundIndices.has(index)) owner.parts.delete(index)
+        if (!boundIndices.has(index)) owner.parts.delete(index);
       }
-      const retainedParts = new Set(owner.parts.values())
+      const retainedParts = new Set(owner.parts.values());
       for (const part of previousParts) {
-        if (!retainedParts.has(part)) this.thoughts.delete(part)
+        if (!retainedParts.has(part)) this.thoughts.delete(part);
       }
-      this.assistantChildren.set(component, bound)
-      this.assistantIndices.set(component, boundIndices)
-    }
-    const previous = component.updateContent
+      this.assistantChildren.set(component, bound);
+      this.assistantIndices.set(component, boundIndices);
+    };
+    const previous = component.updateContent;
     if (!this.assistantMethods.has(component)) {
-      const descriptor = Object.getOwnPropertyDescriptor(
-        component,
-        "updateContent",
-      )
-      const wrapped = function (
-        this: NativeAssistant,
-        message: Message,
-        streaming?: boolean,
-      ) {
-        previous.call(this, message, streaming)
-        if (!isActive()) return
-        owner.message = message
-        bind()
-      }
-      component.updateContent = wrapped
+      const descriptor = Object.getOwnPropertyDescriptor(component, "updateContent");
+      const wrapped = function (this: NativeAssistant, message: Message, streaming?: boolean) {
+        previous.call(this, message, streaming);
+        if (!isActive()) return;
+        owner.message = message;
+        bind();
+      };
+      component.updateContent = wrapped;
       this.assistantMethods.set(component, {
         original: previous,
         wrapped,
         ...(descriptor ? { descriptor } : {}),
-      })
+      });
     }
-    bind()
+    bind();
   }
 
   private releaseAssistant(component: NativeAssistant) {
-    const methods = this.assistantMethods.get(component)
-    if (!methods) return
+    const methods = this.assistantMethods.get(component);
+    if (!methods) return;
     if (component.updateContent === methods.wrapped) {
-      if (methods.descriptor)
-        Object.defineProperty(component, "updateContent", methods.descriptor)
-      else
-        delete (component as unknown as Record<string, unknown>)[
-          "updateContent"
-        ]
+      if (methods.descriptor) Object.defineProperty(component, "updateContent", methods.descriptor);
+      else delete (component as unknown as Record<string, unknown>)["updateContent"];
     }
-    for (const child of this.assistantChildren.get(component) ?? [])
-      this.byComponent.delete(child)
-    this.assistantChildren.delete(component)
-    this.assistantIndices.delete(component)
-    this.assistantMethods.delete(component)
+    for (const child of this.assistantChildren.get(component) ?? []) this.byComponent.delete(child);
+    this.assistantChildren.delete(component);
+    this.assistantIndices.delete(component);
+    this.assistantMethods.delete(component);
   }
 
   private wrapNativeConstruction() {
-    const host = this.host
+    const host = this.host;
     requireMethod(
       host.settingsManager.getHideThinkingBlock,
       "settingsManager.getHideThinkingBlock",
-    )
+    );
     for (const name of [
       "getMarkdownThemeWithSettings",
       "getMarkdownTransformers",
       "getRegisteredToolDefinition",
     ] as const)
-      requireMethod(host[name], name)
+      requireMethod(host[name], name);
     const observe = (target: object, name: string, kind: DeliveryKind) => {
-      const methods = target as Record<
-        string,
-        (...args: unknown[]) => Message[]
-      >
-      const original = requireMethod(methods[name], name)
-      const descriptor = Object.getOwnPropertyDescriptor(target, name)
+      const methods = target as Record<string, (...args: unknown[]) => Message[]>;
+      const original = requireMethod(methods[name], name);
+      const descriptor = Object.getOwnPropertyDescriptor(target, name);
       const record = (messages: Message[]) => {
-        if (this.active) this.agentActivity.observe(messages, kind)
-      }
+        if (this.active) this.agentActivity.observe(messages, kind);
+      };
       const wrapped = function (this: unknown, ...args: unknown[]) {
-        const messages = original.apply(this, args)
-        record(messages)
-        return messages
-      }
-      methods[name] = wrapped
+        const messages = original.apply(this, args);
+        record(messages);
+        return messages;
+      };
+      methods[name] = wrapped;
       this.deliveryCleanup.push(() => {
-        if (methods[name] !== wrapped) return
-        if (descriptor) Object.defineProperty(target, name, descriptor)
-        else delete methods[name]
-      })
-    }
-    observe(host.session.agent, "normalizePromptInput", "initial")
-    observe(host.session.agent.steeringQueue, "drain", "steering")
-    observe(host.session.agent.followUpQueue, "drain", "follow-up")
+        if (methods[name] !== wrapped) return;
+        if (descriptor) Object.defineProperty(target, name, descriptor);
+        else delete methods[name];
+      });
+    };
+    observe(host.session.agent, "normalizePromptInput", "initial");
+    observe(host.session.agent.steeringQueue, "drain", "steering");
+    observe(host.session.agent.followUpQueue, "drain", "follow-up");
     const wrap = (
       name: string,
-      make: (
-        original: (...args: never[]) => unknown,
-      ) => (...args: never[]) => unknown,
+      make: (original: (...args: never[]) => unknown) => (...args: never[]) => unknown,
     ) => {
       const original = requireMethod(
-        (host as unknown as Record<string, (...args: never[]) => unknown>)[
-          name
-        ],
+        (host as unknown as Record<string, (...args: never[]) => unknown>)[name],
         name,
-      )
-      const implementation = make(original)
+      );
+      const implementation = make(original);
       const wrapped = (...args: never[]) =>
-        this.active ? implementation(...args) : original.apply(host, args)
-      this.originals.set(name, original)
-      this.wrappers.set(name, wrapped)
-      this.ownDescriptors.set(name, Object.getOwnPropertyDescriptor(host, name))
+        this.active ? implementation(...args) : original.apply(host, args);
+      this.originals.set(name, original);
+      this.wrappers.set(name, wrapped);
+      this.ownDescriptors.set(name, Object.getOwnPropertyDescriptor(host, name));
       Object.defineProperty(host, name, {
         configurable: true,
         writable: true,
         value: wrapped,
-      })
-    }
+      });
+    };
     for (const name of ["addChild", "removeChild", "clear"] as const) {
-      const original = host.chatContainer[name] as (...args: never[]) => unknown
-      this.chatMethods.set(name, original)
-      this.chatDescriptors.set(
-        name,
-        Object.getOwnPropertyDescriptor(host.chatContainer, name),
-      )
+      const original = host.chatContainer[name] as (...args: never[]) => unknown;
+      this.chatMethods.set(name, original);
+      this.chatDescriptors.set(name, Object.getOwnPropertyDescriptor(host.chatContainer, name));
       if (name === "addChild") {
         const wrapped = ((component: Component) => {
-          original.call(host.chatContainer, component as never)
-          if (this.active) this.recordNative(component)
-        }) as typeof host.chatContainer.addChild
-        host.chatContainer.addChild = wrapped
-        this.chatWrappers.set(name, wrapped as (...args: never[]) => unknown)
+          original.call(host.chatContainer, component as never);
+          if (this.active) this.recordNative(component);
+        }) as typeof host.chatContainer.addChild;
+        host.chatContainer.addChild = wrapped;
+        this.chatWrappers.set(name, wrapped as (...args: never[]) => unknown);
       } else {
         const wrapped = (...args: never[]) => {
-          const result = original.apply(host.chatContainer, args)
-          if (!this.active) return result
+          const result = original.apply(host.chatContainer, args);
+          if (!this.active) return result;
           if (name === "clear") {
-            this.rememberDisclosures()
-            this.clearHistorical()
-            for (const component of this.assistantMethods.keys())
-              this.releaseAssistant(component)
-            this.occurrences.length = 0
-            this.byEntryId.clear()
-            this.projections.clear()
-            this.indexedIds = []
-            this.sourceRanks.clear()
-            this.sourceZones.clear()
-            this.lastSourceZone = { withThinking: 0, withoutThinking: 0 }
-            this.byComponent.clear()
-            this.thoughts.clear()
-            this.renderGroups.clear()
+            this.rememberDisclosures();
+            this.clearHistorical();
+            for (const component of this.assistantMethods.keys()) this.releaseAssistant(component);
+            this.occurrences.length = 0;
+            this.byEntryId.clear();
+            this.projections.clear();
+            this.indexedIds = [];
+            this.sourceRanks.clear();
+            this.sourceZones.clear();
+            this.lastSourceZone = { withThinking: 0, withoutThinking: 0 };
+            this.byComponent.clear();
+            this.thoughts.clear();
+            this.renderGroups.clear();
             for (const items of this.activityDisclosures.values())
-              for (const item of items.values()) item.dispose()
-            this.activityDisclosures.clear()
-            for (const action of this.responseActions.values()) action.dispose()
-            this.responseActions.clear()
-            this.visibleDisclosures = []
-            this.streaming = undefined
+              for (const item of items.values()) item.dispose();
+            this.activityDisclosures.clear();
+            for (const action of this.responseActions.values()) action.dispose();
+            this.responseActions.clear();
+            this.visibleDisclosures = [];
+            this.streaming = undefined;
           } else {
-            const component = args[0] as Component | undefined
+            const component = args[0] as Component | undefined;
             if (component) {
               if (this.assistantMethods.has(component as NativeAssistant))
-                this.releaseAssistant(component as NativeAssistant)
-              const occurrence = this.byComponent.get(component)
-              if (occurrence?.component === component)
-                delete occurrence.component
-              this.byComponent.delete(component)
+                this.releaseAssistant(component as NativeAssistant);
+              const occurrence = this.byComponent.get(component);
+              if (occurrence?.component === component) delete occurrence.component;
+              this.byComponent.delete(component);
             }
           }
-          return result
-        }
-        ;(host.chatContainer as unknown as Record<string, unknown>)[name] =
-          wrapped
-        this.chatWrappers.set(name, wrapped)
+          return result;
+        };
+        (host.chatContainer as unknown as Record<string, unknown>)[name] = wrapped;
+        this.chatWrappers.set(name, wrapped);
       }
     }
-    wrap(
-      "addMessageToChat",
-      (original) => (message: Message, options?: unknown) => {
-        const owner = this.source ?? this.forMessage(message)
-        owner.message = message
-        const before = host.chatContainer.children.length
-        return this.withSource(owner, () => {
-          const result = original.call(host, message as never, options as never)
-          for (const child of host.chatContainer.children.slice(before)) {
-            if ("contentContainer" in child)
-              this.bindAssistant(child as NativeAssistant, owner)
-          }
-          const added = host.chatContainer.children.slice(before)
-          if (added.length && message.role !== "assistant") {
-            const presenter = added.at(-1)!
-            owner.component = presenter
-            this.byComponent.set(presenter, owner)
-          }
-          return result
-        })
-      },
-    )
+    wrap("addMessageToChat", (original) => (message: Message, options?: unknown) => {
+      const owner = this.source ?? this.forMessage(message);
+      owner.message = message;
+      const before = host.chatContainer.children.length;
+      return this.withSource(owner, () => {
+        const result = original.call(host, message as never, options as never);
+        for (const child of host.chatContainer.children.slice(before)) {
+          if ("contentContainer" in child) this.bindAssistant(child as NativeAssistant, owner);
+        }
+        const added = host.chatContainer.children.slice(before);
+        if (added.length && message.role !== "assistant") {
+          const presenter = added.at(-1)!;
+          owner.component = presenter;
+          this.byComponent.set(presenter, owner);
+        }
+        return result;
+      });
+    });
     wrap("mountInteractiveTui", (original) => (...args: unknown[]) => {
-      const result = original.apply(host, args as never[])
-      this.bindRenderer()
-      return result
-    })
+      const result = original.apply(host, args as never[]);
+      this.bindRenderer();
+      return result;
+    });
     wrap("setToolsExpanded", (original) => (expanded: boolean) => {
-      const result = original.call(host, expanded as never)
-      this.disclosureChoices = new WeakMap()
+      const result = original.call(host, expanded as never);
+      this.disclosureChoices = new WeakMap();
       for (const components of this.historical.values())
         for (const component of components)
-          if (component instanceof ToolExecutionComponent)
-            component.setExpanded(expanded)
+          if (component instanceof ToolExecutionComponent) component.setExpanded(expanded);
       for (const items of this.activityDisclosures.values())
         for (const disclosure of items.values()) {
-          disclosure.setExpanded(expanded)
-          disclosure.setBodyExpanded(expanded)
+          disclosure.setExpanded(expanded);
+          disclosure.setBodyExpanded(expanded);
         }
-      for (const group of this.renderGroups.values()) group.expanded = expanded
+      for (const group of this.renderGroups.values()) group.expanded = expanded;
       for (const disclosure of this.visibleDisclosures)
         if (
           disclosure instanceof AgentActivityHeader &&
           disclosure.agentActivity.final &&
           !disclosure.agentActivity.cancelled
         )
-          disclosure.agentActivity.manualExpanded = expanded
-      this.clearSelection(host.renderer as unknown as TuiAltScreen)
-      ;(host.renderer as unknown as TuiAltScreen).requestRender()
-      return result
-    })
-    requireMethod(host.renderSessionItems, "renderSessionItems")
+          disclosure.agentActivity.manualExpanded = expanded;
+      this.clearSelection(host.renderer as unknown as TuiAltScreen);
+      (host.renderer as unknown as TuiAltScreen).requestRender();
+      return result;
+    });
+    requireMethod(host.renderSessionItems, "renderSessionItems");
     wrap("addCustomEntryToChat", (original) => (entry: Entry) => {
-      const owner =
-        this.source?.entry === entry ? this.source : this.forEntry(entry)
+      const owner = this.source?.entry === entry ? this.source : this.forEntry(entry);
       return this.withSource(owner, () => {
-        const children = host.chatContainer.children
+        const children = host.chatContainer.children;
         const streamingIndex = host.streamingComponent
           ? children.indexOf(host.streamingComponent)
-          : -1
-        const length = children.length
-        const result = original.call(host, entry as never)
+          : -1;
+        const length = children.length;
+        const result = original.call(host, entry as never);
         // Pi inserts directly before the streaming assistant, bypassing addChild.
         if (streamingIndex >= 0 && children.length > length) {
-          const component = children[streamingIndex]
-          if (
-            !component ||
-            !("entry" in component) ||
-            component.entry !== entry
-          )
-            throw new Error("pi-chat cannot associate Pi's custom entry")
-          this.recordNative(component)
+          const component = children[streamingIndex];
+          if (!component || !("entry" in component) || component.entry !== entry)
+            throw new Error("pi-chat cannot associate Pi's custom entry");
+          this.recordNative(component);
         }
-        return result
-      })
-    })
-    wrap(
-      "renderSessionEntries",
-      (original) => (entries: Entry[], options?: unknown) => {
-        this.indexBranch()
-        const owners: Occurrence[] = []
-        const scopedEntries = [...entries]
-        // Observe Pi's projection on our array; entry and message objects stay untouched.
-        scopedEntries.flatMap = (project, thisArg) =>
-          entries.flatMap((entry, index, array) => {
-            const items = project.call(thisArg!, entry, index, array)
-            if (Array.isArray(items))
-              items.forEach((_item, ordinal) =>
-                owners.push(this.forProjectedItem(entry, ordinal)),
-              )
-            else owners.push(this.forProjectedItem(entry, 0))
-            return items
-          })
-        const setSource = (owner: Occurrence) => {
-          this.source = owner
+        return result;
+      });
+    });
+    wrap("renderSessionEntries", (original) => (entries: Entry[], options?: unknown) => {
+      this.indexBranch();
+      const owners: Occurrence[] = [];
+      const scopedEntries = [...entries];
+      // Observe Pi's projection on our array; entry and message objects stay untouched.
+      scopedEntries.flatMap = (project, thisArg) =>
+        entries.flatMap((entry, index, array) => {
+          const items = project.call(thisArg!, entry, index, array);
+          if (Array.isArray(items))
+            items.forEach((_item, ordinal) => owners.push(this.forProjectedItem(entry, ordinal)));
+          else owners.push(this.forProjectedItem(entry, 0));
+          return items;
+        });
+      const setSource = (owner: Occurrence) => {
+        this.source = owner;
+      };
+      const renderItems = host.renderSessionItems;
+      const descriptor = Object.getOwnPropertyDescriptor(host, "renderSessionItems");
+      function* scopedItems(items: Iterable<unknown>) {
+        let index = 0;
+        for (const item of items) {
+          const owner = owners[index++];
+          if (!owner) throw new Error("pi-chat cannot associate Pi's history items");
+          if (typeof item === "object" && item && "role" in item) owner.message = item as Message;
+          setSource(owner);
+          yield item;
         }
-        const renderItems = host.renderSessionItems
-        const descriptor = Object.getOwnPropertyDescriptor(
-          host,
-          "renderSessionItems",
-        )
-        function* scopedItems(items: Iterable<unknown>) {
-          let index = 0
-          for (const item of items) {
-            const owner = owners[index++]
-            if (!owner)
-              throw new Error("pi-chat cannot associate Pi's history items")
-            if (typeof item === "object" && item && "role" in item)
-              owner.message = item as Message
-            setSource(owner)
-            yield item
-          }
-          if (index !== owners.length)
-            throw new Error("pi-chat cannot associate Pi's history items")
+        if (index !== owners.length) throw new Error("pi-chat cannot associate Pi's history items");
+      }
+      const scopedRender: typeof renderItems = (items, renderOptions) =>
+        renderItems.call(host, scopedItems(items), renderOptions);
+      host.renderSessionItems = scopedRender;
+      const previous = this.source;
+      try {
+        return original.call(host, scopedEntries as never, options as never);
+      } finally {
+        this.source = previous;
+        if (host.renderSessionItems === scopedRender) {
+          if (descriptor) Object.defineProperty(host, "renderSessionItems", descriptor);
+          else delete (host as unknown as Record<string, unknown>)["renderSessionItems"];
         }
-        const scopedRender: typeof renderItems = (items, renderOptions) =>
-          renderItems.call(host, scopedItems(items), renderOptions)
-        host.renderSessionItems = scopedRender
-        const previous = this.source
-        try {
-          return original.call(host, scopedEntries as never, options as never)
-        } finally {
-          this.source = previous
-          if (host.renderSessionItems === scopedRender) {
-            if (descriptor)
-              Object.defineProperty(host, "renderSessionItems", descriptor)
-            else
-              delete (host as unknown as Record<string, unknown>)[
-                "renderSessionItems"
-              ]
-          }
-        }
-      },
-    )
+      }
+    });
     wrap(
       "handleEvent",
       (original) =>
         (event: {
-          type: string
-          message?: Message
-          entry?: Entry
-          aborted?: boolean
-          assistantMessageEvent?: { type: string; contentIndex?: number }
+          type: string;
+          message?: Message;
+          entry?: Entry;
+          aborted?: boolean;
+          assistantMessageEvent?: { type: string; contentIndex?: number };
         }) => {
-          let owner: Occurrence | undefined
-          if (
-            event.type === "message_end" &&
-            event.message?.role === "toolResult"
-          ) {
-            const component = host.pendingTools.get(event.message.toolCallId)
-            if (component) this.toolResults.set(event.message, component)
+          let owner: Occurrence | undefined;
+          if (event.type === "message_end" && event.message?.role === "toolResult") {
+            const component = host.pendingTools.get(event.message.toolCallId);
+            if (component) this.toolResults.set(event.message, component);
           }
-          if (event.entry) owner = this.forEntry(event.entry)
+          if (event.entry) owner = this.forEntry(event.entry);
           else if (event.message) {
             owner =
-              event.type === "message_end" &&
-              event.message.role === "user" &&
-              this.deliveringUser
+              event.type === "message_end" && event.message.role === "user" && this.deliveringUser
                 ? this.deliveringUser
-                : event.type === "message_start" ||
-                    event.message.role !== "assistant"
+                : event.type === "message_start" || event.message.role !== "assistant"
                   ? this.forMessage(event.message)
-                  : (this.streaming ?? this.forMessage(event.message))
-            owner.message = event.message
-            this.liveMessages.set(event.message, owner)
+                  : (this.streaming ?? this.forMessage(event.message));
+            owner.message = event.message;
+            this.liveMessages.set(event.message, owner);
           }
           if (event.type === "message_start" && owner) {
-            const previous = this.agentActivity.start(owner)
-            if (previous) this.recordRelationship(previous)
-            if (event.message?.role === "user") this.deliveringUser = owner
-            if (event.message?.role === "assistant") this.streaming = owner
+            const previous = this.agentActivity.start(owner);
+            if (previous) this.recordRelationship(previous);
+            if (event.message?.role === "user") this.deliveringUser = owner;
+            if (event.message?.role === "assistant") this.streaming = owner;
           }
           if (owner && event.message?.role === "assistant") {
-            const index = event.assistantMessageEvent?.contentIndex
+            const index = event.assistantMessageEvent?.contentIndex;
             if (event.type === "message_update" && index !== undefined)
-              this.providerPhases.bindNormalized(
-                index,
-                event.message.content[index],
-              )
-            this.applyProviderPhases(owner)
+              this.providerPhases.bindNormalized(index, event.message.content[index]);
+            this.applyProviderPhases(owner);
           }
           if (event.type === "agent_settled") {
             const settled = this.agentActivity.settle(
               event.aborted ?? host.session._agentRunAbortRequested,
-            )
-            if (settled) this.recordRelationship(settled)
-            ;(host.renderer as unknown as TuiAltScreen).requestRender()
+            );
+            if (settled) this.recordRelationship(settled);
+            (host.renderer as unknown as TuiAltScreen).requestRender();
           }
-          const result = this.withSource(owner, () =>
-            original.call(host, event as never),
-          )
-          if (
-            event.message?.role === "assistant" &&
-            host.streamingComponent &&
-            owner
-          ) {
-            this.bindAssistant(host.streamingComponent, owner)
+          const result = this.withSource(owner, () => original.call(host, event as never));
+          if (event.message?.role === "assistant" && host.streamingComponent && owner) {
+            this.bindAssistant(host.streamingComponent, owner);
           }
           if (
             event.type === "message_end" &&
             event.message?.role === "assistant" &&
             this.streaming === owner
           )
-            this.streaming = undefined
+            this.streaming = undefined;
           if (event.type === "message_end" && event.message?.role === "user")
-            this.deliveringUser = undefined
-          if (event.message) this.sourceRevision++
-          this.working.refresh()
-          return result
+            this.deliveringUser = undefined;
+          if (event.message) this.sourceRevision++;
+          this.working.refresh();
+          return result;
         },
-    )
-    const session = host.session
-    const record = requireMethod(session.recordBashResult, "recordBashResult")
-    this.originals.set(
-      "recordBashResult",
-      record as (...args: never[]) => unknown,
-    )
+    );
+    const session = host.session;
+    const record = requireMethod(session.recordBashResult, "recordBashResult");
+    this.originals.set("recordBashResult", record as (...args: never[]) => unknown);
     this.ownDescriptors.set(
       "recordBashResult",
       Object.getOwnPropertyDescriptor(session, "recordBashResult"),
-    )
+    );
     const wrappedRecord = (...args: unknown[]) => {
-      const before = session._pendingBashMessages.length
-      const result = record.apply(session, args)
-      if (!this.active) return result
-      const component = host.bashComponent ?? host.pendingBashComponents.at(-1)
-      const pending = session._pendingBashMessages[before]
-      if (component && pending) this.bashMessages.set(pending, component)
-      return result
-    }
-    session.recordBashResult = wrappedRecord
-    this.wrappers.set(
-      "recordBashResult",
-      wrappedRecord as (...args: never[]) => unknown,
-    )
+      const before = session._pendingBashMessages.length;
+      const result = record.apply(session, args);
+      if (!this.active) return result;
+      const component = host.bashComponent ?? host.pendingBashComponents.at(-1);
+      const pending = session._pendingBashMessages[before];
+      if (component && pending) this.bashMessages.set(pending, component);
+      return result;
+    };
+    session.recordBashResult = wrappedRecord;
+    this.wrappers.set("recordBashResult", wrappedRecord as (...args: never[]) => unknown);
 
-    const manager = host.sessionManager
+    const manager = host.sessionManager;
     const appendEntry = requireMethod(
       (manager as unknown as { _appendEntry(entry: Entry): void })._appendEntry,
       "sessionManager._appendEntry",
-    )
-    this.originals.set(
-      "_appendEntry",
-      appendEntry as (...args: never[]) => unknown,
-    )
+    );
+    this.originals.set("_appendEntry", appendEntry as (...args: never[]) => unknown);
     this.ownDescriptors.set(
       "_appendEntry",
       Object.getOwnPropertyDescriptor(manager, "_appendEntry"),
-    )
+    );
     const wrappedAppendEntry = (entry: Entry) => {
-      appendEntry.call(manager, entry)
-      if (!this.active) return
+      appendEntry.call(manager, entry);
+      if (!this.active) return;
       if (entry.parentId === (this.indexedIds.at(-1) ?? null)) {
-        this.indexEntry(entry)
-        this.forEntry(entry)
-        this.sourceRevision++
-      } else this.indexBranch()
-    }
-    ;(manager as unknown as { _appendEntry(entry: Entry): void })._appendEntry =
-      wrappedAppendEntry
-    this.wrappers.set(
-      "_appendEntry",
-      wrappedAppendEntry as (...args: never[]) => unknown,
-    )
-    const appendMessage = requireMethod(
-      manager.appendMessage,
-      "sessionManager.appendMessage",
-    )
-    this.originals.set(
-      "appendMessage",
-      appendMessage as (...args: never[]) => unknown,
-    )
+        this.indexEntry(entry);
+        this.forEntry(entry);
+        this.sourceRevision++;
+      } else this.indexBranch();
+    };
+    (manager as unknown as { _appendEntry(entry: Entry): void })._appendEntry = wrappedAppendEntry;
+    this.wrappers.set("_appendEntry", wrappedAppendEntry as (...args: never[]) => unknown);
+    const appendMessage = requireMethod(manager.appendMessage, "sessionManager.appendMessage");
+    this.originals.set("appendMessage", appendMessage as (...args: never[]) => unknown);
     this.ownDescriptors.set(
       "appendMessage",
       Object.getOwnPropertyDescriptor(manager, "appendMessage"),
-    )
+    );
     const wrappedAppendMessage: typeof manager.appendMessage = (message) => {
-      const id = appendMessage.call(manager, message)
-      if (!this.active || message.role !== "bashExecution") return id
-      const entry = manager.getEntry(id)
-      const component = this.bashMessages.get(message) ?? host.bashComponent
+      const id = appendMessage.call(manager, message);
+      if (!this.active || message.role !== "bashExecution") return id;
+      const entry = manager.getEntry(id);
+      const component = this.bashMessages.get(message) ?? host.bashComponent;
       if (entry && component) {
-        const owner = this.forEntry(entry)
-        owner.message = message
-        owner.component = component
-        this.byComponent.set(component, owner)
+        const owner = this.forEntry(entry);
+        owner.message = message;
+        owner.component = component;
+        this.byComponent.set(component, owner);
       }
-      return id
-    }
-    manager.appendMessage = wrappedAppendMessage
-    this.wrappers.set(
-      "appendMessage",
-      wrappedAppendMessage as (...args: never[]) => unknown,
-    )
+      return id;
+    };
+    manager.appendMessage = wrappedAppendMessage;
+    this.wrappers.set("appendMessage", wrappedAppendMessage as (...args: never[]) => unknown);
 
-    requireMethod(
-      manager.appendCustomMessageEntry,
-      "sessionManager.appendCustomMessageEntry",
-    )
-    const appendCustom = requireMethod(
-      session._appendCustomMessage,
-      "_appendCustomMessage",
-    )
-    this.originals.set(
-      "_appendCustomMessage",
-      appendCustom as (...args: never[]) => unknown,
-    )
+    requireMethod(manager.appendCustomMessageEntry, "sessionManager.appendCustomMessageEntry");
+    const appendCustom = requireMethod(session._appendCustomMessage, "_appendCustomMessage");
+    this.originals.set("_appendCustomMessage", appendCustom as (...args: never[]) => unknown);
     this.ownDescriptors.set(
       "_appendCustomMessage",
       Object.getOwnPropertyDescriptor(session, "_appendCustomMessage"),
-    )
+    );
     const wrappedAppendCustom = (message: Message) => {
-      if (!this.active) return appendCustom.call(session, message)
-      const originalAppend = manager.appendCustomMessageEntry
-      const previous = Object.getOwnPropertyDescriptor(
-        manager,
-        "appendCustomMessageEntry",
-      )
-      const scopedAppend: typeof manager.appendCustomMessageEntry = (
-        ...args
-      ) => {
-        const id = originalAppend.apply(manager, args)
-        const entry = manager.getEntry(id)
+      if (!this.active) return appendCustom.call(session, message);
+      const originalAppend = manager.appendCustomMessageEntry;
+      const previous = Object.getOwnPropertyDescriptor(manager, "appendCustomMessageEntry");
+      const scopedAppend: typeof manager.appendCustomMessageEntry = (...args) => {
+        const id = originalAppend.apply(manager, args);
+        const entry = manager.getEntry(id);
         if (entry) {
-          const owner = this.forEntry(entry)
-          owner.message = message
-          this.liveMessages.set(message, owner)
+          const owner = this.forEntry(entry);
+          owner.message = message;
+          this.liveMessages.set(message, owner);
         }
-        return id
-      }
-      manager.appendCustomMessageEntry = scopedAppend
+        return id;
+      };
+      manager.appendCustomMessageEntry = scopedAppend;
       try {
-        return appendCustom.call(session, message)
+        return appendCustom.call(session, message);
       } finally {
         if (manager.appendCustomMessageEntry === scopedAppend) {
-          if (previous)
-            Object.defineProperty(manager, "appendCustomMessageEntry", previous)
-          else
-            delete (manager as unknown as Record<string, unknown>)[
-              "appendCustomMessageEntry"
-            ]
+          if (previous) Object.defineProperty(manager, "appendCustomMessageEntry", previous);
+          else delete (manager as unknown as Record<string, unknown>)["appendCustomMessageEntry"];
         }
       }
-    }
-    session._appendCustomMessage = wrappedAppendCustom
-    this.wrappers.set(
-      "_appendCustomMessage",
-      wrappedAppendCustom as (...args: never[]) => unknown,
-    )
+    };
+    session._appendCustomMessage = wrappedAppendCustom;
+    this.wrappers.set("_appendCustomMessage", wrappedAppendCustom as (...args: never[]) => unknown);
   }
 
   private promotePersistedMessage(event: unknown) {
@@ -3807,22 +3320,22 @@ export class NativeChatHost {
       event.type !== "message_end" ||
       !("message" in event)
     )
-      return
-    const message = event.message as Message
-    const id = this.host.session._entryIdsByMessage.get(message)
-    if (!id) return
-    const entry = this.host.sessionManager.getEntry(id)
-    if (!entry) return
-    const occurrence = this.liveMessages.get(message)
+      return;
+    const message = event.message as Message;
+    const id = this.host.session._entryIdsByMessage.get(message);
+    if (!id) return;
+    const entry = this.host.sessionManager.getEntry(id);
+    if (!entry) return;
+    const occurrence = this.liveMessages.get(message);
     if (occurrence) {
-      occurrence.entry = entry
-      this.byEntryId.set(id, occurrence)
+      occurrence.entry = entry;
+      this.byEntryId.set(id, occurrence);
       for (const part of occurrence.parts.values()) {
-        part.entry = entry
+        part.entry = entry;
         const content =
           message.role === "assistant" && part.contentIndex !== undefined
             ? message.content[part.contentIndex]
-            : undefined
+            : undefined;
         if (content?.type === "toolCall")
           this.activityItems.bind(
             part,
@@ -3832,18 +3345,18 @@ export class NativeChatHost {
             this.host.sessionManager.getSessionId(),
             entry,
             part.contentIndex,
-          )
+          );
       }
-      const relationship = this.agentActivity.committed(occurrence)
-      if (relationship) this.recordRelationship(relationship)
+      const relationship = this.agentActivity.committed(occurrence);
+      if (relationship) this.recordRelationship(relationship);
       if (message.role === "assistant") {
-        this.applyProviderPhases(occurrence)
-        const agentActivity = this.agentActivity.find(occurrence)
+        this.applyProviderPhases(occurrence);
+        const agentActivity = this.agentActivity.find(occurrence);
         if (agentActivity?.request.entry) {
           for (let index = 0; index < message.content.length; index++) {
-            const part = message.content[index]
-            if (part?.type !== "text") continue
-            const phase = this.providerPhases.evidenceFor(index, part)?.phase
+            const part = message.content[index];
+            if (part?.type !== "text") continue;
+            const phase = this.providerPhases.evidenceFor(index, part)?.phase;
             if (phase)
               this.recordRelationship({
                 version: 1,
@@ -3852,206 +3365,161 @@ export class NativeChatHost {
                 sourceId: id,
                 contentIndex: index,
                 phase,
-              })
+              });
           }
         }
       }
     }
-    const bash = this.bashMessages.get(message)
-    if (bash) this.byComponent.set(bash, this.forEntry(entry))
-    const tool = this.toolResults.get(message)
-    const call = tool && this.byComponent.get(tool)
+    const bash = this.bashMessages.get(message);
+    if (bash) this.byComponent.set(bash, this.forEntry(entry));
+    const tool = this.toolResults.get(message);
+    const call = tool && this.byComponent.get(tool);
     if (call) {
-      call.resultEntry = entry
-      call.resultMessage = message
+      call.resultEntry = entry;
+      call.resultMessage = message;
     }
   }
 
   dispose() {
-    if (!this.active) return
-    this.restoreWorkingIndicator()
+    if (!this.active) return;
+    this.restoreWorkingIndicator();
     for (const items of this.activityDisclosures.values())
-      for (const item of items.values()) item.dispose()
-    for (const action of this.responseActions.values()) action.dispose()
-    if (this.host.fullscreenLayoutRoot === this.root)
-      this.transcript.setScrollbar("hidden")
-    this.active = false
-    this.activityItems.stop()
-    this.unsubscribe?.()
-    this.forkCleanup?.()
-    for (const cleanup of this.deliveryCleanup) cleanup()
-    this.deliveryCleanup.length = 0
-    this.agentActivity.clear()
-    this.unbindRenderer()
+      for (const item of items.values()) item.dispose();
+    for (const action of this.responseActions.values()) action.dispose();
+    if (this.host.fullscreenLayoutRoot === this.root) this.transcript.setScrollbar("hidden");
+    this.active = false;
+    this.activityItems.stop();
+    this.unsubscribe?.();
+    this.forkCleanup?.();
+    for (const cleanup of this.deliveryCleanup) cleanup();
+    this.deliveryCleanup.length = 0;
+    this.agentActivity.clear();
+    this.unbindRenderer();
     for (const [name] of this.originals) {
       const target =
         name === "appendMessage" || name === "_appendEntry"
           ? this.host.sessionManager
           : name === "recordBashResult" || name === "_appendCustomMessage"
             ? this.host.session
-            : this.host
-      if (
-        (target as unknown as Record<string, unknown>)[name] ===
-        this.wrappers.get(name)
-      ) {
-        const descriptor = this.ownDescriptors.get(name)
-        if (descriptor) Object.defineProperty(target, name, descriptor)
-        else delete (target as unknown as Record<string, unknown>)[name]
+            : this.host;
+      if ((target as unknown as Record<string, unknown>)[name] === this.wrappers.get(name)) {
+        const descriptor = this.ownDescriptors.get(name);
+        if (descriptor) Object.defineProperty(target, name, descriptor);
+        else delete (target as unknown as Record<string, unknown>)[name];
       }
     }
     for (const [name] of this.chatMethods) {
       if (
-        (this.host.chatContainer as unknown as Record<string, unknown>)[
-          name
-        ] === this.chatWrappers.get(name)
+        (this.host.chatContainer as unknown as Record<string, unknown>)[name] ===
+        this.chatWrappers.get(name)
       ) {
-        const descriptor = this.chatDescriptors.get(name)
-        if (descriptor)
-          Object.defineProperty(this.host.chatContainer, name, descriptor)
-        else
-          delete (
-            this.host.chatContainer as unknown as Record<string, unknown>
-          )[name]
+        const descriptor = this.chatDescriptors.get(name);
+        if (descriptor) Object.defineProperty(this.host.chatContainer, name, descriptor);
+        else delete (this.host.chatContainer as unknown as Record<string, unknown>)[name];
       }
     }
-    for (const component of this.assistantMethods.keys())
-      this.releaseAssistant(component)
-    this.assistantChildren.clear()
-    this.assistantIndices.clear()
-    if (this.host.fullscreenLayoutRoot === this.root)
-      this.host.fullscreenLayoutRoot = this.oldRoot
-    if (this.host.renderer.layoutRoot === this.root)
-      this.host.renderer.setLayoutRoot(this.oldRoot)
+    for (const component of this.assistantMethods.keys()) this.releaseAssistant(component);
+    this.assistantChildren.clear();
+    this.assistantIndices.clear();
+    if (this.host.fullscreenLayoutRoot === this.root) this.host.fullscreenLayoutRoot = this.oldRoot;
+    if (this.host.renderer.layoutRoot === this.root) this.host.renderer.setLayoutRoot(this.oldRoot);
     if (active.get(this.host as unknown as InteractiveMode) === this)
-      active.delete(this.host as unknown as InteractiveMode)
-    this.occurrences.length = 0
-    this.leaves = []
-    this.intervals = []
-    this.painting.clear()
-    this.paintingWidth.clear()
-    this.scrollContent.clear()
-    this.scrollContent.setHeight(0)
-    this.clearHistorical()
-    this.byEntryId.clear()
-    this.byComponent.clear()
-    this.thoughts.clear()
-    this.renderGroups.clear()
-    this.activityDisclosures.clear()
-    this.responseActions.clear()
-    this.visibleDisclosures = []
-    this.projections.clear()
-    this.indexedIds = []
-    this.sourceRanks.clear()
-    this.sourceZones.clear()
+      active.delete(this.host as unknown as InteractiveMode);
+    this.occurrences.length = 0;
+    this.leaves = [];
+    this.intervals = [];
+    this.painting.clear();
+    this.paintingWidth.clear();
+    this.scrollContent.clear();
+    this.scrollContent.setHeight(0);
+    this.clearHistorical();
+    this.byEntryId.clear();
+    this.byComponent.clear();
+    this.thoughts.clear();
+    this.renderGroups.clear();
+    this.activityDisclosures.clear();
+    this.responseActions.clear();
+    this.visibleDisclosures = [];
+    this.projections.clear();
+    this.indexedIds = [];
+    this.sourceRanks.clear();
+    this.sourceZones.clear();
   }
 }
 
-type Bootstrap = { renderer: unknown; install(host: InteractiveMode): void }
-const pending = new Set<Bootstrap>()
-let descriptor: PropertyDescriptor | undefined
-let bootstrapWrapper: NativeMode["renderSessionEntries"] | undefined
+type Bootstrap = { renderer: unknown; install(host: InteractiveMode): void };
+const pending = new Set<Bootstrap>();
+let descriptor: PropertyDescriptor | undefined;
+let bootstrapWrapper: NativeMode["renderSessionEntries"] | undefined;
 
-export function armHistoryBootstrap(
-  renderer: unknown,
-  install: (host: InteractiveMode) => void,
-) {
-  const token: Bootstrap = { renderer, install }
-  pending.add(token)
+export function armHistoryBootstrap(renderer: unknown, install: (host: InteractiveMode) => void) {
+  const token: Bootstrap = { renderer, install };
+  pending.add(token);
   if (!descriptor) {
-    descriptor = Object.getOwnPropertyDescriptor(
-      InteractiveMode.prototype,
-      "renderSessionEntries",
-    )
+    descriptor = Object.getOwnPropertyDescriptor(InteractiveMode.prototype, "renderSessionEntries");
     if (!descriptor || typeof descriptor.value !== "function")
-      throw new Error("pi-chat cannot observe Pi history construction")
-    const original = descriptor.value as NativeMode["renderSessionEntries"]
-    bootstrapWrapper = function (
-      this: NativeMode,
-      entries: Entry[],
-      options?: unknown,
-    ) {
+      throw new Error("pi-chat cannot observe Pi history construction");
+    const original = descriptor.value as NativeMode["renderSessionEntries"];
+    bootstrapWrapper = function (this: NativeMode, entries: Entry[], options?: unknown) {
       for (const candidate of pending) {
         if (
-          this.session?.extensionRunner?.getEntryRenderer?.(
-            "pi-chat.relationship",
-          ) === candidate.renderer
+          this.session?.extensionRunner?.getEntryRenderer?.("pi-chat.relationship") ===
+          candidate.renderer
         ) {
           try {
-            candidate.install(this as unknown as InteractiveMode)
+            candidate.install(this as unknown as InteractiveMode);
           } catch (error) {
-            this.showError?.(
-              `pi-chat: ${error instanceof Error ? error.message : String(error)}`,
-            )
-            return original.call(this, entries, options)
+            this.showError?.(`pi-chat: ${error instanceof Error ? error.message : String(error)}`);
+            return original.call(this, entries, options);
           } finally {
-            disarmHistoryBootstrap(candidate)
+            disarmHistoryBootstrap(candidate);
           }
-          return this.renderSessionEntries(entries, options)
+          return this.renderSessionEntries(entries, options);
         }
       }
-      return original.call(this, entries, options)
-    }
+      return original.call(this, entries, options);
+    };
     Object.defineProperty(InteractiveMode.prototype, "renderSessionEntries", {
       ...descriptor,
       value: bootstrapWrapper,
-    })
+    });
   }
-  return () => disarmHistoryBootstrap(token)
+  return () => disarmHistoryBootstrap(token);
 }
 
 function disarmHistoryBootstrap(token: Bootstrap) {
-  pending.delete(token)
+  pending.delete(token);
   if (pending.size === 0 && descriptor) {
     if (
-      (InteractiveMode.prototype as unknown as NativeMode)
-        .renderSessionEntries === bootstrapWrapper
+      (InteractiveMode.prototype as unknown as NativeMode).renderSessionEntries === bootstrapWrapper
     )
-      Object.defineProperty(
-        InteractiveMode.prototype,
-        "renderSessionEntries",
-        descriptor,
-      )
-    descriptor = undefined
-    bootstrapWrapper = undefined
+      Object.defineProperty(InteractiveMode.prototype, "renderSessionEntries", descriptor);
+    descriptor = undefined;
+    bootstrapWrapper = undefined;
   }
 }
 
 export function captureHost(ctx: ExtensionContext): InteractiveMode {
-  if (ctx.mode !== "tui") throw new Error("pi-chat requires Pi TUI mode")
-  const prior = Object.getOwnPropertyDescriptor(
-    InteractiveMode.prototype,
-    "setExtensionWidget",
-  )
+  if (ctx.mode !== "tui") throw new Error("pi-chat requires Pi TUI mode");
+  const prior = Object.getOwnPropertyDescriptor(InteractiveMode.prototype, "setExtensionWidget");
   if (!prior || typeof prior.value !== "function")
-    throw new Error("pi-chat cannot observe Pi widget host")
-  let host: InteractiveMode | undefined
+    throw new Error("pi-chat cannot observe Pi widget host");
+  let host: InteractiveMode | undefined;
   Object.defineProperty(InteractiveMode.prototype, "setExtensionWidget", {
     ...prior,
     value: function (this: InteractiveMode, ...args: unknown[]) {
       // oxlint-disable-next-line typescript/no-this-alias -- The prototype observer must capture Pi's receiver.
-      host = this
-      Object.defineProperty(
-        InteractiveMode.prototype,
-        "setExtensionWidget",
-        prior,
-      )
-      return prior.value.apply(this, args)
+      host = this;
+      Object.defineProperty(InteractiveMode.prototype, "setExtensionWidget", prior);
+      return prior.value.apply(this, args);
     },
-  })
+  });
   try {
-    ctx.ui.setWidget("pi-chat.host", undefined)
+    ctx.ui.setWidget("pi-chat.host", undefined);
   } finally {
-    Object.defineProperty(
-      InteractiveMode.prototype,
-      "setExtensionWidget",
-      prior,
-    )
+    Object.defineProperty(InteractiveMode.prototype, "setExtensionWidget", prior);
   }
-  if (
-    !host ||
-    (host as unknown as NativeMode).sessionManager !==
-      (ctx.sessionManager as unknown)
-  )
-    throw new Error("pi-chat could not acquire this Pi session's host")
-  return host
+  if (!host || (host as unknown as NativeMode).sessionManager !== (ctx.sessionManager as unknown))
+    throw new Error("pi-chat could not acquire this Pi session's host");
+  return host;
 }

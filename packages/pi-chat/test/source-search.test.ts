@@ -1,19 +1,15 @@
-import assert from "node:assert/strict"
-import { writeFile } from "node:fs/promises"
-import { join } from "node:path"
-import test from "node:test"
-import { stripTerminalSequences, Text } from "@earendil-works/pi-tui"
-import {
-  createReadToolDefinition,
-  ToolExecutionComponent,
-} from "@earendil-works/pi-coding-agent"
-import { openNativeHost } from "../../../fixtures/native-host.ts"
+import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import test from "node:test";
+import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
+import { createReadToolDefinition, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { openNativeHost } from "../../../fixtures/native-host.ts";
 
 /* oxlint-disable eslint/no-control-regex -- Assert Pi's native terminal highlight sequences. */
 
-const chat = new URL("../src/index.ts", import.meta.url).pathname
-const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
-  .pathname
+const chat = new URL("../src/index.ts", import.meta.url).pathname;
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url).pathname;
 const delta = (content: string, tool?: string) => ({
   event: {
     choices: [
@@ -42,53 +38,49 @@ const delta = (content: string, tool?: string) => ({
       },
     ],
   },
-})
+});
 const finish = (reason = "stop") => ({
   event: { choices: [{ index: 0, delta: {}, finish_reason: reason }] },
-})
-const done = { event: "[DONE]" }
+});
+const done = { event: "[DONE]" };
 
 test("native Find reveals a matching occurrence inside closed agent activity", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "one.txt"), "tool output")
-  host.queueResponse(
-    delta("Hidden telescope", "one.txt"),
-    finish("tool_calls"),
-    done,
-  )
-  host.queueResponse(delta("Final response"), finish(), done)
-  await host.type("Look up the text")
-  await host.key("\r")
-  await host.settled()
-  const before = await host.frame()
-  assert.match(before, /Worked for \d+m \d+s ▶/)
-  assert.doesNotMatch(before, /Hidden telescope/)
+  });
+  await writeFile(join(host.directory, "one.txt"), "tool output");
+  host.queueResponse(delta("Hidden telescope", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Final response"), finish(), done);
+  await host.type("Look up the text");
+  await host.key("\r");
+  await host.settled();
+  const before = await host.frame();
+  assert.match(before, /Worked for \d+m \d+s ▶/);
+  assert.doesNotMatch(before, /Hidden telescope/);
 
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /Worked for \d+m \d+s ▼/)
-  assert.match(screen, /Hidden telescope/)
-  assert.match(screen, /1\/1/)
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(screen, /Worked for \d+m \d+s ▼/);
+  assert.match(screen, /Hidden telescope/);
+  assert.match(screen, /1\/1/);
   const matched = host
     .screenLines()
-    .find((line) => stripTerminalSequences(line).includes("Hidden telescope"))
-  assert.match(matched ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-})
+    .find((line) => stripTerminalSequences(line).includes("Hidden telescope"));
+  assert.match(matched ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+});
 
 test("Find opens a closed render group and keeps the native result presenter", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "one.txt"), "ordinary output")
-  await writeFile(join(host.directory, "two.txt"), "rare telescope output")
+  });
+  await writeFile(join(host.directory, "one.txt"), "ordinary output");
+  await writeFile(join(host.directory, "two.txt"), "rare telescope output");
   host.queueResponse(
     {
       event: {
@@ -111,117 +103,112 @@ test("Find opens a closed render group and keeps the native result presenter", a
     },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Finished"), finish(), done)
-  await host.type("Read two files")
-  await host.key("\r")
-  await host.settled()
-  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
+  );
+  host.queueResponse(delta("Finished"), finish(), done);
+  await host.type("Read two files");
+  await host.key("\r");
+  await host.settled();
+  assert.match(await host.frame(), /Worked for \d+m \d+s ▶/);
 
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /Worked for \d+m \d+s ▼/)
-  assert.match(screen, /Read files ▼/)
-  assert.match(screen, /Read one\.txt >/)
-  assert.doesNotMatch(screen, /ordinary output/)
-  assert.match(screen, /rare telescope output/)
-  assert.match(screen, /1\/1/)
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(screen, /Worked for \d+m \d+s ▼/);
+  assert.match(screen, /Read files ▼/);
+  assert.match(screen, /Read one\.txt >/);
+  assert.doesNotMatch(screen, /ordinary output/);
+  assert.match(screen, /rare telescope output/);
+  assert.match(screen, /1\/1/);
   const result = host
     .screenLines()
-    .find((line) =>
-      stripTerminalSequences(line).includes("rare telescope output"),
-    )
-  assert.match(result ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-})
+    .find((line) => stripTerminalSequences(line).includes("rare telescope output"));
+  assert.match(result ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+});
 
 test("Find includes the native tool-call name", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "one.txt"), "ordinary output")
-  host.queueResponse(delta("", "one.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Run the tool")
-  await host.key("\r")
-  await host.settled()
-  await host.key("\x06")
-  await host.type("read")
-  await host.frame()
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /1\/1/,
-  )
+  });
+  await writeFile(join(host.directory, "one.txt"), "ordinary output");
+  host.queueResponse(delta("", "one.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Run the tool");
+  await host.key("\r");
+  await host.settled();
+  await host.key("\x06");
+  await host.type("read");
+  await host.frame();
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /1\/1/);
   const call = host
     .screenLines()
-    .find((line) => stripTerminalSequences(line).includes("Read one.txt"))
-  assert.match(call ?? "", /\x1b\[48;5;52m[^\n]*Read/)
-})
+    .find((line) => stripTerminalSequences(line).includes("Read one.txt"));
+  assert.match(call ?? "", /\x1b\[48;5;52m[^\n]*Read/);
+});
 
 test("Find searches original tool argument values with escapes", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 34,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  const path = 'C:\\work\\file".txt'
-  await writeFile(join(host.directory, path), "ordinary output")
-  host.queueResponse(delta("", path), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Run the tool")
-  await host.key("\r")
-  await host.settled()
-  await host.key("\x06")
-  await host.type(path)
-  assert.match(await host.frame(), /1\/1/)
-})
+  });
+  const path = 'C:\\work\\file".txt';
+  await writeFile(join(host.directory, path), "ordinary output");
+  host.queueResponse(delta("", path), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Run the tool");
+  await host.key("\r");
+  await host.settled();
+  await host.key("\x06");
+  await host.type(path);
+  assert.match(await host.frame(), /1\/1/);
+});
 
 test("Find searches readable Markdown and literal command syntax", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
+  });
   host.queueResponse(
     delta(
       "**Bright** [telescope](https://hidden.example/secret-path)\n\n```sh\nprintf 'orbit'\n```\n\n- **alpha** comet\n- beta planet\n\n| Header | Value |\n| --- | --- |\n| gamma | telescope |\n\n> first galaxy\n> second galaxy",
     ),
     finish(),
     done,
-  )
-  await host.type("Describe it")
-  await host.key("\r")
-  await host.settled()
+  );
+  await host.type("Describe it");
+  await host.key("\r");
+  await host.settled();
   const query = async (value: string) => {
-    await host.key("\x06")
-    await host.type(value)
-    await host.frame()
-    return host.screenLines().map(stripTerminalSequences).join("\n")
-  }
-  assert.match(await query("Bright telescope"), /1\/1/)
+    await host.key("\x06");
+    await host.type(value);
+    await host.frame();
+    return host.screenLines().map(stripTerminalSequences).join("\n");
+  };
+  assert.match(await query("Bright telescope"), /1\/1/);
   const label = host
     .screenLines()
     .find(
       (line) =>
         stripTerminalSequences(line).includes("Bright telescope") &&
         !stripTerminalSequences(line).includes("│"),
-    )
-  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*Bright/)
-  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-  await host.key("\x1b")
-  assert.match(await query("printf 'orbit'"), /1\/1/)
-  await host.key("\x1b")
-  assert.match(await query("alpha comet"), /1\/1/)
-  await host.key("\x1b")
-  assert.match(await query("gamma telescope"), /1\/1/)
-  await host.key("\x1b")
-  assert.match(await query("first galaxy second galaxy"), /1\/1/)
-  await host.key("\x1b")
-  assert.match(await query("secret-path"), /No matches/)
-})
+    );
+  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*Bright/);
+  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  await host.key("\x1b");
+  assert.match(await query("printf 'orbit'"), /1\/1/);
+  await host.key("\x1b");
+  assert.match(await query("alpha comet"), /1\/1/);
+  await host.key("\x1b");
+  assert.match(await query("gamma telescope"), /1\/1/);
+  await host.key("\x1b");
+  assert.match(await query("first galaxy second galaxy"), /1\/1/);
+  await host.key("\x1b");
+  assert.match(await query("secret-path"), /No matches/);
+});
 
 for (const { name, source, rendered, escaped, escapedQuery } of [
   {
@@ -258,28 +245,28 @@ for (const { name, source, rendered, escaped, escapedQuery } of [
       extensionPaths: [chat, copyExtension],
       rows: 34,
       keybindings: { "tui.altScreen.search": "ctrl+f" },
-    })
-    host.queueResponse(delta(source), finish(), done)
-    await host.type("Show link")
-    await host.key("\r")
-    await host.settled()
-    assert.ok((await host.frame()).includes(rendered))
+    });
+    host.queueResponse(delta(source), finish(), done);
+    await host.type("Show link");
+    await host.key("\r");
+    await host.settled();
+    assert.ok((await host.frame()).includes(rendered));
 
     const query = async (value: string) => {
-      await host.key("\x06")
-      await host.type(value)
-      const frame = await host.frame()
-      const lines = host.screenLines()
-      await host.key("\x1b")
-      return { frame, lines }
-    }
-    const code = await query("b]")
-    assert.match(code.frame, /1\/1/)
-    if (!escaped) assert.match(code.lines.join("\n"), /\x1b\[48;5;52m[^\n]*b\]/)
-    assert.match((await query("c")).frame, /1\/1/)
-    if (escapedQuery) assert.match((await query(escapedQuery)).frame, /1\/1/)
-    assert.match((await query("secret-path")).frame, /No matches/)
-  })
+      await host.key("\x06");
+      await host.type(value);
+      const frame = await host.frame();
+      const lines = host.screenLines();
+      await host.key("\x1b");
+      return { frame, lines };
+    };
+    const code = await query("b]");
+    assert.match(code.frame, /1\/1/);
+    if (!escaped) assert.match(code.lines.join("\n"), /\x1b\[48;5;52m[^\n]*b\]/);
+    assert.match((await query("c")).frame, /1\/1/);
+    if (escapedQuery) assert.match((await query(escapedQuery)).frame, /1\/1/);
+    assert.match((await query("secret-path")).frame, /No matches/);
+  });
 }
 
 test("native Find navigation keeps duplicate occurrences distinct", async (t) => {
@@ -290,19 +277,19 @@ test("native Find navigation keeps duplicate occurrences distinct", async (t) =>
       "tui.altScreen.search": "ctrl+f",
       "tui.altScreen.searchPrevious": "ctrl+p",
     },
-  })
-  host.queueResponse(delta("Orbit and orbit"), finish(), done)
-  await host.type("Repeat")
-  await host.key("\r")
-  await host.settled()
-  await host.key("\x06")
-  await host.type("orbit")
-  assert.match(await host.frame(), /1\/2/)
-  await host.key("\r")
-  assert.match(await host.frame(), /2\/2/)
-  await host.key("\x10")
-  assert.match(await host.frame(), /1\/2/)
-})
+  });
+  host.queueResponse(delta("Orbit and orbit"), finish(), done);
+  await host.type("Repeat");
+  await host.key("\r");
+  await host.settled();
+  await host.key("\x06");
+  await host.type("orbit");
+  assert.match(await host.frame(), /1\/2/);
+  await host.key("\r");
+  assert.match(await host.frame(), /2\/2/);
+  await host.key("\x10");
+  assert.match(await host.frame(), /1\/2/);
+});
 
 test("Find reveals source through default bodies despite a custom renderer", async (t) => {
   const host = await openNativeHost(t, {
@@ -320,8 +307,8 @@ test("Find reveals source through default bodies despite a custom renderer", asy
           renderResult: () => new Text("CUSTOM RESULT", 0, 0),
         }),
     ],
-  })
-  await writeFile(join(host.directory, "secret.txt"), "unrendered telescope")
+  });
+  await writeFile(join(host.directory, "secret.txt"), "unrendered telescope");
   host.queueResponse(
     {
       event: {
@@ -351,42 +338,35 @@ test("Find reveals source through default bodies despite a custom renderer", asy
     },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Read it")
-  await host.key("\r")
-  await host.settled()
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const lines = host.screenLines()
-  const call = lines.find((line) =>
-    stripTerminalSequences(line).includes("unrendered telescope"),
-  )
-  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/)
-  assert.match(call ?? "", /\x1b\[48;5;52m/)
-  assert.doesNotMatch(
-    lines.map(stripTerminalSequences).join("\n"),
-    /CUSTOM CALL|CUSTOM RESULT/,
-  )
-  await host.key("\x1b")
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  assert.doesNotMatch(await host.frame(), /CUSTOM CALL/)
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const retained = host.screenLines()
-  assert.match(retained.map(stripTerminalSequences).join("\n"), /1\/1/)
+  );
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Read it");
+  await host.key("\r");
+  await host.settled();
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const lines = host.screenLines();
+  const call = lines.find((line) => stripTerminalSequences(line).includes("unrendered telescope"));
+  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/);
+  assert.match(call ?? "", /\x1b\[48;5;52m/);
+  assert.doesNotMatch(lines.map(stripTerminalSequences).join("\n"), /CUSTOM CALL|CUSTOM RESULT/);
+  await host.key("\x1b");
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  assert.doesNotMatch(await host.frame(), /CUSTOM CALL/);
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const retained = host.screenLines();
+  assert.match(retained.map(stripTerminalSequences).join("\n"), /1\/1/);
   assert.match(
-    retained.find((line) =>
-      stripTerminalSequences(line).includes("unrendered telescope"),
-    ) ?? "",
+    retained.find((line) => stripTerminalSequences(line).includes("unrendered telescope")) ?? "",
     /\x1b\[48;5;52m/,
-  )
-})
+  );
+});
 
 test("Find temporarily reveals a hidden thought body or extracted activity heading", async (t) => {
   const host = await openNativeHost(t, {
@@ -399,8 +379,8 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
       "tui.altScreen.searchPrevious": "ctrl+p",
       "app.thinking.toggle": "ctrl+t",
     },
-  })
-  const reasoning = "**Investigating optics**\n\nThe hidden telescope"
+  });
+  const reasoning = "**Investigating optics**\n\nThe hidden telescope";
   host.queueResponse(
     { event: { type: "response.created", response: { id: "reply" } } },
     {
@@ -451,9 +431,7 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
           type: "message",
           id: "answer",
           role: "assistant",
-          content: [
-            { type: "output_text", text: "The visible telescope answer" },
-          ],
+          content: [{ type: "output_text", text: "The visible telescope answer" }],
         },
       },
     },
@@ -464,55 +442,55 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
       },
     },
     { end: true },
-  )
-  await host.type("Think")
-  await host.key("\r")
-  await host.settled()
-  const before = await host.frame()
-  assert.doesNotMatch(before, /Worked|The hidden telescope|Thought/)
-  await host.key("\x06")
-  await host.type("optics")
-  await host.frame()
-  const headingHit = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(headingHit, /1\/1/)
-  assert.match(headingHit, /Worked for \d+m \d+s ▼[\s\S]*The hidden telescope/)
-  assert.doesNotMatch(headingHit, /Investigating optics/)
-  await host.key("\x1b")
-  assert.doesNotMatch(await host.frame(), /Worked|The hidden telescope/)
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const lines = host.screenLines()
-  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/2/)
+  );
+  await host.type("Think");
+  await host.key("\r");
+  await host.settled();
+  const before = await host.frame();
+  assert.doesNotMatch(before, /Worked|The hidden telescope|Thought/);
+  await host.key("\x06");
+  await host.type("optics");
+  await host.frame();
+  const headingHit = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(headingHit, /1\/1/);
+  assert.match(headingHit, /Worked for \d+m \d+s ▼[\s\S]*The hidden telescope/);
+  assert.doesNotMatch(headingHit, /Investigating optics/);
+  await host.key("\x1b");
+  assert.doesNotMatch(await host.frame(), /Worked|The hidden telescope/);
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const lines = host.screenLines();
+  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/2/);
   assert.match(
     lines.map(stripTerminalSequences).join("\n"),
     /Worked for \d+m \d+s ▼[\s\S]*The hidden telescope/,
-  )
+  );
   const thought = lines.find((line) =>
     stripTerminalSequences(line).includes("The hidden telescope"),
-  )
-  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-  await host.key("\r")
-  const next = await host.frame()
-  assert.match(next, /2\/2/)
-  assert.doesNotMatch(next, /The hidden telescope/)
-  await host.key("\x10")
-  assert.match(await host.frame(), /The hidden telescope/)
-  await host.type("-missing")
-  const missing = await host.frame()
-  assert.match(missing, /No matches/)
-  assert.doesNotMatch(missing, /The hidden telescope/)
-  await host.key("\x1b")
-  await host.key("\x14")
-  assert.match(await host.frame(), /The hidden telescope/)
-})
+  );
+  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  await host.key("\r");
+  const next = await host.frame();
+  assert.match(next, /2\/2/);
+  assert.doesNotMatch(next, /The hidden telescope/);
+  await host.key("\x10");
+  assert.match(await host.frame(), /The hidden telescope/);
+  await host.type("-missing");
+  const missing = await host.frame();
+  assert.match(missing, /No matches/);
+  assert.doesNotMatch(missing, /The hidden telescope/);
+  await host.key("\x1b");
+  await host.key("\x14");
+  assert.match(await host.frame(), /The hidden telescope/);
+});
 
 test("Find refreshes results as a represented assistant message streams", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
+  });
   host.queueResponse(
     delta("First"),
     { pause: true },
@@ -520,40 +498,32 @@ test("Find refreshes results as a represented assistant message streams", async 
     { pause: true },
     finish(),
     done,
-  )
-  await host.type("Stream")
-  await host.key("\r")
+  );
+  await host.type("Stream");
+  await host.key("\r");
   await t.waitFor(() =>
-    assert.match(
-      host.screenLines().map(stripTerminalSequences).join("\n"),
-      /First/,
-    ),
-  )
-  await host.key("\x06")
-  await host.type("telescope")
-  assert.match(await host.frame(), /No matches/)
-  host.resumeResponse()
+    assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /First/),
+  );
+  await host.key("\x06");
+  await host.type("telescope");
+  assert.match(await host.frame(), /No matches/);
+  host.resumeResponse();
   await t.waitFor(() =>
-    assert.match(
-      host.screenLines().map(stripTerminalSequences).join("\n"),
-      /First telescope/,
-    ),
-  )
-  assert.equal(host.session.isStreaming, true)
-  assert.match(await host.frame(), /1\/1/)
-  host.resumeResponse()
-  await host.settled()
-  await host.frame()
-  const lines = host.screenLines()
-  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/)
-  const match = lines.find((line) =>
-    stripTerminalSequences(line).includes("First telescope"),
-  )
-  assert.match(match ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-})
+    assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /First telescope/),
+  );
+  assert.equal(host.session.isStreaming, true);
+  assert.match(await host.frame(), /1\/1/);
+  host.resumeResponse();
+  await host.settled();
+  await host.frame();
+  const lines = host.screenLines();
+  assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/);
+  const match = lines.find((line) => stripTerminalSequences(line).includes("First telescope"));
+  assert.match(match ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+});
 
 test("Find excludes source text outside the active branch after tree navigation", async (t) => {
-  let target = ""
+  let target = "";
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
@@ -562,40 +532,40 @@ test("Find excludes source text outside the active branch after tree navigation"
       (pi) =>
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
-            await ctx.navigateTree(target)
+            await ctx.navigateTree(target);
           },
         }),
     ],
-  })
-  host.queueResponse(delta("Old telescope"), finish(), done)
-  await host.type("Old request")
-  await host.key("\r")
-  await host.settled()
+  });
+  host.queueResponse(delta("Old telescope"), finish(), done);
+  await host.type("Old request");
+  await host.key("\r");
+  await host.settled();
   const request = host.session.sessionManager
     .getBranch()
-    .find((entry) => entry.type === "message" && entry.message.role === "user")
-  assert(request)
-  target = request.id
-  await host.key("\x06")
-  await host.type("telescope")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.type("/test-tree")
-  await host.key("\r")
-  assert.doesNotMatch(await host.frame(), /Old telescope/)
-  await host.key("\x06")
-  await host.type("telescope")
-  assert.match(await host.frame(), /No matches/)
-})
+    .find((entry) => entry.type === "message" && entry.message.role === "user");
+  assert(request);
+  target = request.id;
+  await host.key("\x06");
+  await host.type("telescope");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.type("/test-tree");
+  await host.key("\r");
+  assert.doesNotMatch(await host.frame(), /Old telescope/);
+  await host.key("\x06");
+  await host.type("telescope");
+  assert.match(await host.frame(), /No matches/);
+});
 
 test("Find indexes the literal native shell command and output", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await host.type("!printf 'shell-telescope'")
-  await host.key("\r")
+  });
+  await host.type("!printf 'shell-telescope'");
+  await host.key("\r");
   await t.waitFor(() => {
     assert(
       host.session.sessionManager
@@ -606,18 +576,18 @@ test("Find indexes the literal native shell command and output", async (t) => {
             entry.message.role === "bashExecution" &&
             entry.message.output.includes("shell-telescope"),
         ),
-    )
-  })
-  await host.key("\x06")
-  await host.type("printf 'shell-telescope'")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("shell-telescope")
-  assert.match(await host.frame(), /1\/2/)
-  await host.key("\r")
-  assert.match(await host.frame(), /2\/2/)
-})
+    );
+  });
+  await host.key("\x06");
+  await host.type("printf 'shell-telescope'");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("shell-telescope");
+  assert.match(await host.frame(), /1\/2/);
+  await host.key("\r");
+  assert.match(await host.frame(), /2\/2/);
+});
 
 test("Find scrolls native activity output in the conversation to the selected source occurrence", async (t) => {
   const host = await openNativeHost(t, {
@@ -628,108 +598,97 @@ test("Find scrolls native activity output in the conversation to the selected so
       "tui.altScreen.top": "home",
       "tui.altScreen.bottom": "end",
     },
-  })
+  });
   await writeFile(
     join(host.directory, "large.txt"),
     Array.from({ length: 90 }, (_, index) =>
       index === 82 ? "row-82 telescope" : `row-${index} ordinary`,
     ).join("\n"),
-  )
-  host.queueResponse(delta("Reading", "large.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Read the file")
-  await host.key("\r")
-  await host.settled()
-  assert.doesNotMatch(await host.frame(), /row-82 telescope/)
-  await host.key("\x06")
-  await host.type("telescope")
-  await host.frame()
-  const lines = host.screenLines()
-  assert.match(lines.map(stripTerminalSequences).join("\n"), /row-82 telescope/)
-  const selected = lines.find((line) =>
-    stripTerminalSequences(line).includes("row-82 telescope"),
-  )
-  assert.match(selected ?? "", /\x1b\[48;5;52m[^\n]*telescope/)
-  await host.key("\x1b")
-  await host.key("\x1b[H")
-  const top = await host.frame()
-  assert.match(top, /Read large\.txt ▼/)
-  assert.doesNotMatch(top, /Read files/)
-  assert.match(top, /row-0 ordinary/)
-  assert.doesNotMatch(top, /row-82 telescope/)
-  await host.key("\x1b[F")
-  const bottom = await host.frame()
-  assert.match(bottom, /row-89 ordinary/)
-  assert.match(bottom, /Done/)
-  assert.doesNotMatch(bottom, /Read large\.txt|Read files|row-0 ordinary/)
-})
+  );
+  host.queueResponse(delta("Reading", "large.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Read the file");
+  await host.key("\r");
+  await host.settled();
+  assert.doesNotMatch(await host.frame(), /row-82 telescope/);
+  await host.key("\x06");
+  await host.type("telescope");
+  await host.frame();
+  const lines = host.screenLines();
+  assert.match(lines.map(stripTerminalSequences).join("\n"), /row-82 telescope/);
+  const selected = lines.find((line) => stripTerminalSequences(line).includes("row-82 telescope"));
+  assert.match(selected ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  await host.key("\x1b");
+  await host.key("\x1b[H");
+  const top = await host.frame();
+  assert.match(top, /Read large\.txt ▼/);
+  assert.doesNotMatch(top, /Read files/);
+  assert.match(top, /row-0 ordinary/);
+  assert.doesNotMatch(top, /row-82 telescope/);
+  await host.key("\x1b[F");
+  const bottom = await host.frame();
+  assert.match(bottom, /row-89 ordinary/);
+  assert.match(bottom, /Done/);
+  assert.doesNotMatch(bottom, /Read large\.txt|Read files|row-0 ordinary/);
+});
 
 test("Find uses native case, Unicode, and whitespace matching", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     rows: 32,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  host.queueResponse(delta("Café   🪐 orbit"), finish(), done)
-  await host.type("Describe")
-  await host.key("\r")
-  await host.settled()
-  await host.key("\x06")
-  await host.type("CAFÉ 🪐 ORBIT")
-  await host.frame()
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /1\/1/,
-  )
-  const match = host
-    .screenLines()
-    .find((line) => stripTerminalSequences(line).includes("Café"))
-  assert.match(match ?? "", /\x1b\[48;5;52m/)
-})
+  });
+  host.queueResponse(delta("Café   🪐 orbit"), finish(), done);
+  await host.type("Describe");
+  await host.key("\r");
+  await host.settled();
+  await host.key("\x06");
+  await host.type("CAFÉ 🪐 ORBIT");
+  await host.frame();
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /1\/1/);
+  const match = host.screenLines().find((line) => stripTerminalSequences(line).includes("Café"));
+  assert.match(match ?? "", /\x1b\[48;5;52m/);
+});
 
 test("Find reveals a retained message before Pi's compaction summary", async (t) => {
-  let native: unknown
+  let native: unknown;
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
     rows: 44,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
     onMount: (mode) => {
-      native = mode
+      native = mode;
     },
-  })
-  host.queueResponse(delta("Earlier answer"), finish(), done)
-  await host.type("archival-needle request")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  assert.doesNotMatch(await host.frame(), /archival-needle/)
-  ;(
-    native as { headerContainer: { addChild(component: Text): void } }
-  ).headerContainer.addChild(new Text("Native header marker", 0, 0))
+  });
+  host.queueResponse(delta("Earlier answer"), finish(), done);
+  await host.type("archival-needle request");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  assert.doesNotMatch(await host.frame(), /archival-needle/);
+  (native as { headerContainer: { addChild(component: Text): void } }).headerContainer.addChild(
+    new Text("Native header marker", 0, 0),
+  );
 
-  await host.key("\x06")
-  await host.type("archival-needle")
-  const frame = await host.frame()
-  assert.match(frame, /1\/1/)
-  assert.match(frame, /archival-needle/)
-  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.ok(
-    screen.indexOf("archival-needle") < screen.indexOf("Compacted from"),
-  )
-  assert.ok(
-    screen.indexOf("Native header marker") < screen.indexOf("archival-needle"),
-  )
-  await host.key("\x1b")
-  host.queueResponse(delta("New answer"), finish(), done)
-  await host.type("New request")
-  await host.key("\r")
-  await host.settled()
-  assert.doesNotMatch(JSON.stringify(host.requests.at(-1)), /archival-needle/)
-})
+  await host.key("\x06");
+  await host.type("archival-needle");
+  const frame = await host.frame();
+  assert.match(frame, /1\/1/);
+  assert.match(frame, /archival-needle/);
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.ok(screen.indexOf("archival-needle") < screen.indexOf("Compacted from"));
+  assert.ok(screen.indexOf("Native header marker") < screen.indexOf("archival-needle"));
+  await host.key("\x1b");
+  host.queueResponse(delta("New answer"), finish(), done);
+  await host.type("New request");
+  await host.key("\r");
+  await host.settled();
+  assert.doesNotMatch(JSON.stringify(host.requests.at(-1)), /archival-needle/);
+});
 
 test("revealing a retained user row does not add it to native editor history", async (t) => {
   const host = await openNativeHost(t, {
@@ -737,64 +696,62 @@ test("revealing a retained user row does not add it to native editor history", a
     persistSession: true,
     rows: 40,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  host.queueResponse(delta("Seed answer"), finish(), done)
-  await host.type("Seed request")
-  await host.key("\r")
-  await host.settled()
+  });
+  host.queueResponse(delta("Seed answer"), finish(), done);
+  await host.type("Seed request");
+  await host.key("\r");
+  await host.settled();
   const original = host.session.sessionManager
     .getBranch()
-    .find((entry) => entry.type === "message" && entry.message.role === "user")
-  assert(original?.type === "message" && original.message.role === "user")
+    .find((entry) => entry.type === "message" && entry.message.role === "user");
+  assert(original?.type === "message" && original.message.role === "user");
   host.session.sessionManager.appendMessage({
     ...original.message,
     // Keep the match below Pi's search overlay in the recording terminal.
     content: "Earlier context\n\nMore context\n\nhistory-needle request",
-  })
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+  });
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
 
-  await host.key("\x06")
-  await host.type("history-needle")
-  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x06");
+  await host.type("history-needle");
+  assert.match(await host.frame(), /1\/1/);
   const matched = host
     .screenLines()
-    .find((line) =>
-      stripTerminalSequences(line).includes("history-needle request"),
-    )
-  assert(matched, host.screenLines().map(stripTerminalSequences).join("\n"))
+    .find((line) => stripTerminalSequences(line).includes("history-needle request"));
+  assert(matched, host.screenLines().map(stripTerminalSequences).join("\n"));
   assert.equal(
     stripTerminalSequences(matched).indexOf("history-needle request"),
     host.terminal.columns - "history-needle request".length - 1,
-  )
-  assert.match(matched, /\x1b\[48;5;52m[^\n]*history-needle/)
-  await host.key("\x1b")
-  await host.key("\x1b[A")
-  await host.frame()
+  );
+  assert.match(matched, /\x1b\[48;5;52m[^\n]*history-needle/);
+  await host.key("\x1b");
+  await host.key("\x1b[A");
+  await host.frame();
   assert.doesNotMatch(
     host.screenLines().slice(-6).map(stripTerminalSequences).join("\n"),
     /history-needle/,
-  )
-  host.ui.setEditorText("")
-  await host.type("/settings")
-  await host.key("\r")
-  await host.type("Output padding")
-  await host.key("\r")
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("history-needle")
-  await host.frame()
+  );
+  host.ui.setEditorText("");
+  await host.type("/settings");
+  await host.key("\r");
+  await host.type("Output padding");
+  await host.key("\r");
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("history-needle");
+  await host.frame();
   const unpadded = host
     .screenLines()
     .map(stripTerminalSequences)
-    .find((line) => line.includes("history-needle request"))
+    .find((line) => line.includes("history-needle request"));
   assert.equal(
     unpadded?.indexOf("history-needle request"),
     host.terminal.columns - "history-needle request".length,
-  )
-})
+  );
+});
 
 test("Find reopens a hidden retained thought using the native Markdown environment", async (t) => {
   const host = await openNativeHost(t, {
@@ -812,9 +769,9 @@ test("Find reopens a hidden retained thought using the native Markdown environme
           context.messageType === "assistant-thinking"
             ? markdown.replaceAll("source-", "shown-")
             : markdown,
-        )
+        );
         pi.on("message_end", ({ message }) => {
-          if (message.role !== "assistant") return
+          if (message.role !== "assistant") return;
           return {
             message: {
               ...message,
@@ -823,44 +780,42 @@ test("Find reopens a hidden retained thought using the native Markdown environme
                 { type: "text", text: "Visible answer" },
               ],
             },
-          }
-        })
+          };
+        });
       },
     ],
-  })
-  host.queueResponse(delta("Original answer"), finish(), done)
-  await host.type("Think about history")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  assert.doesNotMatch(await host.frame(), /historical telescope/)
+  });
+  host.queueResponse(delta("Original answer"), finish(), done);
+  await host.type("Think about history");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  assert.doesNotMatch(await host.frame(), /historical telescope/);
 
-  await host.key("\x06")
-  await host.type("historical")
-  await host.frame()
-  const lines = host.screenLines()
-  const screen = lines.map(stripTerminalSequences).join("\n")
-  assert.match(screen, /1\/1/)
-  assert.match(screen, /shown-historical/)
-  const thought = lines.find((line) =>
-    stripTerminalSequences(line).includes("shown-historical"),
-  )
-  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*historical/)
-  await host.key("\x1b")
-  assert.doesNotMatch(await host.frame(), /historical telescope/)
-  await host.key("\x14")
-  assert.match(await host.frame(), /shown-historical telescope/)
-  await host.type("/settings")
-  await host.key("\r")
-  await host.type("Output padding")
-  await host.key("\r")
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("historical")
-  await host.frame()
+  await host.key("\x06");
+  await host.type("historical");
+  await host.frame();
+  const lines = host.screenLines();
+  const screen = lines.map(stripTerminalSequences).join("\n");
+  assert.match(screen, /1\/1/);
+  assert.match(screen, /shown-historical/);
+  const thought = lines.find((line) => stripTerminalSequences(line).includes("shown-historical"));
+  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*historical/);
+  await host.key("\x1b");
+  assert.doesNotMatch(await host.frame(), /historical telescope/);
+  await host.key("\x14");
+  assert.match(await host.frame(), /shown-historical telescope/);
+  await host.type("/settings");
+  await host.key("\r");
+  await host.type("Output padding");
+  await host.key("\r");
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("historical");
+  await host.frame();
   assert.equal(
     host
       .screenLines()
@@ -868,11 +823,11 @@ test("Find reopens a hidden retained thought using the native Markdown environme
       .find((line) => line.includes("shown-historical telescope"))
       ?.indexOf("shown-historical telescope"),
     0,
-  )
-  await host.key("\x1b")
-  await host.key("\x14")
-  assert.doesNotMatch(await host.frame(), /historical telescope/)
-})
+  );
+  await host.key("\x1b");
+  await host.key("\x14");
+  assert.doesNotMatch(await host.frame(), /historical telescope/);
+});
 
 test("Find restores separate retained calls with reused IDs and their own results", async (t) => {
   const host = await openNativeHost(t, {
@@ -880,49 +835,49 @@ test("Find restores separate retained calls with reused IDs and their own result
     persistSession: true,
     rows: 50,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "first.txt"), "first-needle output")
-  await writeFile(join(host.directory, "second.txt"), "second-needle output")
+  });
+  await writeFile(join(host.directory, "first.txt"), "first-needle output");
+  await writeFile(join(host.directory, "second.txt"), "second-needle output");
   const run = async (prompt: string, file: string) => {
-    host.queueResponse(delta("", file), finish("tool_calls"), done)
-    host.queueResponse(delta(`Completed ${prompt}`), finish(), done)
-    await host.type(prompt)
-    await host.key("\r")
-    await host.settled()
-  }
-  await run("First request", "first.txt")
-  await run("Second request", "second.txt")
-  const requests = host.requests.length
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  assert.doesNotMatch(await host.frame(), /first-needle|second-needle/)
+    host.queueResponse(delta("", file), finish("tool_calls"), done);
+    host.queueResponse(delta(`Completed ${prompt}`), finish(), done);
+    await host.type(prompt);
+    await host.key("\r");
+    await host.settled();
+  };
+  await run("First request", "first.txt");
+  await run("Second request", "second.txt");
+  const requests = host.requests.length;
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  assert.doesNotMatch(await host.frame(), /first-needle|second-needle/);
 
-  await host.key("\x06")
-  await host.type("first-needle")
-  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x06");
+  await host.type("first-needle");
+  assert.match(await host.frame(), /1\/1/);
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
     /read first\.txt[\s\S]*first-needle output/,
-  )
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("second-needle")
-  assert.match(await host.frame(), /1\/1/)
-  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /read second\.txt[\s\S]*second-needle output/)
-  assert.match(screen, /Read first\.txt ▼[\s\S]*Read second\.txt ▼/)
-  assert.doesNotMatch(screen, /Read files/)
-  await host.key("\x1b")
-  await host.type("/settings")
-  await host.key("\r")
-  await host.type("Output padding")
-  await host.key("\r")
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("first-needle")
-  await host.frame()
+  );
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("second-needle");
+  assert.match(await host.frame(), /1\/1/);
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(screen, /read second\.txt[\s\S]*second-needle output/);
+  assert.match(screen, /Read first\.txt ▼[\s\S]*Read second\.txt ▼/);
+  assert.doesNotMatch(screen, /Read files/);
+  await host.key("\x1b");
+  await host.type("/settings");
+  await host.key("\r");
+  await host.type("Output padding");
+  await host.key("\r");
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("first-needle");
+  await host.frame();
   assert.equal(
     host
       .screenLines()
@@ -930,9 +885,9 @@ test("Find restores separate retained calls with reused IDs and their own result
       .find((line) => line.trim() === "read first.txt")
       ?.indexOf("read"),
     "setOutputPad" in ToolExecutionComponent.prototype ? 0 : 1,
-  )
-  assert.equal(host.requests.length, requests)
-})
+  );
+  assert.equal(host.requests.length, requests);
+});
 
 test("configured native global expansion reaches a revealed retained call", async (t) => {
   const host = await openNativeHost(t, {
@@ -943,40 +898,37 @@ test("configured native global expansion reaches a revealed retained call", asyn
       "tui.altScreen.search": "ctrl+f",
       "app.tools.expand": "ctrl+e",
     },
-  })
-  await writeFile(
-    join(host.directory, "older.txt"),
-    "retained-tool-needle output",
-  )
-  host.queueResponse(delta("", "older.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Read older file")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+  });
+  await writeFile(join(host.directory, "older.txt"), "retained-tool-needle output");
+  host.queueResponse(delta("", "older.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Read older file");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
 
-  await host.key("\x06")
-  await host.type("retained-tool-needle")
-  assert.match(await host.frame(), /retained-tool-needle output/)
-  await host.key("\x1b")
-  await host.key("\x05")
-  assert.match(await host.frame(), /retained-tool-needle output/)
-  await host.key("\x05")
-  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
-  await host.key("\x0f")
-  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/)
-  await host.key("\x05")
-  assert.doesNotMatch(await host.frame(), /Read files/)
-  assert.match(await host.frame(), /Read older\.txt ▼/)
-  assert.match(await host.frame(), /retained-tool-needle output/)
-  assert.equal(host.requests.length, 2)
-})
+  await host.key("\x06");
+  await host.type("retained-tool-needle");
+  assert.match(await host.frame(), /retained-tool-needle output/);
+  await host.key("\x1b");
+  await host.key("\x05");
+  assert.match(await host.frame(), /retained-tool-needle output/);
+  await host.key("\x05");
+  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/);
+  await host.key("\x0f");
+  assert.doesNotMatch(await host.frame(), /retained-tool-needle output/);
+  await host.key("\x05");
+  assert.doesNotMatch(await host.frame(), /Read files/);
+  assert.match(await host.frame(), /Read older\.txt ▼/);
+  assert.match(await host.frame(), /retained-tool-needle output/);
+  assert.equal(host.requests.length, 2);
+});
 
 test("Find includes displayed native custom messages before and after compaction", async (t) => {
-  let send: (() => void) | undefined
+  let send: (() => void) | undefined;
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
@@ -987,7 +939,7 @@ test("Find includes displayed native custom messages before and after compaction
         pi.registerMessageRenderer(
           "historical-notice",
           () => new Text("Current custom renderer", 0, 0),
-        )
+        );
         send = () => {
           pi.sendMessage(
             {
@@ -996,7 +948,7 @@ test("Find includes displayed native custom messages before and after compaction
               display: true,
             },
             { triggerTurn: false },
-          )
+          );
           pi.sendMessage(
             {
               customType: "historical-notice",
@@ -1004,56 +956,50 @@ test("Find includes displayed native custom messages before and after compaction
               display: false,
             },
             { triggerTurn: false },
-          )
-        }
+          );
+        };
       },
     ],
-  })
-  assert(send)
-  host.queueResponse(delta("Seed answer"), finish(), done)
-  await host.type("Seed session")
-  await host.key("\r")
-  await host.settled()
-  send()
-  assert.match(await host.frame(), /Current custom renderer/)
-  assert.match(
-    JSON.stringify(host.session.sessionManager.getBranch()),
-    /custom-needle/,
-  )
-  await host.key("\x06")
-  await host.type("custom-needle")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  assert.doesNotMatch(await host.frame(), /Current custom renderer/)
-  assert.match(
-    JSON.stringify(host.session.sessionManager.getBranch()),
-    /custom-needle/,
-  )
+  });
+  assert(send);
+  host.queueResponse(delta("Seed answer"), finish(), done);
+  await host.type("Seed session");
+  await host.key("\r");
+  await host.settled();
+  send();
+  assert.match(await host.frame(), /Current custom renderer/);
+  assert.match(JSON.stringify(host.session.sessionManager.getBranch()), /custom-needle/);
+  await host.key("\x06");
+  await host.type("custom-needle");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  assert.doesNotMatch(await host.frame(), /Current custom renderer/);
+  assert.match(JSON.stringify(host.session.sessionManager.getBranch()), /custom-needle/);
 
-  await host.key("\x06")
-  await host.type("custom-needle")
-  assert.match(await host.frame(), /1\/1/)
+  await host.key("\x06");
+  await host.type("custom-needle");
+  assert.match(await host.frame(), /1\/1/);
   assert.match(
     host.screenLines().map(stripTerminalSequences).join("\n"),
     /Current custom renderer/,
-  )
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("private-needle")
-  assert.match(await host.frame(), /No matches/)
-})
+  );
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("private-needle");
+  assert.match(await host.frame(), /No matches/);
+});
 
 test("revealing retained history leaves a live native tool result attached", async (t) => {
-  let release!: () => void
+  let release!: () => void;
   const gate = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  t.after(() => release())
-  let started = false
+    release = resolve;
+  });
+  t.after(() => release());
+  let started = false;
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
@@ -1066,24 +1012,24 @@ test("revealing retained history leaves a live native tool result attached", asy
           name: "wait",
           label: "Wait",
           execute: async () => {
-            started = true
-            await gate
+            started = true;
+            await gate;
             return {
               content: [{ type: "text", text: "live-result needle" }],
               details: {},
-            }
+            };
           },
         }),
     ],
-  })
-  host.queueResponse(delta("Old answer"), finish(), done)
-  await host.type("archival-needle request")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+  });
+  host.queueResponse(delta("Old answer"), finish(), done);
+  await host.type("archival-needle request");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
   host.queueResponse(
     {
       event: {
@@ -1111,26 +1057,23 @@ test("revealing retained history leaves a live native tool result attached", asy
     },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Live work done"), finish(), done)
-  await host.type("Run live work")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(started, true))
-  assert.equal(host.session.isStreaming, true)
-  await host.key("\x06")
-  await host.type("archival-needle")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  release()
-  await host.settled()
-  await host.key("\x06")
-  await host.type("live-result")
-  assert.match(await host.frame(), /1\/1/)
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /live-result needle/,
-  )
-})
+  );
+  host.queueResponse(delta("Live work done"), finish(), done);
+  await host.type("Run live work");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(started, true));
+  assert.equal(host.session.isStreaming, true);
+  await host.key("\x06");
+  await host.type("archival-needle");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  release();
+  await host.settled();
+  await host.key("\x06");
+  await host.type("live-result");
+  assert.match(await host.frame(), /1\/1/);
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /live-result needle/);
+});
 
 test("Find keeps source order when selecting a retained assistant's calls backward", async (t) => {
   const host = await openNativeHost(t, {
@@ -1138,9 +1081,9 @@ test("Find keeps source order when selecting a retained assistant's calls backwa
     persistSession: true,
     rows: 50,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "one.txt"), "one-needle output")
-  await writeFile(join(host.directory, "two.txt"), "two-needle output")
+  });
+  await writeFile(join(host.directory, "one.txt"), "one-needle output");
+  await writeFile(join(host.directory, "two.txt"), "two-needle output");
   host.queueResponse(
     {
       event: {
@@ -1163,34 +1106,32 @@ test("Find keeps source order when selecting a retained assistant's calls backwa
     },
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Read both")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+  );
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Read both");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
 
-  await host.key("\x06")
-  await host.type("two-needle")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("one-needle")
-  assert.match(await host.frame(), /1\/1/)
-  const screen = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(screen, /Read files/)
-  assert.match(screen, /one-needle output/)
-  assert.match(screen, /two-needle output/)
-  assert.ok(
-    screen.indexOf("one-needle output") < screen.indexOf("two-needle output"),
-  )
-})
+  await host.key("\x06");
+  await host.type("two-needle");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("one-needle");
+  assert.match(await host.frame(), /1\/1/);
+  const screen = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(screen, /Read files/);
+  assert.match(screen, /one-needle output/);
+  assert.match(screen, /two-needle output/);
+  assert.ok(screen.indexOf("one-needle output") < screen.indexOf("two-needle output"));
+});
 
 test("historical presenters clear on reload and branch navigation", async (t) => {
-  let target = ""
+  let target = "";
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
@@ -1200,42 +1141,42 @@ test("historical presenters clear on reload and branch navigation", async (t) =>
       (pi) =>
         pi.registerCommand("test-tree", {
           handler: async (_args, ctx) => {
-            await ctx.navigateTree(target)
+            await ctx.navigateTree(target);
           },
         }),
     ],
-  })
-  host.queueResponse(delta("Old answer"), finish(), done)
-  await host.type("archival-needle request")
-  await host.key("\r")
-  await host.settled()
+  });
+  host.queueResponse(delta("Old answer"), finish(), done);
+  await host.type("archival-needle request");
+  await host.key("\r");
+  await host.settled();
   const user = host.session.sessionManager
     .getBranch()
-    .find((entry) => entry.type === "message" && entry.message.role === "user")
-  assert(user?.parentId)
-  target = user.parentId
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+    .find((entry) => entry.type === "message" && entry.message.role === "user");
+  assert(user?.parentId);
+  target = user.parentId;
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
 
-  await host.key("\x06")
-  await host.type("archival-needle")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.reload()
-  assert.doesNotMatch(await host.frame(), /archival-needle/)
-  await host.key("\x06")
-  await host.type("archival-needle")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.type("/test-tree")
-  await host.key("\r")
-  assert.doesNotMatch(await host.frame(), /archival-needle/)
-  await host.key("\x06")
-  await host.type("archival-needle")
-  assert.match(await host.frame(), /No matches/)
-})
+  await host.key("\x06");
+  await host.type("archival-needle");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.reload();
+  assert.doesNotMatch(await host.frame(), /archival-needle/);
+  await host.key("\x06");
+  await host.type("archival-needle");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.type("/test-tree");
+  await host.key("\r");
+  assert.doesNotMatch(await host.frame(), /archival-needle/);
+  await host.key("\x06");
+  await host.type("archival-needle");
+  assert.match(await host.frame(), /No matches/);
+});
 
 test("retained aborted and failed calls keep Pi's historical error display", async (t) => {
   const host = await openNativeHost(t, {
@@ -1243,13 +1184,13 @@ test("retained aborted and failed calls keep Pi's historical error display", asy
     persistSession: true,
     rows: 44,
     keybindings: { "tui.altScreen.search": "ctrl+f" },
-  })
-  await writeFile(join(host.directory, "seed.txt"), "seed output")
-  host.queueResponse(delta("", "seed.txt"), finish("tool_calls"), done)
-  host.queueResponse(delta("Done"), finish(), done)
-  await host.type("Read seed")
-  await host.key("\r")
-  await host.settled()
+  });
+  await writeFile(join(host.directory, "seed.txt"), "seed output");
+  host.queueResponse(delta("", "seed.txt"), finish("tool_calls"), done);
+  host.queueResponse(delta("Done"), finish(), done);
+  await host.type("Read seed");
+  await host.key("\r");
+  await host.settled();
   const assistant = host.session.sessionManager
     .getBranch()
     .find(
@@ -1257,14 +1198,10 @@ test("retained aborted and failed calls keep Pi's historical error display", asy
         entry.type === "message" &&
         entry.message.role === "assistant" &&
         entry.message.content.some((part) => part.type === "toolCall"),
-    )
-  assert(
-    assistant?.type === "message" && assistant.message.role === "assistant",
-  )
-  const call = assistant.message.content.find(
-    (part) => part.type === "toolCall",
-  )
-  assert(call?.type === "toolCall")
+    );
+  assert(assistant?.type === "message" && assistant.message.role === "assistant");
+  const call = assistant.message.content.find((part) => part.type === "toolCall");
+  assert(call?.type === "toolCall");
   for (const [stopReason, path, errorMessage] of [
     ["aborted", "abort-needle", undefined],
     ["error", "error-needle", "Historical failure"],
@@ -1274,25 +1211,19 @@ test("retained aborted and failed calls keep Pi's historical error display", asy
       stopReason,
       ...(errorMessage ? { errorMessage } : {}),
       content: [{ ...call, id: path, arguments: { path } }],
-    })
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
+    });
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
 
-  await host.key("\x06")
-  await host.type("abort-needle")
-  assert.match(await host.frame(), /1\/1/)
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /Operation aborted/,
-  )
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("error-needle")
-  assert.match(await host.frame(), /1\/1/)
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /Historical failure/,
-  )
-})
+  await host.key("\x06");
+  await host.type("abort-needle");
+  assert.match(await host.frame(), /1\/1/);
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /Operation aborted/);
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("error-needle");
+  assert.match(await host.frame(), /1\/1/);
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /Historical failure/);
+});

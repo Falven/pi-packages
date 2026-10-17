@@ -1,9 +1,9 @@
-import assert from "node:assert/strict"
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import test from "node:test"
-import { createReadToolDefinition } from "@earendil-works/pi-coding-agent"
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { createReadToolDefinition } from "@earendil-works/pi-coding-agent";
 import {
   getCapabilities,
   getNativeClipboard,
@@ -11,30 +11,20 @@ import {
   stripTerminalSequences,
   Text,
   type NativeClipboard,
-} from "@earendil-works/pi-tui"
-import { openNativeHost } from "../../../fixtures/native-host.ts"
+} from "@earendil-works/pi-tui";
+import { openNativeHost } from "../../../fixtures/native-host.ts";
 
 /* oxlint-disable eslint/no-control-regex -- Assert Pi's native Kitty image sequences. */
 
-const chat = new URL("../src/index.ts", import.meta.url).pathname
-const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url)
-  .pathname
-const composer = new URL("../../pi-composer/src/index.ts", import.meta.url)
-  .pathname
-const attachments = new URL(
-  "../../pi-attachments/src/index.ts",
-  import.meta.url,
-).pathname
-const skills = new URL(
-  "../../pi-skill-references/src/index.ts",
-  import.meta.url,
-).pathname
-const acceptance = new URL(
-  "../../pi-composer/fixtures/mixed-acceptance.ts",
-  import.meta.url,
-).pathname
+const chat = new URL("../src/index.ts", import.meta.url).pathname;
+const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url).pathname;
+const composer = new URL("../../pi-composer/src/index.ts", import.meta.url).pathname;
+const attachments = new URL("../../pi-attachments/src/index.ts", import.meta.url).pathname;
+const skills = new URL("../../pi-skill-references/src/index.ts", import.meta.url).pathname;
+const acceptance = new URL("../../pi-composer/fixtures/mixed-acceptance.ts", import.meta.url)
+  .pathname;
 const png =
-  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg=="
+  "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAADUlEQVR4nGP4zwAE/wEHAAH/4iOeWQAAAABJRU5ErkJggg==";
 const call = {
   event: {
     choices: [
@@ -55,34 +45,26 @@ const call = {
       },
     ],
   },
-}
+};
 const finish = (reason = "stop") => ({
   event: { choices: [{ index: 0, delta: {}, finish_reason: reason }] },
-})
-const done = { event: "[DONE]" }
-const responseMessage = (
-  id: string,
-  phase: "commentary" | "final_answer",
-  text = "",
-) => ({
+});
+const done = { event: "[DONE]" };
+const responseMessage = (id: string, phase: "commentary" | "final_answer", text = "") => ({
   id,
   type: "message",
   role: "assistant",
   status: text ? "completed" : "in_progress",
   phase,
   content: text ? [{ type: "output_text", text, annotations: [] }] : [],
-})
-const started = (
-  index: number,
-  id: string,
-  phase: "commentary" | "final_answer",
-) => ({
+});
+const started = (index: number, id: string, phase: "commentary" | "final_answer") => ({
   event: {
     type: "response.output_item.added",
     output_index: index,
     item: responseMessage(id, phase),
   },
-})
+});
 const textDelta = (index: number, text: string) => ({
   event: {
     type: "response.output_text.delta",
@@ -90,64 +72,50 @@ const textDelta = (index: number, text: string) => ({
     content_index: 0,
     delta: text,
   },
-})
-const ended = (
-  index: number,
-  id: string,
-  phase: "commentary" | "final_answer",
-  text: string,
-) => ({
+});
+const ended = (index: number, id: string, phase: "commentary" | "final_answer", text: string) => ({
   event: {
     type: "response.output_item.done",
     output_index: index,
     item: responseMessage(id, phase, text),
   },
-})
+});
 const completed = {
   event: { type: "response.completed", response: { status: "completed" } },
-}
+};
 const completion = (delta: Record<string, unknown>) => ({
   event: {
-    choices: [
-      { index: 0, delta: { role: "assistant", ...delta }, finish_reason: null },
-    ],
+    choices: [{ index: 0, delta: { role: "assistant", ...delta }, finish_reason: null }],
   },
-})
+});
 const toolCalls = (paths: string[], names: string[]) =>
   paths.map((path, index) => ({
     index,
     id: `mixed-${path}`,
     type: "function",
     function: { name: names[index], arguments: JSON.stringify({ path }) },
-  }))
+  }));
 
 async function skillCatalog(t: Parameters<typeof openNativeHost>[0]) {
-  const directory = await mkdtemp(join(tmpdir(), "pi-chat-mixed-skill-"))
-  t.after(() => rm(directory, { recursive: true, force: true }))
-  await mkdir(join(directory, "review"))
+  const directory = await mkdtemp(join(tmpdir(), "pi-chat-mixed-skill-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await mkdir(join(directory, "review"));
   await writeFile(
     join(directory, "review", "SKILL.md"),
     "---\nname: review\ndescription: Review mixed requests\n---\nReview the mixed request exactly once.\n",
-  )
-  return directory
+  );
+  return directory;
 }
 
 function writableClipboard(
   clipboard: NativeClipboard | undefined,
-): asserts clipboard is NativeClipboard &
-  Required<Pick<NativeClipboard, "setText">> {
-  assert(clipboard?.setText)
+): asserts clipboard is NativeClipboard & Required<Pick<NativeClipboard, "setText">> {
+  assert(clipboard?.setText);
 }
 
 for (const [name, paths] of [
-  [
-    "chat first",
-    [chat, composer, skills, attachments, acceptance, copyExtension],
-  ],
-  [
-    "chat last",
-    [copyExtension, composer, attachments, skills, acceptance, chat],
-  ],
+  ["chat first", [chat, composer, skills, attachments, acceptance, copyExtension]],
+  ["chat last", [copyExtension, composer, attachments, skills, acceptance, chat]],
 ] as const) {
   test(`mixed ${name} session keeps the draft, native dock, and streaming final`, async (t) => {
     const host = await openNativeHost(t, {
@@ -161,13 +129,13 @@ for (const [name, paths] of [
         "tui.altScreen.search": "ctrl+f",
         "app.tools.expand": "ctrl+e",
       },
-    })
-    const image = join(host.directory, "diagram.png")
-    await writeFile(image, Buffer.from(png, "base64"))
-    await host.attachFile(image)
-    await t.waitFor(() => assert.match(host.ui.getEditorText(), /diagram\.png/))
-    const reference = host.ui.getEditorText().trim()
-    host.ui.setEditorText(`**Review** /skill:review\n${reference}`)
+    });
+    const image = join(host.directory, "diagram.png");
+    await writeFile(image, Buffer.from(png, "base64"));
+    await host.attachFile(image);
+    await t.waitFor(() => assert.match(host.ui.getEditorText(), /diagram\.png/));
+    const reference = host.ui.getEditorText().trim();
+    host.ui.setEditorText(`**Review** /skill:review\n${reference}`);
     host.queueResponse(
       started(0, "progress", "commentary"),
       textDelta(0, "Mixed progress"),
@@ -177,11 +145,11 @@ for (const [name, paths] of [
       { pause: true },
       ended(4, "final", "final_answer", "Mixed answer"),
       completed,
-    )
-    await host.key("\r")
-    await t.waitFor(() => assert.equal(host.requests.length, 1))
-    const streaming = await host.frame()
-    assert.match(streaming, /Worked for \d+m \d+s ▶/)
+    );
+    await host.key("\r");
+    await t.waitFor(() => assert.equal(host.requests.length, 1));
+    const streaming = await host.frame();
+    assert.match(streaming, /Worked for \d+m \d+s ▶/);
     assert.equal(
       host
         .screenLines()
@@ -189,90 +157,76 @@ for (const [name, paths] of [
         .find((line) => /Worked for \d+m \d+s ▶/.test(line))
         ?.indexOf("Worked"),
       name === "chat first" ? 0 : 1,
-    )
-    assert.match(streaming, /Mixed answer/)
-    assert.doesNotMatch(streaming, /Mixed progress/)
-    assert.match(streaming, /Mixed acceptance fixture ready/)
-    const request = JSON.stringify(host.requests[0])
-    assert.equal(request.match(/<skill name=\\?"review/g)?.length, 1)
-    assert.match(request, /Review the mixed request exactly once/)
-    assert.match(request, /iVBORw0KGgo/)
-    assert.doesNotMatch(request, /Worked|Mixed progress|Mixed answer/)
-    await host.key("\x05")
-    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
-    assert.match(await host.frame(), /Mixed progress/)
-    await host.key("\x0f")
-    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/)
-    host.resumeResponse()
-    await host.settled()
-    assert.match(await host.frame(), /Mixed answer/)
-    assert.match(await host.frame(), /Mixed progress/)
-    await host.key("\x05")
-    assert.match(await host.frame(), /Worked for \d+m \d+s ▶/)
-    assert.doesNotMatch(await host.frame(), /Mixed progress/)
-    assert.match(await host.frame(), /Mixed answer/)
-    assert.match(JSON.stringify(host.session.messages), /diagram\.png/)
-    await host.key("\x1b[112;7u")
-    assert.match(await host.frame(), /Review mixed request/)
-    await host.key("\x1b")
-    await host.type("x")
-    assert.equal(host.ui.getEditorText(), "x")
-    const file = host.session.sessionFile!
-    await host.reload()
-    assert.match(await host.frame(), /Mixed answer/)
-    assert.equal(host.ui.getEditorText(), "x")
-    assert.equal(host.ui.setTheme("light").success, true)
-    assert.match(await host.frame(), /Mixed acceptance fixture ready/)
-    host.session.sessionManager.appendCompaction(
-      "Compressed mixed session",
-      null,
-      100,
-    )
-    await host.runtime.newSession()
-    await host.runtime.switchSession(file)
-    assert.doesNotMatch(await host.frame(), /Mixed progress/)
-    await host.key("\x06")
-    await host.type("Mixed progress")
-    assert.match(await host.frame(), /1\/1/)
-    assert.match(
-      host.screenLines().map(stripTerminalSequences).join("\n"),
-      /Mixed progress/,
-    )
-    await host.key("\x1b")
-    assert.equal(host.switchMode("regular"), true)
-    await host.frame()
-    assert.equal(host.switchMode("fullscreen"), true)
-    assert.match(await host.frame(), /Mixed progress/)
-    assert.equal(host.requests.length, 1)
-  })
+    );
+    assert.match(streaming, /Mixed answer/);
+    assert.doesNotMatch(streaming, /Mixed progress/);
+    assert.match(streaming, /Mixed acceptance fixture ready/);
+    const request = JSON.stringify(host.requests[0]);
+    assert.equal(request.match(/<skill name=\\?"review/g)?.length, 1);
+    assert.match(request, /Review the mixed request exactly once/);
+    assert.match(request, /iVBORw0KGgo/);
+    assert.doesNotMatch(request, /Worked|Mixed progress|Mixed answer/);
+    await host.key("\x05");
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/);
+    assert.match(await host.frame(), /Mixed progress/);
+    await host.key("\x0f");
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▼/);
+    host.resumeResponse();
+    await host.settled();
+    assert.match(await host.frame(), /Mixed answer/);
+    assert.match(await host.frame(), /Mixed progress/);
+    await host.key("\x05");
+    assert.match(await host.frame(), /Worked for \d+m \d+s ▶/);
+    assert.doesNotMatch(await host.frame(), /Mixed progress/);
+    assert.match(await host.frame(), /Mixed answer/);
+    assert.match(JSON.stringify(host.session.messages), /diagram\.png/);
+    await host.key("\x1b[112;7u");
+    assert.match(await host.frame(), /Review mixed request/);
+    await host.key("\x1b");
+    await host.type("x");
+    assert.equal(host.ui.getEditorText(), "x");
+    const file = host.session.sessionFile!;
+    await host.reload();
+    assert.match(await host.frame(), /Mixed answer/);
+    assert.equal(host.ui.getEditorText(), "x");
+    assert.equal(host.ui.setTheme("light").success, true);
+    assert.match(await host.frame(), /Mixed acceptance fixture ready/);
+    host.session.sessionManager.appendCompaction("Compressed mixed session", null, 100);
+    await host.runtime.newSession();
+    await host.runtime.switchSession(file);
+    assert.doesNotMatch(await host.frame(), /Mixed progress/);
+    await host.key("\x06");
+    await host.type("Mixed progress");
+    assert.match(await host.frame(), /1\/1/);
+    assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /Mixed progress/);
+    await host.key("\x1b");
+    assert.equal(host.switchMode("regular"), true);
+    await host.frame();
+    assert.equal(host.switchMode("fullscreen"), true);
+    assert.match(await host.frame(), /Mixed progress/);
+    assert.equal(host.requests.length, 1);
+  });
 }
 
 test("mixed live agent activity keeps native and custom tools, queued requests, search, and copy operable", async (t) => {
-  const clipboard = getNativeClipboard()
-  writableClipboard(clipboard)
-  let copied = ""
+  const clipboard = getNativeClipboard();
+  writableClipboard(clipboard);
+  let copied = "";
   t.mock.method(clipboard, "setText", async (text: string) => {
-    copied = text
-  })
-  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"]
-  const saved = remote.map((name) => process.env[name])
+    copied = text;
+  });
+  const remote = ["SSH_CONNECTION", "SSH_CLIENT", "MOSH_CONNECTION"];
+  const saved = remote.map((name) => process.env[name]);
   t.after(() =>
     remote.forEach((name, index) => {
-      if (saved[index] === undefined) delete process.env[name]
-      else process.env[name] = saved[index]
+      if (saved[index] === undefined) delete process.env[name];
+      else process.env[name] = saved[index];
     }),
-  )
-  for (const name of remote) delete process.env[name]
-  const catalog = await skillCatalog(t)
+  );
+  for (const name of remote) delete process.env[name];
+  const catalog = await skillCatalog(t);
   const host = await openNativeHost(t, {
-    extensionPaths: [
-      copyExtension,
-      composer,
-      attachments,
-      skills,
-      acceptance,
-      chat,
-    ],
+    extensionPaths: [copyExtension, composer, attachments, skills, acceptance, chat],
     skillPaths: [catalog],
     rows: 52,
     settings: {
@@ -297,18 +251,18 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
           }),
           renderCall: () => new Text("CUSTOM CALL", 0, 0),
           renderResult: () => new Text("CUSTOM RESULT", 0, 0),
-        })
+        });
         pi.registerMarkdownTransformer((markdown, context) =>
           context.messageType === "assistant"
             ? markdown.replaceAll("Recovered answer", "Shown answer\n\n")
             : markdown,
-        )
+        );
       },
     ],
-  })
-  await writeFile(join(host.directory, "one.txt"), "native result")
-  await writeFile(join(host.directory, "two.txt"), "hidden telescope")
-  await writeFile(join(host.directory, "three.txt"), "later result")
+  });
+  await writeFile(join(host.directory, "one.txt"), "native result");
+  await writeFile(join(host.directory, "two.txt"), "hidden telescope");
+  await writeFile(join(host.directory, "three.txt"), "later result");
   host.queueResponse(
     completion({
       reasoning_content: "Mixed thought preview",
@@ -321,7 +275,7 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
     { pause: true },
     finish("tool_calls"),
     done,
-  )
+  );
   host.queueResponse(
     completion({
       content: "After steering",
@@ -329,8 +283,8 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
     }),
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(completion({ content: "First answer" }), finish(), done)
+  );
+  host.queueResponse(completion({ content: "First answer" }), finish(), done);
   host.queueResponse(
     completion({
       content: "Followup work",
@@ -338,179 +292,153 @@ test("mixed live agent activity keeps native and custom tools, queued requests, 
     }),
     finish("tool_calls"),
     done,
-  )
-  host.queueResponse(completion({ content: "Second answer" }), finish(), done)
-  host.ui.setEditorText("Review /skill:review")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 1))
-  assert.match(await host.frame(), /Mixed thought preview/)
-  await host.session.steer("Same queued text")
-  await host.session.followUp("Same queued text")
-  host.resumeResponse()
-  await host.settled()
-  const frame = await host.frame()
-  assert.equal(host.requests.length, 5)
-  assert.match(frame, /First answer/)
-  assert.match(frame, /Second answer/)
-  assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2)
-  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 2)
-  assert.equal((frame.match(/Same queued text/g) ?? []).length, 2)
-  assert.doesNotMatch(frame, /Before steering|After steering|Followup work/)
-  assert.equal(
-    (JSON.stringify(host.requests[0]).match(/<skill name=\\?"review/g) ?? [])
-      .length,
-    1,
-  )
+  );
+  host.queueResponse(completion({ content: "Second answer" }), finish(), done);
+  host.ui.setEditorText("Review /skill:review");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 1));
+  assert.match(await host.frame(), /Mixed thought preview/);
+  await host.session.steer("Same queued text");
+  await host.session.followUp("Same queued text");
+  host.resumeResponse();
+  await host.settled();
+  const frame = await host.frame();
+  assert.equal(host.requests.length, 5);
+  assert.match(frame, /First answer/);
+  assert.match(frame, /Second answer/);
+  assert.equal((frame.match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2);
+  assert.equal((frame.match(/\[Copy response\]/g) ?? []).length, 2);
+  assert.equal((frame.match(/Same queued text/g) ?? []).length, 2);
+  assert.doesNotMatch(frame, /Before steering|After steering|Followup work/);
+  assert.equal((JSON.stringify(host.requests[0]).match(/<skill name=\\?"review/g) ?? []).length, 1);
   const copyAnswer = async (answer: string, expected: string) => {
-    const lines = host.screenLines().map(stripTerminalSequences)
-    const answerRow = lines.findIndex((line) => line.includes(answer))
+    const lines = host.screenLines().map(stripTerminalSequences);
+    const answerRow = lines.findIndex((line) => line.includes(answer));
     const footerRow = lines.findIndex(
-      (line, index) =>
-        index > answerRow && /\[(?:Copy response|Copied)\]/.test(line),
-    )
-    assert(answerRow >= 0 && footerRow > answerRow)
-    assert.equal(lines[footerRow - 1]!.trim(), "")
-    assert.notEqual(lines[footerRow - 2]!.trim(), "")
-    const column = lines[footerRow]!.indexOf("[") + 1
-    copied = ""
-    await host.key(`\x1b[<0;${column};${footerRow + 1}M`)
-    await host.key(`\x1b[<0;${column};${footerRow + 1}m`)
-    await t.waitFor(() => assert.equal(copied, expected))
-    await host.frame()
-  }
-  await copyAnswer("First answer", "First answer")
-  await copyAnswer("Second answer", "Second answer")
-  await copyAnswer("First answer", "First answer")
-  assert.equal(
-    ((await host.frame()).match(/Worked for \d+m \d+s ▶/g) ?? []).length,
-    2,
-  )
-  await host.key("\x1b")
+      (line, index) => index > answerRow && /\[(?:Copy response|Copied)\]/.test(line),
+    );
+    assert(answerRow >= 0 && footerRow > answerRow);
+    assert.equal(lines[footerRow - 1]!.trim(), "");
+    assert.notEqual(lines[footerRow - 2]!.trim(), "");
+    const column = lines[footerRow]!.indexOf("[") + 1;
+    copied = "";
+    await host.key(`\x1b[<0;${column};${footerRow + 1}M`);
+    await host.key(`\x1b[<0;${column};${footerRow + 1}m`);
+    await t.waitFor(() => assert.equal(copied, expected));
+    await host.frame();
+  };
+  await copyAnswer("First answer", "First answer");
+  await copyAnswer("Second answer", "Second answer");
+  await copyAnswer("First answer", "First answer");
+  assert.equal(((await host.frame()).match(/Worked for \d+m \d+s ▶/g) ?? []).length, 2);
+  await host.key("\x1b");
 
   const row = host
     .screenLines()
-    .findIndex((line) =>
-      /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)),
-    )
-  assert(row >= 0)
-  await host.key(`\x1b[<0;2;${row + 1}M`)
-  await host.key(`\x1b[<0;2;${row + 1}m`)
-  await host.frame()
-  assert.match(await host.frame(), /Mixed thought preview/)
+    .findIndex((line) => /Worked for \d+m \d+s ▶/.test(stripTerminalSequences(line)));
+  assert(row >= 0);
+  await host.key(`\x1b[<0;2;${row + 1}M`);
+  await host.key(`\x1b[<0;2;${row + 1}m`);
+  await host.frame();
+  assert.match(await host.frame(), /Mixed thought preview/);
   const groupRow = host
     .screenLines()
     .findIndex((line) =>
-      stripTerminalSequences(line).includes(
-        "Loaded a tool, called a tool, read files",
-      ),
-    )
-  assert(groupRow >= 0)
-  await host.key(`\x1b[<0;2;${groupRow + 1}M`)
-  await host.key(`\x1b[<0;2;${groupRow + 1}m`)
-  await host.key("\x1bg")
-  const expanded = await host.frame()
-  assert.match(expanded, /Loaded a tool, called a tool, read files ▼/)
-  assert.match(expanded, /Read one\.txt >/)
-  assert.match(expanded, /Called mystery >/)
-  assert.doesNotMatch(
-    expanded,
-    /CUSTOM CALL|CUSTOM RESULT|native result|hidden telescope/,
-  )
+      stripTerminalSequences(line).includes("Loaded a tool, called a tool, read files"),
+    );
+  assert(groupRow >= 0);
+  await host.key(`\x1b[<0;2;${groupRow + 1}M`);
+  await host.key(`\x1b[<0;2;${groupRow + 1}m`);
+  await host.key("\x1bg");
+  const expanded = await host.frame();
+  assert.match(expanded, /Loaded a tool, called a tool, read files ▼/);
+  assert.match(expanded, /Read one\.txt >/);
+  assert.match(expanded, /Called mystery >/);
+  assert.doesNotMatch(expanded, /CUSTOM CALL|CUSTOM RESULT|native result|hidden telescope/);
   const nativeRow = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"))
-  assert(nativeRow >= 0)
-  await host.key(`\x1b[<0;2;${nativeRow + 1}M`)
-  await host.key(`\x1b[<0;2;${nativeRow + 1}m`)
-  assert.doesNotMatch(await host.frame(), /native result/)
+    .findIndex((line) => stripTerminalSequences(line).includes("Read one.txt"));
+  assert(nativeRow >= 0);
+  await host.key(`\x1b[<0;2;${nativeRow + 1}M`);
+  await host.key(`\x1b[<0;2;${nativeRow + 1}m`);
+  assert.doesNotMatch(await host.frame(), /native result/);
   const nativeCall = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"))
-  assert(nativeCall >= 0)
-  await host.key(`\x1b[<0;2;${nativeCall + 1}M`)
-  await host.key(`\x1b[<0;2;${nativeCall + 1}m`)
-  assert.match(await host.frame(), /native result/)
-  assert.doesNotMatch(
-    await host.frame(),
-    /hidden telescope|CUSTOM CALL|CUSTOM RESULT/,
-  )
+    .findIndex((line) => stripTerminalSequences(line).includes("read one.txt"));
+  assert(nativeCall >= 0);
+  await host.key(`\x1b[<0;2;${nativeCall + 1}M`);
+  await host.key(`\x1b[<0;2;${nativeCall + 1}m`);
+  assert.match(await host.frame(), /native result/);
+  assert.doesNotMatch(await host.frame(), /hidden telescope|CUSTOM CALL|CUSTOM RESULT/);
 
-  await host.key("\x06")
-  await host.type("hidden telescope")
-  assert.match(await host.frame(), /1\/1/)
-  assert.match(
-    host.screenLines().map(stripTerminalSequences).join("\n"),
-    /hidden telescope/,
-  )
-  assert.doesNotMatch(await host.frame(), /CUSTOM CALL|CUSTOM RESULT/)
-  await host.key("\x1b")
-  const revealed = await host.frame()
-  assert.match(revealed, /Called mystery ▼[\s\S]*hidden telescope/)
-  assert.doesNotMatch(revealed, /CUSTOM CALL|CUSTOM RESULT/)
+  await host.key("\x06");
+  await host.type("hidden telescope");
+  assert.match(await host.frame(), /1\/1/);
+  assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /hidden telescope/);
+  assert.doesNotMatch(await host.frame(), /CUSTOM CALL|CUSTOM RESULT/);
+  await host.key("\x1b");
+  const revealed = await host.frame();
+  assert.match(revealed, /Called mystery ▼[\s\S]*hidden telescope/);
+  assert.doesNotMatch(revealed, /CUSTOM CALL|CUSTOM RESULT/);
   const answerRow = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("First answer"))
-  assert(answerRow >= 0)
+    .findIndex((line) => stripTerminalSequences(line).includes("First answer"));
+  assert(answerRow >= 0);
   const footerRow = host
     .screenLines()
     .findIndex(
       (line, index) =>
-        index > answerRow &&
-        /\[(?:Copy response|Copied)\]/.test(stripTerminalSequences(line)),
-    )
-  assert(footerRow > answerRow)
-  await host.key(`\x1b[<0;2;${answerRow + 1}M`)
-  await host.key(`\x1b[<32;14;${footerRow + 1}M`)
-  await host.key(`\x1b[<0;14;${footerRow + 1}m`)
-  await host.key("\x18")
-  await t.waitFor(() => assert.equal(copied, "First answer"))
+        index > answerRow && /\[(?:Copy response|Copied)\]/.test(stripTerminalSequences(line)),
+    );
+  assert(footerRow > answerRow);
+  await host.key(`\x1b[<0;2;${answerRow + 1}M`);
+  await host.key(`\x1b[<32;14;${footerRow + 1}M`);
+  await host.key(`\x1b[<0;14;${footerRow + 1}m`);
+  await host.key("\x18");
+  await t.waitFor(() => assert.equal(copied, "First answer"));
 
-  await host.key("\x1b")
+  await host.key("\x1b");
   host.queueResponse(
     completion({ content: "Partial interrupted" }),
     { pause: true },
     finish(),
     done,
-  )
-  host.ui.setEditorText("Interrupt this request")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 6))
-  assert.match(await host.frame(), /Partial interrupted/)
-  await host.session.abort()
-  assert.match(await host.frame(), /Operation aborted/)
+  );
+  host.ui.setEditorText("Interrupt this request");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 6));
+  assert.match(await host.frame(), /Partial interrupted/);
+  await host.session.abort();
+  assert.match(await host.frame(), /Operation aborted/);
 
-  host.queueResponse({ status: 503 })
-  host.queueResponse(
-    completion({ content: "Recovered answer" }),
-    finish(),
-    done,
-  )
-  host.ui.setEditorText("Retry this request")
-  await host.key("\r")
-  await t.waitFor(() => assert.equal(host.requests.length, 8))
-  await host.settled()
-  assert.match(await host.frame(), /Shown answer/)
-  assert.match(JSON.stringify(host.session.messages.at(-1)), /Recovered answer/)
-  await copyAnswer("Shown answer", "Recovered answer")
-  await host.reload()
-  await host.frame()
-  await host.key("\x06")
-  await host.type("Copy response")
-  assert.match(await host.frame(), /No matches/)
-  await host.key("\x1b")
-  await host.key("\x06")
-  await host.type("First answer")
-  assert.match(await host.frame(), /1\/1/)
-  await host.key("\x1b")
-  await host.frame()
-  await copyAnswer("First answer", "First answer")
-  assert.doesNotMatch(JSON.stringify(host.requests), /Copy response|\[Copied\]/)
-})
+  host.queueResponse({ status: 503 });
+  host.queueResponse(completion({ content: "Recovered answer" }), finish(), done);
+  host.ui.setEditorText("Retry this request");
+  await host.key("\r");
+  await t.waitFor(() => assert.equal(host.requests.length, 8));
+  await host.settled();
+  assert.match(await host.frame(), /Shown answer/);
+  assert.match(JSON.stringify(host.session.messages.at(-1)), /Recovered answer/);
+  await copyAnswer("Shown answer", "Recovered answer");
+  await host.reload();
+  await host.frame();
+  await host.key("\x06");
+  await host.type("Copy response");
+  assert.match(await host.frame(), /No matches/);
+  await host.key("\x1b");
+  await host.key("\x06");
+  await host.type("First answer");
+  assert.match(await host.frame(), /1\/1/);
+  await host.key("\x1b");
+  await host.frame();
+  await copyAnswer("First answer", "First answer");
+  assert.doesNotMatch(JSON.stringify(host.requests), /Copy response|\[Copied\]/);
+});
 
 test("revealed retained tool images follow native image settings", async (t) => {
-  const capabilities = getCapabilities()
-  setCapabilities({ ...capabilities, images: "kitty" })
-  t.after(() => setCapabilities(capabilities))
+  const capabilities = getCapabilities();
+  setCapabilities({ ...capabilities, images: "kitty" });
+  t.after(() => setCapabilities(capabilities));
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
     persistSession: true,
@@ -530,61 +458,59 @@ test("revealed retained tool images follow native image settings", async (t) => 
           }),
         }),
     ],
-  })
-  host.queueResponse(call, finish("tool_calls"), done)
+  });
+  host.queueResponse(call, finish("tool_calls"), done);
   host.queueResponse(
     {
       event: {
-        choices: [
-          { index: 0, delta: { content: "Done" }, finish_reason: null },
-        ],
+        choices: [{ index: 0, delta: { content: "Done" }, finish_reason: null }],
       },
     },
     finish(),
     done,
-  )
-  await host.type("Read the image")
-  await host.key("\r")
-  await host.settled()
-  const file = host.session.sessionFile!
-  host.session.sessionManager.appendCompaction("Compressed context", null, 100)
-  await host.runtime.newSession()
-  await host.runtime.switchSession(file)
-  await host.key("\x06")
-  await host.type("image-needle")
-  assert.match(await host.frame(), /1\/1/)
-  assert.match(await host.frame(), /Called read ▼/)
-  assert.doesNotMatch(await host.frame(), /Called a tool/)
-  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/)
-  await host.key("\x1b")
+  );
+  await host.type("Read the image");
+  await host.key("\r");
+  await host.settled();
+  const file = host.session.sessionFile!;
+  host.session.sessionManager.appendCompaction("Compressed context", null, 100);
+  await host.runtime.newSession();
+  await host.runtime.switchSession(file);
+  await host.key("\x06");
+  await host.type("image-needle");
+  assert.match(await host.frame(), /1\/1/);
+  assert.match(await host.frame(), /Called read ▼/);
+  assert.doesNotMatch(await host.frame(), /Called a tool/);
+  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/);
+  await host.key("\x1b");
 
-  await host.type("/settings")
-  await host.key("\r")
-  assert.match(await host.frame(), /Show images/)
-  await host.key("\x1b[B")
-  await host.key("\r")
-  await host.key("\x1b")
-  const hidden = host.screenLines().map(stripTerminalSequences).join("\n")
-  assert.match(hidden, /image-needle/)
-  assert.doesNotMatch(host.screenLines().join("\n"), /\x1b_G/)
+  await host.type("/settings");
+  await host.key("\r");
+  assert.match(await host.frame(), /Show images/);
+  await host.key("\x1b[B");
+  await host.key("\r");
+  await host.key("\x1b");
+  const hidden = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(hidden, /image-needle/);
+  assert.doesNotMatch(host.screenLines().join("\n"), /\x1b_G/);
 
-  await host.type("/settings")
-  await host.key("\r")
-  await host.key("\x1b[B")
-  await host.key("\r")
-  await host.key("\x1b")
-  await host.frame()
-  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/)
+  await host.type("/settings");
+  await host.key("\r");
+  await host.key("\x1b[B");
+  await host.key("\r");
+  await host.key("\x1b");
+  await host.frame();
+  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=60/);
 
-  await host.type("/settings")
-  await host.key("\r")
-  await host.key("\x1b[B")
-  await host.key("\x1b[B")
-  await host.key("\r")
-  await host.key("\x1b")
-  await host.frame()
-  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=80/)
-  assert.equal(host.ui.setTheme("light").success, true)
-  await host.frame()
-  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=80/)
-})
+  await host.type("/settings");
+  await host.key("\r");
+  await host.key("\x1b[B");
+  await host.key("\x1b[B");
+  await host.key("\r");
+  await host.key("\x1b");
+  await host.frame();
+  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=80/);
+  assert.equal(host.ui.setTheme("light").success, true);
+  await host.frame();
+  assert.match(host.screenLines().join("\n"), /\x1b_G[^;]*c=80/);
+});

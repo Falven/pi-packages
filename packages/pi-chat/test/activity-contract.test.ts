@@ -1,11 +1,11 @@
-import assert from "node:assert/strict"
-import test from "node:test"
+import assert from "node:assert/strict";
+import test from "node:test";
 import {
   readActivity,
   readActivityUpdate,
   type ActivityUpdate,
-} from "../src/tool-adapters/activity-contract.ts"
-import { activityDetails } from "../../../fixtures/activity.ts"
+} from "../src/tool-adapters/activity-contract.ts";
+import { activityDetails } from "../../../fixtures/activity.ts";
 
 const update: ActivityUpdate = {
   version: 1,
@@ -24,15 +24,15 @@ const update: ActivityUpdate = {
       output: "hello",
     },
   ],
-}
+};
 
 test("activity binds semantic facts to processed content without binding image bytes", () => {
   const content = [
     { type: "text" as const, text: "transport result" },
     { type: "image" as const, data: "original", mimeType: "image/png" },
-  ]
-  const details = activityDetails(update, content, ["command"])
-  assert.deepEqual(readActivity({ content, details })?.update, update)
+  ];
+  const details = activityDetails(update, content, ["command"]);
+  assert.deepEqual(readActivity({ content, details })?.update, update);
   assert.ok(
     readActivity({
       content: [
@@ -50,25 +50,21 @@ test("activity binds semantic facts to processed content without binding image b
       ],
       details,
     }),
-  )
-  assert.equal(
-    readActivity({ content: [{ type: "text", text: "redacted" }], details }),
-    undefined,
-  )
-  const changed = structuredClone(details)
-  changed.activity.update.operations[0]!.output = "forged body"
-  assert.equal(readActivity({ content, details: changed }), undefined)
-})
+  );
+  assert.equal(readActivity({ content: [{ type: "text", text: "redacted" }], details }), undefined);
+  const changed = structuredClone(details);
+  changed.activity.update.operations[0]!.output = "forged body";
+  assert.equal(readActivity({ content, details: changed }), undefined);
+});
 
 test("explicit empty activity is valid while missing, unsupported and malformed facts are absent", () => {
-  const content = [{ type: "text" as const, text: "collected" }]
-  const empty = { ...update, operations: [] }
+  const content = [{ type: "text" as const, text: "collected" }];
+  const empty = { ...update, operations: [] };
   assert.deepEqual(
-    readActivity({ content, details: activityDetails(empty, content) })?.update
-      .operations,
+    readActivity({ content, details: activityDetails(empty, content) })?.update.operations,
     [],
-  )
-  assert.equal(readActivity({ content }), undefined)
+  );
+  assert.equal(readActivity({ content }), undefined);
   for (const invalid of [
     { ...update, version: 2 },
     { ...update, revision: -1 },
@@ -88,6 +84,6 @@ test("explicit empty activity is valid while missing, unsupported and malformed 
       }),
     ),
   ])
-    assert.equal(readActivityUpdate(invalid), undefined)
-  assert.equal(readActivityUpdate(update), update)
-})
+    assert.equal(readActivityUpdate(invalid), undefined);
+  assert.equal(readActivityUpdate(update), update);
+});

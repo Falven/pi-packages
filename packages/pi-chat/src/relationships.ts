@@ -2,51 +2,47 @@ import type {
   AgentSessionRuntime,
   SessionEntry,
   SessionManager,
-} from "@earendil-works/pi-coding-agent"
-import type { DeliveryKind } from "./agent-activity.ts"
-import type { MessagePhase } from "./provider-phase.ts"
+} from "@earendil-works/pi-coding-agent";
+import type { DeliveryKind } from "./agent-activity.ts";
+import type { MessagePhase } from "./provider-phase.ts";
 
-const customType = "pi-chat.relationship"
+const customType = "pi-chat.relationship";
 
 export type RelationshipFact =
   | {
-      version: 1
-      kind: "member"
-      requestId: string
-      sourceId: string
-      delivery?: DeliveryKind
+      version: 1;
+      kind: "member";
+      requestId: string;
+      sourceId: string;
+      delivery?: DeliveryKind;
     }
   | {
-      version: 1
-      kind: "settled"
-      requestId: string
-      sourceId: string
-      finalId?: string
-      finalParts?: number[]
-      cancelled: boolean
+      version: 1;
+      kind: "settled";
+      requestId: string;
+      sourceId: string;
+      finalId?: string;
+      finalParts?: number[];
+      cancelled: boolean;
     }
   | {
-      version: 1
-      kind: "phase"
-      requestId: string
-      sourceId: string
-      contentIndex: number
-      phase: MessagePhase
-    }
+      version: 1;
+      kind: "phase";
+      requestId: string;
+      sourceId: string;
+      contentIndex: number;
+      phase: MessagePhase;
+    };
 
-type Recorded = { id: string; fact: RelationshipFact }
+type Recorded = { id: string; fact: RelationshipFact };
 
 function certified(entry: SessionEntry): Recorded | undefined {
-  if (entry.type !== "custom" || entry.customType !== customType) return
-  const value: unknown = entry.data
-  if (!value || typeof value !== "object") return
-  const fact = value as Partial<RelationshipFact>
-  if (
-    fact.version !== 1 ||
-    typeof fact.requestId !== "string" ||
-    typeof fact.sourceId !== "string"
-  )
-    return
+  if (entry.type !== "custom" || entry.customType !== customType) return;
+  const value: unknown = entry.data;
+  if (!value || typeof value !== "object") return;
+  const fact = value as Partial<RelationshipFact>;
+  if (fact.version !== 1 || typeof fact.requestId !== "string" || typeof fact.sourceId !== "string")
+    return;
   if (fact.kind === "member") {
     if (
       fact.delivery !== undefined &&
@@ -54,8 +50,8 @@ function certified(entry: SessionEntry): Recorded | undefined {
       fact.delivery !== "steering" &&
       fact.delivery !== "follow-up"
     )
-      return
-    return { id: entry.id, fact: fact as RelationshipFact }
+      return;
+    return { id: entry.id, fact: fact as RelationshipFact };
   }
   if (
     fact.kind === "settled" &&
@@ -63,102 +59,89 @@ function certified(entry: SessionEntry): Recorded | undefined {
     (fact.finalId === undefined || typeof fact.finalId === "string") &&
     (fact.finalParts === undefined ||
       (Array.isArray(fact.finalParts) &&
-        fact.finalParts.every(
-          (index) => Number.isInteger(index) && index >= 0,
-        )))
+        fact.finalParts.every((index) => Number.isInteger(index) && index >= 0)))
   )
-    return { id: entry.id, fact: fact as RelationshipFact }
+    return { id: entry.id, fact: fact as RelationshipFact };
   if (
     fact.kind === "phase" &&
     Number.isInteger(fact.contentIndex) &&
     (fact.contentIndex as number) >= 0 &&
     (fact.phase === "commentary" || fact.phase === "final_answer")
   )
-    return { id: entry.id, fact: fact as RelationshipFact }
-  return undefined
+    return { id: entry.id, fact: fact as RelationshipFact };
+  return undefined;
 }
 
 export class RelationshipJournal {
-  private readonly facts: Recorded[] = []
-  private writeFailure?: Error
+  private readonly facts: Recorded[] = [];
+  private writeFailure?: Error;
 
   constructor(private readonly manager: SessionManager) {
     for (const entry of manager.getEntries()) {
-      const record = certified(entry)
-      if (record) this.facts.push(record)
+      const record = certified(entry);
+      if (record) this.facts.push(record);
     }
   }
 
   record(fact: RelationshipFact) {
-    if (this.writeFailure) throw this.writeFailure
+    if (this.writeFailure) throw this.writeFailure;
     try {
-      const id = this.manager.appendCustomEntry(customType, fact)
-      this.facts.push({ id, fact })
+      const id = this.manager.appendCustomEntry(customType, fact);
+      this.facts.push({ id, fact });
     } catch (cause) {
-      this.writeFailure = new Error(
-        "pi-chat could not persist an agent activity relationship",
-        {
-          cause,
-        },
-      )
-      throw this.writeFailure
+      this.writeFailure = new Error("pi-chat could not persist an agent activity relationship", {
+        cause,
+      });
+      throw this.writeFailure;
     }
   }
 
   active(branch: SessionEntry[]) {
-    const sources = new Map(branch.map((entry) => [entry.id, entry]))
-    return this.facts.flatMap(({ fact }) =>
-      this.survives(fact, sources) ? [fact] : [],
-    )
+    const sources = new Map(branch.map((entry) => [entry.id, entry]));
+    return this.facts.flatMap(({ fact }) => (this.survives(fact, sources) ? [fact] : []));
   }
 
   transferTo(manager: SessionManager) {
-    const sources = new Map(
-      manager.getBranch().map((entry) => [entry.id, entry]),
-    )
-    const copied = new Set(manager.getEntries().map((entry) => entry.id))
+    const sources = new Map(manager.getBranch().map((entry) => [entry.id, entry]));
+    const copied = new Set(manager.getEntries().map((entry) => entry.id));
     for (const { id, fact } of this.facts) {
       if (!copied.has(id) && this.survives(fact, sources)) {
         try {
-          manager.appendCustomEntry(customType, fact)
+          manager.appendCustomEntry(customType, fact);
         } catch (cause) {
           throw new Error("pi-chat could not persist fork relationships", {
             cause,
-          })
+          });
         }
       }
     }
   }
 
   private survives(fact: RelationshipFact, sources: Map<string, SessionEntry>) {
-    const request = sources.get(fact.requestId)
-    const source = sources.get(fact.sourceId)
+    const request = sources.get(fact.requestId);
+    const source = sources.get(fact.sourceId);
     if (
       request?.type !== "message" ||
       request.message.role !== "user" ||
       !source ||
       (source.type !== "message" && source.type !== "custom_message")
     )
-      return false
+      return false;
     if (fact.kind === "member" && fact.delivery)
-      return source.type === "message" && source.message.role === "user"
+      return source.type === "message" && source.message.role === "user";
     if (fact.kind === "settled" && fact.finalId) {
-      const final = sources.get(fact.finalId)
-      if (final?.type !== "message" || final.message.role !== "assistant")
-        return false
-      const content = final.message.content
-      return (
-        !fact.finalParts ||
-        fact.finalParts.every((index) => content[index]?.type === "text")
-      )
+      const final = sources.get(fact.finalId);
+      if (final?.type !== "message" || final.message.role !== "assistant") return false;
+      const content = final.message.content;
+      return !fact.finalParts || fact.finalParts.every((index) => content[index]?.type === "text");
     }
     if (fact.kind === "phase")
       return (
         source.type === "message" &&
         source.message.role === "assistant" &&
         source.message.content[fact.contentIndex]?.type === "text"
-      )
-    return true
+      );
+    return true;
   }
 }
 
@@ -170,61 +153,53 @@ export function carryObservedFork(
   // Pi copies only the selected ancestry; install the surviving facts before
   // its new runtime reads the forked manager and builds the initial chat.
   const runtime = host as unknown as {
-    fork: AgentSessionRuntime["fork"]
+    fork: AgentSessionRuntime["fork"];
     createRuntime: (options: {
-      sessionManager: SessionManager
-      sessionStartEvent?: { reason: string }
-    }) => Promise<unknown>
-  }
+      sessionManager: SessionManager;
+      sessionStartEvent?: { reason: string };
+    }) => Promise<unknown>;
+  };
   for (const name of ["fork", "createRuntime"] as const)
     if (typeof runtime[name] !== "function")
-      throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`)
-  const originalFork = runtime.fork
-  const forkDescriptor = Object.getOwnPropertyDescriptor(runtime, "fork")
-  let active = true
+      throw new Error(`pi-chat cannot attach: Pi is missing ${name}()`);
+  const originalFork = runtime.fork;
+  const forkDescriptor = Object.getOwnPropertyDescriptor(runtime, "fork");
+  let active = true;
   const wrappedFork: typeof runtime.fork = async (entryId, options) => {
-    if (!active) return originalFork.call(runtime, entryId, options)
-    const originalCreate = runtime.createRuntime
-    const createDescriptor = Object.getOwnPropertyDescriptor(
-      runtime,
-      "createRuntime",
-    )
-    let pending = true
-    let transferFailure: Error | undefined
+    if (!active) return originalFork.call(runtime, entryId, options);
+    const originalCreate = runtime.createRuntime;
+    const createDescriptor = Object.getOwnPropertyDescriptor(runtime, "createRuntime");
+    let pending = true;
+    let transferFailure: Error | undefined;
     const wrappedCreate: typeof runtime.createRuntime = async (input) => {
       if (pending && input.sessionStartEvent?.reason === "fork") {
-        pending = false
+        pending = false;
         try {
-          journal.transferTo(input.sessionManager)
+          journal.transferTo(input.sessionManager);
         } catch (error) {
-          transferFailure =
-            error instanceof Error ? error : new Error(String(error))
+          transferFailure = error instanceof Error ? error : new Error(String(error));
         }
       }
-      return originalCreate.call(runtime, input)
-    }
-    runtime.createRuntime = wrappedCreate
+      return originalCreate.call(runtime, input);
+    };
+    runtime.createRuntime = wrappedCreate;
     try {
-      const result = await originalFork.call(runtime, entryId, options)
-      if (transferFailure) reportFailure(transferFailure)
-      return result
+      const result = await originalFork.call(runtime, entryId, options);
+      if (transferFailure) reportFailure(transferFailure);
+      return result;
     } finally {
-      pending = false
+      pending = false;
       if (runtime.createRuntime === wrappedCreate) {
-        if (createDescriptor)
-          Object.defineProperty(runtime, "createRuntime", createDescriptor)
-        else
-          delete (runtime as unknown as Record<string, unknown>)[
-            "createRuntime"
-          ]
+        if (createDescriptor) Object.defineProperty(runtime, "createRuntime", createDescriptor);
+        else delete (runtime as unknown as Record<string, unknown>)["createRuntime"];
       }
     }
-  }
-  runtime.fork = wrappedFork
+  };
+  runtime.fork = wrappedFork;
   return () => {
-    active = false
-    if (runtime.fork !== wrappedFork) return
-    if (forkDescriptor) Object.defineProperty(runtime, "fork", forkDescriptor)
-    else delete (runtime as unknown as Record<string, unknown>)["fork"]
-  }
+    active = false;
+    if (runtime.fork !== wrappedFork) return;
+    if (forkDescriptor) Object.defineProperty(runtime, "fork", forkDescriptor);
+    else delete (runtime as unknown as Record<string, unknown>)["fork"];
+  };
 }

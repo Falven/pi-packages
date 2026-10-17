@@ -22,7 +22,7 @@ type Recognizer =
   | "awk"
   | "python"
   | "get-content"
-  | "xargs"
+  | "xargs";
 
 export const activityConfig = {
   commands: {
@@ -60,26 +60,10 @@ export const activityConfig = {
       python2: "python",
       python3: "python",
     } as Record<string, Recognizer>,
-    caseInsensitiveNames: { "get-content": "get-content" } as Record<
-      string,
-      Recognizer
-    >,
-    prefixes: { "python2.": "python", "python3.": "python" } as Record<
-      string,
-      Recognizer
-    >,
+    caseInsensitiveNames: { "get-content": "get-content" } as Record<string, Recognizer>,
+    prefixes: { "python2.": "python", "python3.": "python" } as Record<string, Recognizer>,
     // Suppress these formatting helpers when a shell script has another operation.
-    formatting: [
-      "wc",
-      "tr",
-      "cut",
-      "sort",
-      "uniq",
-      "tee",
-      "column",
-      "yes",
-      "printf",
-    ],
+    formatting: ["wc", "tr", "cut", "sort", "uniq", "tee", "column", "yes", "printf"],
     // Short labels skip these directory names; file identity and expanded commands stay intact.
     omitPathComponents: ["build", "dist", "node_modules", "src"],
   },
@@ -162,4 +146,4 @@ export const activityConfig = {
     callError: "Call error:",
     omitted: "[Output omitted from history]",
   },
-}
+};

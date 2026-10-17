@@ -67,9 +67,7 @@
     },
     {
       "input": ["bash", "-lc", "ls && pwd; echo 'hi there' | wc -l"],
-      "sources": [
-        "bash::tests::accepts_multiple_commands_with_allowed_operators"
-      ],
+      "sources": ["bash::tests::accepts_multiple_commands_with_allowed_operators"],
       "expected": [
         {
           "cmd": "ls && pwd; echo 'hi there' | wc -l",
@@ -152,11 +150,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "echo \"~HOME\" 'HEAD~1' \"HEAD^\" 'foo#bar' \"=sh\" 'file~'"
-      ],
+      "input": ["bash", "-lc", "echo \"~HOME\" 'HEAD~1' \"HEAD^\" 'foo#bar' \"=sh\" 'file~'"],
       "sources": ["bash::tests::preserves_quoted_literals"],
       "expected": [
         {
@@ -177,9 +171,7 @@
     },
     {
       "input": ["bash", "-lc", "echo $(pwd)"],
-      "sources": [
-        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
-      ],
+      "sources": ["bash::tests::rejects_command_and_process_substitutions_and_expansions"],
       "expected": [
         {
           "cmd": "echo $(pwd)",
@@ -189,9 +181,7 @@
     },
     {
       "input": ["bash", "-lc", "echo `pwd`"],
-      "sources": [
-        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
-      ],
+      "sources": ["bash::tests::rejects_command_and_process_substitutions_and_expansions"],
       "expected": [
         {
           "cmd": "echo `pwd`",
@@ -201,9 +191,7 @@
     },
     {
       "input": ["bash", "-lc", "echo $HOME"],
-      "sources": [
-        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
-      ],
+      "sources": ["bash::tests::rejects_command_and_process_substitutions_and_expansions"],
       "expected": [
         {
           "cmd": "echo $HOME",
@@ -213,9 +201,7 @@
     },
     {
       "input": ["bash", "-lc", "echo \"hi $USER\""],
-      "sources": [
-        "bash::tests::rejects_command_and_process_substitutions_and_expansions"
-      ],
+      "sources": ["bash::tests::rejects_command_and_process_substitutions_and_expansions"],
       "expected": [
         {
           "cmd": "echo \"hi $USER\"",
@@ -225,9 +211,7 @@
     },
     {
       "input": ["bash", "-lc", "rg -g\"$(pwd)\" pattern"],
-      "sources": [
-        "bash::tests::rejects_concatenation_with_command_substitution"
-      ],
+      "sources": ["bash::tests::rejects_concatenation_with_command_substitution"],
       "expected": [
         {
           "cmd": "rg -g\"$(pwd)\" pattern",
@@ -237,9 +221,7 @@
     },
     {
       "input": ["bash", "-lc", "rg -g\"$(echo '*.py')\" pattern"],
-      "sources": [
-        "bash::tests::rejects_concatenation_with_command_substitution"
-      ],
+      "sources": ["bash::tests::rejects_concatenation_with_command_substitution"],
       "expected": [
         {
           "cmd": "rg -g\"$(echo '*.py')\" pattern",
@@ -249,9 +231,7 @@
     },
     {
       "input": ["bash", "-lc", "rg -g\"$VAR\" pattern"],
-      "sources": [
-        "bash::tests::rejects_concatenation_with_variable_substitution"
-      ],
+      "sources": ["bash::tests::rejects_concatenation_with_variable_substitution"],
       "expected": [
         {
           "cmd": "rg -g\"$VAR\" pattern",
@@ -261,9 +241,7 @@
     },
     {
       "input": ["bash", "-lc", "rg -g\"${VAR}\" pattern"],
-      "sources": [
-        "bash::tests::rejects_concatenation_with_variable_substitution"
-      ],
+      "sources": ["bash::tests::rejects_concatenation_with_variable_substitution"],
       "expected": [
         {
           "cmd": "rg -g\"${VAR}\" pattern",
@@ -323,9 +301,7 @@
     },
     {
       "input": ["bash", "-lc", "ls ;; pwd"],
-      "sources": [
-        "bash::tests::rejects_empty_command_position_with_double_separator"
-      ],
+      "sources": ["bash::tests::rejects_empty_command_position_with_double_separator"],
       "expected": [
         {
           "cmd": "ls ;; pwd",
@@ -335,9 +311,7 @@
     },
     {
       "input": ["bash", "-lc", "ls | | wc"],
-      "sources": [
-        "bash::tests::rejects_empty_command_position_with_empty_pipeline_segment"
-      ],
+      "sources": ["bash::tests::rejects_empty_command_position_with_empty_pipeline_segment"],
       "expected": [
         {
           "cmd": "ls | | wc",
@@ -347,9 +321,7 @@
     },
     {
       "input": ["bash", "-lc", "&& ls"],
-      "sources": [
-        "bash::tests::rejects_empty_command_position_with_leading_operator"
-      ],
+      "sources": ["bash::tests::rejects_empty_command_position_with_leading_operator"],
       "expected": [
         {
           "cmd": "&& ls",
@@ -379,9 +351,7 @@
     },
     {
       "input": ["bash", "-lc", "ls > out.txt"],
-      "sources": [
-        "bash::tests::rejects_redirections_and_unsupported_operators"
-      ],
+      "sources": ["bash::tests::rejects_redirections_and_unsupported_operators"],
       "expected": [
         {
           "cmd": "ls > out.txt",
@@ -391,9 +361,7 @@
     },
     {
       "input": ["bash", "-lc", "echo hi & echo bye"],
-      "sources": [
-        "bash::tests::rejects_redirections_and_unsupported_operators"
-      ],
+      "sources": ["bash::tests::rejects_redirections_and_unsupported_operators"],
       "expected": [
         {
           "cmd": "echo hi & echo bye",
@@ -573,9 +541,7 @@
     },
     {
       "input": ["ag", "-l", "TODO", "src"],
-      "sources": [
-        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
-      ],
+      "sources": ["reference::tests::ag_ack_pt_files_with_matches_flags_are_search"],
       "expected": [
         {
           "cmd": "ag -l TODO src",
@@ -587,9 +553,7 @@
     },
     {
       "input": ["ack", "-l", "TODO", "src"],
-      "sources": [
-        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
-      ],
+      "sources": ["reference::tests::ag_ack_pt_files_with_matches_flags_are_search"],
       "expected": [
         {
           "cmd": "ack -l TODO src",
@@ -601,9 +565,7 @@
     },
     {
       "input": ["pt", "-l", "TODO", "src"],
-      "sources": [
-        "reference::tests::ag_ack_pt_files_with_matches_flags_are_search"
-      ],
+      "sources": ["reference::tests::ag_ack_pt_files_with_matches_flags_are_search"],
       "expected": [
         {
           "cmd": "pt -l TODO src",
@@ -626,11 +588,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "awk '{print $1}' Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "awk '{print $1}' Cargo.toml; cat reference-sentinel.md"],
       "sources": [
         "reference::tests::awk_behavior (formatting)",
         "reference::tests::supports_awk_with_file (formatting)"
@@ -651,11 +609,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "awk -f script.awk Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "awk -f script.awk Cargo.toml; cat reference-sentinel.md"],
       "sources": ["reference::tests::awk_behavior (formatting)"],
       "expected": [
         {
@@ -699,9 +653,7 @@
     },
     {
       "input": ["bash", "-lc", "bar; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::bash_cd_then_bar_is_same_as_bar (formatting)"
-      ],
+      "sources": ["reference::tests::bash_cd_then_bar_is_same_as_bar (formatting)"],
       "expected": [
         {
           "cmd": "bar; cat reference-sentinel.md",
@@ -775,9 +727,7 @@
     },
     {
       "input": ["bash", "-lc", "head -n 1; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::bash_dash_c_pipeline_parsing (formatting)"
-      ],
+      "sources": ["reference::tests::bash_dash_c_pipeline_parsing (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -810,10 +760,7 @@
     },
     {
       "input": ["bash", "-lc", "sed -n 1,10p Cargo.toml"],
-      "sources": [
-        "reference::tests::bin_bash_lc_sed",
-        "reference::tests::bin_zsh_lc_sed"
-      ],
+      "sources": ["reference::tests::bin_bash_lc_sed", "reference::tests::bin_zsh_lc_sed"],
       "expected": [
         {
           "cmd": "sed -n '1,10p' Cargo.toml",
@@ -824,11 +771,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n 1,10p Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n 1,10p Cargo.toml; cat reference-sentinel.md"],
       "sources": [
         "reference::tests::bin_bash_lc_sed (formatting)",
         "reference::tests::bin_zsh_lc_sed (formatting)"
@@ -934,9 +877,7 @@
     },
     {
       "input": ["rg", "--files", "|", "nl", "-ba", "|", "foo"],
-      "sources": [
-        "reference::tests::collapses_pipeline_with_helper_when_later_stage_is_unknown"
-      ],
+      "sources": ["reference::tests::collapses_pipeline_with_helper_when_later_stage_is_unknown"],
       "expected": [
         {
           "cmd": "rg --files '|' nl -ba '|' foo",
@@ -957,9 +898,7 @@
         "-e",
         "s/QkBindingController/QkController/g"
       ],
-      "sources": [
-        "reference::tests::collapses_plain_pipeline_when_any_stage_is_unknown"
-      ],
+      "sources": ["reference::tests::collapses_plain_pipeline_when_any_stage_is_unknown"],
       "expected": [
         {
           "cmd": "rg -l QkBindingController presentation/src/main/java '|' xargs perl -pi -e s/QkBindingController/QkController/g",
@@ -968,11 +907,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-Command",
-        "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"
-      ],
+      "input": ["powershell", "-Command", "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -1048,11 +983,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-Command",
-        "Get-Content C:/skills/demo/SKILL.md C:/important"
-      ],
+      "input": ["powershell", "-Command", "Get-Content C:/skills/demo/SKILL.md C:/important"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -1076,11 +1007,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-Command",
-        "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"
-      ],
+      "input": ["powershell", "-Command", "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -1203,11 +1130,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "cat -- ansi-escape/Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "cat -- ansi-escape/Cargo.toml; cat reference-sentinel.md"],
       "sources": ["reference::tests::filters_out_printf (formatting)"],
       "expected": [
         {
@@ -1318,11 +1241,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "rg -n \"BUG|FIXME|TODO|XXX|HACK\" -S | head -n 200"
-      ],
+      "input": ["bash", "-lc", "rg -n \"BUG|FIXME|TODO|XXX|HACK\" -S | head -n 200"],
       "sources": ["reference::tests::handles_complex_bash_command"],
       "expected": [
         {
@@ -1334,14 +1253,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::handles_complex_bash_command (formatting)"
-      ],
+      "input": ["bash", "-lc", "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S; cat reference-sentinel.md"],
+      "sources": ["reference::tests::handles_complex_bash_command (formatting)"],
       "expected": [
         {
           "cmd": "rg -n 'BUG|FIXME|TODO|XXX|HACK' -S",
@@ -1359,9 +1272,7 @@
     },
     {
       "input": ["bash", "-lc", "head -n 200; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::handles_complex_bash_command (formatting)"
-      ],
+      "sources": ["reference::tests::handles_complex_bash_command (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -1387,9 +1298,7 @@
     },
     {
       "input": ["bash", "-lc", "rg --version; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::handles_complex_bash_command_head (formatting)"
-      ],
+      "sources": ["reference::tests::handles_complex_bash_command_head (formatting)"],
       "expected": [
         {
           "cmd": "rg --version",
@@ -1407,9 +1316,7 @@
     },
     {
       "input": ["bash", "-lc", "node -v; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::handles_complex_bash_command_head (formatting)"
-      ],
+      "sources": ["reference::tests::handles_complex_bash_command_head (formatting)"],
       "expected": [
         {
           "cmd": "node -v; cat reference-sentinel.md",
@@ -1419,9 +1326,7 @@
     },
     {
       "input": ["bash", "-lc", "pnpm -v; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::handles_complex_bash_command_head (formatting)"
-      ],
+      "sources": ["reference::tests::handles_complex_bash_command_head (formatting)"],
       "expected": [
         {
           "cmd": "pnpm -v; cat reference-sentinel.md",
@@ -1492,11 +1397,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "head -n 40 file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "head -n 40 file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::head_behavior (formatting)"],
       "expected": [
         {
@@ -1544,11 +1445,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "head -n50 Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "head -n50 Cargo.toml; cat reference-sentinel.md"],
       "sources": ["reference::tests::head_with_no_space (formatting)"],
       "expected": [
         {
@@ -1602,11 +1499,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed s/a/x/ -- -input.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed s/a/x/ -- -input.txt; cat reference-sentinel.md"],
       "sources": [
         "reference::tests::ignores_sed_operands_after_double_dash_when_checking_mutation (formatting)"
       ],
@@ -1630,14 +1523,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n -i.bak 1p secret.txt; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
-      ],
+      "input": ["bash", "-lc", "sed -n -i.bak 1p secret.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command (formatting)"],
       "expected": [
         {
           "cmd": "sed -n -i.bak 1p secret.txt; cat reference-sentinel.md",
@@ -1656,14 +1543,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -ni.bak 1p secret.txt; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
-      ],
+      "input": ["bash", "-lc", "sed -ni.bak 1p secret.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command (formatting)"],
       "expected": [
         {
           "cmd": "sed -ni.bak 1p secret.txt; cat reference-sentinel.md",
@@ -1682,14 +1563,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -Eni.bak 1p secret.txt; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::keeps_mutating_sed_in_compound_command (formatting)"
-      ],
+      "input": ["bash", "-lc", "sed -Eni.bak 1p secret.txt; cat reference-sentinel.md"],
+      "sources": ["reference::tests::keeps_mutating_sed_in_compound_command (formatting)"],
       "expected": [
         {
           "cmd": "sed -Eni.bak 1p secret.txt; cat reference-sentinel.md",
@@ -1717,9 +1592,7 @@
         "-lc",
         "rg -l QkBindingController presentation/src/main/java; cat reference-sentinel.md"
       ],
-      "sources": [
-        "reference::tests::keeps_mutating_xargs_pipeline (formatting)"
-      ],
+      "sources": ["reference::tests::keeps_mutating_xargs_pipeline (formatting)"],
       "expected": [
         {
           "cmd": "rg -l QkBindingController presentation/src/main/java",
@@ -1741,9 +1614,7 @@
         "-lc",
         "xargs perl -pi -e s/QkBindingController/QkController/g; cat reference-sentinel.md"
       ],
-      "sources": [
-        "reference::tests::keeps_mutating_xargs_pipeline (formatting)"
-      ],
+      "sources": ["reference::tests::keeps_mutating_xargs_pipeline (formatting)"],
       "expected": [
         {
           "cmd": "xargs perl -pi -e s/QkBindingController/QkController/g; cat reference-sentinel.md",
@@ -1784,12 +1655,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "Get-Content C:\\skills\\demo\\SKILL.md"
-      ],
+      "input": ["powershell", "-NoProfile", "-Command", "Get-Content C:\\skills\\demo\\SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -1903,12 +1769,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "Get-Content C:\\workspace\\README.md"
-      ],
+      "input": ["powershell", "-NoProfile", "-Command", "Get-Content C:\\workspace\\README.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -1920,12 +1781,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "gc C:/skills/demo/SKILL.md"
-      ],
+      "input": ["powershell", "-NoProfile", "-Command", "gc C:/skills/demo/SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -1937,12 +1793,7 @@
       ]
     },
     {
-      "input": [
-        "powershell",
-        "-NoProfile",
-        "-Command",
-        "type C:/skills/demo/SKILL.md"
-      ],
+      "input": ["powershell", "-NoProfile", "-Command", "type C:/skills/demo/SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -1971,12 +1822,7 @@
       ]
     },
     {
-      "input": [
-        "/usr/local/bin/powershell.exe",
-        "-NoProfile",
-        "-c",
-        "Write-Host hi"
-      ],
+      "input": ["/usr/local/bin/powershell.exe", "-NoProfile", "-c", "Write-Host hi"],
       "sources": ["reference::tests::powershell_with_path_is_stripped"],
       "expected": [
         {
@@ -1999,9 +1845,7 @@
     },
     {
       "input": ["pwsh", "-NoProfile", "-c", "Write-Host hi"],
-      "sources": [
-        "reference::tests::pwsh_with_noprofile_and_c_alias_is_stripped"
-      ],
+      "sources": ["reference::tests::pwsh_with_noprofile_and_c_alias_is_stripped"],
       "expected": [
         {
           "cmd": "Write-Host hi",
@@ -2020,14 +1864,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "python -c 'print('\"'\"'hello'\"'\"')'; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::python_without_file_walk_is_unknown (formatting)"
-      ],
+      "input": ["bash", "-lc", "python -c 'print('\"'\"'hello'\"'\"')'; cat reference-sentinel.md"],
+      "sources": ["reference::tests::python_without_file_walk_is_unknown (formatting)"],
       "expected": [
         {
           "cmd": "python -c 'print('\"'\"'hello'\"'\"')'; cat reference-sentinel.md",
@@ -2132,11 +1970,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n 10p file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n 10p file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::sed_behavior (formatting)"],
       "expected": [
         {
@@ -2154,11 +1988,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n -e 10p file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n -e 10p file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::sed_behavior (formatting)"],
       "expected": [
         {
@@ -2176,11 +2006,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n 10p -- file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n 10p -- file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::sed_behavior (formatting)"],
       "expected": [
         {
@@ -2198,11 +2024,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n 1,200p file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n 1,200p file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::sed_behavior (formatting)"],
       "expected": [
         {
@@ -2232,11 +2054,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "sed -n +10p file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "sed -n +10p file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::sed_behavior (formatting)"],
       "expected": [
         {
@@ -2261,9 +2079,7 @@
     },
     {
       "input": ["bash", "-lc", "wc; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2275,9 +2091,7 @@
     },
     {
       "input": ["bash", "-lc", "wc -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2289,9 +2103,7 @@
     },
     {
       "input": ["bash", "-lc", "tr; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2303,9 +2115,7 @@
     },
     {
       "input": ["bash", "-lc", "tr -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2317,9 +2127,7 @@
     },
     {
       "input": ["bash", "-lc", "cut; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2331,9 +2139,7 @@
     },
     {
       "input": ["bash", "-lc", "cut -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2345,9 +2151,7 @@
     },
     {
       "input": ["bash", "-lc", "sort; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2359,9 +2163,7 @@
     },
     {
       "input": ["bash", "-lc", "sort -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2373,9 +2175,7 @@
     },
     {
       "input": ["bash", "-lc", "uniq; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2387,9 +2187,7 @@
     },
     {
       "input": ["bash", "-lc", "uniq -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2401,9 +2199,7 @@
     },
     {
       "input": ["bash", "-lc", "xargs; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2415,9 +2211,7 @@
     },
     {
       "input": ["bash", "-lc", "xargs -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2429,9 +2223,7 @@
     },
     {
       "input": ["bash", "-lc", "tee; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2443,9 +2235,7 @@
     },
     {
       "input": ["bash", "-lc", "tee -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2457,9 +2247,7 @@
     },
     {
       "input": ["bash", "-lc", "column; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2471,9 +2259,7 @@
     },
     {
       "input": ["bash", "-lc", "column -x; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::small_formatting_always_true_commands (formatting)"
-      ],
+      "sources": ["reference::tests::small_formatting_always_true_commands (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -2612,11 +2398,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "bat --theme TwoDark README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "bat --theme TwoDark README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_bat (formatting)"],
       "expected": [
         {
@@ -2676,11 +2458,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "cat webview/README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "cat webview/README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_cat (formatting)"],
       "expected": [
         {
@@ -2877,9 +2655,7 @@
     },
     {
       "input": ["grep", "-R", "src/main.rs", "-n", "."],
-      "sources": [
-        "reference::tests::supports_grep_query_with_slashes_not_shortened"
-      ],
+      "sources": ["reference::tests::supports_grep_query_with_slashes_not_shortened"],
       "expected": [
         {
           "cmd": "grep -R src/main.rs -n .",
@@ -2902,13 +2678,7 @@
       ]
     },
     {
-      "input": [
-        "grep",
-        "-R",
-        "CODEX_SANDBOX_ENV_VAR",
-        "-n",
-        "core/src/spawn.rs"
-      ],
+      "input": ["grep", "-R", "CODEX_SANDBOX_ENV_VAR", "-n", "core/src/spawn.rs"],
       "sources": ["reference::tests::supports_grep_recursive_specific_file"],
       "expected": [
         {
@@ -2974,11 +2744,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "head -n 50 Cargo.toml; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "head -n 50 Cargo.toml; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_head_n (formatting)"],
       "expected": [
         {
@@ -3008,11 +2774,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "less -p TODO README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "less -p TODO README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_less (formatting)"],
       "expected": [
         {
@@ -3100,11 +2862,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "nl -ba core/src/parse_command.rs | sed -n '1200,1720p'"
-      ],
+      "input": ["bash", "-lc", "nl -ba core/src/parse_command.rs | sed -n '1200,1720p'"],
       "sources": ["reference::tests::supports_nl_then_sed_reading"],
       "expected": [
         {
@@ -3116,14 +2874,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "nl -ba core/src/parse_command.rs; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::supports_nl_then_sed_reading (formatting)"
-      ],
+      "input": ["bash", "-lc", "nl -ba core/src/parse_command.rs; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_nl_then_sed_reading (formatting)"],
       "expected": [
         {
           "cmd": "nl -ba core/src/parse_command.rs",
@@ -3141,9 +2893,7 @@
     },
     {
       "input": ["bash", "-lc", "sed -n 1200,1720p; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::supports_nl_then_sed_reading (formatting)"
-      ],
+      "sources": ["reference::tests::supports_nl_then_sed_reading (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -3164,11 +2914,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "python3 -c \"import glob; print(glob.glob('*.rs'))\""
-      ],
+      "input": ["bash", "-lc", "python3 -c \"import glob; print(glob.glob('*.rs'))\""],
       "sources": ["reference::tests::supports_python3_walks_files"],
       "expected": [
         {
@@ -3184,9 +2930,7 @@
         "-lc",
         "python3 -c 'import glob; print(glob.glob('\"'\"'*.rs'\"'\"'))'; cat reference-sentinel.md"
       ],
-      "sources": [
-        "reference::tests::supports_python3_walks_files (formatting)"
-      ],
+      "sources": ["reference::tests::supports_python3_walks_files (formatting)"],
       "expected": [
         {
           "cmd": "python3 -c \"import glob; print(glob.glob('*.rs'))\"",
@@ -3202,11 +2946,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "python -c \"import os; print(os.listdir('.'))\""
-      ],
+      "input": ["bash", "-lc", "python -c \"import os; print(os.listdir('.'))\""],
       "sources": ["reference::tests::supports_python_walks_files"],
       "expected": [
         {
@@ -3275,14 +3015,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "rg --files webview/src; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::supports_rg_files_with_path_and_pipe (formatting)"
-      ],
+      "input": ["bash", "-lc", "rg --files webview/src; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_rg_files_with_path_and_pipe (formatting)"],
       "expected": [
         {
           "cmd": "rg --files webview/src",
@@ -3299,9 +3033,7 @@
     },
     {
       "input": ["bash", "-lc", "sed -n; cat reference-sentinel.md"],
-      "sources": [
-        "reference::tests::supports_rg_files_with_path_and_pipe (formatting)"
-      ],
+      "sources": ["reference::tests::supports_rg_files_with_path_and_pipe (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -3324,14 +3056,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "rg -n navigate-to-route -S; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::supports_searching_for_navigate_to_route (formatting)"
-      ],
+      "input": ["bash", "-lc", "rg -n navigate-to-route -S; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_searching_for_navigate_to_route (formatting)"],
       "expected": [
         {
           "cmd": "rg -n navigate-to-route -S",
@@ -3407,9 +3133,7 @@
         "-lc",
         "cd /Users/pakrym/code/codex && rg -n \"codex_api\" codex-rs -S | head -n 50"
       ],
-      "sources": [
-        "reference::tests::supports_single_string_script_with_cd_and_pipe"
-      ],
+      "sources": ["reference::tests::supports_single_string_script_with_cd_and_pipe"],
       "expected": [
         {
           "cmd": "rg -n codex_api codex-rs -S",
@@ -3420,14 +3144,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "cd /Users/pakrym/code/codex; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"
-      ],
+      "input": ["bash", "-lc", "cd /Users/pakrym/code/codex; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"],
       "expected": [
         {
           "cmd": "cat reference-sentinel.md",
@@ -3438,14 +3156,8 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "rg -n codex_api codex-rs -S; cat reference-sentinel.md"
-      ],
-      "sources": [
-        "reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"
-      ],
+      "input": ["bash", "-lc", "rg -n codex_api codex-rs -S; cat reference-sentinel.md"],
+      "sources": ["reference::tests::supports_single_string_script_with_cd_and_pipe (formatting)"],
       "expected": [
         {
           "cmd": "rg -n codex_api codex-rs -S",
@@ -3504,11 +3216,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "tail -n 30 README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "tail -n 30 README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_tail_n_last_lines (formatting)"],
       "expected": [
         {
@@ -3538,11 +3246,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "tail -n +522 README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "tail -n +522 README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::supports_tail_n_plus (formatting)"],
       "expected": [
         {
@@ -3584,11 +3288,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "tail -n +10 file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "tail -n +10 file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::tail_behavior (formatting)"],
       "expected": [
         {
@@ -3618,11 +3318,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "tail -n 30 file.txt; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "tail -n 30 file.txt; cat reference-sentinel.md"],
       "sources": ["reference::tests::tail_behavior (formatting)"],
       "expected": [
         {
@@ -3694,11 +3390,7 @@
       ]
     },
     {
-      "input": [
-        "bash",
-        "-lc",
-        "tail -n+10 README.md; cat reference-sentinel.md"
-      ],
+      "input": ["bash", "-lc", "tail -n+10 README.md; cat reference-sentinel.md"],
       "sources": ["reference::tests::tail_with_no_space (formatting)"],
       "expected": [
         {
@@ -5198,11 +4890,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"
-      ],
+      "input": ["pwsh", "-c", "Get-Content 'C:\\Users\\O''Brien\\skill\\SKILL.md'"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5214,11 +4902,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\""
-      ],
+      "input": ["pwsh", "-c", "Get-Content \"$(Remove-Item C:/important)/skills/demo/SKILL.md\""],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5230,10 +4914,7 @@
       ]
     },
     {
-      "input": [
-        "Get-Content",
-        "$(Remove-Item C:/important)/skills/demo/SKILL.md"
-      ],
+      "input": ["Get-Content", "$(Remove-Item C:/important)/skills/demo/SKILL.md"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5261,11 +4942,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"
-      ],
+      "input": ["pwsh", "-c", "Get-Content C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5277,10 +4954,7 @@
       ]
     },
     {
-      "input": [
-        "Get-Content",
-        "C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"
-      ],
+      "input": ["Get-Content", "C:/Users/Alice/.ssh/id_rsa,C:/skills/demo/SKILL.md"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5292,11 +4966,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important"
-      ],
+      "input": ["pwsh", "-c", "Get-Content C:/skills/demo/SKILL.md -Raw; Remove-Item C:/important"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5308,13 +4978,7 @@
       ]
     },
     {
-      "input": [
-        "Get-Content",
-        "C:/skills/demo/SKILL.md",
-        "-Raw;",
-        "Remove-Item",
-        "C:/important"
-      ],
+      "input": ["Get-Content", "C:/skills/demo/SKILL.md", "-Raw;", "Remove-Item", "C:/important"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5326,11 +4990,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content C:/skills/demo/SKILL.md C:/important"
-      ],
+      "input": ["pwsh", "-c", "Get-Content C:/skills/demo/SKILL.md C:/important"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5378,11 +5038,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"
-      ],
+      "input": ["pwsh", "-c", "Get-Content -Encoding UTF8 C:/skills/demo/SKILL.md"],
       "sources": [
         "reference::tests::complex_powershell_file_reads_are_intentionally_not_classified"
       ],
@@ -5464,11 +5120,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "get-content -Raw \"C:\\skills and plugins\\SKILL.md\""
-      ],
+      "input": ["pwsh", "-c", "get-content -Raw \"C:\\skills and plugins\\SKILL.md\""],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -5540,11 +5192,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md"
-      ],
+      "input": ["pwsh", "-c", "Get-Content -LiteralPath C:\\skills\\demo\\SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -5592,11 +5240,7 @@
       ]
     },
     {
-      "input": [
-        "pwsh",
-        "-c",
-        "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md"
-      ],
+      "input": ["pwsh", "-c", "Get-Content -Raw -LiteralPath C:\\skills\\demo\\SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
@@ -5608,12 +5252,7 @@
       ]
     },
     {
-      "input": [
-        "Get-Content",
-        "-Raw",
-        "-LiteralPath",
-        "C:/skills/demo/SKILL.md"
-      ],
+      "input": ["Get-Content", "-Raw", "-LiteralPath", "C:/skills/demo/SKILL.md"],
       "sources": ["reference::tests::powershell_file_reads_are_classified"],
       "expected": [
         {
