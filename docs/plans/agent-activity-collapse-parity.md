@@ -75,3 +75,37 @@ git diff --check
 Check changed/new files before staging as well. Preserve the unrelated untracked comparison report. No secondary compatibility run is required. Assert fresh terminal frames, effective input, original provider requests, and canonical session content. This seam proves emitted output and native-host behavior, not physical-terminal or desktop pixel parity.
 
 After reviews, reconcile any main advances in the isolated integration worktree, verify the resulting delta, then fast-forward local main. Record actual code SHA, commands/results, review outcomes, and limits when closing the ticket. Archive every task-owned managed worktree and remove task branches only after verifying integration; preserve all other work and do not push.
+
+## Completion record
+
+Local main received code `f53480f9b4d1ad3b4a0b7bc924a597b9a44e20d5` by fast-forward from `df856004eb9677d070498329ecdb5acd9da51793`. The initial main remains `cbf6ffac013f10b6b2a227804d076a4556bd248d`. Concurrent current-operation, copy-action, image-crop test, and copy-verification changes were preserved. The later copy-closure documentation at `3741f50` was also preserved. No push was made.
+
+The implementer committed `860230919ae84e329043648a08517ee9bf52f834`; the merger integrated it and reconciled the shared specification, ADR 0022, and phase-revocation assertions. New stories use 148–154, preserving concurrent stories 121–147. The final implementation range comparison adds only concurrent Copy response absence assertions. Runtime changes stayed in the three planned modules; no fixture, relationship schema, glossary, dependency, installed Pi source, or scrolling identity change was needed.
+
+Executed and independently reviewed integration: `d5c4f15d0cfb7ef5522a93096c9ff5c60287d334`. It passed the 147/147 chat and combined-workflow suite, typecheck, repository lint, formatting of all 423 tracked files, and full task whitespace checks on installed Pi 1.1.0 with Node `v26.8.1`. Earlier focused implementation checks passed 44/44 lifecycle and 27/27 Find cases. The final rebase changed only copy-verification documentation; an exact diff confirmed identical runtime, tests, fixtures, and configuration at landed `f53480f`. Formatting and whitespace checks covered the reconciled documents. Evidence-only closure changes require formatting/whitespace checks, not another runtime suite.
+
+Independent Standards review found zero actionable findings and no smell warranting a change. Independent Spec review found zero actionable findings or apparent scope creep. Both compared against the original pinned base and the task-only delta after identifying concurrent changes. Reviewers were read-only; the coordinator ran the integrated checks. No physical-terminal, live desktop, secondary Pi-version, or full repository test run is claimed.
+
+### Task ownership and cleanup
+
+| Branch                                  | Managed checkout                                                           | Preserved head                             | Result                                                  |
+| --------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
+| `codex/pi-chat-collapse-parity`         | `/Users/fran/.codex/worktrees/pi-chat-collapse-parity/pi-packages`         | `f53480f9b4d1ad3b4a0b7bc924a597b9a44e20d5` | Integrated, checkout and branch removed.                |
+| `codex/pi-chat-collapse-implementation` | `/Users/fran/.codex/worktrees/pi-chat-collapse-implementation/pi-packages` | `860230919ae84e329043648a08517ee9bf52f834` | Patch integration checked, checkout and branch removed. |
+
+No compatibility or review checkout was created. Both checkouts were clean except disposable ignored dependency links. Tests, reports, and logs were already outside them. The managed archive tool returned `queued` for each checkout (including an implementation retry), but subsequent artifact and Git inventory checks still showed both present. A verified complete-history Git bundle at `/tmp/pi-chat-collapse-worktrees.bundle` preserves both branch heads; its SHA-256 is `e30d1376c2edc3143205eb7de0bde263b6c408340ff9924180abda82c01d4451`. After confirming main ancestry and the original-to-integrated patch mapping, Git removed only these two clean worktrees and branches. Their otherwise-empty wrapper directories and zero-byte name markers were removed. Final inventory confirms no task-owned branch or checkout remains. This records a Git-bundle fallback, not a successful managed app archive.
+
+All other worktrees and branches were left to their owners. In particular, this task did not remove the pre-existing copy worktrees; their owner's concurrent cleanup is recorded in Chat 12. The untracked comparison report remains excluded from commits/formatting with its original SHA-256.
+
+### Local evidence
+
+- `/tmp/pi-chat-collapse-red-eligibility.log`: two expected cancellation/revocation failures before runtime changes.
+- `/tmp/pi-chat-collapse-red-blank-final.log`, `/tmp/pi-chat-collapse-red-find.log`, and `/tmp/pi-chat-collapse-blank-boundary.log`: subsequent behavioral failures fixed before final checks.
+- `/tmp/pi-chat-collapse-implementation-focused.log`, `/tmp/pi-chat-collapse-implementation-find.log`: 44/44 and 27/27 passing implementation checks.
+- `/tmp/pi-chat-collapse-integrated-tests.log`: 147/147 passing integrated cases, zero failures/cancellations/skips.
+- `/tmp/pi-chat-collapse-integrated-typecheck.log`, `/tmp/pi-chat-collapse-integrated-lint.log`, `/tmp/pi-chat-collapse-integrated-format.log`: integrated static results.
+- `/tmp/pi-chat-collapse-parity-installed-pi-dependencies.json`, `/tmp/pi-chat-collapse-installed-resolution.log`: coherent installed Pi 1.1.0 resolution.
+- `/tmp/pi-chat-collapse-review-report.md`, `/tmp/pi-chat-collapse-final-range-diff.log`: separate review axes and rebased patch comparison.
+- `/tmp/pi-chat-collapse-task.json`: baseline, approvals, task ownership, revisions, checks, and cleanup ledger.
+
+These temporary evidence files may expire; the commands, results, revision boundaries, policy, and cleanup outcome are retained in the specification, ticket, and this record.
