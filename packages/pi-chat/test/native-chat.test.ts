@@ -647,22 +647,28 @@ test("a single tool call stays grouped and collapsed after completion", async (t
     assert(match, screen())
     return Number(match[1]) - row
   }
-  let previous = answerPosition()
-  /* oxlint-disable eslint/no-await-in-loop -- Terminal wheel events and frames must remain ordered. */
-  for (let step = 0; step < 8; step++) {
-    await host.key("\x1b[<65;3;2M")
-    await host.frame()
-    const current = answerPosition()
-    assert(current > previous, `wheel ${step}: ${screen()}`)
-    await host.frame()
-    assert.equal(answerPosition(), current)
-    previous = current
+  const wheelThroughBoundary = async () => {
+    let previous = answerPosition()
+    /* oxlint-disable eslint/no-await-in-loop -- Terminal wheel events and frames must remain ordered. */
+    for (let step = 0; step < 8; step++) {
+      await host.key("\x1b[<65;3;2M")
+      await host.frame()
+      const current = answerPosition()
+      assert(current > previous, `wheel ${step}: ${screen()}`)
+      await host.frame()
+      assert.equal(answerPosition(), current)
+      previous = current
+    }
+    /* oxlint-enable eslint/no-await-in-loop */
   }
-  /* oxlint-enable eslint/no-await-in-loop */
+  await wheelThroughBoundary()
 
+  await host.key("\x1b[H")
+  await host.frame()
+  assert.match(screen(), /Worked for \d+m \d+s ▶/)
   const answerRow = host
     .screenLines()
-    .findIndex((line) => stripTerminalSequences(line).includes("answer-row-"))
+    .findIndex((line) => stripTerminalSequences(line).includes("answer-row-00"))
   assert(answerRow >= 0)
   const start =
     stripTerminalSequences(host.screenLines()[answerRow]!).indexOf(
@@ -672,22 +678,19 @@ test("a single tool call stays grouped and collapsed after completion", async (t
   await host.key(`\x1b[<32;${start + 13};${answerRow + 1}M`)
   await host.key(`\x1b[<0;${start + 13};${answerRow + 1}m`)
   await host.key("\x18")
-  await t.waitFor(() => assert.match(copied, /^answer-row-\d\d$/))
+  await t.waitFor(() => assert.equal(copied, "answer-row-00"))
   const selected = copied
-  previous = answerPosition()
-  await host.key("\x1b[<65;3;2M")
-  await host.frame()
-  assert(answerPosition() > previous, screen())
+  await wheelThroughBoundary()
   copied = ""
   await host.key("\x18")
   await t.waitFor(() => assert.equal(copied, selected))
   await host.key("\x1b")
   await host.type("reading draft")
   assert.match(await host.frame(), /reading draft/)
-  previous = answerPosition()
-  await host.key("\x1b[<65;3;2M")
+  await host.key("\x1b[H")
   await host.frame()
-  assert(answerPosition() > previous, screen())
+  assert.match(screen(), /Worked for \d+m \d+s ▶/)
+  await wheelThroughBoundary()
 })
 
 test("commentary between model iterations separates render groups in source order", async (t) => {
