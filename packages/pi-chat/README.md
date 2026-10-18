@@ -34,9 +34,13 @@ Install [pi-copy](../pi-copy) separately for copy controls. Either load order wo
 
 Keep an eye on progress without opening every tool result. Group summaries show what the agent has done; the working row shows its current operation or thought. You can stay with this overview until something needs a closer look.
 
-| Expanded activity                                                                                      | While a command runs                                                      |
-| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| ![pi-chat with the activity group open, showing the read, edit, and command](screenshots/activity.png) | ![pi-chat showing the command currently running](screenshots/working.png) |
+### Review the steps
+
+Both views show the finished task, with pi-chat's activity group open to show each step.
+
+| Vanilla Pi                                                                         | pi-chat                                                                                                |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| ![Vanilla Pi with the read, edit, and test output visible](screenshots/native.png) | ![pi-chat with the activity group open, showing the read, edit, and command](screenshots/activity.png) |
 
 To check the work, click a group header, then expand an item to inspect its command, file change, or result. Click the same header to fold it away again. The "Worked for" row reopens earlier activity above the final answer.
 
@@ -44,11 +48,23 @@ Press `Alt+G` to focus a nearby control. Use Pi's selector keys: Up/Down to move
 
 Pi's Hide thinking setting controls whether thoughts appear.
 
+### While a command runs
+
+Both views show the checks still running. pi-chat keeps the current command in one row; open it when you want to see the output.
+
+| Vanilla Pi                                                                                | pi-chat                                                                            |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| ![Vanilla Pi showing command output while the checks run](screenshots/native-working.png) | ![pi-chat showing the running command in a collapsed row](screenshots/working.png) |
+
 ## Find text
 
 When you return to a long session, search for the command or output you need. Open Pi's Find (`Ctrl+Shift+F` by default on macOS) and select a match. pi-chat opens the relevant activity, even inside a closed group, without running tools again.
 
-![Find opens collapsed pi-chat activity and highlights the matching word in command output](screenshots/find.png)
+Both views show the same search for `uppercase`.
+
+| Vanilla Pi                                                                               | pi-chat                                                                                                          |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| ![Vanilla Pi Find highlighting uppercase in command output](screenshots/native-find.png) | ![Pi Find opening collapsed pi-chat activity and highlighting uppercase in command output](screenshots/find.png) |
 
 Search covers the text Pi has retained for the current session branch, including text from before compaction and text hidden by a tool's display. Output that was never retained cannot be recovered by search.
 
