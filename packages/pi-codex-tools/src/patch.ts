@@ -1,9 +1,10 @@
 /* eslint-disable no-await-in-loop -- Validation and mutations preserve patch order while holding native file queues. */
-import { mkdir, readFile, realpath, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getSystemErrorMessage } from "node:util";
 import { withFileMutationQueue, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { Check } from "typebox/value";
 import {
   boundedPreview,
   contentHash,
@@ -135,7 +136,8 @@ function decode(bytes: Buffer): string {
   }
 }
 
-function readError(error: unknown): string {
+function readError(error: unknown, path: string): string {
+  if ((error as NodeJS.ErrnoException).code === "EISDIR") return `path \`${path}\` is not a file`;
   const errno = (error as NodeJS.ErrnoException).errno;
   if (typeof errno === "number" && errno < 0) {
     const message = getSystemErrorMessage(errno);
@@ -321,6 +323,10 @@ export function createPatch(
       "The `apply_patch` tool can be used to edit files. This is a FREEFORM tool, so do not wrap the patch in JSON.",
     parameters,
     exposure: "codemode",
+    prepareArguments(args) {
+      if (!Check(parameters, args)) throw new Error("tool `apply_patch` expects a string input");
+      return args;
+    },
     async execute(_id, args, signal, _onUpdate, ctx) {
       const patchChanges: PatchChange[] = [];
       const bodies: PatchChange[] = [];
@@ -402,7 +408,7 @@ export function createPatch(
                     before = decode(await readFile(operation.path));
                   } catch (error) {
                     throw new Error(
-                      `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error)}`,
+                      `apply_patch verification failed: Failed to read${operation.kind === "update" ? " file to update" : ""} ${operation.path}: ${readError(error, operation.path)}`,
                       { cause: error },
                     );
                   }
@@ -418,7 +424,7 @@ export function createPatch(
             const started = performance.now();
             const failure = (message: string) =>
               new Error(
-                `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}`,
+                `Exit code: 1\nWall time: ${Math.floor((performance.now() - started) / 1000)} seconds\nOutput:\n${message}\n`,
               );
             for (const [index, operation] of operations.entries()) {
               abort.throwIfAborted();
@@ -431,7 +437,7 @@ export function createPatch(
                     before = decode(await readFile(operation.path));
                   } catch (error) {
                     throw new Error(
-                      `Failed to read file to update ${operation.path}: ${readError(error)}`,
+                      `Failed to read file to update ${operation.path}: ${readError(error, operation.path)}`,
                       { cause: error },
                     );
                   }
@@ -445,7 +451,7 @@ export function createPatch(
                     "",
                   );
                   body(change, reason);
-                  throw failure(`${reason}\n`);
+                  throw failure(reason);
                 }
               }
               let destinationBefore: string | null | undefined;
@@ -487,10 +493,15 @@ export function createPatch(
                   abort.throwIfAborted();
                 }
                 try {
+                  if (operation.kind === "delete") {
+                    if ((await stat(operation.path)).isDirectory())
+                      throw new Error("path is a directory");
+                    abort.throwIfAborted();
+                  }
                   await unlink(operation.path);
                 } catch {
                   abort.throwIfAborted();
-                  const reason = `Failed to delete file ${operation.path}`;
+                  const reason = `Failed to ${operation.kind === "delete" ? "delete file" : "remove original"} ${operation.path}`;
                   if (operation.kind === "update" && operation.destination) {
                     const source: PatchChange = {
                       id: `${index}:source`,

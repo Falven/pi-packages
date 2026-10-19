@@ -1,6 +1,6 @@
 /* eslint-disable no-await-in-loop -- Each case owns a real host and must finish before the next one. */
 import assert from "node:assert/strict";
-import { lstat, mkdir, readFile, stat, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readFile, readlink, stat, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import {
@@ -435,7 +435,7 @@ test("a later write failure keeps completed changes and reports the measured fai
   const text = output(host);
   assert.deepEqual(JSON.parse(text.slice(text.indexOf("{"))), {
     type: "string",
-    error: `Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to write file ${failed}`,
+    error: `Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to write file ${failed}\n`,
   });
   assert.equal(await readFile(first, "utf8"), "created\n");
   await assert.rejects(readFile(failed), { code: "ENOTDIR" });
@@ -500,7 +500,7 @@ test("patch writes honor the file's operating-system permissions", async (t) => 
   );
   host.queueResponse(completed);
   await host.session.prompt("Attempt the requested protected-file update");
-  assert(output(host).endsWith(`Failed to write file ${path}`));
+  assert(output(host).endsWith(`Failed to write file ${path}\n`));
   assert.equal(await readFile(path, "utf8"), "original\n");
   assert.equal((await stat(path)).mode & 0o777, 0o444);
 });
@@ -891,7 +891,7 @@ test("delete facts describe contents after an earlier alias update", async (t) =
   );
 });
 
-test("deleting a now-dangling alias omits unverifiable counts but still unlinks it", async (t) => {
+test("deleting a now-dangling alias fails and leaves later files unattempted", async (t) => {
   let changes: unknown;
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -906,40 +906,54 @@ test("deleting a now-dangling alias omits unverifiable counts but still unlinks 
   });
   const path = join(host.directory, "real.txt");
   const alias = join(host.directory, "alias.txt");
+  const later = join(host.directory, "later.txt");
   await writeFile(path, "left\nright\n");
   await symlink(path, alias);
+  const aliasMode = (await lstat(alias)).mode;
   const patch =
-    "*** Begin Patch\n*** Delete File: real.txt\n*** Delete File: alias.txt\n*** End Patch";
-  host.queueResponse(...call(`text(await tools.apply_patch(${JSON.stringify(patch)}));`));
+    "*** Begin Patch\n*** Delete File: real.txt\n*** Delete File: alias.txt\n*** Add File: later.txt\n+later\n*** End Patch";
+  host.queueResponse(
+    ...call(
+      `try { text(await tools.apply_patch(${JSON.stringify(patch)})); } catch (error) { text({type: typeof error, error}); }`,
+    ),
+  );
   host.queueResponse(completed);
   await host.session.prompt("Delete the source and its alias");
-  assert.match(output(host), /\n\{\}$/);
+  const text = output(host);
+  assert.deepEqual(JSON.parse(text.slice(text.indexOf("{"))), {
+    type: "string",
+    error: `Exit code: 1\nWall time: 0 seconds\nOutput:\nFailed to delete file ${alias}\n`,
+  });
   await assert.rejects(lstat(path), { code: "ENOENT" });
-  await assert.rejects(lstat(alias), { code: "ENOENT" });
-  assert.deepEqual(
-    (
-      changes as {
-        status: string;
-        added?: number;
-        removed?: number;
-        output?: string;
-      }[]
-    ).map(({ status, added, removed, output: detail }) => ({
-      status,
-      added,
-      removed,
-      output: detail,
-    })),
-    [
-      { status: "completed", added: 0, removed: 2, output: "-left\n-right\n" },
-      {
-        status: "completed",
-        added: undefined,
-        removed: undefined,
-        output: undefined,
-      },
-    ],
-  );
+  assert((await lstat(alias)).isSymbolicLink());
+  assert.equal((await lstat(alias)).mode, aliasMode);
+  assert.equal(await readlink(alias), path);
+  await assert.rejects(readFile(alias), { code: "ENOENT" });
+  await assert.rejects(lstat(later), { code: "ENOENT" });
+  assert.deepEqual(changes, [
+    {
+      id: "0",
+      action: "Deleted",
+      path,
+      status: "completed",
+      added: 0,
+      removed: 2,
+      output: "-left\n-right\n",
+    },
+    {
+      id: "1",
+      action: "Deleted",
+      path: alias,
+      status: "failed",
+      output: `Failed to delete file ${alias}`,
+    },
+    {
+      id: "2",
+      action: "Added",
+      path: later,
+      status: "unattempted",
+    },
+  ]);
 });
 
 test("a patch through an existing symlink waits for a native file mutation", async (t) => {
