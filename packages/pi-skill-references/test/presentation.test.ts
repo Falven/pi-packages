@@ -718,13 +718,15 @@ for (const [name, extensions] of [
   });
 }
 
-test("terminal projection leaves native HTML and branch exports byte-for-byte unchanged", async (t) => {
+test("terminal projection preserves native HTML and branch export contents", async (t) => {
   const fixture = await skillFixture(t);
   const extensions = [skillsExtension];
   const host = await openNativeHost(t, {
     extensionPaths: extensions,
     skillPaths: [fixture.directory],
     persistSession: true,
+    columns: 120,
+    rows: 48,
   });
   await host.type("Use /skill:review and /skill:plan.");
   await host.key("\r");
@@ -748,7 +750,14 @@ test("terminal projection leaves native HTML and branch exports byte-for-byte un
   );
   assert.equal(html, nativeHtml);
   const nativeBranch = host.session.exportToJsonl(join(host.directory, "native.jsonl"));
-  assert.equal(await readFile(nativeBranch, "utf8"), jsonl);
+  const [header, ...entries] = jsonl.split("\n");
+  const [nativeHeader, ...nativeEntries] = (await readFile(nativeBranch, "utf8")).split("\n");
+  const expected = JSON.parse(header!);
+  const actual = JSON.parse(nativeHeader!);
+  assert(Number.isFinite(Date.parse(actual.timestamp)));
+  // Pi stamps a fresh export time; every other header field and source entry must match.
+  assert.deepEqual({ ...actual, timestamp: expected.timestamp }, expected);
+  assert.deepEqual(nativeEntries, entries);
   assert.equal(JSON.stringify(host.session.sessionManager.getBranch()), source);
   assert.equal(host.requests.length, 1);
 });
