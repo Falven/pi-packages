@@ -122,10 +122,10 @@ Selected conversation text inserted into a draft as an editable Markdown blockqu
 _Avoid_: Annotation, when referring only to quoting selected text
 
 **Reference**:
-Editable text within a draft that identifies a resource, such as a file or skill. A plain source path identifies the file whose current contents can be read.
+Text within a draft or user message that identifies a resource, such as a file or skill. A plain source path identifies the file whose current contents can be read.
 
 **Skill reference**:
-A reference identifying a skill the user explicitly wants applied to the request, independent of how the reference entered the draft.
+A reference identifying a skill the user explicitly wants applied to a request, regardless of how the reference was entered.
 
 **Attachment**:
 Supplementary file contents included in a draft through a Markdown link or image pointing to a local file.
