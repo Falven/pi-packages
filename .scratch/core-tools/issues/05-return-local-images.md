@@ -1,4 +1,42 @@
-# 05: Return local images through Pi's image pipeline
+# 05: Prepare and deliver images with reference detail
+
+**What to build:** An allowed image reaches the model with the reference's bytes, dimensions, format, and detail behavior, while image blocking, extension edits, retained history, and single-owner display remain effective.
+
+**Specification:** [Core toolset](../spec.md), especially implementation decisions 8, 17, 25, and 33 and testing decisions 18 and 23.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md); [image cause and public-API boundary](../../../docs/plans/core-tool-behavior-parity.md#image-cause-and-implementation-boundary).
+
+**Blocked by:** None (can start immediately). Existing image dispatch, collection, and provider integration are implemented. The remaining public-hook and codec questions are evidence gates within this slice.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+The accepted image decision gives preparation to this extension. Pi must remain unchanged: no source or installed-package edits, private runtime patches, global-setting toggles, fork, or version requirement to gain host behavior. The eight-case PNG probe establishes a possible final-image path; it is not production integration or complete image parity.
+
+- [ ] Validate the original local-image path and detail before host coercion. Require a string path, match null/omission defaults and unsupported-detail errors, and ignore unknown object keys without changing the frozen declaration. Preserve the retained helper overloads and explicit-detail precedence.
+- [ ] Preserve matching raw helper return values and carry requested detail plus source identity through the worker, execution output, collection, and provider conversion. Cover mixed text/images, duplicate images, later waits, and concurrent cells without assigning one image's detail or ownership to another.
+- [ ] Own emitted-image preparation under the reference's actual format, capability, resizing, and encoding rules. Verify its 32-pixel patch calculation, high-detail limits of 2048 pixels per dimension and 2,500 patches, and original-detail limits of 6000 pixels per dimension and 10,000 patches at their boundaries. Original detail is not an unlimited-size promise.
+- [ ] Preserve source bytes wherever the reference does and match required conversion elsewhere. Compare PNG, JPEG, WebP, converted formats, malformed/unsupported data, orientation, and metadata as applicable to the scoped reference. Matching dimensions or decoded pixels alone does not establish matching encoded bytes or notices.
+- [ ] Establish codec equivalence before choosing an existing primitive or adding an extension-owned dependency. Reuse installed facilities when their output matches; add a dependency only with evidence they cannot satisfy the contract. No image service, replacement provider stack, or Pi dependency change is authorized.
+- [ ] Resolve the prototype's reliance on the current mutable result-event lifetime using existing public APIs. Keep real image blocks visible to normal result hooks and use the final permitted replacement, removal, or blocked outcome. Do not hide payloads in opaque content or recover discarded originals from a side cache.
+- [ ] Keep effective image blocking authoritative before local reads and before returning bytes, including when a hook enables it. A blocked result exposes no image bytes or data URL through image emission or text serialization. Preserve later result, finalized-message, and context redaction.
+- [ ] Finalize prepared bytes and MIME types before history is saved, then modify only owned images still present after context processing. Match the observed wire metadata, including omission of detail where the reference omits it; forwarding the literal word original is not the acceptance criterion.
+- [ ] Preserve correct image/source bindings and hashes through retained history and reload after temporary preparation state is gone. Cover hooks before and after finalization, replacements with different images, removals, unrelated extension images, and changing call identities. Do not restore removed content or rely on the prototype's single known call.
+- [ ] Account for Pi's remaining normalization pass. The public API has no per-tool image skip, and the prototype's earlier tool-completion event still contains resized bytes. Compare every affected event/display consumer as well as final history/provider content; final-image restoration alone cannot establish parity.
+- [ ] Keep actual images once in the native result that collects them, including a later wait, with origin path/status retained separately. Preserve terminal visibility preferences, generic activity bodies, Find/copy bindings, and bounded cleanup. Match the reference's content-part order and conversion-notice behavior without another image history store.
+- [ ] Verify the full helper → public hooks → tool-completion event → finalized message → retained/reloaded history → provider path through existing image, cell, and presentation cases and temporary diagnostics. Repeat the probe's replacement/removal/blocking coverage and establish the untested detail, format, capability, mixed/concurrent, and binding cases. Add no new test cases, files, or harness.
+- [ ] Keep an exact unresolved-difference record for any required image boundary that existing public APIs or available codecs cannot reproduce. Neither the accepted ownership decision nor the PNG probe authorizes a Pi change, a comparator exception, or closing this ticket with an unresolved target.
+
+**Evidence to record:** Raw helper results; ordered boundary payloads; image hashes, sizes, dimensions, MIME types, orientation/metadata, and detail fields; capability and hook cases; reload/display outcomes; codec findings; and runtime/source identities. Keep source-based rules separate from paired runtime observations.
+
+**Current verification:** Pending. Earlier PNG feasibility evidence is linked from the specification; ticket publication neither reruns it nor verifies production parity.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 05: Return local images through Pi's image pipeline
 
 **What to build:** Keep each image’s origin and status while displaying its bytes once inside the appropriate collecting-result activity body.
 

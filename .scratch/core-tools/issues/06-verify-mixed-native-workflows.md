@@ -1,4 +1,39 @@
-# 06: Verify generic native previews for core operations
+# 06: Verify aligned tools through mixed native workflows
+
+**What to build:** Commands, continuation, patches, and images compose correctly in the normal extension setup, with matching model results and truthful live, retained, and restored activity.
+
+**Specification:** [Core toolset](../spec.md), especially testing decisions 5–6, 10–16, and 20–23.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md).
+
+**Blocked by:** [Core 01: command arguments and shells](01-execute-command-through-model-loop.md), [Core 02: process input and collection](02-continue-interactive-commands.md), [Core 03: cell termination and failures](03-yield-and-resume-execution-cells.md), [Core 04: patch deletion effects](04-apply-file-patches.md), and [Core 05: image preparation and delivery](05-return-local-images.md). Their current revisions must pass their own behavior checks before combined acceptance.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This retains the approved mixed-workflow acceptance slice. Prior chat/activity prerequisites are already complete. Use the existing real-host/provider seam and normal extension loader; Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Reuse existing mixed-host cases in both normal extension load orders and the standalone path. Exercise project inspection, an explicit-shell command, invalid arguments, patch success and partial deletion failure, image inspection, yielding/collection, and execution failure through real effects and the next model request.
+- [ ] Verify the integrated cell-termination path: a started command can complete its delayed effect, terminated JavaScript never resumes, late command status stays at its origin, and later session cleanup still reaches retained owned processes. Keep process interruption and caller-only wait cancellation distinct.
+- [ ] Preserve public blocking, argument replacement, returned-result edits, and later context redaction across commands, process input, patches, images, and work after a yield. Processed content remains authoritative; finalization or retained metadata must not resurrect removed content.
+- [ ] Inspect image bytes and bindings at tool completion, finalized-message/history, reload, rendered consumers, and provider output. Preserve single collecting-result placement and independent terminal visibility. An earlier resized event or display difference must remain visible even if the final provider image matches.
+- [ ] Verify corrected failure framing, partial patch outcomes, actual executable context, and late process outcomes through generic activity, standalone rendering, retained source, Find, and raw copy. Check current content fingerprints/bindings rather than recovering stale facts. No script error, forwarded output, or successful input/collection receipt creates an invented operation.
+- [ ] Preserve compact operation/file descriptions, independent native preview/expanded states, manual/global disclosure choices, ordering, unrelated notices, and final responses. Reuse the existing generic consumer path; make only a demonstrated repair required by the corrected results, without a new adapter protocol or unrelated chat redesign.
+- [ ] Exercise ordinary prompts, new/resumed/forked sessions, reload, shutdown, and active-branch replay. Retain completed filesystem effects and known outcomes while clearing live resources appropriately. Do not restore workers/handles, attribute old work to a later request, create polling, or trigger an unsolicited model turn.
+- [ ] Preserve normal tool selection, unrelated companion tools, user guidance and model settings, attachment content, and user-entered shell routing. Verify the installed host stays unchanged; existing accepted attribution and notification-transport limits remain separate from the six corrections.
+- [ ] Use existing workflow and affected generic consumer cases plus temporary assertions; add no new test cases, files, or seam. Record complete effects, rendered frames, clipboard-boundary/Find output, retained entries, and provider content with exact revisions and runtimes. Separate controlled-host, installed-CLI, and physical-terminal observations; do not reuse old physical checks as fresh acceptance.
+- [ ] Close combined acceptance only after current Core 01–05 requirements hold together. Return any demonstrated defect to its owning behavior slice and repeat only affected checks before the final comparison. An unresolved selected behavior remains unresolved even when the workflow reaches a successful final answer.
+
+**Evidence to record:** Load orders and companion identities, exact integrated checks, real effects, model payloads, relevant consumer observations, cleanup outcomes, and any remaining limits. [Core 07](07-verify-contract-and-matched-trials.md) owns the final matrix, live pairs, and verified trace publication.
+
+**Current verification:** Pending. Ticket publication changes no runtime behavior.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 06: Verify generic native previews for core operations
 
 **What to build:** Verify generic native previews for core operations.
 

@@ -1,4 +1,37 @@
-# 02: Continue interactive commands across prompts
+# 02: Align process input and collection
+
+**What to build:** Input and polling reject the reference's invalid arguments without affecting a process, while valid pipe and terminal interactions return each new output segment and actual outcome once.
+
+**Specification:** [Core toolset](../spec.md), especially implementation decisions 13, 25–28, 31, and 33.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md).
+
+**Blocked by:** None (can start immediately). Existing command execution and retained process sessions already support this slice.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This updates the existing approved process slice. Earlier verification remains historical. Use the extension's existing public APIs and host seam; Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Validate original `write_stdin` arguments before host coercion. Require a signed 32-bit integer process identifier; reject string identifiers, fractions, null, and out-of-range values. Keep a type/range failure distinct from an unknown, completed, or stale handle.
+- [ ] Preserve native null/default behavior: chars defaults to empty and yield to 250 ms, with null rejected for both; the output budget is optional/nullable. Apply the native unsigned ranges, ignored unknown keys, and existing input/empty-poll wait clamps. Verify zero and omission independently, including the effective 5,000 ms empty-poll minimum/default.
+- [ ] Reject invalid input before sending bytes, signalling a process, consuming unread output, or changing a collection cursor. Verify absence of those effects as well as the exact processed error in the next model request.
+- [ ] Preserve serialized input delivery and collection, incremental UTF-8 output, token budgets, running versus completed result fields, final-handle retirement, and concurrent-poll behavior. Use real pipe and PTY processes; do not introduce a second process registry or change the captured tool declarations.
+- [ ] Retain the existing exact Ctrl+C exception for non-terminal processes and normal terminal input behavior. Other nonempty pipe input still fails as observed. Report the actual interrupt/exit result; sending a signal alone does not establish that the process stopped.
+- [ ] Keep later output and status attached to the originating command across prompts and cells. Successful empty polls add no activity action; meaningful terminal input and failed collection retain their applicable facts. Public hooks and processed-result edits remain authoritative, with no duplicate output, display-driven collection, or unsolicited model turn.
+- [ ] Preserve initial-call cancellation, bounded output storage, capacity recovery, and session cleanup for independently returned handles. Cell termination's effect on a still-awaited command is owned by [Core 03](03-yield-and-resume-execution-cells.md); do not preserve the superseded kill-on-cell-termination rule.
+- [ ] Verify the full input/poll → actual process effect → processed result → next request path using existing process, command, and presentation cases and temporary diagnostics. Cover current-parent hooks, late completion, malformed arguments, interruption, and cleanup. Add no new test cases, files, or harness.
+
+**Evidence to record:** Paired argument/error cases, incremental returned bytes and fields, actual process outcomes, retained activity facts, and relevant existing checks with runtime/source identities. Coordinate shared validation with Core 01 without creating an artificial implementation prerequisite.
+
+**Current verification:** Pending. Ticket publication changes no runtime behavior.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 02: Continue interactive commands across prompts
 
 **What to build:** Keep live command progress, input, and late process outcomes in their originating independently disclosed activity item.
 

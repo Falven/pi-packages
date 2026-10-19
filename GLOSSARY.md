@@ -189,12 +189,21 @@ The content and outcome returned by a tool call. Returning or forwarding a tool 
 **Execution cell**:
 One execution whose new output and eventual result can be collected across tool calls.
 
+**Cell termination**:
+Ending an execution cell's program. This is distinct from interrupting a process session started by that cell.
+
 **Operation**:
 An underlying action, such as running a command or changing a file. A tool call can perform several operations, and an execution cell can coordinate several tool calls.
 _Avoid_: Activity item, when referring to execution rather than its presentation
 
 **Process session**:
 A command that remains available for input or output collection until its final result is collected.
+
+**Process interruption**:
+A request to stop a running command, distinct from collecting its output or ending the execution cell that coordinated it.
+
+**Image detail**:
+The requested fidelity of an image supplied to the model. It is distinct from the size or visibility of the image's preview in the chat.
 
 ### Goals
 

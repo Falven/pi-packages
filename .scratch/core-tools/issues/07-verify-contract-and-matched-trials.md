@@ -1,4 +1,43 @@
-# 07: Verify the complete contract and matched model trials
+# 07: Verify the full comparison and Phoenix evidence
+
+**What to build:** Produce inspectable evidence for all six corrections across the complete selected tool surface, identical deterministic tasks, paired live tasks, actual effects, and verified Phoenix captures.
+
+**Specification:** [Core toolset](../spec.md), especially testing decisions 3–4, 7–10, and 16–24 and its current reference/evidence notes.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md); [verification and completion gates](../../../docs/plans/core-tool-behavior-parity.md#verification-and-completion-gates).
+
+**Blocked by:** [Core 06: aligned mixed native workflows](06-verify-mixed-native-workflows.md), which requires the current Core 01–05 revisions. Earlier resolved revisions do not satisfy these blockers.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This retains the approved final-contract and matched-trial slice. Earlier passing counts and accepted mismatches remain evidence for their recorded revisions only. Use the existing comparison runner, real-host seam, and local Phoenix project. Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Record the tested extension revision, unmodified Pi/runtime identities, pinned reference binary/version, associated source commit, configured companions, and fixture hashes. Preserve the frozen complete-capture and scoped-declaration identities. A version-associated source commit is not proof of a reproducible binary build.
+- [ ] Verify the complete retained declarations, guidance, raw-input grammar, and helper surface remain unchanged, including namespaces, schemas, declared defaults, and call-input encoding. Cover exec, wait, command execution, process input, patching, and local images; verify corrected runtime results separately and do not widen scope to excluded desktop tools or change full host prompts.
+- [ ] Confirm each correction has its own paired evidence: strict argument handling; full explicit-shell selection; started-command survival after cell termination with eventual cleanup; ordered genuine failure results; target-then-symlink partial deletion; and image detail/bytes across relevant boundaries. Source inspection and prototype success alone do not close a runtime gate.
+- [ ] After targeted cases pass, run one fresh named replay of the existing full 147-case differential matrix. Record cases, steps, payloads, and any supplemental diagnostics separately; preserve the original audit and raw captures rather than overwriting baselines or reclassifying older results.
+- [ ] Compare identical deterministic task inputs and every ordered output associated with each call, including returned fields, missing versus null values, errors, stacks, content-part boundaries, image bytes/metadata, and filesystem/process effects. Preserve arrays and meaningful order. Similar final answers or task success cannot substitute for these comparisons.
+- [ ] Keep only the comparator's existing allowances for generated identifiers, reported durations, and JSON object-key order. No new stack, image, error-text, effect, or ordering normalization is authorized. Report raw and normalized results separately and retain any unresolved difference.
+- [ ] Run the relevant existing package checks, the core package suite, typechecking, and changed-file lint/format/whitespace checks. Broaden consumer checks only where corrected results affect them. Reuse existing cases and temporary diagnostics; add no new test cases, files, or harness. Repeat broader performance measurements only for an observed regression or relevant resource concern.
+- [ ] Run fresh paired live command, patch, continuation, and image tasks after deterministic acceptance. Match task prompt bytes, starting conversations, fixture directories/contents, model alias, and supported generation controls; record unavailable controls and full surrounding host-request differences. Keep actual inference calls distinct from scripted provider exchanges.
+- [ ] Record task outcomes, selected tools and arguments, unnecessary calls, errors, elapsed time, and tokens per arm, with request/result/effect hashes. Preserve failed attempts and repaired follow-ups under their actual revisions. Do not claim identical generated prose, immutable backend identity, or a general performance advantage from these trials.
+- [ ] Publish new inputs, all ordered outputs, comparisons, actual effects, source identities, and relevant lifecycle spans to the existing local Phoenix project with new run identifiers. Retrieve the stored input/output payloads and verify their hashes against captures. A successful span status means execution/capture succeeded, not that parity passed.
+- [ ] Publish a per-correction and per-tool pass/fail/unverified ledger with evidence pointers and remaining differences. Keep accepted native attribution/notification limits, unselected findings, and full-request assembly differences separate from unresolved selected targets. Do not promote a normalized payload match into exact full-request equality.
+- [ ] Verify unchanged Pi and frozen artifacts, bounded cleanup, normal package loading, and preservation of permissions/redaction. Review the final extension delta against the specification and repository standards. Resolve actionable findings and rerun only affected checks.
+- [ ] Update existing operator/release documentation for the verified behavior and material limits, using the current accepted ADR and specification. Keep model-facing guidance verbatim. Add only a scoped extension release note where required; any codec dependency needs its recorded evidence and must not require a Pi change.
+- [ ] Resolve this revision only when all six selected corrections and required verification gates pass. If an existing public API or codec cannot achieve a required outcome, retain the exact unresolved result and leave the correction open; do not waive the target, change Pi, or claim perfect parity.
+
+**Evidence to record:** Fresh run identifiers, exact counts and revisions, literal captures and hashes, full-matrix results, live-task controls/outcomes, retrieved Phoenix payload verification, review results, and explicit unchecked limits. The historical evidence below must retain its original status and scope.
+
+**Current verification:** Pending. Ticket publication runs no comparisons, inference, or Phoenix uploads.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 07: Verify the complete contract and matched model trials
 
 **What to build:** Verify the patch-state repair's final file contents, model results, actual change facts, and preserved public contracts; review the completed delta independently.
 

@@ -1,4 +1,42 @@
-# 03: Yield and resume execution cells
+# 03: Align cell termination and execution failures
+
+**What to build:** Terminating an execution stops its JavaScript while an already-running command can finish, and failed or continued executions return the reference's complete ordered diagnostics without losing cleanup ownership.
+
+**Specification:** [Core toolset](../spec.md), especially implementation decisions 6–7, 11, 18, 30, and 33 and testing decisions 18, 20–21.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md).
+
+**Blocked by:** None (can start immediately). The existing cell, process, output-storage, and public-dispatch implementations are complete.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This updates the existing approved execution-cell slice. Its prior cancellation policy is superseded. Keep the change within the extension and existing public APIs; Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Prepare raw execution input and wait arguments before host coercion. Execution input remains nonempty raw source; wait requires a string cell identifier. Wait yield and terminate are defaulted/non-null, output budgets are optional/nullable, and unknown object keys are ignored under the reference rules.
+- [ ] Match first-line pragma parsing: a JSON object with only the two supported numeric options, native null/default behavior, nonnegative safe integers, and following code. Remove the pragma before evaluation. Preserve native numeric ranges outside the pragma, zero versus omission, and pre-cell error paths without rewriting the frozen grammar or declarations.
+- [ ] Reproduce the delayed-marker case in both runtimes. After explicit cell termination, the already-started awaited command writes its marker, while JavaScript after the await never executes. Ending the cell prevents new dispatch and stops its worker/timers without implicitly interrupting that command.
+- [ ] Return termination promptly with only output already accepted into the cell. A command still running or a held result hook must not force a wait for completion or fabricate a killed-command result. Determine pending-operation behavior from actual reference observations.
+- [ ] Retain surviving processes in the existing session ownership/cleanup registry, including any previously returned handle and their real late status. A terminated or collected cell must not prevent subsequent forced reload/shutdown cleanup. Preserve bounded cleanup and truthful incomplete-cleanup reporting; add no survival daemon or process-global registry.
+- [ ] Late callbacks must not append to closed cell storage, resume JavaScript, commit terminated script work, duplicate operation rows, or start another model turn. Preserve the actual command outcome independently from the terminated cell's outcome.
+- [ ] Probe pre-start commands, initial command collection, pending process input, queued patch work, and held result hooks separately against the reference. Match their observed lifetime rules; command survival alone does not authorize a queued file mutation. Keep the existing file queues and process registry.
+- [ ] Preserve cancellation of initial execution, caller-only cancellation of a later wait, explicit process interruption, resource-failure cleanup, session replacement, and existing store/load commit/discard semantics. Ordinary script completion and a yielded process handle remain separate from cell termination.
+- [ ] Failed execution results include the native failure header, timing, and output framing, then already accepted text/images and the genuine error in reference order. Preserve content-part boundaries, single-string versus multipart shapes, budgets, failure status, and independently successful child results.
+- [ ] Preserve genuine stack strings, the reference module origin `exec_main.mjs`, and source positions after pragma removal. Match conversion of thrown non-Error values. Do not fabricate native frames, strip custom stacks with broad filters, or normalize Node/runtime-frame differences out of the comparison.
+- [ ] Cover synchronous/asynchronous throws, nested frames, errors after yield, timer and syntax errors, thrown strings/undefined/objects, custom stack strings/accessors, child rejections, serialization errors, and exit. A stack accessor that invokes exit must not restart error processing.
+- [ ] Keep failure results, standalone rendering, retained source, raw copy, and Find consistent without duplicated errors. Script text/errors and input/collection receipts create no invented operations; valid empty activity facts remain meaningful on failure.
+- [ ] Verify cell start/yield/wait/termination/failure through the existing real-host seam with real command/file effects, authoritative hooks, final provider content, and cleanup of owned PIDs. Reuse existing cases and temporary diagnostics; add no new test cases, files, or harness. Report parser information or runtime-frame differences that existing public APIs cannot reproduce.
+
+**Evidence to record:** Paired lifecycle timelines and ordered failure payloads, marker/PID outcomes, source-position checks, hook timing, late activity, and final cleanup. This ticket owns the cell/process lifetime boundary and raw exec/wait inputs; Core 02 owns process-input argument parity.
+
+**Current verification:** Pending. Ticket publication changes no runtime behavior.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 03: Yield and resume execution cells
 
 **What to build:** Inspect yielded executions and late outcomes at their origin, then recover the same reliable operations after reload or branch changes.
 

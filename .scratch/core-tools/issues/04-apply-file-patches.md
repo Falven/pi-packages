@@ -1,4 +1,37 @@
-# 04: Apply file patches through native dispatch
+# 04: Align ordered patch deletion effects
+
+**What to build:** Applying the same patch leaves the reference's filesystem state and returns the same partial-failure information, including when an earlier deletion leaves a later symlink dangling.
+
+**Specification:** [Core toolset](../spec.md), especially implementation decisions 16, 32–33 and testing decisions 17–18 and 22.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md).
+
+**Blocked by:** None (can start immediately). The earlier patch-state repair and public mutation queues are already implemented.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This updates the existing approved patch slice. It specifically supersedes the earlier best-effort deletion of a newly dangling alias; the successful update-order repair remains required. Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Require raw patch input to be a string before host coercion. The internal dispatch wrapper must not turn a numeric or other invalid patch argument into valid text. Preserve public argument edits, blocking, error processing, and the frozen raw-input declaration; invalid input produces no filesystem effect.
+- [ ] Retain whole-patch initial validation, repeated-source-path checks, existing public mutation queues, and application-time rereading/recomputation of updates. Keep same-patch alias updates and move-then-update behavior correct without cached replacement writes or new overlap restrictions.
+- [ ] Before each deletion, perform the reference's application-time metadata and non-directory check following the path, then unlink only when that check succeeds. A valid symlink deletion removes its entry without deleting its target. Keep presentation-only prior-content reads best-effort rather than turning them into stricter mutation requirements.
+- [ ] Reproduce target deletion followed by deletion of its symlink and a later operation. The target remains deleted, the now-dangling link remains, its deletion fails, and the later operation is unattempted. Preserve earlier effects with no rollback, retry, or synthetic success.
+- [ ] Match the raw application-error framing and final newline, then preserve the processed result through normal hooks and the next model request. Per-file facts distinguish completed, failed, and unattempted changes and report only verified contents/counts.
+- [ ] Compare target-then-alias, alias-then-target, initially dangling links, directories, links to directories, and related move/alias cases. Measure move-source deletion before sharing or broadening the new check; do not infer its behavior from ordinary Delete operations.
+- [ ] Observe directory entries and link targets as well as file bytes and modes. A failed file read is insufficient to prove a dangling link was removed. Verify rendered and retained per-file facts against these actual effects, including after failure and result redaction.
+- [ ] Replace the contrary expectation in the existing dangling-alias case and reuse the existing 51-case patch comparison, queue/cancellation checks, and real-host presentation coverage. Verify request → mutation → processed result → next request. Add no new test cases, files, lock service, or harness.
+
+**Evidence to record:** Paired filesystem snapshots and ordered results, exact error framing, per-file outcomes/counts, relevant existing checks, and runtime/source identities. Earlier passing best-effort unlink evidence below remains historical and cannot close this revision.
+
+**Current verification:** Pending. Ticket publication changes no runtime behavior.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 04: Apply file patches through native dispatch
 
 **What to build:** Preserve earlier operations in the same patch by recomputing each update from current file contents, and record the actual contents changed or deleted.
 

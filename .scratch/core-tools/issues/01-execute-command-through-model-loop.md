@@ -1,4 +1,37 @@
-# 01: Execute a command through the complete model loop
+# 01: Align command arguments and explicit shell selection
+
+**What to build:** A command accepts the same arguments and selects the same explicit shell as the reference, then exposes its actual output, failure, and effective command context through the complete model loop.
+
+**Specification:** [Core toolset](../spec.md), especially implementation decisions 12, 14, 15, and 33 and testing decisions 18–19.
+
+**Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md).
+
+**Blocked by:** None (can start immediately). The existing command and public-dispatch implementation is complete.
+
+**Status:** ready-for-agent
+
+## Behavior alignment — 2026-10-18
+
+This updates the existing approved command slice. The current requirements supersede conflicting historical requirements below; earlier passing checks do not verify this revision. Work stays in the extension and its existing public-host seam. Pi source, installed packages, private runtime behavior, global settings, and version requirements must remain unchanged.
+
+- [ ] Validate original command arguments through public argument preparation before Pi can coerce them. Require a string command; reject incorrect primitives, invalid array members, fractions, and out-of-range numeric values under the reference's field rules. Preserve the distinction between an argument error, a launch error, and a nonzero command exit.
+- [ ] Match null, omission, and zero separately. Command yield defaults to 10,000 ms and tty to false; both reject null. Optional command fields and output budgets retain their native nullable/default behavior and applicable unsigned ranges. Ignore unknown keys in the scoped object call while preserving every frozen declaration, including its captured additional-property restriction.
+- [ ] Keep public nested dispatch, blocking, argument edits, result replacement/redaction, permissions, and explicit tool selection authoritative. Reuse existing non-coercing facilities; do not add a validation framework, parser copy, or unsupported authority. Share only validation that the other slices actually need.
+- [ ] Apply the complete explicit-shell rule before launching: infer the supplied name's shell kind, discover an installed executable in reference order, and use the platform fallback when the kind is unknown or unavailable. On the audited platform, account-shell, PATH, and family fallback precedence must match.
+- [ ] Apply that rule even when the supplied path exists. Reproduce the existing-custom-wrapper case against the pinned runtime before treating source inspection as runtime evidence. Cover recognized families, missing recognized paths, unknown names, relative names, and discovery precedence.
+- [ ] With shell omitted, preserve Pi's configured shell and existing default behavior. Keep command text, the once-applied prefix, owning working directory, inherited environment, session metadata, login options, and pipe/PTY selection. Report the actual selected executable in effective inputs after argument processing.
+- [ ] Launch once. A missing working directory or another launch failure must not trigger a shell retry or a second execution. Invalid command arguments must produce no marker or process effect. Measure public-boundary error diagnostics; disclose unavailable raw-parser information instead of modifying Pi or masking differences.
+- [ ] Verify request → public dispatch → real command effect → processed result → next request with the existing command and presentation cases and temporary diagnostics. Check exact result fields, errors, effective inputs, hook edits, and retained source alongside real effects. Add no new test cases, files, or harness.
+
+**Evidence to record:** Targeted paired inputs/results, actual executable and launch count, effect checks, runtime/source identities, and relevant existing checks. Record unresolved differences explicitly. This ticket owns command validation and shell selection; the other behavior tickets own their own entry boundaries.
+
+**Current verification:** Pending. Ticket publication changes no runtime behavior.
+
+## Historical revisions
+
+Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
+
+**Previous title:** 01: Execute a command through the complete model loop
 
 **What to build:** Inspect each completed command independently in the chat, with a separate entry for genuinely script-owned output or errors and an unchanged model contract.
 
