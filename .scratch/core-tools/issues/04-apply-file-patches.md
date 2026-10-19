@@ -8,7 +8,7 @@
 
 **Blocked by:** None (can start immediately). The earlier patch-state repair and public mutation queues are already implemented.
 
-**Status:** claimed — implementation, focused checks, and paired-reference verification pass at integration `3c4a6c946e82a8c03dfca8c5eabff1b9326ff629`; final integration review remains pending.
+**Status:** resolved — ordered deletion effects, output, and per-file facts verified on the final integrated runtime
 
 ## Behavior alignment — 2026-10-18
 
@@ -34,6 +34,12 @@ Raw preparation now uses the installed non-coercing schema check. Seven invalid 
 The existing dangling-alias case now verifies the failed raw string result, its final newline, the retained link target/mode, and completed/failed/unattempted file facts. Nine isolated public-host controls cover valid and reverse-order alias deletion, initially dangling links, directories, directory links, a target replaced by a directory earlier in the patch, and related moves. A native application subprocess separately measured a protected move-source removal: its destination write survives, its source remains, and the diagnostic is `Failed to remove original`. That wording is corrected; the new following-metadata check remains confined to ordinary Delete operations. Current-session native tool probes and the pinned source establish the directory-read diagnostic ``path `…` is not a file``, replacing the host's different OS wording. These probes supplement, and do not replace, root's paired model-loop captures.
 
 All 68 existing patch and patch-presentation checks pass, including update ordering, whole-patch validation, queue coordination, cancellation, file modes, permissions, and hooks. Temporary diagnostics also pass for raw types, ordered deletion controls, move-source partial effects, and rendered/retained facts before and after reload and result redaction. Root `tsc --noEmit -p tsconfig.json`, changed-file `oxlint`, `oxfmt --check`, and `git diff --check` pass. No permanent test cases/files were added. Pi, installed dependencies, frozen declarations/captures, the shared host fixture, and the historical ticket body remain unchanged; hashes and scope checks are in the evidence index.
+
+## Integrated result — 2026-10-19
+
+The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on `codex/core-tool-behavior-parity`. The final full replay has 147 cases and 158 steps: 120 raw matches, 152 normalized matches, and 158 matching filesystem snapshots. See the [implementation report](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/report.md) and [complete case ledger](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/case-ledger-final.md) for the exact remaining differences. Normalized results use only the existing comparator; they do not establish full-request or universal runtime equality.
+
+The target-then-symlink patch deletes the target, fails the now-dangling link deletion, leaves that link, and leaves later operations unattempted. The earlier targeted run covers 12 cases/14 steps and the 51-case patch matrix; all 65 normalized results and filesystem snapshots match. All 51 patch-tagged steps also match in the final full replay. Existing queue/cancellation and presentation checks preserve blocking, argument/result edits, redaction, retained file facts, and actual directory/link state. Both review axes found no further patch defect. This resolves the patch slice; it does not resolve image, process-race, or workspace-integrity gates elsewhere.
 
 ## Historical revisions
 

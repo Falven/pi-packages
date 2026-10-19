@@ -57,11 +57,11 @@ Helper availability follows Pi's active tool configuration. With Pi's built-in t
 
 Each script starts with fresh JavaScript variables. Use `store` and `load` to retain serializable values across calls in the same session. A running command can return a `session_id` for `write_stdin`; a running JavaScript execution returns a `cell_id` for `wait`.
 
-Patch results show the changed file paths.
+Patch results show the changed file paths. Deleting a target before its symlink can fail on the dangling link: the target stays deleted, the link remains, and later operations are unattempted.
 
 ![A completed patch reports the updated file](screenshots/patch.png)
 
-Image results appear inline. Local image arguments are checked before native coercion and after permission hooks edit them. Omitted or null detail defaults to `high`; unknown fields are ignored. Image preparation still has [open alignment gates](../../.scratch/core-tools/issues/05-return-local-images.md) for encoded bytes, detail, and late blocking. Late blocking can leave image bytes in saved results and serialized model output.
+Image results appear inline. Local image arguments are checked before native coercion and after permission hooks edit them. Omitted or null detail defaults to `high`; unknown fields are ignored. The image output helper rejects remote URLs and returns an omission notice for `low` detail. Image preparation still has [open alignment gates](../../.scratch/core-tools/issues/05-return-local-images.md) for encoded bytes, detail, and late blocking. Late blocking can leave image bytes in saved results and serialized model output.
 
 ![An image result displayed in Pi](screenshots/image.png)
 
@@ -79,6 +79,6 @@ Patches validate all operations before writing. A validation failure leaves file
 
 Live command output can appear before extensions process or redact the final result. Later redaction cannot hide output that was already displayed.
 
-Script failures retain prior output and source locations in `exec_main.mjs`. Custom stack strings and formatters are preserved. Some JSON parser diagnostics still differ from the reference runtime.
+Script failures retain prior output and source locations in `exec_main.mjs`. Custom stack strings and formatters are preserved. Custom stack callbacks can receive Node evaluator frames absent from the reference runtime. Some JSON parser diagnostics still differ because original JSON spelling is unavailable after host decoding.
 
 See the [tool lifecycle](../../docs/adr/0024-core-tools-use-native-extension-lifecycle.md) and [activity format](../../docs/specs/tool-activity.md) for details.

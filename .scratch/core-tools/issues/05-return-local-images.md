@@ -8,7 +8,7 @@
 
 **Blocked by:** Required image source/detail binding cannot be completed safely through the current public APIs. Existing dispatch and validation fixes can proceed; the image preparation and late-blocking gates below remain unresolved.
 
-**Status:** claimed — `codex/core-image-alignment`, 2026-10-18; base `6c775356361cf89bf247f7eb9f1dc31a16cb912e`
+**Status:** partially implemented — strict arguments and ordinary helper corrections delivered; full image preparation/delivery and late blocking remain blocked by the existing public-host boundary
 
 ## Behavior alignment — 2026-10-18
 
@@ -26,11 +26,11 @@ The accepted image decision gives preparation to this extension. Pi must remain 
 - [ ] Account for Pi's remaining normalization pass. The public API has no per-tool image skip, and the prototype's earlier tool-completion event still contains resized bytes. Compare every affected event/display consumer as well as final history/provider content; final-image restoration alone cannot establish parity.
 - [ ] Keep actual images once in the native result that collects them, including a later wait, with origin path/status retained separately. Preserve terminal visibility preferences, generic activity bodies, Find/copy bindings, and bounded cleanup. Match the reference's content-part order and conversion-notice behavior without another image history store.
 - [ ] Verify the full helper → public hooks → tool-completion event → finalized message → retained/reloaded history → provider path through existing image, cell, and presentation cases and temporary diagnostics. Repeat the probe's replacement/removal/blocking coverage and establish the untested detail, format, capability, mixed/concurrent, and binding cases. Add no new test cases, files, or harness.
-- [ ] Keep an exact unresolved-difference record for any required image boundary that existing public APIs or available codecs cannot reproduce. Neither the accepted ownership decision nor the PNG probe authorizes a Pi change, a comparator exception, or closing this ticket with an unresolved target.
+- [x] Keep an exact unresolved-difference record for any required image boundary that existing public APIs or available codecs cannot reproduce. Neither the accepted ownership decision nor the PNG probe authorizes a Pi change, a comparator exception, or closing this ticket with an unresolved target.
 
 **Evidence to record:** Raw helper results; ordered boundary payloads; image hashes, sizes, dimensions, MIME types, orientation/metadata, and detail fields; capability and hook cases; reload/display outcomes; codec findings; and runtime/source identities. Keep source-based rules separate from paired runtime observations.
 
-**Current verification:** Raw argument correction implemented; image preparation/integration acceptance remains unresolved. The claimed branch and original base above are preserved. Focused checks and exact remaining gates are recorded below; no prior verification is promoted to current parity.
+**Earlier worker-local verification:** Raw argument correction implemented; image preparation/integration acceptance remains unresolved. The claimed branch and original base above are preserved. Focused checks and exact remaining gates are recorded below; no prior verification is promoted to current parity.
 
 ### Current implementation and evidence — 2026-10-18
 
@@ -71,6 +71,12 @@ The subsequent clean merge of integration `2753f5a1e520655ad559415a9b2a6e6c66959
 After merging `d7de8ac`, the existing routed-limit assertion was extended to select a text-only virtual model with an image-capable physical route. It reproduced the premature rejection. Removing the unsupported selected-model guard makes the same assertion pass, including the raw helper return, physical 12×8 limits, and the existing resize-setting check. No private capability lookup or image-pipeline workaround was introduced. Capability fidelity remains open because selected-model metadata does not reliably describe the physical route.
 
 All 37 affected existing checks pass; fourteen are image checks covering raw validation, unavailable/overridden tools, permissions, argument edits, result redaction, blocking, and routed delivery. No permanent test case, fixture, or harness was added. [Final-review evidence](/tmp/pi-core-alignment-20261018-a7r6fk0i/review-fixes/README.md) records the red/green results, exact commands, static checks, and final commit. Full image preparation, source/detail binding, byte equivalence, earlier consumers, and late blocking remain unresolved. Installed-host integrity acceptance remains failed after the earlier shim incident. The blocked full pipeline was not re-investigated, and this ticket remains claimed.
+
+## Integrated result — 2026-10-19
+
+The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on `codex/core-tool-behavior-parity`. The final full replay has 147 cases and 158 steps: 120 raw matches, 152 normalized matches, and 158 matching filesystem snapshots. See the [implementation report](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/report.md) and [complete case ledger](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/case-ledger-final.md) for the exact remaining differences. Normalized results use only the existing comparator; they do not establish full-request or universal runtime equality.
+
+Strict path/detail arguments, native file errors, and permission-hook revalidation are delivered. The premature selected-model rejection was removed because a text-only virtual model can route to an image-capable physical model. The final helper follow-up aligns HTTP/HTTPS errors, ordinary detail type/order/case handling, and low-detail omission with its separate output position and text-budget behavior. Full image ownership remains unmet: for the audited 3000×2000 PNG, Pi sends a resized 2000×1333 image with `detail: "auto"`; native high is 1920×1280 and native original preserves the source dimensions/bytes. Disabling resizing also reencodes the source. The 18-mode public-host investigation records earlier tool-completion changes, unsafe mutable event lifetime, image/source binding, replacement/removal, and late blocking failures. A final restoration cache would bypass authoritative edits and does not fix earlier consumers. No processor bypass, side cache, opaque image payload, replacement provider, dependency/version requirement, or Pi patch was added. The exact unmet boundaries remain in the report; this ticket cannot close.
 
 ## Historical revisions
 

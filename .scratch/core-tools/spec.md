@@ -1,14 +1,20 @@
 # Core toolset
 
-**Status:** `ready-for-agent` — behavior-alignment revision published on 2026-10-18. The six corrections below are specified, not implemented or newly verified. Q1–Q3 are settled: Pi stays unchanged, the extension owns image preparation under the reference rules, and explicit shells follow the full reference selection rule.
+**Status:** partially implemented — the integration branch delivers argument, shell, process/cell, failure, patch, and limited image-helper corrections. Required image, stack/lifetime, and immutable-host gates remain open. Q1–Q3 and all acceptance requirements remain unchanged. See the [implementation report](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/report.md).
 
-**Tracker:** this existing local tracker entry publishes the current specification with the `ready-for-agent` label. It updates the contract in place; completed core, activity, and chat tickets retain their status and historical evidence.
+**Tracker:** the existing local issues record current completion and blockers separately from their byte-preserved historical revisions. Core 01, Core 02 and Core 04 are resolved for their selected behavior. Core 03 and Core 05–07 remain open, including the overall installed-host integrity gate.
 
 **Current decisions:** [behavior-alignment ADR](../../docs/adr/0030-core-tool-behavior-parity.md) and [implementation plan](../../docs/plans/core-tool-behavior-parity.md). They revise cell termination, raw argument validation, explicit shell selection, JavaScript failure results, ordered patch deletion effects, and image detail. Other contract and presentation decisions remain applicable.
 
 **Earlier activity baseline:** implemented and verified at `fbc8030`, including generic command facts, verbatim core guidance, non-terminal Ctrl+C, and input/script-result activity suppression. [Activity 08](../tool-activity/issues/08-verbatim-core-tool-guidance.md) and [Activity 10](../tool-activity/issues/10-process-input-parity.md) retain their scope; [Activity 09](../tool-activity/issues/09-verify-activity-alignment.md) records affected-suite verification and cleanup. Those results do not verify this revision.
 
 **Completed baseline:** the selected core contract was implemented and verified at `c2adc1b`, with disclosed native-host and unverified limits. Final presentation verification at `d4ffbfd` is recorded separately in ticket 07: 207 package checks pass, as do static checks, two installed-CLI live pipe/PTY checks with the six usable companions, and both independent review rechecks. Main integration at `9c633a3` also passes four mixed checks and both installed-CLI cases with all seven companions, closing the earlier attachments startup gap. The approved native image-placement exception, physical-display gap, and measured cost of rendering expanded output into the native exit transcript remain explicit. Earlier measurements retain their original revision identities.
+
+## Implementation evidence — 2026-10-19
+
+The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on `codex/core-tool-behavior-parity`. The final full replay has 147 cases and 158 steps: 120 raw matches, 152 normalized matches, and 158 matching filesystem snapshots. See the [implementation report](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/report.md) and [complete case ledger](/Users/fran/.pi/artifacts/pi-codex-tools-alignment-2026-10-18-a7r6fk0i/case-ledger-final.md) for the exact remaining differences. Normalized results use only the existing comparator; they do not establish full-request or universal runtime equality.
+
+The suite and comparison evidence, remaining differences, installed-shim incident, trace readback hashes, and cleanup limits are recorded in that report. The initial package-manager verification crossed Q1 by changing generated dependency shims; this remains a failed integrity gate. Subsequent checks used direct installed binaries. Fresh live-model trials remain conditional on deterministic acceptance and were not run. No acceptance target was relaxed, and the public image-hook prototype was not promoted into an unsafe production bypass.
 
 ## Problem Statement
 
