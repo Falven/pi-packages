@@ -40,6 +40,8 @@ The existing image assertions were updated, with a failing public-host run befor
 
 The focused image and image-presentation suites pass 33/33. The full package run passes 222/223: the unchanged Ctrl+C workflow case with the toolset first observed exit 0/`AFTER` instead of exit 23/`STOPPED`; both load-order cases pass on an isolated rerun. Direct root TypeScript checking, targeted lint, formatting, and whitespace checks pass. `pnpm typecheck` itself failed in dependency setup as recorded below. Integration refs `3c4a6c9` and `1d39dda` were merged without conflicts; the latter only updated the patch ticket. Exact commands and logs are in the evidence index.
 
+Integration subsequently advanced to `7aa3894` with the command validation/shell correction. That ref was merged without conflicts after implementation commit `b21c075`. On the merged branch, the existing image, image-presentation, command, and presentation suites pass 101/101; both Ctrl+C workflow cases pass again. Direct TypeScript and formatting checks also pass. The earlier 222/223 package result remains a separate pre-merge observation.
+
 The production image-restoration prototype was **not** adopted. The current public API has no final pre-normalization result callback. In the new diagnostic, two different permitted PNG byte streams collapse to the same normalized image. An immutable result snapshot cannot observe a later replacement; the retained mutable event does, but that lifetime is undocumented. Matching normalized hashes cannot establish which source is still permitted. Restoring an earlier payload would violate the replacement/removal boundary.
 
 Required gates remain open:
