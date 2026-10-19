@@ -3,7 +3,12 @@ import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type, type TSchema } from "typebox";
 import { createCommand, createStdin } from "./command.ts";
-import { ExecutionCells, type WaitOptions } from "./execution.ts";
+import {
+  ExecutionCells,
+  prepareExecArguments,
+  prepareWaitArguments,
+  type WaitOptions,
+} from "./execution.ts";
 import { createImage } from "./image.ts";
 import { createPatch } from "./patch.ts";
 import { ProcessSessions } from "./process.ts";
@@ -118,6 +123,7 @@ export default function coreTools(pi: ExtensionAPI): void {
     exposure: "model-only",
     namespace: { name: contract.namespace.name },
     executionMode: "sequential",
+    prepareArguments: prepareExecArguments,
     prepareLoadout(loadout) {
       const names = new Set(loadout.callable.map((tool) => tool.name));
       const stock = new Set(
@@ -164,6 +170,7 @@ export default function coreTools(pi: ExtensionAPI): void {
     exposure: "model-only",
     namespace: { name: contract.namespace.name },
     executionMode: "sequential",
+    prepareArguments: prepareWaitArguments,
     execute(id, args, signal) {
       return cells.wait(args, signal, id);
     },

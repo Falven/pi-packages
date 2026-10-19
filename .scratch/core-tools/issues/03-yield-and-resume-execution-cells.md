@@ -8,7 +8,7 @@
 
 **Blocked by:** None (can start immediately). The existing cell, process, output-storage, and public-dispatch implementations are complete.
 
-**Status:** ready-for-agent
+**Status:** implemented — focused checks passed on 2026-10-19; required parity gates remain open
 
 ## Behavior alignment — 2026-10-18
 
@@ -30,7 +30,15 @@ This updates the existing approved execution-cell slice. Its prior cancellation 
 
 **Evidence to record:** Paired lifecycle timelines and ordered failure payloads, marker/PID outcomes, source-position checks, hook timing, late activity, and final cleanup. This ticket owns the cell/process lifetime boundary and raw exec/wait inputs; Core 02 owns process-input argument parity.
 
-**Current verification:** Pending. Ticket publication changes no runtime behavior.
+**Current implementation:** `codex/core-cell-alignment` merged integration `102ca84`, including command alignment, process commit `b82c357`, and image argument validation. Explicit cell termination detaches pending input collection, preserves already-started commands and unread process output, and retains forced cleanup ownership. Failure output keeps its native header, ordered parts, budget, and source locations. The worker-local default stack formatter filters structured evaluator CallSites before stacks can be cached, while leaving the script's `Error.prepareStackTrace`, custom stacks, and exit behavior intact. `store` rejects unserializable values with the reference's string values.
+
+**Focused verification:** Nine existing host cases passed. Temporary diagnostics passed 36 failure observations, 37 raw argument observations, and eight lifetime/admission phases. All twelve current failure references match after duration substitution, including cached stacks and formatter visibility; the six parsed stored-value records, including complete error strings, match the immutable `full-1/exec-store-values` capture. Checks include pending stdin poll/write survival, cancellation of a write queued behind a poll, exactly-once final collection, late operation status without another model request, reload cleanup of owned PIDs, held hooks, and pre-start/queued mutation cancellation. Direct `tsc`, changed-file `oxlint`, `oxfmt --check`, and `git diff --check` pass. Evidence and exact commands: `/tmp/pi-core-alignment-20261018-a7r6fk0i/cell/finish.r0n4n5dp/evidence.md`; earlier red/green evidence remains in `cell/` and `cell/resume/`. The completed process branch supplies the deterministic SIGINT fixtures and 64-token PTY budget. No new permanent tests/files or frozen declaration changes were made.
+
+**Open requirements, not waived:**
+
+- Wait parsing still lacks native JSON error positions, duplicate-key detection, numeric spelling, and precision already lost before public `prepareArguments`. The captured malformed pragma is matched; other malformed-JSON diagnostics still use V8 wording. These remain parity gaps.
+- Native observations remain needed for work held before dispatch, a queued patch, and held result hooks. Local cancellation/cleanup passes do not establish those reference lifetimes. Additional native stack probes are listed in the temporary evidence, including CallSite-based custom formatters, direct `JSON.stringify`, and serializer accessors.
+- The parent owns fresh paired captures, the final full suites, combined review, and live/Phoenix verification. This ticket remains open until those required scopes are resolved; the passing focused checks do not certify full parity.
 
 ### Additional lifetime and stack evidence — 2026-10-19
 

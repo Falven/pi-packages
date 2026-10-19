@@ -98,7 +98,7 @@ export function readable(
     .map((part) => {
       const text = part.text
         .replace(
-          /^Script (?:completed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
+          /^Script (?:completed|failed|terminated|running with cell ID [^\n]+)\nWall time [^\n]+\nOutput:\n/,
           "",
         )
         .replace(/^Exit code: 1\nWall time: [^\n]+\nOutput:\n/, "");

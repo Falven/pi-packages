@@ -35,6 +35,31 @@ const cancel = Object.setPrototypeOf((id) => {
   clearTimeout(timers.get(id));
   timers.delete(id);
 }, null);
+const bridgeSource = `${import.meta.url}#bridge`;
+const stackSources = new Set([
+  import.meta.url,
+  bridgeSource,
+  "node:internal/vm/module",
+  "node:internal/process/task_queues",
+  "node:internal/timers",
+]);
+// The worker fallback also formats cached stacks without replacing the VM's own hook.
+const prepareStack = Error.prepareStackTrace;
+Error.prepareStackTrace = (value, frames) =>
+  prepareStack(
+    value,
+    frames.filter((frame, index) => {
+      const file = frame.getFileName();
+      return (
+        !stackSources.has(file) &&
+        !(
+          file === null &&
+          frame.getFunctionName() === "stringify" &&
+          frames[index + 1]?.getFileName() === bridgeSource
+        )
+      );
+    }),
+  );
 const context = createContext(Object.create(null));
 const createBridge = runInContext(
   `((send, schedule, cancel, definitions, stored) => {
@@ -77,9 +102,20 @@ const createBridge = runInContext(
       for (const id of callbacks.keys()) cancel(id);
       callbacks.clear();
     };
+    const errorText = error => {
+      if (error === finish || ended) return finish;
+      let stack;
+      if (error !== null && (typeof error === "object" || typeof error === "function")) {
+        try { stack = error.stack; } catch { /* An unavailable stack falls back to the thrown value. */ }
+      }
+      if (ended) return finish;
+      let message = "";
+      try { message = typeof stack === "string" ? stack : String(error); } catch { /* V8 string conversion can fail. */ }
+      return ended ? finish : message;
+    };
     const failed = error => {
-      if (error === finish || ended) return;
-      settle("error", error instanceof Error ? error.name + ": " + error.message : String(error));
+      const message = errorText(error);
+      if (message !== finish) settle("error", message);
     };
     globalThis.text = value => post({ type: "text", text: stringify(value), owner: value !== null && typeof value === "object" ? childResults.get(value) : undefined });
     globalThis.notify = value => post({ type: "notify", text: stringify(value) });
@@ -89,9 +125,10 @@ const createBridge = runInContext(
     };
     globalThis.store = (key, value) => {
       if (typeof key !== "string") throw new TypeError("Stored keys must be strings");
-      const serialized = JSON.stringify(value);
+      let serialized;
+      try { serialized = JSON.stringify(value); } catch (error) { throw errorText(error); }
       if (serialized === undefined)
-        throw new Error('Unable to store "' + key + '". Only plain serializable objects can be stored.');
+        throw 'Unable to store "' + key + '". Only plain serializable objects can be stored.';
       const size = bytes(key) + bytes(serialized);
       if (size > 256 * 1024) throw new Error("Stored value exceeds 256 KiB");
       const previous = values.get(key);
@@ -162,27 +199,36 @@ const createBridge = runInContext(
         if (!callback || ended) return;
         try { Promise.resolve(callback()).catch(failed); } catch (error) { failed(error); }
       },
-      error(message) { return new Error(message); },
       completed() { settle("done"); },
       failed,
     };
   })`,
   context,
+  { filename: bridgeSource },
 );
 const bridge = createBridge(send, schedule, cancel, JSON.stringify(tools), JSON.stringify(values));
 port.on("message", (message) => bridge.receive(message));
+let module;
 try {
-  const module = new SourceTextModule(source, {
+  module = new SourceTextModule(source, {
     context,
+    identifier: "exec_main.mjs",
     importModuleDynamically() {
-      throw bridge.error("Module imports are not available");
+      throw "unsupported import in exec";
     },
   });
-  await module.link(() => {
-    throw bridge.error("Module imports are not available");
-  });
-  await module.evaluate();
-  bridge.completed();
 } catch (error) {
-  bridge.failed(error);
+  // Compilation has no user stack; Node's VM constructor frames are host implementation details.
+  bridge.failed(String(error));
+}
+if (module) {
+  try {
+    await module.link(() => {
+      throw "unsupported import in exec";
+    });
+    await module.evaluate();
+    bridge.completed();
+  } catch (error) {
+    bridge.failed(error);
+  }
 }

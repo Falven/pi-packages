@@ -69,6 +69,8 @@ Image results appear inline. Local image arguments are checked before native coe
 
 Running commands, yielded executions, and stored values remain available across prompts in the same Pi session. Switching sessions, reloading extensions, or closing Pi stops this package's running work and clears its temporary state. File changes and saved history remain.
 
+`wait` with `terminate: true` stops the script while already-started commands continue, including during a pending `write_stdin` call. Returned process handles remain usable. Cancelling a later `wait` call leaves the execution and its unread output available.
+
 ![A running command continues to show its status and output](screenshots/running.png)
 
 Commands run with the host's permissions; elevated execution requests are rejected.
@@ -76,5 +78,7 @@ Commands run with the host's permissions; elevated execution requests are reject
 Patches validate all operations before writing. A validation failure leaves files unchanged. A failure while applying a patch can leave earlier changes applied.
 
 Live command output can appear before extensions process or redact the final result. Later redaction cannot hide output that was already displayed.
+
+Script failures retain prior output and source locations in `exec_main.mjs`. Custom stack strings and formatters are preserved. Some JSON parser diagnostics still differ from Codex.
 
 See the [tool lifecycle](../../docs/adr/0024-core-tools-use-native-extension-lifecycle.md) and [activity format](../../docs/specs/tool-activity.md) for details.

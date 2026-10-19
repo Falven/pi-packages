@@ -242,7 +242,8 @@ test("a script failure with no message remains in model results and source witho
   });
   host.queueResponse(...call('throw "";', "empty-error"));
   await host.session.prompt("Run a script that fails without a message");
-  assert.equal(output(host, "empty-error"), "Script error:\n");
+  const raw = output(host, "empty-error");
+  assert.match(raw, /^Script failed\nWall time \d+\.\d seconds\nOutput:\n\nScript error:\n$/);
   await openWork(host);
   await host.key("\x0f");
   await host.frame();
@@ -262,7 +263,7 @@ test("a script failure with no message remains in model results and source witho
   await openWork(host);
   await host.frame();
   assert.doesNotMatch(screen(), /(?:>|▼) Error|Called exec/);
-  assert.equal(output(host, "empty-error"), "Script error:\n");
+  assert.equal(output(host, "empty-error"), raw);
 });
 
 for (const order of ["first", "last"] as const) {

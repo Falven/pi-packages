@@ -5,6 +5,8 @@ import * as pty from "node-pty";
 import { boundedPreview } from "./presentation.ts";
 import { OutputStore, type OutputCursor } from "./output.ts";
 
+export const cellTerminated = new Error("Execution cell terminated");
+
 export type ProcessPresentation = {
   id: number;
   output: string;
@@ -389,6 +391,8 @@ export class ProcessSessions {
     chars = "",
   ) {
     const call = child.collected.then(async () => {
+      const cancelled = () => signal.aborted && signal.reason === cellTerminated;
+      if (cancelled()) throw cellTerminated;
       if (this.processes.get(child.id) !== child)
         throw new Error(`write_stdin failed: Unknown process id ${child.id}`);
       if (chars && !child.write && chars !== "\u0003")
@@ -398,7 +402,11 @@ export class ProcessSessions {
       const started = performance.now();
       let timer: NodeJS.Timeout | undefined;
       let retire = false;
-      const stop = () => this.sendSignal(child);
+      const detached = Promise.withResolvers<void>();
+      const stop = () => {
+        if (cancelled()) detached.resolve();
+        else this.sendSignal(child);
+      };
       signal.addEventListener("abort", stop, { once: true });
       try {
         if (signal.aborted) stop();
@@ -409,20 +417,24 @@ export class ProcessSessions {
         }
         await Promise.race([
           child.done,
+          detached.promise,
           new Promise<void>((resolve) => {
             timer = setTimeout(resolve, yieldTime);
           }),
         ]);
+        if (cancelled()) throw cellTerminated;
         if (signal.aborted || child.error) await child.done;
         let exitCode = child.exitCode;
         let cutoff = child.output.snapshot();
         let collected = await child.output.read(child.cursor, cutoff, maxTokens);
+        if (cancelled()) throw cellTerminated;
         if (signal.aborted || child.error) {
           await child.done;
           exitCode = child.exitCode;
           cutoff = child.output.snapshot();
           collected = await child.output.read(child.cursor, cutoff, maxTokens);
         }
+        if (cancelled()) throw cellTerminated;
         retire = exitCode !== undefined;
         if (child.error)
           throw new Error(child.error.message + (collected.output ? `\n${collected.output}` : ""));
@@ -435,6 +447,7 @@ export class ProcessSessions {
           ...collected,
         };
       } catch (error) {
+        if (error === cellTerminated) throw error;
         this.sendSignal(child);
         await child.done;
         retire = true;
