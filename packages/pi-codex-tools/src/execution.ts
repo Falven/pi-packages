@@ -20,7 +20,7 @@ import {
   type OperationPresentation,
   type PatchDetails,
 } from "./presentation.ts";
-import type { ProcessSessions, ProcessPresentation } from "./process.ts";
+import { cellTerminated, type ProcessSessions, type ProcessPresentation } from "./process.ts";
 import { OutputStore, type OutputCursor } from "./output.ts";
 import type {
   AgentToolResult,
@@ -88,6 +88,7 @@ type Cell = {
   replies: Map<number, number>;
   replyBytes: number;
   controller: AbortController;
+  termination: AbortController;
   text: OutputStore;
   images: OutputStore;
   parts: Part[];
@@ -123,16 +124,142 @@ const cleanupLimit = 2000;
 const selectedNames = new Set(["exec_command", "write_stdin", "apply_patch", "view_image"]);
 const brief = (value: unknown) =>
   truncateToWidth(stripVTControlCharacters(String(value)).replaceAll(/\s+/g, " "), 256);
+const header = (status: string, started = performance.now()) => ({
+  type: "text" as const,
+  text: `Script ${status}\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
+});
 const failure = (message: string): Result => ({
-  content: [{ type: "text", text: `Script error:\n${message}` }],
+  content: [header("failed"), { type: "text", text: `Script error:\n${message}` }],
   details: undefined,
   isError: true,
 });
-function integer(value: number | undefined, fallback: number, name: string): number {
-  const result = value ?? fallback;
-  if (!Number.isSafeInteger(result) || result < 0)
-    throw new Error(`${name} must be a nonnegative integer`);
-  return result;
+const rawSourceError =
+  'exec expects raw JavaScript source text (non-empty). Provide JS only, optionally with first-line `// @exec: {"yield_time_ms": 10000, "max_output_tokens": 1000}`.';
+
+function argumentType(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string") return `string ${JSON.stringify(value)}`;
+  if (typeof value === "boolean") return `boolean \`${value}\``;
+  if (typeof value === "number") {
+    const integer = Number.isInteger(value) && value >= -(2 ** 63) && value < 2 ** 64;
+    return `${integer ? "integer" : "floating point"} \`${integer ? value : value >= 2 ** 64 ? value.toExponential() : value}\``;
+  }
+  return Array.isArray(value) ? "sequence" : "map";
+}
+
+function unsigned(value: unknown, expected: "u64" | "usize"): number {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 2 ** 64)
+    return value;
+  const invalid =
+    typeof value === "number" && Number.isInteger(value) && value < 0 && value >= -(2 ** 63)
+      ? "value"
+      : "type";
+  throw new Error(`invalid ${invalid}: ${argumentType(value)}, expected ${expected}`);
+}
+
+export function prepareExecArguments(args: unknown): { input: string } {
+  const input = (args as { input?: unknown } | null)?.input;
+  if (typeof input !== "string" || !input.trim()) throw new Error(rawSourceError);
+  return { input };
+}
+
+export function prepareWaitArguments(args: unknown): WaitOptions {
+  try {
+    if (!args || typeof args !== "object" || Array.isArray(args))
+      throw new Error(`invalid type: ${argumentType(args)}, expected struct ExecWaitArgs`);
+    let cellId: string | undefined;
+    let yieldTime = 10000;
+    let maxTokens = 10000;
+    let terminate = false;
+    for (const [key, value] of Object.entries(args)) {
+      if (value === undefined) continue;
+      if (key === "cell_id") {
+        if (typeof value !== "string")
+          throw new Error(`invalid type: ${argumentType(value)}, expected a string`);
+        cellId = value;
+      } else if (key === "yield_time_ms") yieldTime = unsigned(value, "u64");
+      else if (key === "max_tokens" && value !== null) maxTokens = unsigned(value, "usize");
+      else if (key === "terminate") {
+        if (typeof value !== "boolean")
+          throw new Error(`invalid type: ${argumentType(value)}, expected a boolean`);
+        terminate = value;
+      }
+    }
+    if (cellId === undefined) throw new Error("missing field `cell_id`");
+    return { cell_id: cellId, yield_time_ms: yieldTime, max_tokens: maxTokens, terminate };
+  } catch (error) {
+    throw new Error(
+      `failed to parse function arguments: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+function executionSource(source: string) {
+  const newline = source.indexOf("\n");
+  const firstLine = (newline < 0 ? source : source.slice(0, newline)).trimStart();
+  if (!firstLine.startsWith("// @exec:")) return { source, maxTokens: 10000, yieldTime: 30000 };
+  const rest = newline < 0 ? "" : source.slice(newline + 1);
+  if (!rest.trim())
+    throw new Error("exec pragma must be followed by JavaScript source on subsequent lines");
+  const directive = firstLine.slice("// @exec:".length).trim();
+  const objectError =
+    "exec pragma must be a JSON object with supported fields `yield_time_ms` and `max_output_tokens`";
+  if (!directive) throw new Error(objectError);
+  const numbers = new Map<string, string>();
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(directive, (key: string, value: unknown, context?: { source?: string }) => {
+      if (typeof value === "number" && context?.source !== undefined)
+        numbers.set(key, context.source);
+      return value;
+    });
+  } catch (error) {
+    let message = error instanceof Error ? error.message : String(error);
+    const position = message.match(
+      /^Expected (?:property name or '}'|double-quoted property name) in JSON at position (\d+)/,
+    )?.[1];
+    if (position !== undefined && Number(position) < directive.length)
+      message = `key must be a string at line 1 column ${Buffer.byteLength(directive.slice(0, Number(position))) + 1}`;
+    // shortcut: Other JSON syntax errors keep V8 wording, extend with pinned reference captures.
+    throw new Error(
+      `exec pragma must be valid JSON with supported fields \`yield_time_ms\` and \`max_output_tokens\`: ${message}`,
+      { cause: error },
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(objectError);
+  const options = parsed as Record<string, unknown>;
+  for (const key of Object.keys(options).toSorted())
+    if (key !== "yield_time_ms" && key !== "max_output_tokens")
+      throw new Error(
+        `exec pragma only supports \`yield_time_ms\` and \`max_output_tokens\`; got \`${key}\``,
+      );
+  for (const key of ["max_output_tokens", "yield_time_ms"] as const) {
+    const value = options[key];
+    if (value === undefined || value === null) continue;
+    const expected = key === "yield_time_ms" ? "u64" : "usize";
+    const invalid =
+      typeof value === "number"
+        ? !Number.isInteger(value) ||
+          value < 0 ||
+          value >= 2 ** 64 ||
+          !/^\d+$/.test(numbers.get(key)!)
+          ? "invalid number"
+          : undefined
+        : `invalid type: ${argumentType(value)}, expected ${expected}`;
+    if (invalid)
+      throw new Error(
+        `exec pragma fields \`yield_time_ms\` and \`max_output_tokens\` must be non-negative safe integers: ${invalid}`,
+      );
+  }
+  for (const key of ["yield_time_ms", "max_output_tokens"] as const)
+    if (typeof options[key] === "number" && !Number.isSafeInteger(options[key]))
+      throw new Error(`exec pragma field \`${key}\` must be a non-negative safe integer`);
+  return {
+    source: rest,
+    maxTokens: (options["max_output_tokens"] as number | null | undefined) ?? 10000,
+    yieldTime: (options["yield_time_ms"] as number | null | undefined) ?? 30000,
+  };
 }
 
 export class ExecutionCells {
@@ -175,20 +302,16 @@ export class ExecutionCells {
     if (this.cells.size >= 32) return failure("Execution has too many retained cells (32)");
     if (this.workers.size >= 8) return failure("Execution has too many live workers (8)");
     if (Buffer.byteLength(source) > 1024 * 1024) return failure("Execution source exceeds 1 MiB");
-    const pragma = source.match(/^[ \t]*\/\/ @exec:([^\r\n]*)/);
     let maxTokens: number;
     let yieldTime: number;
     try {
-      const options = pragma
-        ? (JSON.parse(pragma[1]!) as {
-            max_output_tokens?: number;
-            yield_time_ms?: number;
-          })
-        : {};
-      maxTokens = integer(options.max_output_tokens, 10000, "max_output_tokens");
-      yieldTime = integer(options.yield_time_ms, 30000, "yield_time_ms");
+      ({ source, maxTokens, yieldTime } = executionSource(source));
     } catch (error) {
-      return failure(error instanceof Error ? error.message : String(error));
+      return {
+        content: [{ type: "text", text: error instanceof Error ? error.message : String(error) }],
+        details: undefined,
+        isError: true,
+      };
     }
     const credits = new Int32Array(new SharedArrayBuffer(4));
     Atomics.store(credits, 0, queueLimit);
@@ -207,6 +330,7 @@ export class ExecutionCells {
       replies: new Map(),
       replyBytes: 0,
       controller: new AbortController(),
+      termination: new AbortController(),
       text: new OutputStore((error) => void this.stop(cell, String(error))),
       images: new OutputStore((error) => void this.stop(cell, String(error))),
       parts: [],
@@ -297,8 +421,8 @@ export class ExecutionCells {
 
   async wait(args: WaitOptions, signal: AbortSignal | undefined, callId: string): Promise<Result> {
     try {
-      const maxTokens = integer(args.max_tokens, 10000, "max_tokens");
-      const yieldTime = integer(args.yield_time_ms, 10000, "yield_time_ms");
+      const maxTokens = args.max_tokens ?? 10000;
+      const yieldTime = args.yield_time_ms ?? 10000;
       const cell = this.cells.get(args.cell_id);
       if (!cell || cell.collected) return failure(`exec cell ${args.cell_id} not found`);
       this.pi.events.emit(activityType, this.activityUpdate(cell, [], callId));
@@ -360,6 +484,10 @@ export class ExecutionCells {
       this.flush(cell);
       cell.wake?.();
     } else if (message.type === "done" || message.type === "error") {
+      if (message.type === "error") {
+        await this.appendText(cell, `Script error:\n${message.message}`, true);
+        if (!cell.accepting) return;
+      }
       this.commit(message.writes);
       cell.status = message.type === "done" ? "completed" : "failed";
       cell.error = message.type === "error" ? message.message : undefined;
@@ -370,7 +498,7 @@ export class ExecutionCells {
       this.release(cell);
       this.record(cell, {
         type: cell.status,
-        ...(cell.error ? { error: brief(cell.error) } : {}),
+        ...(cell.error ? { error: boundedPreview(cell.error) } : {}),
       });
       this.flush(cell);
       cell.wake?.();
@@ -439,6 +567,12 @@ export class ExecutionCells {
     };
     let returned = false;
     let liveRedacted = false;
+    const controller = new AbortController();
+    const terminate = () => {
+      if (message.name !== "exec_command" || processId === undefined)
+        controller.abort(cellTerminated);
+    };
+    cell.termination.signal.addEventListener("abort", terminate, { once: true });
     try {
       this.record(cell, {
         type: "started",
@@ -456,7 +590,7 @@ export class ExecutionCells {
         message.name,
         message.name === "apply_patch" ? { input: message.args } : message.args,
         {
-          signal: cell.controller.signal,
+          signal: AbortSignal.any([cell.controller.signal, controller.signal]),
           onUpdate: (partial) => {
             const context = partial.details as
               | {
@@ -567,7 +701,8 @@ export class ExecutionCells {
         name: message.name,
         ...(outcome.isError || blocked ? { error: brief(text) } : {}),
       });
-      if (cell.stopping && text) await this.appendText(cell, text);
+      if (cell.stopping && cell.controller.signal.aborted && !cell.collected && text)
+        await this.appendText(cell, text);
       if (cell.accepting)
         this.reply(
           cell,
@@ -591,6 +726,7 @@ export class ExecutionCells {
       });
       if (cell.accepting) this.reply(cell, message.id, { error: text });
     } finally {
+      cell.termination.signal.removeEventListener("abort", terminate);
       if (cell.status !== "running") this.flush(cell);
     }
   }
@@ -707,17 +843,23 @@ export class ExecutionCells {
   }
 
   private stop(cell: Cell, error?: string): Promise<void> {
-    if (cell.stopping) return cell.stopping;
+    if (error === undefined && cell.status !== "running") return Promise.resolve();
+    const forced = cell.controller.signal.aborted;
+    if (error !== undefined) cell.controller.abort();
+    if (cell.stopping && (error === undefined || forced)) return cell.stopping;
     if (cell.status !== "running" && cell.calls.size === 0) return Promise.resolve();
     cell.accepting = false;
-    cell.controller.abort();
+    cell.termination.abort();
     this.release(cell);
     cell.stopping = (async () => {
       let timer: NodeJS.Timeout | undefined;
       const complete = await Promise.race([
-        Promise.allSettled([cell.release, cell.processing, cell.writing, ...cell.calls]).then(
-          () => true,
-        ),
+        Promise.allSettled([
+          cell.release,
+          cell.processing,
+          cell.writing,
+          ...(error === undefined ? [] : cell.calls),
+        ]).then(() => true),
         new Promise<false>((resolve) => {
           timer = setTimeout(() => resolve(false), cleanupLimit);
         }),
@@ -733,7 +875,7 @@ export class ExecutionCells {
       this.update(cell);
       this.record(cell, {
         type: "terminated",
-        ...(cell.error ? { error: brief(cell.error) } : {}),
+        ...(cell.error ? { error: boundedPreview(cell.error) } : {}),
       });
       this.flush(cell);
       cell.wake?.();
@@ -818,26 +960,19 @@ export class ExecutionCells {
           await Promise.all([cell.text.close(), cell.images.close()]);
           if (!cell.calls.size) this.cells.delete(cell.id);
         }
-        if (cutoff.status === "failed" || cutoff.error) {
-          const failed = [...content, ...failure(cutoff.error ?? "Execution failed").content];
-          return {
-            content: failed,
-            details: this.details(cell, failed, cutoff.parts, callId),
-            isError: true,
-          };
-        }
+        const failed = cutoff.status === "failed" || cutoff.error !== undefined;
         const status =
           cutoff.status === "running" ? `running with cell ID ${cell.id}` : cutoff.status;
         const resultContent: Result["content"] = [
-          {
-            type: "text",
-            text: `Script ${status}\nWall time ${((performance.now() - started) / 1000).toFixed(1)} seconds\nOutput:\n`,
-          },
+          header(failed ? "failed" : status, started),
           ...content,
         ];
+        if (cutoff.error !== undefined && cutoff.status !== "failed")
+          resultContent.push({ type: "text", text: `Script error:\n${cutoff.error}` });
         return {
           content: resultContent,
           details: this.details(cell, resultContent, cutoff.parts, callId),
+          ...(failed ? { isError: true } : {}),
         };
       })
       .catch((error: unknown) => failure(error instanceof Error ? error.message : String(error)));
