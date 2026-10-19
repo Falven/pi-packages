@@ -41,7 +41,7 @@ type Result = AgentToolResult<ExecutionDetails | undefined>;
 type Status = "running" | "completed" | "failed" | "terminated";
 type Part = {
   id: number;
-  type: "text" | "image";
+  type: "text" | "image" | "omitted-image";
   from: OutputCursor;
   through: OutputCursor;
   sealed: boolean;
@@ -462,6 +462,7 @@ export class ExecutionCells {
       name: string;
       args: unknown;
       url: string;
+      detail?: string;
       writes: [string, string][];
       owner?: number;
     };
@@ -470,7 +471,17 @@ export class ExecutionCells {
     else if (message.type === "image") {
       if (this.pi.getSettings().images?.blockImages)
         await this.appendText(cell, "Image reading is disabled.");
-      else {
+      else if (message.detail === "low") {
+        this.checkParts(cell);
+        const cursor = cell.images.snapshot();
+        cell.parts.push({
+          id: ++cell.nextPart,
+          type: "omitted-image",
+          from: cursor,
+          through: cursor,
+          sealed: true,
+        });
+      } else {
         this.checkParts(cell);
         const comma = message.url.indexOf(",");
         const from = cell.images.snapshot();
@@ -1017,11 +1028,14 @@ export class ExecutionCells {
     cutoff: Cutoff,
     maxTokens: number,
   ): Promise<Result["content"]> {
+    const omittedImages = cutoff.parts.some((part) => part.type === "omitted-image");
     const texts = cutoff.parts.filter((part) => part.type === "text");
     const first = texts[0];
     const last = texts.at(-1);
     const bounded =
-      first && last ? await cell.text.read(first.from, last.through, maxTokens) : undefined;
+      !omittedImages && first && last
+        ? await cell.text.read(first.from, last.through, maxTokens)
+        : undefined;
     const truncated = bounded && bounded.original_token_count > maxTokens;
     const mixed = cutoff.parts.some((part) => part.type === "image");
     const headEnd = first ? first.from.bytes + maxTokens * 2 : 0;
@@ -1029,13 +1043,36 @@ export class ExecutionCells {
     const content: Result["content"] = [];
     let addedText = false;
     let marked = false;
+    let remaining = maxTokens;
+    let omittedText = 0;
     for (const part of cutoff.parts) {
-      if (part.type === "image") {
+      if (part.type === "omitted-image") {
+        content.push({
+          type: "text",
+          text: "image content omitted because detail 'low' is not supported; use 'high', 'original', or 'auto'",
+        });
+      } else if (part.type === "image") {
         content.push({
           type: "image",
           mimeType: part.mimeType!,
           data: (await cell.images.readRange(part.from.bytes, part.through.bytes)).toString(),
         });
+      } else if (omittedImages) {
+        // Low-detail omissions retain media budgeting without adding script text or image bytes.
+        if (part.from.bytes === part.through.bytes) continue;
+        if (remaining === 0) {
+          omittedText++;
+          continue;
+        }
+        const text = await cell.text.read(part.from, part.through, remaining);
+        content.push({
+          type: "text",
+          text:
+            text.original_token_count > remaining
+              ? text.output.slice(text.output.indexOf("\n\n") + 2)
+              : text.output,
+        });
+        remaining = Math.max(0, remaining - text.original_token_count);
       } else if (truncated && mixed) {
         let text = addedText ? "" : bounded.output.slice(0, bounded.output.indexOf("\n\n") + 2);
         if (part.from.bytes < headEnd) {
@@ -1069,6 +1106,8 @@ export class ExecutionCells {
           text: (await cell.text.readRange(part.from.bytes, part.through.bytes)).toString(),
         });
     }
+    if (omittedText)
+      content.push({ type: "text", text: `[omitted ${omittedText} text items ...]` });
     return content;
   }
 
