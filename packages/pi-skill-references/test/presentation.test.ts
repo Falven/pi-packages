@@ -734,11 +734,11 @@ test("terminal projection leaves native HTML and branch exports byte-for-byte un
     await host.session.exportToHtml(join(host.directory, "compact.html")),
     "utf8",
   );
-  assert.match(html, /Review the actual behavior/);
-  assert.match(html, /Plan the smallest change/);
-  assert.match(html, /References are relative/);
   const branch = host.session.exportToJsonl(join(host.directory, "compact.jsonl"));
   const jsonl = await readFile(branch, "utf8");
+  assert.match(jsonl, /Review the actual behavior/);
+  assert.match(jsonl, /Plan the smallest change/);
+  assert.match(jsonl, /References are relative/);
   extensions.length = 0;
   await host.reload();
   assert.match(await screen(host), /\[skill\]/);
