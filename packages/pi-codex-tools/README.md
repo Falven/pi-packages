@@ -51,6 +51,8 @@ const result = await tools.exec_command({ cmd: "git status --short" });
 text(result);
 ```
 
+An explicit `shell` selects an installed shell by kind; its supplied path may be ignored even when the file exists. Unknown or unavailable kinds use `/bin/sh` on macOS. Omit `shell` to use Pi's configured shell, including a custom wrapper. Pi's command prefix still applies once.
+
 Helper availability follows Pi's active tool configuration. With Pi's built-in tools, `bash` enables the command helpers, `edit` and `write` together enable patches, and `read` enables images. Each helper can also be enabled by name. Enabled helpers replace the corresponding built-in tools in the model's tool list.
 
 Each script starts with fresh JavaScript variables. Use `store` and `load` to retain serializable values across calls in the same session. A running command can return a `session_id` for `write_stdin`; a running JavaScript execution returns a `cell_id` for `wait`.
