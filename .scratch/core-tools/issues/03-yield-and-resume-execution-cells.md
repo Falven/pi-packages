@@ -32,6 +32,12 @@ This updates the existing approved execution-cell slice. Its prior cancellation 
 
 **Current verification:** Pending. Ticket publication changes no runtime behavior.
 
+### Additional lifetime and stack evidence — 2026-10-19
+
+The queued-input cases under `delta-queued-stdin-before-20261018-a7r6fk0i` and `delta-queued-stdin-late-exit-before-20261018-a7r6fk0i` separate an active poll from an input write queued behind it. Native termination prevents the queued write while the existing reader remains alive until its own bounded late exit. The earlier pending-input probes establish survival after a write has already begun. Preserve those distinct effects; do not infer that every queued operation continues.
+
+A temporary [persistent-worker formatter probe](/tmp/pi-core-alignment-20261018-a7r6fk0i/persistent-worker-stack-probe.mjs) demonstrates that the default formatter in our own Node worker can filter structured implementation frames before a script first reads its stack. This preserves cached default stacks as well as custom cached strings and script-provided formatters, while the VM's `typeof Error.prepareStackTrace` remains `undefined`. It changes no Pi code or settings. A formatter used only when collecting failure cannot correct a default stack that the script already read and cached. Fresh reference cases are retained under `delta-cached-stack-before-20261018-a7r6fk0i`; compare those outputs before final acceptance. Do not rewrite arbitrary cached strings or widen comparison allowances.
+
 ## Historical revisions
 
 Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
