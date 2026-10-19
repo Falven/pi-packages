@@ -34,8 +34,7 @@ type Process = {
 
 type CommandOptions = {
   shell: string;
-  command: string;
-  login: boolean;
+  args: string[];
   cwd: string;
   env: NodeJS.ProcessEnv;
   tty: boolean;
@@ -215,10 +214,9 @@ export class ProcessSessions {
         fail(error);
       }
     };
-    const args = [options.login ? "-lc" : "-c", options.command];
     try {
       if (options.tty) {
-        const terminal = pty.spawn(options.shell, args, {
+        const terminal = pty.spawn(options.shell, options.args, {
           cwd: options.cwd,
           env: options.env,
           cols: 80,
@@ -234,7 +232,7 @@ export class ProcessSessions {
           resolve();
         });
       } else {
-        const command = spawn(options.shell, args, {
+        const command = spawn(options.shell, options.args, {
           cwd: options.cwd,
           env: options.env,
           detached: true,
