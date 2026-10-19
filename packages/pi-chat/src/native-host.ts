@@ -42,6 +42,7 @@ import { Thought, type ThoughtEnvironment } from "./thought.ts";
 import type { WorkingLabel } from "./working-label.ts";
 import { ProviderPhaseIndex } from "./provider-phase.ts";
 import { SourceSearch, type SearchField, type SourceHit } from "./source-search.ts";
+import type { SourcePresentation, SourcePresentationProvider } from "./source-presentation.ts";
 const { allocateStackSizes } = (await import(
   new URL("./components/stack.js", import.meta.resolve("@earendil-works/pi-tui")).href
 )) as typeof import("@earendil-works/pi-tui/dist/components/stack.js");
@@ -656,6 +657,7 @@ export class NativeChatHost {
     readonly activityItems: ActivityItems,
     private readonly working: WorkingLabel,
     copyProvider?: CopyProvider,
+    private readonly sourcePresentation?: SourcePresentation,
   ) {
     this.host = host;
     this.copy = copyProvider?.({
@@ -703,6 +705,7 @@ export class NativeChatHost {
     activityItems: ActivityItems,
     working: WorkingLabel,
     copyProvider?: CopyProvider,
+    sourcePresentation?: SourcePresentationProvider,
   ): NativeChatHost {
     const mode = host as unknown as NativeMode;
     if (
@@ -712,7 +715,13 @@ export class NativeChatHost {
         mode.renderer.layoutRoot !== mode.fullscreenLayoutRoot)
     )
       throw new Error("pi-chat chat root is already owned");
-    const adapter = new NativeChatHost(mode, activityItems, working, copyProvider);
+    const adapter = new NativeChatHost(
+      mode,
+      activityItems,
+      working,
+      copyProvider,
+      sourcePresentation?.(mode.sessionManager),
+    );
     try {
       requireMethod(mode.setEditorWorkingStatusIndicator, "setEditorWorkingStatusIndicator");
       adapter.wrapNativeConstruction();
@@ -1685,7 +1694,9 @@ export class NativeChatHost {
       sourceEntry?: Entry,
       sourceIndex?: number,
     ) => {
-      if (owner && source)
+      if (owner && source) {
+        const ranges =
+          owner.message && this.sourcePresentation?.searchRanges(owner.message, sourceIndex);
         fields.push({
           owner,
           key,
@@ -1705,9 +1716,11 @@ export class NativeChatHost {
               }
             : {}),
           source,
+          ...(ranges ? { ranges } : {}),
           markdown,
           tool,
         });
+      }
     };
     const addAssistant = (
       owner: Occurrence | undefined,
@@ -1925,8 +1938,21 @@ export class NativeChatHost {
       leaf.rows.map((_, row) => this.contentLine(leaf, row)),
       hit.query,
     ).matches;
-    const sourceCount = this.searchState?.counts.get(hit.field.owner);
-    if (matching.length === sourceCount) return matching[hit.ordinal]?.segments;
+    const visible = (candidate: SourceHit<Occurrence>) => {
+      const message = candidate.field.owner.message;
+      const ranges =
+        message &&
+        this.sourcePresentation?.visibleRanges(message, candidate.field.sourceRef.contentIndex);
+      return (
+        !ranges || ranges.some((range) => candidate.from >= range.from && candidate.to <= range.to)
+      );
+    };
+    const hits = this.searchState?.hits.filter(
+      (candidate) => candidate.field.owner === hit.field.owner && visible(candidate),
+    );
+    const ordinal = hits?.indexOf(hit) ?? -1;
+    if (ordinal < 0) return undefined;
+    if (matching.length === hits?.length) return matching[ordinal]?.segments;
     if (!hit.field.tool) return undefined;
     const row = leaf.rows.findIndex((line) => stripTerminalSequences(line).trim());
     const fallbackRow = Math.max(0, row);
@@ -1951,13 +1977,9 @@ export class NativeChatHost {
     if (!components) {
       const receiver = Object.create(this.host) as NativeMode;
       receiver.chatContainer = new Container();
-      (InteractiveMode.prototype as unknown as NativeMode).addMessageToChat.call(
-        receiver,
-        owner.message,
-        {
-          populateHistory: false,
-        },
-      );
+      this.host.addMessageToChat.call(receiver, owner.message, {
+        populateHistory: false,
+      });
       components = [...receiver.chatContainer.children];
     }
     if (owner.message.role === "assistant") {
@@ -2020,9 +2042,27 @@ export class NativeChatHost {
     return true;
   }
 
+  private selectSourceHit(hit?: SourceHit<Occurrence>) {
+    const owner = hit?.field.owner;
+    return (
+      this.sourcePresentation?.select(
+        hit && owner?.message
+          ? {
+              message: owner.message,
+              contentIndex: hit.field.sourceRef.contentIndex,
+              component: owner.component,
+              from: hit.from,
+              to: hit.to,
+            }
+          : undefined,
+      ) ?? false
+    );
+  }
+
   private revealSearchHit(hit: SourceHit<Occurrence>) {
     const owner = hit.field.owner;
     let changed = this.materializeSearchHit(hit);
+    changed = this.selectSourceHit(hit) || changed;
     const agentActivity = this.agentActivity.find(owner);
     if (agentActivity && agentActivity.manualExpanded !== true) {
       agentActivity.manualExpanded = true;
@@ -2066,7 +2106,7 @@ export class NativeChatHost {
     const native = (renderer as unknown as { activeSearch?: NativeSearch }).activeSearch;
     if (!native) {
       this.searchState = undefined;
-      return false;
+      return this.selectSourceHit();
     }
     native.matches = [];
     native.selectedIndex = -1;
@@ -2112,6 +2152,7 @@ export class NativeChatHost {
     const previousHit = previous?.hits[previous.selected];
     const previousOwner = previousHit?.field.owner;
     const visibilityChanged =
+      (!hit && this.selectSourceHit()) ||
       (previousOwner !== hit?.field.owner &&
         (previousOwner?.component instanceof ActivityItemDisclosure ||
           hit?.field.owner.component instanceof ActivityItemDisclosure)) ||
@@ -2363,6 +2404,7 @@ export class NativeChatHost {
     bind("closeSearch", (original) => () => {
       const result = original.call(renderer);
       this.searchState = undefined;
+      this.selectSourceHit();
       return result;
     });
     bind("routeWheel", (original) => (event: { x: number; y: number }, delta: number) => {
@@ -2548,8 +2590,22 @@ export class NativeChatHost {
     return active.get(host);
   }
 
+  private resetSourceSearch() {
+    this.selectSourceHit();
+    this.searchState = undefined;
+    const renderer = this.boundRenderer;
+    const close = renderer && (renderer as unknown as { closeSearch(): void }).closeSearch;
+    if (
+      renderer &&
+      this.ownsRenderer(renderer) &&
+      close === this.rendererMethods.get("closeSearch")?.wrapped
+    )
+      close?.call(renderer);
+  }
+
   rebaseRelationships() {
     if (!this.active) return;
+    this.resetSourceSearch();
     this.indexBranch();
     this.restoreRelationships();
     this.clearChatSelection();
@@ -2608,6 +2664,8 @@ export class NativeChatHost {
   }
 
   private clearHistorical() {
+    this.selectSourceHit();
+    this.searchState = undefined;
     for (const [id, components] of this.historical) {
       const owned = new Set(components);
       const owner = this.byEntryId.get(id);
@@ -3002,8 +3060,11 @@ export class NativeChatHost {
         name,
       );
       const implementation = make(original);
-      const wrapped = (...args: never[]) =>
-        this.active ? implementation(...args) : original.apply(host, args);
+      const isActive = () => this.active;
+      const wrapped = function (this: NativeMode, ...args: never[]) {
+        // Detached historical construction keeps effective native presentation hooks, not live row bookkeeping.
+        return isActive() && this === host ? implementation(...args) : original.apply(this, args);
+      };
       this.originals.set(name, original);
       this.wrappers.set(name, wrapped);
       this.ownDescriptors.set(name, Object.getOwnPropertyDescriptor(host, name));
@@ -3404,6 +3465,7 @@ export class NativeChatHost {
 
   dispose() {
     if (!this.active) return;
+    this.resetSourceSearch();
     this.restoreWorkingIndicator();
     for (const items of this.activityDisclosures.values())
       for (const item of items.values()) item.dispose();
@@ -3481,8 +3543,19 @@ export function armHistoryBootstrap(renderer: unknown, install: (host: Interacti
     descriptor = Object.getOwnPropertyDescriptor(InteractiveMode.prototype, "renderSessionEntries");
     if (!descriptor || typeof descriptor.value !== "function")
       throw new Error("pi-chat cannot observe Pi history construction");
-    const original = descriptor.value as NativeMode["renderSessionEntries"];
-    bootstrapWrapper = function (this: NativeMode, entries: Entry[], options?: unknown) {
+    const prior = descriptor;
+    const original = prior.value as NativeMode["renderSessionEntries"];
+    bootstrapWrapper = function observeHistory(
+      this: NativeMode,
+      entries: Entry[],
+      options?: unknown,
+    ) {
+      // Another scoped observer may restore this inactive wrapper after its first disarm.
+      if (
+        !pending.size &&
+        (InteractiveMode.prototype as unknown as NativeMode).renderSessionEntries === observeHistory
+      )
+        Object.defineProperty(InteractiveMode.prototype, "renderSessionEntries", prior);
       for (const candidate of pending) {
         if (
           this.session?.extensionRunner?.getEntryRenderer?.("pi-chat.relationship") ===
@@ -3506,7 +3579,17 @@ export function armHistoryBootstrap(renderer: unknown, install: (host: Interacti
       value: bootstrapWrapper,
     });
   }
-  return () => disarmHistoryBootstrap(token);
+  const observed = bootstrapWrapper;
+  const prior = descriptor;
+  return () => {
+    disarmHistoryBootstrap(token);
+    if (
+      !pending.size &&
+      prior &&
+      (InteractiveMode.prototype as unknown as NativeMode).renderSessionEntries === observed
+    )
+      Object.defineProperty(InteractiveMode.prototype, "renderSessionEntries", prior);
+  };
 }
 
 function disarmHistoryBootstrap(token: Bootstrap) {

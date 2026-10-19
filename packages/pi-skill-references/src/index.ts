@@ -7,10 +7,73 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Marked } from "@earendil-works/pi-tui";
 import { withInlineSkills } from "./completion.ts";
+import { armHistoryBootstrap, attachPresentation, captureHost } from "./native-host.ts";
+import type { SourcePresentationProvider } from "./source-presentation.ts";
 
 export default function piSkillReferences(pi: ExtensionAPI): void {
+  let adapter: ReturnType<typeof attachPresentation> | undefined;
+  let attachedHost: Parameters<typeof attachPresentation>[0] | undefined;
+  const install = (host: Parameters<typeof attachPresentation>[0]) => {
+    if (host === attachedHost) return;
+    adapter?.dispose();
+    adapter = undefined;
+    attachedHost = undefined;
+    adapter = attachPresentation(host);
+    attachedHost = host;
+  };
+  const provider: SourcePresentationProvider = (manager) => {
+    const current = () =>
+      (attachedHost as unknown as { sessionManager?: unknown } | undefined)?.sessionManager ===
+      manager
+        ? adapter
+        : undefined;
+    return {
+      searchRanges: (message, index) => current()?.searchRanges(message, index),
+      select: (selection) => current()?.select(selection) ?? false,
+      visibleRanges: (message, index) => current()?.visibleRanges(message, index),
+    };
+  };
+  const listen = () =>
+    pi.events.on("pi.chat.source-presentation", (value) => {
+      const request = value as { version?: unknown; use?: unknown } | undefined;
+      if (request?.version === 1 && typeof request.use === "function") request.use(provider);
+    });
+  let unlisten: (() => void) | undefined = listen();
+  // oxlint-disable-next-line unicorn/consistent-function-scoping -- Each extension runtime needs a distinct marker identity.
+  const marker = () => undefined;
+  pi.registerEntryRenderer("pi-skill-references.host", marker);
+  let disarm: (() => void) | undefined;
+  let bootstrapError: unknown;
+  try {
+    disarm = armHistoryBootstrap(marker, install);
+  } catch (error) {
+    bootstrapError = error;
+  }
+  pi.on("resources_discover", () => {
+    disarm?.();
+  });
   pi.on("session_start", (_event, ctx) => {
+    disarm?.();
+    unlisten ??= listen();
     ctx.ui.addAutocompleteProvider(withInlineSkills);
+    if (ctx.mode !== "tui") return;
+    try {
+      if (bootstrapError) throw bootstrapError;
+      install(captureHost(ctx));
+    } catch (error) {
+      ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+    }
+  });
+  pi.on("session_shutdown", () => {
+    disarm?.();
+    unlisten?.();
+    unlisten = undefined;
+    adapter?.dispose();
+    adapter = undefined;
+    attachedHost = undefined;
+  });
+  pi.on("session_tree", () => {
+    adapter?.select(undefined);
   });
   const markdown = new Marked({
     extensions: [

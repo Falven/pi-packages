@@ -1,4 +1,5 @@
 import { Marked, type Token } from "@earendil-works/pi-tui";
+import type { SourceTextRange } from "./source-presentation.ts";
 
 export type SearchField<Owner extends object> = {
   owner: Owner;
@@ -6,6 +7,7 @@ export type SearchField<Owner extends object> = {
   sourceRef: { entryId?: string; contentIndex?: number; itemOrdinal?: number };
   callRef?: { entryId: string; contentIndex: number };
   source: string;
+  ranges?: SourceTextRange[];
   markdown: boolean;
   tool: boolean;
 };
@@ -18,7 +20,7 @@ export type SourceHit<Owner extends object> = {
   query: string;
 };
 
-type Piece = { text: string; from: number; to: number };
+type Piece = { text: string; from: number; to: number; mapped?: boolean };
 type Corpus = { text: string; positions: { from: number; to: number }[] };
 
 const parser = new Marked();
@@ -123,8 +125,8 @@ function corpus(pieces: Piece[]): Corpus {
   let separator: { from: number; to: number } | undefined;
   for (const piece of pieces) {
     for (const item of segmenter.segment(piece.text)) {
-      const from = piece.from + item.index;
-      const to = piece.from + item.index + item.segment.length;
+      const from = piece.mapped ? piece.from : piece.from + item.index;
+      const to = piece.mapped ? piece.to : piece.from + item.index + item.segment.length;
       if (/^\s+$/u.test(item.segment)) {
         if (text) separator = { from, to };
         continue;
@@ -141,10 +143,44 @@ function corpus(pieces: Piece[]): Corpus {
   return { text, positions };
 }
 
+function fieldCorpora(field: SearchField<object>): Corpus[] {
+  const valid = field.ranges?.every(
+    (range) =>
+      Number.isSafeInteger(range.from) &&
+      Number.isSafeInteger(range.to) &&
+      range.from >= 0 &&
+      range.to >= range.from &&
+      range.to <= field.source.length &&
+      (range.text === undefined || typeof range.text === "string"),
+  );
+  const ranges = valid ? field.ranges! : [{ from: 0, to: field.source.length }];
+  return ranges.map((range) => {
+    if (range.text !== undefined)
+      return corpus([{ text: range.text, from: range.from, to: range.to, mapped: true }]);
+    const source = field.source.slice(range.from, range.to);
+    const pieces = field.markdown
+      ? readablePieces(source)
+      : [{ text: source, from: 0, to: source.length }];
+    return corpus(
+      pieces.map((piece) =>
+        Object.assign(piece, { from: piece.from + range.from, to: piece.to + range.from }),
+      ),
+    );
+  });
+}
+
 export class SourceSearch<Owner extends object> {
   private readonly cache = new WeakMap<
     Owner,
-    Map<string, { source: string; markdown: boolean; corpus: Corpus }>
+    Map<
+      string,
+      {
+        source: string;
+        ranges: SourceTextRange[] | undefined;
+        markdown: boolean;
+        corpora: Corpus[];
+      }
+    >
   >();
 
   find(fields: SearchField<Owner>[], query: string): SourceHit<Owner>[] {
@@ -160,31 +196,29 @@ export class SourceSearch<Owner extends object> {
         this.cache.set(field.owner, ownerCache);
       }
       let cached = ownerCache.get(field.key);
-      if (!cached || cached.source !== field.source || cached.markdown !== field.markdown) {
+      if (
+        !cached ||
+        cached.source !== field.source ||
+        cached.ranges !== field.ranges ||
+        cached.markdown !== field.markdown
+      ) {
         cached = {
           source: field.source,
+          ranges: field.ranges,
           markdown: field.markdown,
-          corpus: corpus(
-            field.markdown
-              ? readablePieces(field.source)
-              : [{ text: field.source, from: 0, to: field.source.length }],
-          ),
+          corpora: fieldCorpora(field),
         };
         ownerCache.set(field.key, cached);
       }
-      for (const match of cached.corpus.text.matchAll(expression)) {
-        const first = cached.corpus.positions[match.index];
-        const last = cached.corpus.positions[match.index + match[0].length - 1];
-        if (!first || !last) continue;
-        const ordinal = ordinals.get(field.owner) ?? 0;
-        hits.push({
-          field,
-          from: first.from,
-          to: last.to,
-          ordinal,
-          query: normalized,
-        });
-        ordinals.set(field.owner, ordinal + 1);
+      for (const searchable of cached.corpora) {
+        for (const match of searchable.text.matchAll(expression)) {
+          const first = searchable.positions[match.index];
+          const last = searchable.positions[match.index + match[0].length - 1];
+          if (!first || !last) continue;
+          const ordinal = ordinals.get(field.owner) ?? 0;
+          hits.push({ field, from: first.from, to: last.to, ordinal, query: normalized });
+          ordinals.set(field.owner, ordinal + 1);
+        }
       }
     }
     return hits;

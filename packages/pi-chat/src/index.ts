@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { CopyProvider } from "./copy-contract.ts";
+import type { SourcePresentationProvider } from "./source-presentation.ts";
 import { activityType } from "./tool-adapters/activity-contract.ts";
 import { armHistoryBootstrap, captureHost, NativeChatHost } from "./native-host.ts";
 import { thoughtPresentation } from "./thought.ts";
@@ -69,9 +70,25 @@ export default function piChat(pi: ExtensionAPI) {
         copyProvider = provider;
       },
     });
-    adapter = NativeChatHost.install(host, new ActivityItems(pi), working, copyProvider);
+    let sourcePresentation: SourcePresentationProvider | undefined;
+    pi.events.emit("pi.chat.source-presentation", {
+      version: 1,
+      use(provider: SourcePresentationProvider) {
+        sourcePresentation = provider;
+      },
+    });
+    adapter = NativeChatHost.install(
+      host,
+      new ActivityItems(pi),
+      working,
+      copyProvider,
+      sourcePresentation,
+    );
   };
   const disarm = armHistoryBootstrap(relationshipRenderer, install);
+  pi.on("resources_discover", () => {
+    disarm();
+  });
 
   pi.registerShortcut("alt+g", {
     description: "Focus chat disclosures",
