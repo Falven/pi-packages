@@ -49,6 +49,8 @@ All 49 rows in the parent's `delta-arguments-intermediate-20261018-a7r6fk0i/delt
 
 The [follow-up evidence index](/tmp/pi-core-alignment-20261018-a7r6fk0i/command/argument-diagnostics.Trhwhq/README.md) records exact direct-binary commands, raw public-host captures, reference identities, and red/green results. Workspace typechecking, scoped lint/format checks, and whitespace checks pass. The public preparation-hook limit documented above remains unchanged. No process registry, collection/lifetime, Pi, installed-package, global-setting, cell, shared-runner, or Phoenix change was made by this argument follow-up.
 
+Integration `2753f5a1e520655ad559415a9b2a6e6c66959ca7` was then merged cleanly, preserving Core 03's incoming collection/lifetime changes. All 49 stdin rows, the same 25 focused checks, and direct TypeScript/lint/format checks pass on that merged runtime (`*-post-merge` evidence). This follow-up did not edit the cell-owned files.
+
 ## Historical revisions
 
 Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.

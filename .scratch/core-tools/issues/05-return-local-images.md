@@ -64,6 +64,8 @@ The validated red replay showed 11 differing rows in the parent's 19-input image
 
 Exact commands, raw next-request payloads, reference identities, and passing direct TypeScript/lint/format checks are indexed in [the argument follow-up evidence](/tmp/pi-core-alignment-20261018-a7r6fk0i/command/argument-diagnostics.Trhwhq/README.md). The image preparation, normalization, capability, binding, late-blocking, and integrated coverage gates above remain open and were not re-investigated or changed by this follow-up. Pi, installed packages, global settings, frozen model guidance, cell-owned files, shared runners, Phoenix, and every historical body remain unchanged by this work.
 
+The subsequent clean merge of integration `2753f5a1e520655ad559415a9b2a6e6c66959ca7` preserves the incoming Core 03 runtime work. All 19 image rows and the same focused argument/hook/blocking checks pass through that merged runtime, with direct TypeScript/lint/format checks still passing. Fresh `*-post-merge` evidence is retained separately.
+
 ## Historical revisions
 
 Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
