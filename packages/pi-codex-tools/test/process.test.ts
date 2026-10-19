@@ -108,9 +108,23 @@ test("a PTY continues through fresh tool calls and ordinary prompts", async (t) 
     .description;
   assert.match(description, /### `write_stdin`/);
 
+  const rejected = await request(
+    host,
+    `const errors = []; for (const args of ${JSON.stringify([
+      { session_id: String(initial.session_id), chars: "wrong\n" },
+      { session_id: initial.session_id, chars: "wrong\n", yield_time_ms: null },
+      { session_id: initial.session_id, chars: "wrong\n", max_output_tokens: "10" },
+      { session_id: initial.session_id, chars: 1 },
+    ])}) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);`,
+    "invalid-input",
+  );
+  const errors = JSON.parse(rejected.slice(rejected.indexOf("[")));
+  assert.equal(errors.length, 4);
+  for (const error of errors) assert.match(error, /^failed to parse function arguments:/);
+
   host.queueResponse(
     ...call(
-      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"alpha\\n"}));`,
+      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"alpha\\n", max_output_tokens:null, ignored:true}));`,
       "first",
     ),
   );
@@ -191,7 +205,7 @@ test("exact Ctrl+C interrupts a non-terminal process group and preserves its out
   await request(
     host,
     `text(await tools.exec_command(${JSON.stringify({
-      cmd: 'trap \'printf "INTERRUPTED\\n"; exit 23\' INT; printf "READY\\n"; sleep 30; printf "AFTER\\n"',
+      cmd: 'exec node -e \'const timer = setTimeout(() => process.stdout.write("AFTER\\n"), 30000); process.on("SIGINT", () => { process.stdout.write("INTERRUPTED\\n"); process.exitCode = 23; clearTimeout(timer); }); process.stdout.write("READY\\n");\'',
       shell: "/bin/sh",
       login: false,
       tty: false,
@@ -201,6 +215,17 @@ test("exact Ctrl+C interrupts a non-terminal process group and preserves its out
   );
   const initial = result(host, "pipe-start");
   await expectRunningOutput(host, initial, "READY\n");
+  const invalid = await request(
+    host,
+    `for (const args of ${JSON.stringify([
+      { session_id: String(initial.session_id), chars: "\u0003" },
+      { session_id: initial.session_id, chars: "\u0003", yield_time_ms: null },
+    ])}) { try { text(await tools.write_stdin(args)); } catch (error) { text(error); } }`,
+    "pipe-invalid-interrupt",
+  );
+  assert.match(invalid, /expected i32/);
+  assert.match(invalid, /expected u64/);
+  assert.doesNotMatch(invalid, /Unknown process id|INTERRUPTED/);
   for (const [index, chars] of ["ordinary input\n", "\u0003\n"].entries()) {
     const rejected = await request(
       host,
@@ -278,6 +303,18 @@ test("empty polls default to five seconds and clamp short waits without consumin
   assert(input.wall_time_seconds < 2);
   await request(
     host,
+    `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"budget\\n", yield_time_ms:0, max_output_tokens:0}));`,
+    "zero-budget",
+  );
+  const limited = result(host, "zero-budget");
+  assert.equal(limited.session_id, initial.session_id);
+  assert.equal(limited.original_token_count, 5);
+  assert.equal(
+    limited.output,
+    "Warning: truncated output (original token count: 5)\nTotal output lines: 2\n\n…5 tokens truncated…",
+  );
+  await request(
+    host,
     `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"quit\\n"}));`,
     "finish",
   );
@@ -314,6 +351,18 @@ test("pipe mode closes stdin and keeps unread completion output after failed inp
     failed,
     /stdin is closed for this session; rerun exec_command with tty=true to keep stdin open/,
   );
+  const invalid = await request(
+    host,
+    `const errors = []; for (const args of ${JSON.stringify([
+      { session_id: initial.session_id, chars: null },
+      { session_id: initial.session_id, yield_time_ms: null },
+      { session_id: initial.session_id, max_output_tokens: 2 ** 64 },
+    ])}) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);`,
+    "invalid-collection",
+  );
+  const errors = JSON.parse(invalid.slice(invalid.indexOf("[")));
+  assert.equal(errors.length, 3);
+  for (const error of errors) assert.match(error, /^failed to parse function arguments:/);
   await request(
     host,
     `text(await tools.write_stdin({session_id:${initial.session_id}}));`,
@@ -671,11 +720,62 @@ test("process identifiers accept signed integers and reject values outside the o
   assert.match(unknown, /write_stdin failed: Unknown process id -1/);
   const invalid = await request(
     host,
-    "for (const args of [{session_id:1.5}, {session_id:4294967296}, {session_id:-1, yield_time_ms:1.5}, {session_id:-1, yield_time_ms:-1}, {session_id:-1, max_output_tokens:1.5}, {session_id:-1, max_output_tokens:-1}]) { try { await tools.write_stdin(args); } catch (error) { text(error); } }",
+    'const errors = []; for (const args of [{session_id:1.5}, {session_id:2147483648}, {}, {session_id:"1"}]) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);',
     "invalid",
   );
-  assert.doesNotMatch(invalid, /Unknown process id/);
-  assert.match(invalid, /session_id/);
+  assert.deepEqual(JSON.parse(invalid.slice(invalid.indexOf("["))), [
+    "failed to parse function arguments: invalid type: floating point `1.5`, expected i32 at line 1 column 17",
+    "failed to parse function arguments: invalid value: integer `2147483648`, expected i32 at line 1 column 24",
+    "failed to parse function arguments: missing field `session_id` at line 1 column 2",
+    'failed to parse function arguments: invalid type: string "1", expected i32 at line 1 column 17',
+  ]);
+  const malformed = [
+    { args: { session_id: null }, expected: "i32" },
+    { args: { session_id: true }, expected: "i32" },
+    { args: { session_id: -2147483649 }, expected: "i32" },
+    { args: { session_id: -1, chars: null }, expected: "a string" },
+    { args: { session_id: -1, chars: 1 }, expected: "a string" },
+    { args: { session_id: -1, chars: [] }, expected: "a string" },
+    { args: { session_id: -1, yield_time_ms: null }, expected: "u64" },
+    { args: { session_id: -1, yield_time_ms: "1" }, expected: "u64" },
+    { args: { session_id: -1, yield_time_ms: 1.5 }, expected: "u64" },
+    { args: { session_id: -1, yield_time_ms: -1 }, expected: "u64" },
+    { args: { session_id: -1, yield_time_ms: 2 ** 64 }, expected: "u64" },
+    { args: { session_id: -1, max_output_tokens: "1" }, expected: "usize" },
+    { args: { session_id: -1, max_output_tokens: 1.5 }, expected: "usize" },
+    { args: { session_id: -1, max_output_tokens: -1 }, expected: "usize" },
+    { args: { session_id: -1, max_output_tokens: 2 ** 64 }, expected: "usize" },
+  ];
+  const rejected = await request(
+    host,
+    `const errors = []; for (const args of ${JSON.stringify(malformed.map(({ args }) => args))}) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);`,
+    "fields",
+  );
+  const errors = JSON.parse(rejected.slice(rejected.indexOf("[")));
+  assert.equal(errors.length, malformed.length);
+  for (const [index, { expected }] of malformed.entries()) {
+    assert.equal(typeof errors[index], "string");
+    assert.match(errors[index], /^failed to parse function arguments: invalid (type|value):/);
+    assert(errors[index].includes(`expected ${expected} at line 1 column `));
+  }
+  const accepted = [
+    { session_id: -2147483648 },
+    { session_id: 0 },
+    { session_id: 2147483647 },
+    { session_id: -1, chars: "", yield_time_ms: 0, max_output_tokens: 0 },
+    { session_id: -1, max_output_tokens: null, ignored: { nested: true } },
+    { session_id: -1, yield_time_ms: 2 ** 53, max_output_tokens: 2 ** 53 },
+    { session_id: -1, yield_time_ms: 2 ** 64 - 2048, max_output_tokens: 2 ** 64 - 2048 },
+  ];
+  const valid = await request(
+    host,
+    `const errors = []; for (const args of ${JSON.stringify(accepted)}) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);`,
+    "accepted",
+  );
+  assert.deepEqual(
+    JSON.parse(valid.slice(valid.indexOf("["))),
+    accepted.map(({ session_id }) => `write_stdin failed: Unknown process id ${session_id}`),
+  );
 });
 
 test("concurrent final polls drain once and reject the retired handle", async (t) => {
@@ -758,6 +858,14 @@ test("later input preserves native policy edits, redaction, events, and call own
         return undefined;
       });
       pi.on("tool_result", (event) => {
+        if (
+          event.toolName === "exec" &&
+          event.content.some(
+            (part) =>
+              part.type === "text" && part.text.includes("failed to parse function arguments:"),
+          )
+        )
+          return { content: [{ type: "text", text: "processed-invalid-input" }] };
         if (event.toolName === "write_stdin" && !event.isError)
           return { content: [{ type: "text", text: "processed-input" }] };
         return undefined;
@@ -791,6 +899,14 @@ test("later input preserves native policy edits, redaction, events, and call own
     "start",
   );
   const initial = result(host, "start");
+  const invalid = await request(
+    host,
+    `try { await tools.write_stdin({session_id:${JSON.stringify(String(initial.session_id))}, chars:"original\\n"}); } catch (error) { text([typeof error, error]); }`,
+    "invalid",
+  );
+  assert.equal(invalid, "processed-invalid-input");
+  assert.doesNotMatch(invalid, /failed to parse|discarded-secret/);
+  await assert.rejects(readFile(delivered), { code: "ENOENT" });
   const blocked = await request(
     host,
     `try { await tools.write_stdin({session_id:${initial.session_id}, chars:"blocked\\n"}); } catch (error) { text(error); }`,
@@ -879,7 +995,7 @@ test("cancelling a later poll awaits owned children and retains large partial PT
   const initial = result(host, "start");
   host.queueResponse(
     ...call(
-      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"go\\n", yield_time_ms:10000, max_output_tokens:32}));`,
+      `text(await tools.write_stdin({session_id:${initial.session_id}, chars:"go\\n", yield_time_ms:10000, max_output_tokens:64}));`,
       "poll",
     ),
   );

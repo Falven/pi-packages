@@ -284,7 +284,7 @@ for (const order of ["first", "last"] as const) {
       },
     });
     const command =
-      'trap \'printf "STOPPED\\n"; exit 23\' INT; printf "READY\\n"; sleep 30; printf "AFTER\\n"';
+      'exec node -e \'const timer = setTimeout(() => process.stdout.write("AFTER\\n"), 30000); process.on("SIGINT", () => { process.stdout.write("STOPPED\\n"); process.exitCode = 23; clearTimeout(timer); }); process.stdout.write("READY\\n");\'';
     host.queueResponse(
       ...call(
         `const p = await tools.exec_command(${JSON.stringify({ cmd: command, shell: "/bin/sh", login: false, yield_time_ms: 250 })}); store("process", p.session_id); text(p);`,
@@ -296,6 +296,7 @@ for (const order of ["first", "last"] as const) {
       updates
         .flatMap((update) => update.operations)
         .findLast((operation) => operation.kind === "command");
+    await t.waitFor(() => assert.match(latest()?.output ?? "", /READY\n/));
     const origin = latest()?.id;
     assert(origin);
     const rejected =
