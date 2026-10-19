@@ -284,6 +284,7 @@ type ChatRow = {
 };
 type RenderGroup = {
   items: ChatRow[];
+  bodyItems: ChatRow[];
   expanded: boolean;
   header?: RenderGroupHeader;
 };
@@ -296,11 +297,12 @@ type NativeToolPresenter = Component & {
 function disclosureLine(
   width: number,
   outputPad: number,
-  expanded: boolean,
+  expanded: boolean | undefined,
   label: (width: number) => string,
 ) {
   const padding = Math.min(outputPad, Math.floor((width - 1) / 2));
   const available = Math.max(1, width - padding * 2);
+  if (expanded === undefined) return { padding, line: label(available) };
   const labelWidth = available > 2 ? available - 2 : available - 1;
   const chevron = expanded ? "▼" : ">";
   return {
@@ -320,11 +322,15 @@ class RenderGroupHeader implements Component {
 
   invalidate() {}
 
+  get expandable() {
+    return this.group.bodyItems.length > 0;
+  }
+
   render(width: number) {
     const { line, padding } = disclosureLine(
       width,
       this.adapter.host.outputPad,
-      this.group.expanded,
+      this.expandable ? this.group.expanded : undefined,
       (labelWidth) =>
         this.adapter.workingGroup === this.group
           ? this.adapter.workingLine(labelWidth)
@@ -334,7 +340,9 @@ class RenderGroupHeader implements Component {
       line,
       padding,
       0,
-      this.focused ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text) : undefined,
+      this.focused && this.expandable
+        ? (text) => this.adapter.extensionUI.theme.bg("selectedBg", text)
+        : undefined,
     ).render(width);
   }
 
@@ -343,7 +351,7 @@ class RenderGroupHeader implements Component {
   }
 
   handleMouse(event: Parameters<NonNullable<Component["handleMouse"]>>[0]) {
-    if (event.type !== "click" || event.button !== "left") return undefined;
+    if (event.type !== "click" || event.button !== "left" || !this.expandable) return undefined;
     this.adapter.toggleRenderGroup(this.group);
     return { handled: true, focus: true };
   }
@@ -870,6 +878,8 @@ export class NativeChatHost {
             (row.agentActivity ?? this.agentActivity.find(row.occurrence ?? row.owner)) === current,
         );
     const unwrapped = new Map<Component, Component>();
+    const hit = this.searchState?.hits[this.searchState.selected];
+    const revealedItem = hit && this.searchDisclosure(hit);
     let currentGroup: RenderGroup | undefined;
     let composed: ChatRow[] = [];
     for (let index = 0; index < chatRows.length;) {
@@ -893,16 +903,24 @@ export class NativeChatHost {
         composed.push(...items);
         continue;
       }
+      const bodyItems = items.filter(
+        ({ activityItem, component }) =>
+          activityItem?.kind !== "read" ||
+          activityItem.status !== "running" ||
+          component === revealedItem,
+      );
       let group = this.renderGroups.get(first);
       if (!group) {
         group = {
           items,
+          bodyItems,
           expanded: this.retainedDisclosures(first)?.group ?? this.host.toolOutputExpanded,
         };
         group.header = new RenderGroupHeader(this, group);
         this.renderGroups.set(first, group);
       }
       group.items = items;
+      group.bodyItems = bodyItems;
       if (latestWorking && !laterVisible && items.includes(latestWorking)) currentGroup = group;
       const activity = this.agentActivity.find(first);
       const item = items.length === 1 ? items[0]!.activityItem : undefined;
@@ -923,7 +941,7 @@ export class NativeChatHost {
         tool: false,
         agentActivity: activity,
       });
-      if (group.expanded) composed.push(...items);
+      if (group.expanded) composed.push(...bodyItems);
     }
     composed = this.composeAgentActivity(composed).flatMap((chatRow, index, all) => {
       const { component } = chatRow;
@@ -959,7 +977,7 @@ export class NativeChatHost {
             this.host.outputPad * 2 -
             visibleWidth(indicator.getRenderedIndicator()) -
             1 -
-            (this.workingGroup ? 2 : 0),
+            (this.workingGroup?.header?.expandable ? 2 : 0),
         ),
       );
     }
@@ -1066,7 +1084,7 @@ export class NativeChatHost {
         return controls;
       }
       return component instanceof AgentActivityHeader ||
-        component instanceof RenderGroupHeader ||
+        (component instanceof RenderGroupHeader && component.expandable) ||
         (this.isCopyAction(component) && component.enabled)
         ? [component]
         : [];
@@ -1517,6 +1535,7 @@ export class NativeChatHost {
   }
 
   toggleRenderGroup(group: RenderGroup) {
+    if (!group.bodyItems.length) return;
     group.expanded = !group.expanded;
     if (group.expanded) this.agentActivity.inspect(group.items[0]?.occurrence);
     this.clearSelection(this.host.renderer as unknown as TuiAltScreen);
@@ -2093,6 +2112,9 @@ export class NativeChatHost {
     const previousHit = previous?.hits[previous.selected];
     const previousOwner = previousHit?.field.owner;
     const visibilityChanged =
+      (previousOwner !== hit?.field.owner &&
+        (previousOwner?.component instanceof ActivityItemDisclosure ||
+          hit?.field.owner.component instanceof ActivityItemDisclosure)) ||
       (previousOwner !== hit?.field.owner &&
         this.host.settingsManager.getHideThinkingBlock() &&
         ((previousOwner && this.thoughts.has(previousOwner)) ||

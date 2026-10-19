@@ -4,7 +4,7 @@
 
 **Blocked by:** None (behavior, existing real-Pi test seam, and single-ticket scope approved).
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 - [ ] Filter the render-group body independently of logical membership, boundaries, summaries, working labels, and singleton cardinality.
 - [ ] Suppress only authoritatively running ordinary read/search/list items; keep registered skill reads, empty-output general commands, other supported kinds, failures, and uncertain outcomes inspectable.

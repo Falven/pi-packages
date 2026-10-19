@@ -563,6 +563,9 @@ test("a finished call retains choices while arriving groups and items inherit na
 });
 
 test("a completed singleton keeps its independent item and native controls", async (t) => {
+  let started = false;
+  const proceed = Promise.withResolvers<void>();
+  t.after(() => proceed.resolve());
   const clipboard = getNativeClipboard();
   assertWritableClipboard(clipboard);
   let copied = "";
@@ -574,6 +577,17 @@ test("a completed singleton keeps its independent item and native controls", asy
     rows: 28,
     settings: { fullscreenCopyOnSelect: false },
     keybindings: { "tui.altScreen.top": "home" },
+    extensionFactories: [
+      (pi) => {
+        pi.on("session_start", () => {
+          pi.on("tool_execution_start", async ({ toolCallId }) => {
+            if (toolCallId !== "only") return;
+            started = true;
+            await proceed.promise;
+          });
+        });
+      },
+    ],
   });
   await writeFile(join(host.directory, "one.txt"), "only");
   host.queueResponse(readDelta("only", "one.txt"), toolFinish, done, end);
@@ -613,6 +627,12 @@ test("a completed singleton keeps its independent item and native controls", asy
   );
   await host.type("One call");
   await host.key("\r");
+  await t.waitFor(() => assert(started));
+  await host.frame();
+  const pending = host.screenLines().map(stripTerminalSequences).join("\n");
+  assert.match(pending, /^\s*[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] Reading one\.txt\s*$/m);
+  assert.doesNotMatch(pending, /Reading one\.txt [>▼]|read one\.txt/);
+  proceed.resolve();
   await t.waitFor(() => assert.equal(host.requests.length, 2));
   const screen = () => host.screenLines().map(stripTerminalSequences).join("\n");
   await host.frame();

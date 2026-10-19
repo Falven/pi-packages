@@ -6,8 +6,6 @@ import { stripTerminalSequences, Text } from "@earendil-works/pi-tui";
 import { createReadToolDefinition, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { openNativeHost } from "../../../fixtures/native-host.ts";
 
-/* oxlint-disable eslint/no-control-regex -- Assert Pi's native terminal highlight sequences. */
-
 const chat = new URL("../src/index.ts", import.meta.url).pathname;
 const copyExtension = new URL("../../pi-copy/src/index.ts", import.meta.url).pathname;
 const delta = (content: string, tool?: string) => ({
@@ -44,6 +42,21 @@ const finish = (reason = "stop") => ({
 });
 const done = { event: "[DONE]" };
 
+function assertHighlighted(
+  host: Awaited<ReturnType<typeof openNativeHost>>,
+  output: string,
+  text = "",
+) {
+  const background = host.ui.theme.getBgAnsi("searchMatchBg");
+  assert(
+    output.split("\n").some((line) => {
+      const start = line.indexOf(background);
+      return start >= 0 && line.slice(start + background.length).includes(text);
+    }),
+    `Expected native search highlighting before ${JSON.stringify(text)}:\n${output}`,
+  );
+}
+
 test("native Find reveals a matching occurrence inside closed agent activity", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [chat, copyExtension],
@@ -70,7 +83,7 @@ test("native Find reveals a matching occurrence inside closed agent activity", a
   const matched = host
     .screenLines()
     .find((line) => stripTerminalSequences(line).includes("Hidden telescope"));
-  assert.match(matched ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, matched ?? "", "telescope");
 });
 
 test("Find opens a closed render group and keeps the native result presenter", async (t) => {
@@ -123,7 +136,7 @@ test("Find opens a closed render group and keeps the native result presenter", a
   const result = host
     .screenLines()
     .find((line) => stripTerminalSequences(line).includes("rare telescope output"));
-  assert.match(result ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, result ?? "", "telescope");
 });
 
 test("Find includes the native tool-call name", async (t) => {
@@ -145,7 +158,7 @@ test("Find includes the native tool-call name", async (t) => {
   const call = host
     .screenLines()
     .find((line) => stripTerminalSequences(line).includes("Read one.txt"));
-  assert.match(call ?? "", /\x1b\[48;5;52m[^\n]*Read/);
+  assertHighlighted(host, call ?? "", "Read");
 });
 
 test("Find searches original tool argument values with escapes", async (t) => {
@@ -196,8 +209,8 @@ test("Find searches readable Markdown and literal command syntax", async (t) => 
         stripTerminalSequences(line).includes("Bright telescope") &&
         !stripTerminalSequences(line).includes("│"),
     );
-  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*Bright/);
-  assert.match(label ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, label ?? "", "Bright");
+  assertHighlighted(host, label ?? "", "telescope");
   await host.key("\x1b");
   assert.match(await query("printf 'orbit'"), /1\/1/);
   await host.key("\x1b");
@@ -262,7 +275,7 @@ for (const { name, source, rendered, escaped, escapedQuery } of [
     };
     const code = await query("b]");
     assert.match(code.frame, /1\/1/);
-    if (!escaped) assert.match(code.lines.join("\n"), /\x1b\[48;5;52m[^\n]*b\]/);
+    if (!escaped) assertHighlighted(host, code.lines.join("\n"), "b]");
     assert.match((await query("c")).frame, /1\/1/);
     if (escapedQuery) assert.match((await query(escapedQuery)).frame, /1\/1/);
     assert.match((await query("secret-path")).frame, /No matches/);
@@ -349,7 +362,7 @@ test("Find reveals source through default bodies despite a custom renderer", asy
   const lines = host.screenLines();
   const call = lines.find((line) => stripTerminalSequences(line).includes("unrendered telescope"));
   assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/);
-  assert.match(call ?? "", /\x1b\[48;5;52m/);
+  assertHighlighted(host, call ?? "");
   assert.doesNotMatch(lines.map(stripTerminalSequences).join("\n"), /CUSTOM CALL|CUSTOM RESULT/);
   await host.key("\x1b");
   const file = host.session.sessionFile!;
@@ -362,9 +375,9 @@ test("Find reveals source through default bodies despite a custom renderer", asy
   await host.frame();
   const retained = host.screenLines();
   assert.match(retained.map(stripTerminalSequences).join("\n"), /1\/1/);
-  assert.match(
+  assertHighlighted(
+    host,
     retained.find((line) => stripTerminalSequences(line).includes("unrendered telescope")) ?? "",
-    /\x1b\[48;5;52m/,
   );
 });
 
@@ -469,7 +482,7 @@ test("Find temporarily reveals a hidden thought body or extracted activity headi
   const thought = lines.find((line) =>
     stripTerminalSequences(line).includes("The hidden telescope"),
   );
-  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, thought ?? "", "telescope");
   await host.key("\r");
   const next = await host.frame();
   assert.match(next, /2\/2/);
@@ -519,7 +532,7 @@ test("Find refreshes results as a represented assistant message streams", async 
   const lines = host.screenLines();
   assert.match(lines.map(stripTerminalSequences).join("\n"), /1\/1/);
   const match = lines.find((line) => stripTerminalSequences(line).includes("First telescope"));
-  assert.match(match ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, match ?? "", "telescope");
 });
 
 test("Find excludes source text outside the active branch after tree navigation", async (t) => {
@@ -617,7 +630,7 @@ test("Find scrolls native activity output in the conversation to the selected so
   const lines = host.screenLines();
   assert.match(lines.map(stripTerminalSequences).join("\n"), /row-82 telescope/);
   const selected = lines.find((line) => stripTerminalSequences(line).includes("row-82 telescope"));
-  assert.match(selected ?? "", /\x1b\[48;5;52m[^\n]*telescope/);
+  assertHighlighted(host, selected ?? "", "telescope");
   await host.key("\x1b");
   await host.key("\x1b[H");
   const top = await host.frame();
@@ -647,7 +660,7 @@ test("Find uses native case, Unicode, and whitespace matching", async (t) => {
   await host.frame();
   assert.match(host.screenLines().map(stripTerminalSequences).join("\n"), /1\/1/);
   const match = host.screenLines().find((line) => stripTerminalSequences(line).includes("Café"));
-  assert.match(match ?? "", /\x1b\[48;5;52m/);
+  assertHighlighted(host, match ?? "");
 });
 
 test("Find reveals a retained message before Pi's compaction summary", async (t) => {
@@ -726,7 +739,7 @@ test("revealing a retained user row does not add it to native editor history", a
     stripTerminalSequences(matched).indexOf("history-needle request"),
     host.terminal.columns - "history-needle request".length - 1,
   );
-  assert.match(matched, /\x1b\[48;5;52m[^\n]*history-needle/);
+  assertHighlighted(host, matched, "history-needle");
   await host.key("\x1b");
   await host.key("\x1b[A");
   await host.frame();
@@ -803,7 +816,7 @@ test("Find reopens a hidden retained thought using the native Markdown environme
   assert.match(screen, /1\/1/);
   assert.match(screen, /shown-historical/);
   const thought = lines.find((line) => stripTerminalSequences(line).includes("shown-historical"));
-  assert.match(thought ?? "", /\x1b\[48;5;52m[^\n]*historical/);
+  assertHighlighted(host, thought ?? "", "historical");
   await host.key("\x1b");
   assert.doesNotMatch(await host.frame(), /historical telescope/);
   await host.key("\x14");

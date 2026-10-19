@@ -256,6 +256,7 @@ test("native reads and an unrelated command provider share skill labels and reta
   const path = join(directory, "SKILL.md");
   let replaceReads = false;
   let replacements = 0;
+  let completeSkill: (() => void) | undefined;
   await mkdir(directory);
   await writeFile(
     path,
@@ -271,7 +272,8 @@ test("native reads and an unrelated command provider share skill labels and reta
       "app.thinking.toggle": "ctrl+t",
     },
     extensionFactories: [
-      (pi) =>
+      (pi) => {
+        pi.registerEntryRenderer(activityType, () => undefined);
         pi.registerTool({
           name: "opaque_read",
           label: "Opaque read",
@@ -292,14 +294,29 @@ test("native reads and an unrelated command provider share skill labels and reta
                   revision: 1,
                   kind: "command",
                   commands: [`cat '${path}'`],
-                  status: "completed",
+                  status: "running",
                   output: "Independent skill contents.",
                 },
               ],
             };
+            pi.events.emit(activityType, update);
+            completeSkill = () => {
+              const completed: ActivityUpdate = {
+                ...update,
+                revision: 2,
+                operations: update.operations.map((operation) => ({
+                  ...operation,
+                  revision: 2,
+                  status: "completed",
+                })),
+              };
+              pi.events.emit(activityType, completed);
+              pi.appendEntry(activityType, { activity: completed });
+            };
             return { content, details: activityDetails(update, content) };
           },
-        }),
+        });
+      },
       (pi) => {
         if (replaceReads)
           pi.registerTool({
@@ -325,10 +342,9 @@ test("native reads and an unrelated command provider share skill labels and reta
   host.queueResponse({ pause: true }, ...response("", "opaque_read"));
   host.queueResponse({ pause: true }, ...response("Finished"));
   const work = host.session.prompt("Read the registered skill");
+  /* oxlint-disable eslint/no-await-in-loop -- Inspect each paused skill operation before advancing the provider. */
   for (const requests of [2, 3, 4]) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- Check each native/declared skill read before the next request proceeds.
     await t.waitFor(() => assert.equal(host.requests.length, requests));
-    // oxlint-disable-next-line eslint/no-await-in-loop -- Paint the paused native indicator.
     await host.frame();
     assert.match(
       host.screenLines().map(stripTerminalSequences).join("\n"),
@@ -339,8 +355,21 @@ test("native reads and an unrelated command provider share skill labels and reta
         .screenLines()
         .some((line) => stripTerminalSequences(line).trim().endsWith("Reading review skill >")),
     );
+    if (requests === 4) {
+      await host.key("\x1bg");
+      await host.key("\r");
+      await host.frame();
+      assert.match(
+        host.screenLines().map(stripTerminalSequences).join("\n"),
+        /^\s*Reading review skill >\s*$/m,
+      );
+      assert(completeSkill);
+      completeSkill();
+      await host.key("\r");
+    }
     host.resumeResponse();
   }
+  /* oxlint-enable eslint/no-await-in-loop */
   await work;
   await host.frame();
   await host.key("\x0f");
@@ -559,9 +588,93 @@ test("an unrelated provider presents semantic operations and late updates withou
       assert(activeRows[0]!.trim().endsWith(label), activeRows[0]);
       assert.doesNotMatch(activeRows[0]!, /[>▼]\s*$/);
     } else {
-      assert(activeRows[0]!.trim().endsWith(`${groupLabel} >`));
+      assert(activeRows[0]!.trim().endsWith(`${groupLabel} >`), activeRows[0]);
     }
   };
+  await status("Running printf generic-evidence");
+  assert(publish);
+  publish([{ ...runningCommand, output: "" }]);
+  await click("Running printf generic-evidence >");
+  assert.match(screen(), /^\s*Running printf generic-evidence >\s*$/m);
+  await click("Running printf generic-evidence ▼");
+  publish([{ ...runningCommand, commands: ["cat /tmp/first.log"], output: "partial-read-needle" }]);
+  await status("Reading first.log", null);
+  assert.doesNotMatch(screen(), /^\s*Reading first\.log [>▼]/m);
+  const beforeFind = JSON.stringify(host.session.messages);
+  await host.key("\x06");
+  await host.type("partial-read-needle");
+  await host.frame();
+  assert.match(screen(), /1\/1/);
+  assert.match(screen(), /^\s*partial-read-needle\s*$/m);
+  await host.key("\x1b");
+  await status("Reading first.log", null);
+  assert.doesNotMatch(screen(), /partial-read-needle/);
+  assert.equal(JSON.stringify(host.session.messages), beforeFind);
+  assert.equal(host.requests.length, 2);
+  await host.key("\x0f");
+  for (const [commands, label] of [
+    [["rg needle"], "Searching for needle"],
+    [["ls"], "Listing files"],
+    [["cat /tmp/first.log", "cat /tmp/second.log"], "Reading second.log"],
+  ] as const) {
+    publish([{ ...runningCommand, commands: [...commands], output: "partial-read-needle" }]);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Observe each running exploration before the next update.
+    await status(label, null);
+    assert.doesNotMatch(screen(), /^\s*(Reading|Searching|Listing).* [>▼]\s*$/m);
+    assert.doesNotMatch(screen(), /partial-read-needle/);
+  }
+  await host.key("\x06");
+  await host.type(".log");
+  await host.frame();
+  assert.match(screen(), /1\/2/);
+  assert.match(screen(), /^\s*Reading first\.log ▼\s*$/m);
+  assert.doesNotMatch(screen(), /^\s*Reading second\.log [>▼]/m);
+  await host.key("\r");
+  await host.frame();
+  assert.match(screen(), /2\/2/);
+  assert.match(screen(), /^\s*Reading second\.log ▼\s*$/m);
+  assert.doesNotMatch(screen(), /^\s*Reading first\.log [>▼]/m);
+  await host.type("-missing");
+  await host.frame();
+  assert.match(screen(), /No matches/);
+  assert.doesNotMatch(screen(), /partial-read-needle/);
+  await host.key("\x1b");
+  await status("Reading second.log", null);
+  const exploration = {
+    ...runningCommand,
+    commands: ["cat /tmp/first.log"],
+    output: "partial-read-needle",
+  };
+  for (const outcome of ["completed", "failed", "unknown", "unattempted"] as const) {
+    publish([{ ...exploration, status: outcome }]);
+    // oxlint-disable-next-line eslint/no-await-in-loop -- Every authoritative outcome must remain inspectable.
+    await host.frame();
+    assert.match(screen(), /^\s*partial-read-needle\s*$/m);
+  }
+  await host.key("\x1bg");
+  await host.key("\x1b[A");
+  await host.key("\r");
+  await status("Reading first.log");
+  publish([exploration]);
+  await status("Reading first.log", null);
+  await host.type("focus recovered");
+  assert.equal(host.ui.getEditorText(), "focus recovered");
+  host.ui.setEditorText("");
+  await click("Reading first.log");
+  await host.key("\x1bg");
+  await host.type("still composing");
+  assert.equal(host.ui.getEditorText(), "still composing");
+  host.ui.setEditorText("");
+  host.terminal.resize(21, 140);
+  await status("Reading first.log", null);
+  host.terminal.resize(110, 140);
+  publish([{ ...exploration, status: "completed" }]);
+  await status("Reading first.log");
+  assert.doesNotMatch(screen(), /partial-read-needle/);
+  await click("Reading first.log >");
+  assert.match(screen(), /^\s*partial-read-needle\s*$/m);
+  await host.key("\x0f");
+  publish([{ ...runningCommand, output: `\x1b[31m${longOutput}\x1b[0m` }]);
   await status("Running printf generic-evidence");
   host.terminal.resize(24, 140);
   await host.frame();
@@ -645,7 +758,14 @@ test("an unrelated provider presents semantic operations and late updates withou
   };
   publish([firstRead, lastRead]);
   await status("Reading second.log");
+  await click("Reading second.log >");
+  assert.doesNotMatch(screen(), /^\s*Reading (first|second)\.log [>▼]/m);
+  assert.match(screen(), /Running printf generic-evidence ▼/);
   publish([{ ...lastRead, status: "completed" }]);
+  await host.frame();
+  assert.match(screen(), /^\s*Read second\.log >\s*$/m);
+  assert.doesNotMatch(screen(), /^\s*Reading first\.log [>▼]/m);
+  await click("Reading first.log ▼");
   await status("Reading first.log");
   publish([{ ...firstRead, status: "completed" }]);
   await status("Reading second.log");
