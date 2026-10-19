@@ -13,13 +13,13 @@ import { boundedPreview, contentHash } from "./presentation.ts";
 import type { ProcessPresentation, ProcessSessions } from "./process.ts";
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
-const commandInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
+const unsignedInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
 const parameters = Type.Object(
   {
     cmd: Type.String(),
     justification: Type.Optional(Type.String()),
     login: Type.Optional(Type.Boolean()),
-    max_output_tokens: Type.Optional(commandInteger),
+    max_output_tokens: Type.Optional(unsignedInteger),
     prefix_rule: Type.Optional(Type.Array(Type.String())),
     sandbox_permissions: Type.Optional(
       Type.Union([Type.Literal("use_default"), Type.Literal("require_escalated")]),
@@ -27,7 +27,7 @@ const parameters = Type.Object(
     shell: Type.Optional(Type.String()),
     tty: Type.Optional(Type.Boolean()),
     workdir: Type.Optional(Type.String()),
-    yield_time_ms: Type.Optional(commandInteger),
+    yield_time_ms: Type.Optional(unsignedInteger),
   },
   { additionalProperties: false },
 );
@@ -174,11 +174,15 @@ export function createCommand(
           ? (settings.shellPath ?? userInfo().shell)
           : explicitShell(args.shell);
       if (!shell) throw new Error("The user has no configured shell");
-      const command = settings.shellCommandPrefix
+      let command = settings.shellCommandPrefix
         ? `${settings.shellCommandPrefix}\n${args.cmd}`
         : args.cmd;
       const login = args.login !== false;
       const kind = args.shell === undefined ? undefined : shellKind(shell);
+      const utf8Prefix =
+        "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
+      if (kind === "powershell" && !command.trimStart().startsWith(utf8Prefix))
+        command = utf8Prefix + command;
       const commandArgs =
         kind === "powershell"
           ? [...(login ? [] : ["-NoProfile"]), "-Command", command]
@@ -251,7 +255,6 @@ export function createCommand(
   };
 }
 
-const inputUnsignedInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
 const inputParameters = Type.Object(
   {
     session_id: Type.Number({
@@ -260,8 +263,8 @@ const inputParameters = Type.Object(
       multipleOf: 1,
     }),
     chars: Type.Optional(Type.String()),
-    max_output_tokens: Type.Optional(inputUnsignedInteger),
-    yield_time_ms: Type.Optional(inputUnsignedInteger),
+    max_output_tokens: Type.Optional(unsignedInteger),
+    yield_time_ms: Type.Optional(unsignedInteger),
   },
   { additionalProperties: false },
 );

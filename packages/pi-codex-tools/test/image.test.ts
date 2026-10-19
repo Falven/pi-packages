@@ -335,6 +335,7 @@ test("large original-detail images use the routed limits once and honor effectiv
   assert(selected);
   await host.session.setModel({
     ...selected,
+    input: ["text"],
     inputLimits: { images: { resize: { maxWidth: 1, maxHeight: 1 } } },
   });
   const source =

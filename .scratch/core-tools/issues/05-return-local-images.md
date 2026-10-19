@@ -6,7 +6,7 @@
 
 **Decision:** [Accepted behavior alignment](../../../docs/adr/0030-core-tool-behavior-parity.md); [image cause and public-API boundary](../../../docs/plans/core-tool-behavior-parity.md#image-cause-and-implementation-boundary).
 
-**Blocked by:** None (can start immediately). Existing image dispatch, collection, and provider integration are implemented. The remaining public-hook and codec questions are evidence gates within this slice.
+**Blocked by:** Required image source/detail binding cannot be completed safely through the current public APIs. Existing dispatch and validation fixes can proceed; the image preparation and late-blocking gates below remain unresolved.
 
 **Status:** claimed — `codex/core-image-alignment`, 2026-10-18; base `6c775356361cf89bf247f7eb9f1dc31a16cb912e`
 
@@ -34,7 +34,7 @@ The accepted image decision gives preparation to this extension. Pi must remain 
 
 ### Current implementation and evidence — 2026-10-18
 
-`src/image.ts` validates original arguments through public `prepareArguments`, retains omission/null defaults, ignores unknown keys, and returns the observed unsupported-detail error. It rechecks effective arguments after permission hooks and rejects reads when the public current model excludes image input. The follow-up below corrects the remaining captured nested-argument shapes, numeric descriptions, and field-order positions; original direct-tool JSON spelling is still not exposed by public preparation.
+`src/image.ts` validates original arguments through public `prepareArguments`, retains omission/null defaults, ignores unknown keys, and returns the observed unsupported-detail error. It rechecks effective arguments after permission hooks. The final-review follow-up removes the premature current-model capability rejection after the routed-model regression was demonstrated. The argument follow-up below corrects the remaining captured nested-argument shapes, numeric descriptions, and field-order positions; original direct-tool JSON spelling is still not exposed by public preparation.
 
 The existing image assertions were updated, with a failing public-host run before the fix. An isolated public-host diagnostic then rejected 16 invalid/blocked inputs, preserved raw helper bytes for six valid/default/unknown-key/edited inputs, and kept nested result-hook blocking effective before bytes returned to JavaScript. No permanent test cases or harness files were added. Temporary scripts, raw boundary payloads, logs, fixtures, and reference-probe requests are under [/tmp/pi-core-alignment-20261018-a7r6fk0i/image](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/README.md).
 
@@ -65,6 +65,12 @@ The validated red replay showed 11 differing rows in the parent's 19-input image
 Exact commands, raw next-request payloads, reference identities, and passing direct TypeScript/lint/format checks are indexed in [the argument follow-up evidence](/tmp/pi-core-alignment-20261018-a7r6fk0i/command/argument-diagnostics.Trhwhq/README.md). The image preparation, normalization, capability, binding, late-blocking, and integrated coverage gates above remain open and were not re-investigated or changed by this follow-up. Pi, installed packages, global settings, frozen model guidance, cell-owned files, shared runners, Phoenix, and every historical body remain unchanged by this work.
 
 The subsequent clean merge of integration `2753f5a1e520655ad559415a9b2a6e6c66959ca7` preserves the incoming Core 03 runtime work. All 19 image rows and the same focused argument/hook/blocking checks pass through that merged runtime, with direct TypeScript/lint/format checks still passing. Fresh `*-post-merge` evidence is retained separately.
+
+### Final review fixes — 2026-10-19
+
+After merging `d7de8ac`, the existing routed-limit assertion was extended to select a text-only virtual model with an image-capable physical route. It reproduced the premature rejection. Removing the unsupported selected-model guard makes the same assertion pass, including the raw helper return, physical 12×8 limits, and the existing resize-setting check. No private capability lookup or image-pipeline workaround was introduced. Capability fidelity remains open because selected-model metadata does not reliably describe the physical route.
+
+All 37 affected existing checks pass; fourteen are image checks covering raw validation, unavailable/overridden tools, permissions, argument edits, result redaction, blocking, and routed delivery. No permanent test case, fixture, or harness was added. [Final-review evidence](/tmp/pi-core-alignment-20261018-a7r6fk0i/review-fixes/README.md) records the red/green results, exact commands, static checks, and final commit. Full image preparation, source/detail binding, byte equivalence, earlier consumers, and late blocking remain unresolved. Installed-host integrity acceptance remains failed after the earlier shim incident. The blocked full pipeline was not re-investigated, and this ticket remains claimed.
 
 ## Historical revisions
 

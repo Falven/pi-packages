@@ -11,7 +11,7 @@ export function argumentError(
   key?: string,
   index?: number,
 ): Error {
-  // shortcut: positions describe nested-call JSON; direct-tool spelling needs a public raw-input hook.
+  // shortcut: positions use canonical JSON; original direct-tool spelling needs a public raw-input hook.
   let column = 1;
   for (const [name, value] of Object.entries(args)) {
     const encoded = JSON.stringify(value);
