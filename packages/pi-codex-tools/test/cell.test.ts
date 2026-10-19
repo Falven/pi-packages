@@ -319,8 +319,12 @@ test("early exit and ordinary exceptions commit writes while timers alone do not
     /Script completed/,
   );
   assert.match(
-    await execute(host, 'store("exception", 2); throw new Error("ordinary-failure");', "exception"),
-    /ordinary-failure/,
+    await execute(
+      host,
+      '// @exec: {}\nstore("exception", 2); const error = new Error("ordinary-failure"); void error.stack; throw error;',
+      "exception",
+    ),
+    /^Script failed\nWall time \d+\.\d seconds\nOutput:\n\nScript error:\nError: ordinary-failure\n    at exec_main\.mjs:1:38$/,
   );
   assert.match(
     await execute(
@@ -328,7 +332,7 @@ test("early exit and ordinary exceptions commit writes while timers alone do not
       'store("timer", 3); setTimeout(() => { throw new Error("timer-failure") }, 0); await new Promise(() => {});',
       "timer",
     ),
-    /timer-failure/,
+    /Script error:\nError: timer-failure\n    at exec_main\.mjs:1:45$/,
   );
   const cleared = await execute(
     host,
@@ -343,14 +347,21 @@ text([load("exit"), load("exception"), load("timer"), load("discarded")]);`,
     host,
     `const cycle = {}; cycle.self = cycle;
 for (const value of [undefined, () => {}, 1n, cycle, "x".repeat(262144)]) {
-  try { store("invalid", value); } catch (error) { text(String(error)); }
+  try { store("invalid", value); } catch (error) { text({type:typeof error,error:String(error)}); }
 }
 text(load("invalid"));`,
     "invalid",
   );
-  assert.match(invalid, /Only plain serializable objects can be stored/);
-  assert.match(invalid, /BigInt/);
+  assert.match(
+    invalid,
+    /"type":"string","error":"Unable to store \\"invalid\\"\. Only plain serializable objects can be stored\."/,
+  );
+  assert.match(
+    invalid,
+    /"type":"string","error":"TypeError: Do not know how to serialize a BigInt\\n    at exec_main\.mjs:3:9"/,
+  );
   assert.match(invalid, /circular/i);
+  assert.doesNotMatch(invalid, /node:internal|worker\.mjs|evalmachine|JSON\.stringify/);
   assert.match(invalid, /Stored value exceeds 256 KiB/);
   assert.match(invalid, /undefined$/);
 });
@@ -443,17 +454,26 @@ test("wait validates its budget before looking up a stale string cell identifier
   });
   assert.match(
     await collect(host, "stale", "negative", { max_tokens: -1 }),
-    /max_tokens must be a nonnegative integer/,
+    /failed to parse function arguments: invalid value: integer `-1`, expected usize/,
   );
-  assert.match(await collect(host, "stale", "fraction", { yield_time_ms: 0.5 }), /integer/);
-  assert.match(await collect(host, "stale", "unknown"), /exec cell stale not found/);
+  assert.match(
+    await collect(host, "stale", "fraction", { yield_time_ms: 0.5 }),
+    /failed to parse function arguments: invalid type: floating point `0.5`, expected u64/,
+  );
+  assert.match(
+    await collect(host, "stale", "unknown", { ignored: true }),
+    /exec cell stale not found/,
+  );
   host.queueResponse(...functionCall("wait", { cell_id: 1 }, "numeric", "functions"));
   host.queueResponse(completed);
   await host.session.prompt("Keep process and cell identifiers distinct");
-  assert.match(output(host, "numeric"), /exec cell 1 not found/);
+  assert.match(
+    output(host, "numeric"),
+    /failed to parse function arguments: invalid type: integer `1`, expected a string/,
+  );
 });
 
-test("cancelling a later wait preserves pending work and termination aborts it without committing writes", async (t) => {
+test("cancelling a later wait preserves work and cell termination lets its command finish without committing writes", async (t) => {
   const waiting = Promise.withResolvers<void>();
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
@@ -465,11 +485,14 @@ test("cancelling a later wait preserves pending work and termination aborts it w
     },
   });
   const pidFile = join(host.directory, "owned.pids");
+  const releaseFile = join(host.directory, "release-command");
+  const marker = join(host.directory, "survived");
   const cell = cellId(
     await execute(
       host,
       `store("pending", "discarded"); await yield_control(); text("UNREAD");
-text(await tools.exec_command(${JSON.stringify({ cmd: `sleep 30 & child=$!; printf 'COMMAND-PARTIAL'; printf '%s %s' $$ "$child" > '${pidFile}'; wait`, shell: "/bin/sh", login: false, yield_time_ms: 30000 })}));`,
+text(await tools.exec_command(${JSON.stringify({ cmd: `while [ ! -e '${releaseFile}' ]; do sleep 0.01; done & child=$!; printf 'COMMAND-PARTIAL'; printf '%s %s' $$ "$child" > '${pidFile}'; wait; printf SURVIVED > '${marker}'; printf COMMAND-COMPLETE`, shell: "/bin/sh", login: false, yield_time_ms: 30000 })}));
+text("DISCARDED-CONTINUATION"); store("pending", "late");`,
       "start",
     ),
   );
@@ -488,8 +511,13 @@ text(await tools.exec_command(${JSON.stringify({ cmd: `sleep 30 & child=$!; prin
   const stopped = await collect(host, cell, "terminated", { terminate: true });
   assert.match(stopped, /Script terminated/);
   assert.match(stopped, /UNREAD/);
-  assert.match(stopped, /COMMAND-PARTIAL/);
-  for (const pid of pids) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  assert.doesNotMatch(stopped, /COMMAND-PARTIAL|COMMAND-COMPLETE|DISCARDED-CONTINUATION/);
+  for (const pid of pids) process.kill(pid, 0);
+  await writeFile(releaseFile, "finish");
+  await t.waitFor(async () => assert.equal(await readFile(marker, "utf8"), "SURVIVED"));
+  await t.waitFor(() => {
+    for (const pid of pids) assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  });
   assert.match(
     await execute(
       host,
@@ -763,7 +791,7 @@ try { await tools.exec_command({cmd:"printf forbidden",login:false}) } catch (er
   );
 });
 
-test("termination and shutdown report bounded cleanup when a public result hook has not returned", async (t) => {
+test("termination returns promptly and shutdown reports bounded cleanup when a public result hook has not returned", async (t) => {
   let blocked = Promise.withResolvers<void>();
   let release = Promise.withResolvers<void>();
   t.after(() => release.resolve());
@@ -789,8 +817,8 @@ test("termination and shutdown report bounded cleanup when a public result hook 
   await blocked.promise;
   const started = performance.now();
   const result = await collect(host, id, "terminate-held", { terminate: true });
-  assert.match(result, /Execution cleanup did not finish within 2000 ms/);
-  assert(performance.now() - started < 4000);
+  assert.match(result, /^Script terminated\nWall time \d+\.\d seconds\nOutput:\n$/);
+  assert(performance.now() - started < 1500);
   release.resolve();
   await t.waitFor(() => {
     const entries = host.session.sessionManager
@@ -811,12 +839,18 @@ test("termination and shutdown report bounded cleanup when a public result hook 
   assert.doesNotMatch(output(host, "terminate-held"), /DISCARDED-CONTINUATION/);
   blocked = Promise.withResolvers<void>();
   release = Promise.withResolvers<void>();
-  await execute(
-    host,
-    'await yield_control(); await tools.exec_command({cmd:"true",login:false});',
-    "held-shutdown",
+  const shutdownCell = cellId(
+    await execute(
+      host,
+      'await yield_control(); await tools.exec_command({cmd:"true",login:false});',
+      "held-shutdown",
+    ),
   );
   await blocked.promise;
+  assert.match(
+    await collect(host, shutdownCell, "terminate-before-shutdown", { terminate: true }),
+    /^Script terminated\nWall time \d+\.\d seconds\nOutput:\n$/,
+  );
   const errors: string[] = [];
   await host.session.bindExtensions({
     onError(error) {
