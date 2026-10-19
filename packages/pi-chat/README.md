@@ -50,6 +50,8 @@ Pi's Hide thinking setting controls whether thoughts appear.
 
 ### While a command runs
 
+Ordinary reads, searches, and directory listings show progress without an item row until they finish. Their group becomes expandable when it has something eligible to inspect. General commands and registered skill reads remain inspectable while running; Find can reveal retained content from an unfinished operation.
+
 Both views show the checks still running. pi-chat keeps the current command in one row; open it when you want to see the output.
 
 | Vanilla Pi                                                                                | pi-chat                                                                            |

@@ -49,7 +49,10 @@ The ordered commentary, thoughts, and tool activity within a turn, presented sep
 _Avoid_: Turn, when referring only to the agent's activity
 
 **Render group**:
-Consecutive activity items displayed together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
+Consecutive activity items represented together within agent activity. Visible standalone non-tool items and explicit activity boundaries separate groups; an assistant message or execution cell boundary alone does not.
+
+**Render-group body**:
+The activity items currently available to inspect inside a render group.
 
 **Activity item**:
 A unit of displayed agent activity identifying an operation, failure, or delivered image. A conversation item or tool call can contribute zero or several activity items; returning text alone is not an operation.
