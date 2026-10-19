@@ -6,6 +6,10 @@
 
 **Status:** resolved
 
+**Task graph:** Retain the approved single vertical slice and its existing no-blocker relationship. It delivers body eligibility, disclosure interaction, source Find, state preservation, documentation, and real-host acceptance together. No prefactor, split, additional ticket, or remaining implementation frontier is needed; related earlier tickets remain closed. Main integration and pushing are outside this ticket's authorized delivery.
+
+**Publication:** Initially `ready-for-agent` at `f928f14`, claimed during implementation, and resolved at `0fe3cac`. This to-spec/to-tickets follow-up reconciles the existing contracts and closeout record; it does not reclassify completed work as ready to implement.
+
 - [x] Filter the render-group body independently of logical membership, boundaries, summaries, working labels, and singleton cardinality.
 - [x] Suppress only authoritatively running ordinary read/search/list items; keep registered skill reads, empty-output general commands, other supported kinds, failures, and uncertain outcomes inspectable.
 - [x] Retain status-only headers without chevrons, focus decoration, or keyboard/pointer disclosure access when no body is eligible, regardless of item count.
@@ -13,15 +17,16 @@
 - [x] Preserve group, item, and native-output choices through eligibility transitions, completion, failure, cancellation, settings reconstruction, and existing replay boundaries.
 - [x] Keep configured global expansion and new-control inheritance without allowing global, pointer, or keyboard input to bypass body eligibility.
 - [x] Preserve usable focus, reading position, valid selection/copy, native padding, and narrow-width label fitting as availability changes.
-- [x] Let Find temporarily reveal only its selected suppressed item or retained source; remove temporary visibility on navigation/query change/close without erasing disclosure choices.
+- [x] Let Find temporarily reveal only its selected suppressed item or retained source; remove the previous reveal when selection leaves its item or source occurrence, no match remains, or Find closes, without erasing disclosure choices.
 - [x] Preserve provider requests, results, session content, execution, source identity, and generic fallback behavior.
 - [x] Keep the original general-command screenshot expandable; introduce no item-count or stdout-presence threshold.
 - [x] Document absent Codex visualization and summary-only dynamic-renderer inputs without adding settings, provider fields, dependencies, or host hooks.
+- [x] Keep the companion operation contract aligned: publish full facts and retain working-label selection even when chat suppresses item rows.
 - [x] Extend existing real-Pi host cases through red/green cycles and pass the combined presentation suite on installed Pi 1.1.0, typecheck, lint, task-file formatting, and whitespace checks.
 - [x] Complete separate Standards and Spec self-review passes against the approved starting main revision and resolve actionable findings.
 - [x] Deliver on the integration branch with main untouched, no push, and no temporary implementation worktree left behind.
 
-**Contract:** The [chat specification](../../../docs/specs/pi-chat.md) is canonical. The activity-presentation, disclosure-interaction, source-Find, singleton, and native-flow ADRs carry the corresponding amendments. Existing glossary terms distinguish the logical render group from its render-group body.
+**Contract:** The [chat specification](../../../docs/specs/pi-chat.md) is canonical, including its explicit body-eligibility presentation matrix. The [tool-activity specification](../../../docs/specs/tool-activity.md) records the unchanged operation-fact and working-label obligations. The activity-presentation, disclosure-interaction, source-Find, singleton, and native-flow ADRs carry the corresponding amendments. Existing glossary terms distinguish the logical render group from its render-group body.
 
 **Authorization:** The user approved the existing real-Pi InteractiveMode / AgentSessionRuntime seam, installed Pi 1.1.0, one complete ticket with no blockers, and integration-branch delivery. The user accepted sequential implementation and separate self-performed review axes because subagent tools are unavailable. These are not independent reviews. No physical-terminal, live Codex, additional Pi-version matrix, remote issue, or PR is required.
 
@@ -41,4 +46,4 @@
 
 **Evidence:** `/tmp/pi-chat-expandability.29O3O8/evidence/` retains focused red/green logs, the seven parity probes, unchanged-main palette evidence, the 147-case combined log, static-check results, runtime identity, the reviewed diff, and both review notes. Installed dependencies were copied into the isolated checkout without changing manifests, lockfiles, versions, or installed Pi source. Normal Git hooks passed.
 
-**Delivery and limits:** The integration branch is the deliverable; main remains at the approved baseline and nothing is pushed. Temporary checkout cleanup follows the closing commit and is verified in the session's completion output. No implementer subagents or independent review agents were available or used. Physical-terminal pixels/input, OS clipboard transport, live Codex, another Pi version, and the full repository behavioral suite were not checked. Codex-only unsupported inputs retain the documented applicability limits.
+**Delivery and limits:** The integration branch is the deliverable; main remains at the approved baseline and nothing is pushed. Delivery at `0fe3cac` and removal of the temporary implementation checkout were verified in the session completion output; only the unchanged main checkout remained. The later specification/ticket synchronization is documentation only and carries forward the same runtime/test evidence, rather than claiming a new behavioral run. No implementer subagents or independent review agents were available or used. Physical-terminal pixels/input, OS clipboard transport, live Codex, another Pi version, and the full repository behavioral suite were not checked. Codex-only unsupported inputs retain the documented applicability limits.
