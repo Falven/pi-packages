@@ -62,27 +62,43 @@ test("the image helper accepts ordinary forms and validates explicit detail befo
   host.queueResponse(
     ...call(`const url = ${JSON.stringify(url)};
 text(typeof image(url));
-image({image_url: url, detail: "invalid"}, "original");
+image({image_url: url, detail: "invalid"}, "oRiGiNaL");
+image(url, "AuTo");
+image({image_url: url.replace("data:", "DaTa:"), detail: "HiGh"});
 for (const detail of ["invalid", 1, null]) {
   try { image({image_url: url, detail: "invalid"}, detail); }
+  catch (error) { text({type: typeof error, error}); }
+}
+for (const [value, detail] of [
+  [{image_url: url, detail: 17}, "original"],
+  [{image_url: "", detail: 17}, "original"],
+  [{image_url: "https://example.com/a.png", detail: 17}, "original"],
+  ["https://example.com/a.png", 17],
+  [null, 17],
+]) {
+  try { image(value, detail); }
   catch (error) { text({type: typeof error, error}); }
 }`),
   );
   host.queueResponse(completed);
   await host.session.prompt("Emit ordinary image values with detail validation");
-  assert.equal(images(host.requests[1]).length, 2);
+  assert.equal(images(host.requests[1]).length, 4);
   assert.match(output(host), /undefined/);
   assert.match(
     output(host),
     /"type":"string","error":"image detail must be one of: auto, low, high, original"/,
   );
-  assert.match(
-    output(host),
-    /"type":"string","error":"image detail must be a string when provided"/,
+  assert.equal(
+    (
+      output(host).match(
+        /"type":"string","error":"image detail must be a string when provided"/g,
+      ) ?? []
+    ).length,
+    6,
   );
   assert.deepEqual(
     images(host.requests[1]).map((item) => item["detail"]),
-    ["auto", "auto"],
+    ["auto", "auto", "auto", "auto"],
   );
 });
 
@@ -93,7 +109,7 @@ test("the image helper rejects inputs outside its ordinary data URL surface", as
   });
   host.queueResponse(
     ...call(
-      'for (const value of ["not-a-data-url", "", null, 1, {}, {image_url: 1}, {type: "image", data: "AA==", mimeType: "image/png"}]) { try { image(value); } catch (error) { text({type: typeof error, error}); } }',
+      'for (const value of ["not-a-data-url", "http://example.com/a.png", "HTTPS://example.com/a.png", "ftp://example.com/a.png", "", null, 1, {}, {image_url: 1}, {type: "image", data: "AA==", mimeType: "image/png"}]) { try { image(value); } catch (error) { text({type: typeof error, error}); } }',
     ),
   );
   host.queueResponse(completed);
@@ -102,6 +118,14 @@ test("the image helper rejects inputs outside its ordinary data URL surface", as
   assert.match(
     output(host),
     /"type":"string","error":"Tool call failed: invalid image output\. Pass a base64 data URI instead"/,
+  );
+  assert.equal(
+    (
+      output(host).match(
+        /"type":"string","error":"Tool call failed: remote image URLs are not supported in tool outputs\. Pass a base64 data URI instead"/g,
+      ) ?? []
+    ).length,
+    2,
   );
   assert.equal(
     (
@@ -189,12 +213,12 @@ test("effective image blocking prevents local reads and text serialization indep
   try { text(await tools.view_image({path})); }
   catch (error) { text({error}); }
 }
-image(${JSON.stringify(`data:image/png;base64,${tiny}`)});`),
+for (const detail of [undefined, "LOW"]) image(${JSON.stringify(`data:image/png;base64,${tiny}`)}, detail);`),
   );
   host.queueResponse(completed);
   await host.session.prompt("Honor the effective image setting");
-  assert.equal((output(host).match(/Image reading is disabled\./g) ?? []).length, 3);
-  assert.doesNotMatch(output(host), /image_url|data:|unable to locate/);
+  assert.equal((output(host).match(/Image reading is disabled\./g) ?? []).length, 4);
+  assert.doesNotMatch(output(host), /image_url|data:|unable to locate|image content omitted/);
   assert.equal(images(host.requests[1]).length, 0);
   assert.equal(host.session.settingsManager.getShowImages(), true);
 });
@@ -254,7 +278,8 @@ test("nested image calls retain native blocking, argument edits, result redactio
   });
   await writeFile(join(host.directory, "private.png"), Buffer.from(tiny, "base64"));
   host.queueResponse(
-    ...call(`text(await tools.view_image({path: "original"}));
+    ...call(`const value = await tools.view_image({path: "original"}); text(value);
+try { image(value, "low"); } catch (error) { text(error); }
 try { text(await tools.view_image({path: "blocked"})); }
 catch (error) { text(error); }`),
   );
@@ -262,7 +287,7 @@ catch (error) { text(error); }`),
   await host.session.prompt("Apply the native image policy");
   assert.match(output(host), /image-redacted/);
   assert.match(output(host), /Image denied by the test policy/);
-  assert.doesNotMatch(output(host), /image_url|data:/);
+  assert.doesNotMatch(output(host), /image_url|data:|image content omitted/);
   assert.equal(images(host.requests[1]).length, 0);
   assert(
     activity.some((event) => event.name === "view_image" && event.parent?.startsWith("call_one")),
@@ -284,7 +309,7 @@ test("outer result hooks can replace an emitted image before the next request", 
   await writeFile(join(host.directory, "private.png"), Buffer.from(tiny, "base64"));
   host.queueResponse(
     ...call(
-      'const result = await tools.view_image({path: "private.png"}); text(result); image(result);',
+      'const result = await tools.view_image({path: "private.png"}); text(result); image(result); image(result, "low");',
     ),
   );
   host.queueResponse(completed);
@@ -563,7 +588,7 @@ test("wait results preserve duplicate image positions and later context redactio
       });
       host.queueResponse(
         ...call(
-          `await yield_control(); text("BEFORE"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)}); text("AFTER"); image(${JSON.stringify(`data:image/png;base64,${tiny}`)});`,
+          `const url = ${JSON.stringify(`data:image/png;base64,${tiny}`)}; await yield_control(); text("BEFORE"); image(url); image(url, "low"); text("AFTER"); image(url);`,
           "one",
           null,
         ),
@@ -586,12 +611,16 @@ test("wait results preserve duplicate image positions and later context redactio
         const parts = result.output as { type: string; text?: string }[];
         assert.deepEqual(
           parts.map((part) => part.type),
-          ["input_text", "input_text", "input_image", "input_text", "input_image"],
+          ["input_text", "input_text", "input_image", "input_text", "input_text", "input_image"],
         );
         assert.equal(parts[1]!.text, "BEFORE");
-        assert.equal(parts[3]!.text, "AFTER");
+        assert.equal(
+          parts[3]!.text,
+          "image content omitted because detail 'low' is not supported; use 'high', 'original', or 'auto'",
+        );
+        assert.equal(parts[4]!.text, "AFTER");
       } else {
-        assert.doesNotMatch(output(host, "collected"), /BEFORE|AFTER/);
+        assert.doesNotMatch(output(host, "collected"), /BEFORE|AFTER|image content omitted/);
         if (mode === "changed") assert.match(output(host, "collected"), /^PUBLIC/);
       }
     });

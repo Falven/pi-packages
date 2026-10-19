@@ -157,17 +157,21 @@ const createBridge = runInContext(
     };
     globalThis.yield_control = async () => post({ type: "yield" });
     globalThis.image = (value, detail) => {
+      if (detail != null && typeof detail !== "string")
+        throw "image detail must be a string when provided";
       const url = typeof value === "string" ? value : value?.image_url;
+      const embedded = typeof value !== "string" && typeof url === "string" ? value?.detail : undefined;
+      if (embedded != null && typeof embedded !== "string")
+        throw "image detail must be a string when provided";
       if (typeof url !== "string" || url.length === 0)
         throw "image expects a non-empty image URL string or an object with image_url and optional detail";
-      if (!url.startsWith("data:"))
+      if (/^https?:/i.test(url))
+        throw "Tool call failed: remote image URLs are not supported in tool outputs. Pass a base64 data URI instead";
+      if (!/^data:/i.test(url))
         throw "Tool call failed: invalid image output. Pass a base64 data URI instead";
-      const selected = detail ?? value?.detail;
-      if (selected !== undefined && selected !== null) {
-        if (typeof selected !== "string") throw "image detail must be a string when provided";
-        if (!["auto", "low", "high", "original"].includes(selected))
-          throw "image detail must be one of: auto, low, high, original";
-      }
+      const selected = (detail ?? embedded)?.replace(/[A-Z]/g, letter => letter.toLowerCase());
+      if (selected !== undefined && !["auto", "low", "high", "original"].includes(selected))
+        throw "image detail must be one of: auto, low, high, original";
       post({ type: "image", url, detail: selected, owner: value !== null && typeof value === "object" ? childResults.get(value) : undefined });
     };
     globalThis.ALL_TOOLS = JSON.parse(definitions);
