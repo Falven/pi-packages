@@ -61,7 +61,7 @@ Patch results show the changed file paths.
 
 ![A completed patch reports the updated file](screenshots/patch.png)
 
-Image results appear inline and follow Pi's image settings.
+Image results appear inline. Local image arguments are checked before native coercion and after permission hooks edit them. Omitted or null detail defaults to `high`; unknown fields are ignored. Image preparation still has [open alignment gates](../../.scratch/core-tools/issues/05-return-local-images.md) for encoded bytes, detail, and late blocking. Late blocking can leave image bytes in saved results and serialized model output.
 
 ![An image result displayed in Pi](screenshots/image.png)
 

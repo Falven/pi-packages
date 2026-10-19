@@ -34,7 +34,7 @@ test("a local image resolves in the owning directory and reaches the next model 
   await writeFile(join(host.directory, "sample.png"), Buffer.from(tiny, "base64"));
   host.queueResponse(
     ...call(
-      'const result = await tools.view_image({path: "sample.png"}); text(result); image(result);',
+      'const result = await tools.view_image({path: "sample.png", detail: null, extra: true}); text(result); image(result);',
     ),
   );
   host.queueResponse(completed);
@@ -124,7 +124,11 @@ test("local image failures report observed file and decoding errors without retu
   await writeFile(join(host.directory, "unreadable.png"), Buffer.from(tiny, "base64"));
   await chmod(join(host.directory, "unreadable.png"), 0);
   host.queueResponse(
-    ...call(`for (const path of ["text.png", "broken.png", "missing.png", "image-directory", "unreadable.png"]) {
+    ...call(`for (const args of [{}, {path: 17}, {path: "missing.png", detail: "low"}]) {
+  try { text(await tools.view_image(args)); }
+  catch (error) { text({error}); }
+}
+for (const path of ["text.png", "broken.png", "missing.png", "image-directory", "unreadable.png"]) {
   try { text(await tools.view_image({path})); }
   catch (error) { text({path, error}); }
 }`),
@@ -132,6 +136,15 @@ test("local image failures report observed file and decoding errors without retu
   host.queueResponse(completed);
   await host.session.prompt("Report local image failures");
   const result = output(host);
+  assert.match(
+    result,
+    /failed to parse function arguments: missing field `path` at line 1 column 2/,
+  );
+  assert.match(
+    result,
+    /failed to parse function arguments: invalid type: integer `17`, expected a string at line 1 column 10/,
+  );
+  assert.match(result, /view_image.detail only supports `high` or `original`/);
   assert.equal(
     (result.match(/unable to process image: invalid or unsupported image data/g) ?? []).length,
     2,
