@@ -78,6 +78,10 @@ The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on 
 
 Strict path/detail arguments, native file errors, and permission-hook revalidation are delivered. The premature selected-model rejection was removed because a text-only virtual model can route to an image-capable physical model. The final helper follow-up aligns HTTP/HTTPS errors, ordinary detail type/order/case handling, and low-detail omission with its separate output position and text-budget behavior. Full image ownership remains unmet: for the audited 3000×2000 PNG, Pi sends a resized 2000×1333 image with `detail: "auto"`; native high is 1920×1280 and native original preserves the source dimensions/bytes. Disabling resizing also reencodes the source. The 18-mode public-host investigation records earlier tool-completion changes, unsafe mutable event lifetime, image/source binding, replacement/removal, and late blocking failures. A final restoration cache would bypass authoritative edits and does not fix earlier consumers. No processor bypass, side cache, opaque image payload, replacement provider, dependency/version requirement, or Pi patch was added. The exact unmet boundaries remain in the report; this ticket cannot close.
 
+## Installed launcher repair — 2026-10-19
+
+The user subsequently authorized repair. All ten reported Pi shims now match their saved hashes exactly. The repair also covers 35 other shims in the setup ledger and eight workspace-package Pi launchers identified by the same timestamp and worktree references. All 5,141 recorded Pi files match the expanded baseline, and the image worktree is archived. The [repair report](/Users/fran/.pi/artifacts/pi-codex-tools-shim-repair-2026-10-19-b9_72wnb/report.md) retains backups and passing launcher checks, and distinguishes the 43 launchers without historical hashes. The original unauthorized-write incident remains recorded. No image implementation or acceptance result changed.
+
 ## Historical revisions
 
 Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.

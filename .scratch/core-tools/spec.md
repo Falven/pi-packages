@@ -16,6 +16,10 @@ The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on 
 
 The suite and comparison evidence, remaining differences, installed-shim incident, trace readback hashes, and cleanup limits are recorded in that report. The initial package-manager verification crossed Q1 by changing generated dependency shims; this remains a failed integrity gate. Subsequent checks used direct installed binaries. Fresh live-model trials remain conditional on deterministic acceptance and were not run. No acceptance target was relaxed, and the public image-hook prototype was not promoted into an unsafe production bypass.
 
+## Installed launcher repair — 2026-10-19
+
+The user authorized repair of the accidental installed-file changes. All ten reported Pi shims are restored byte-for-byte, and all 5,141 recorded Pi files match the expanded baseline. Another 43 launchers from the same setup run were repaired to the original relative-path format; their historical hashes were not recorded. The image worktree is archived. All 107 launcher routing checks and eight real CLI checks pass with that checkout absent. See the [repair report](/Users/fran/.pi/artifacts/pi-codex-tools-shim-repair-2026-10-19-b9_72wnb/report.md). The original integrity failure remains part of the implementation evidence; this repair does not change Q1, waive an acceptance gate, or verify the remaining parity work.
+
 ## Problem Statement
 
 Matching tool declarations currently conceal different behavior. The core toolset coerces some invalid arguments, stops an awaited command when its execution cell is terminated, treats an explicit shell path differently, and omits parts of the reference's JavaScript failure result. These differences change what the agent can do and what information it receives for its next decision.

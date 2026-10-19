@@ -33,6 +33,10 @@ The current integrated runtime is `454569bf92372b4e8b07a45b7435d678493ae5e0` on 
 
 The existing full core suite and affected generic consumer checks exercise both extension load orders, standalone rendering, effective commands, partial file facts, failed-cell source, Find/copy boundaries, retained activity, and resumed/forked cleanup. The chat suite completed 133/134 checks; its unchanged pending-call streaming test timed out before dispatch and passed in isolation. This is recorded as a failed full-suite attempt plus a passing retry, not a clean full-suite pass. Image byte/detail and late-blocking requirements do not hold across all event/history/provider boundaries. Custom formatter frames and native held-hook/queued-patch checks also remain open. Installed dependency shims were accidentally changed by package-manager automatic setup during verification. The integrity gate failed; no later installed writes or repair were attempted. These findings prevent combined acceptance. No fresh physical-terminal observation or matched live inference trial is claimed.
 
+## Installed launcher repair — 2026-10-19
+
+The user subsequently authorized repair of the installed launchers. The ten reported Pi shims and all 5,141 recorded Pi files now match their saved hashes. The [repair report](/Users/fran/.pi/artifacts/pi-codex-tools-shim-repair-2026-10-19-b9_72wnb/report.md) records 43 further launcher repairs, 107 routing checks, and eight passing CLI checks with the image worktree removed. These checks establish launcher recovery; they do not rerun mixed workflows or remove the original verification's integrity failure. The remaining combined-acceptance gates stay open.
+
 ## Historical revisions
 
 Everything below records prior requirements and verification. It remains historical where it conflicts with the current revision above.
