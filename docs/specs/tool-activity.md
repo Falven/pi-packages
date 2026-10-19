@@ -6,7 +6,7 @@
 
 **Completed thought-title revision:** [13: Thought titles without body leakage](../../.scratch/tool-activity/issues/13-thought-titles.md). [11: Working labels from current activity](../../.scratch/tool-activity/issues/11-working-labels.md) and [12: Verify working label parity](../../.scratch/tool-activity/issues/12-verify-working-labels.md) are its completed prerequisites.
 
-**Body-eligibility revision:** The [chat specification](pi-chat.md) owns render-group body eligibility and disclosure availability. This consumer-only behavior is implemented at `39263b9` on `codex/render-group-body-eligibility`, not yet integrated into main. The operation data format, command recognition, and working-label selection below remain unchanged. [Chat 19](../../.scratch/pi-chat/issues/19-render-group-body-eligibility.md) records the approved single-ticket scope, installed-Pi test seam, verification, and limits.
+**Body-eligibility revision:** The [chat specification](pi-chat.md) owns render-group body eligibility and disclosure availability. This consumer-only behavior is implemented at `39263b9` and integrated into local `main` at `0680d51`. The operation data format, command recognition, and working-label selection below remain unchanged. [Chat 19](../../.scratch/pi-chat/issues/19-render-group-body-eligibility.md) records the approved single-ticket scope, installed-Pi test seam, verification, and limits.
 
 **Completed chat placement revision:** [Chat 18](../../.scratch/pi-chat/issues/18-active-accordion-working-row.md) specifies one thinking row as the current render-group header or below the conversation, with trailing group/item chevrons. The later body-eligibility revision governs whether a retained group header is expandable; a status-only header has no chevron. Placement alone does not change selection; the operation and thought-heading selection rules below remain authoritative. The new placement is implemented and verified at `5724ea6`, then integrated into `main` at `72c77f6`; Chat 18 and the [chat specification](pi-chat.md) record its 147-case verification, completed reviews, and unavailable physical-terminal check.
 
@@ -142,7 +142,7 @@ For example, adding `view: "cat"` to `commands.names` recognizes a `view` execut
 
 ## Out of Scope
 
-For body eligibility, the operation wire format, command parser, model-facing guidance, execution, and working-label priority/lifetime are unchanged. No provider visibility flags, new operation kinds, output-presence/count threshold, new setting, additional Pi-version matrix, or live-app parity claim is introduced. Main integration and pushing remain separately authorized actions.
+For body eligibility, the operation wire format, command parser, model-facing guidance, execution, and working-label priority/lifetime are unchanged. No provider visibility flags, new operation kinds, output-presence/count threshold, new setting, additional Pi-version matrix, or live-app parity claim is introduced. Pushing remains a separately authorized action.
 
 A separate package, new tools, execution changes beyond the Ctrl+C correction, declaration-schema changes, a shell interpreter, settings UI or persistence, a repository-wide configuration framework, new output viewers, display-driven polling, extra model calls, automatic notifications, old-history migration, producer-specific chat rules, ChatGPT.app/Codex system and other prompts, additional model guidance, and claims of complete app visual parity.
 
