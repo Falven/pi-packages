@@ -6,13 +6,12 @@ import {
   type ExtensionAPI,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "typebox";
-import { Value } from "typebox/value";
+import { Type, type Static } from "typebox";
+import { Check, Value } from "typebox/value";
 import { boundedPreview, contentHash } from "./presentation.ts";
 import type { ProcessPresentation, ProcessSessions } from "./process.ts";
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
-const nonnegativeInteger = Type.Number({ minimum: 0, multipleOf: 1 });
 const commandInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
 const parameters = Type.Object(
   {
@@ -216,6 +215,7 @@ export function createCommand(
   };
 }
 
+const inputUnsignedInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
 const inputParameters = Type.Object(
   {
     session_id: Type.Number({
@@ -224,8 +224,8 @@ const inputParameters = Type.Object(
       multipleOf: 1,
     }),
     chars: Type.Optional(Type.String()),
-    max_output_tokens: Type.Optional(nonnegativeInteger),
-    yield_time_ms: Type.Optional(nonnegativeInteger),
+    max_output_tokens: Type.Optional(inputUnsignedInteger),
+    yield_time_ms: Type.Optional(inputUnsignedInteger),
   },
   { additionalProperties: false },
 );
@@ -241,6 +241,66 @@ export function createStdin(
     description: "Writes characters to an existing unified exec session and returns recent output.",
     parameters: inputParameters,
     exposure: "codemode",
+    prepareArguments(args) {
+      let column = 1;
+      const invalid = (value: unknown, expected: string, at = column): never => {
+        const integer =
+          typeof value === "number" &&
+          Number.isInteger(value) &&
+          value >= -(2 ** 63) &&
+          value < 2 ** 64;
+        const unexpected =
+          value === null
+            ? "null"
+            : typeof value === "number"
+              ? `${integer ? "integer" : "floating point"} \`${Math.abs(value) >= 2 ** 64 ? value.toExponential().replace("e+", "e") : value}\``
+              : typeof value === "string"
+                ? `string ${JSON.stringify(value)}`
+                : typeof value === "boolean"
+                  ? `boolean \`${value}\``
+                  : Array.isArray(value)
+                    ? "sequence"
+                    : "map";
+        const kind = integer && ["i32", "u64", "usize"].includes(expected) ? "value" : "type";
+        throw new Error(
+          `failed to parse function arguments: invalid ${kind}: ${unexpected}, expected ${expected} at line 1 column ${at}`,
+        );
+      };
+      if (!args || typeof args !== "object" || Array.isArray(args))
+        invalid(args, "struct WriteStdinArgs");
+      const input = args as Record<string, unknown>;
+      const prepared: Record<string, unknown> = {};
+      // shortcut: columns use serialized arguments; use raw JSON if the public hook exposes it.
+      for (const key of Object.keys(input).toSorted()) {
+        const value = input[key];
+        if (value === undefined) continue;
+        if (column > 1) column++;
+        column += Buffer.byteLength(JSON.stringify(key)) + 1;
+        const start = column;
+        column += Buffer.byteLength(JSON.stringify(value));
+        if (!Object.hasOwn(inputParameters.properties, key)) continue;
+        if (key === "max_output_tokens" && value === null) continue;
+        const field = key as keyof typeof inputParameters.properties;
+        if (!Check(inputParameters.properties[field], value))
+          invalid(
+            value,
+            key === "session_id"
+              ? "i32"
+              : key === "chars"
+                ? "a string"
+                : key === "yield_time_ms"
+                  ? "u64"
+                  : "usize",
+            value !== null && typeof value === "object" ? start + 1 : column,
+          );
+        prepared[key] = value;
+      }
+      if (!Object.hasOwn(prepared, "session_id"))
+        throw new Error(
+          `failed to parse function arguments: missing field \`session_id\` at line 1 column ${column + 1}`,
+        );
+      return prepared as Static<typeof inputParameters>;
+    },
     async execute(_id, args, signal, onUpdate) {
       signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime;
       signal.throwIfAborted();
@@ -249,7 +309,7 @@ export function createStdin(
       const minimum = chars ? 250 : 5000;
       const yieldTime = Math.min(
         chars ? 30000 : 300000,
-        Math.max(minimum, args.yield_time_ms ?? minimum),
+        Math.max(minimum, args.yield_time_ms ?? 250),
       );
       const maxTokens = args.max_output_tokens ?? 10000;
       const effectiveArgs = {
