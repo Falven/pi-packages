@@ -2,6 +2,11 @@ packages:
   - packages/*
 
 allowBuilds:
+  "@google/genai": false
+  esbuild: false
+  lefthook: true
+  node-pty: false
+  protobufjs: false
   tree-sitter: true
   tree-sitter-bash: true
 

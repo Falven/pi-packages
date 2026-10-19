@@ -6,12 +6,13 @@
   "scripts": {
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "lint": "oxlint .",
+    "lint": "oxlint --deny-warnings .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test",
     "changeset": "changeset",
     "version": "changeset version && pnpm install --lockfile-only --ignore-scripts",
-    "release": "changeset publish"
+    "release": "changeset publish",
+    "prepare": "lefthook install"
   },
   "devDependencies": {
     "@changesets/cli": "3.0.3",
@@ -19,6 +20,7 @@
     "@tsconfig/node24": "24.0.5",
     "@tsconfig/strictest": "2.0.8",
     "@types/node": "24.19.1",
+    "lefthook": "2.1.14",
     "oxfmt": "0.71.0",
     "oxlint": "1.86.0",
     "typescript": "7.0.2"

@@ -1,0 +1,25 @@
+glob_matcher: doublestar
+
+pre-commit:
+  commands:
+    oxlint:
+      priority: 1
+      glob: "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
+      run: pnpm exec oxlint --config .oxlintrc.json --fix --deny-warnings --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+    oxfmt:
+      priority: 2
+      glob: "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,json5,css,scss,less,html,vue,svelte,md,mdx,yml,yaml,graphql,gql,code-workspace}"
+      run: pnpm exec oxfmt --write --no-error-on-unmatched-pattern {staged_files}
+      stage_fixed: true
+
+pre-push:
+  commands:
+    oxlint:
+      glob: "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"
+      run: pnpm exec oxlint --config .oxlintrc.json --deny-warnings --no-error-on-unmatched-pattern {push_files}
+
+    oxfmt:
+      glob: "**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs,json,jsonc,json5,css,scss,less,html,vue,svelte,md,mdx,yml,yaml,graphql,gql,code-workspace}"
+      run: pnpm exec oxfmt --check --no-error-on-unmatched-pattern {push_files}

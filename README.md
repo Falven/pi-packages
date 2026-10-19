@@ -42,8 +42,11 @@ See the [specifications](docs/specs/), [architecture decisions](docs/adr/), and 
 
 ```bash
 pnpm install --frozen-lockfile --ignore-scripts
+pnpm run prepare
 pnpm run format:check
 pnpm run lint
 pnpm run typecheck
 pnpm test
 ```
+
+`pnpm run prepare` installs Lefthook's Git hooks after the install above skips lifecycle scripts. Installs that enable lifecycle scripts run it automatically. Before a commit, Oxlint fixes staged JavaScript and TypeScript files, then Oxfmt formats supported staged files; both stage their fixes. Before a push, the hooks check lint and formatting on changed files without modifying them. Lint warnings fail these checks and `pnpm run lint`.
