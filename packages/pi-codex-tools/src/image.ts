@@ -17,6 +17,47 @@ const parameters = Type.Object(
   { additionalProperties: false },
 );
 
+function prepareArguments(value: unknown): { path: string; detail?: "high" | "original" } {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new Error("failed to parse function arguments: expected an object");
+  const args = value as Record<string, unknown>;
+  // Nested calls serialize objects with sorted keys in the reference.
+  const entries = Object.keys(args)
+    .toSorted()
+    .map((key) => [key, args[key]] as const);
+  let prefix = "{";
+  for (const [key, field] of entries) {
+    prefix += `${JSON.stringify(key)}:`;
+    if ((key === "path" || (key === "detail" && field != null)) && typeof field !== "string") {
+      const kind =
+        field === null
+          ? "null"
+          : Array.isArray(field)
+            ? "sequence"
+            : typeof field === "object"
+              ? "map"
+              : typeof field === "number"
+                ? `${Number.isInteger(field) ? "integer" : "floating point"} \`${field}\``
+                : `${typeof field} \`${String(field)}\``;
+      const token = typeof field === "object" && field !== null ? "[" : JSON.stringify(field);
+      throw new Error(
+        `failed to parse function arguments: invalid type: ${kind}, expected a string at line 1 column ${Buffer.byteLength(prefix + token)}`,
+      );
+    }
+    prefix += `${JSON.stringify(field)},`;
+  }
+  if (!("path" in args))
+    throw new Error(
+      `failed to parse function arguments: missing field \`path\` at line 1 column ${Buffer.byteLength(JSON.stringify(Object.fromEntries(entries)))}`,
+    );
+  const detail = args["detail"];
+  if (detail != null && detail !== "high" && detail !== "original")
+    throw new Error(
+      `view_image.detail only supports \`high\` or \`original\`; omit \`detail\` for default high resized behavior, got \`${String(args["detail"])}\``,
+    );
+  return { path: args["path"] as string, ...(detail == null ? {} : { detail }) };
+}
+
 function fileError(action: string, path: string, error: unknown): Error {
   const errno = (error as NodeJS.ErrnoException).errno;
   if (errno === undefined) throw error;
@@ -39,10 +80,15 @@ export function createImage(
     description:
       "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.",
     parameters,
+    prepareArguments,
     exposure: "codemode",
     async execute(_id, args, signal, onUpdate, ctx) {
       signal?.throwIfAborted();
       if (!available()) throw new Error("Image reading is not available in the active tool scope");
+      if (ctx.model && !ctx.model.input.includes("image"))
+        throw new Error("view_image is not allowed because you do not support image inputs");
+      // Permission hooks can edit arguments after the host's preparation step.
+      args = prepareArguments(args);
       const path = resolve(ctx.cwd, args.path);
       onUpdate?.({ content: [], details: { path } });
       checkBlocking();

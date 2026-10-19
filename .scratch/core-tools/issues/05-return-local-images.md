@@ -8,13 +8,13 @@
 
 **Blocked by:** None (can start immediately). Existing image dispatch, collection, and provider integration are implemented. The remaining public-hook and codec questions are evidence gates within this slice.
 
-**Status:** ready-for-agent
+**Status:** claimed — `codex/core-image-alignment`, 2026-10-18; base `6c775356361cf89bf247f7eb9f1dc31a16cb912e`
 
 ## Behavior alignment — 2026-10-18
 
 The accepted image decision gives preparation to this extension. Pi must remain unchanged: no source or installed-package edits, private runtime patches, global-setting toggles, fork, or version requirement to gain host behavior. The eight-case PNG probe establishes a possible final-image path; it is not production integration or complete image parity.
 
-- [ ] Validate the original local-image path and detail before host coercion. Require a string path, match null/omission defaults and unsupported-detail errors, and ignore unknown object keys without changing the frozen declaration. Preserve the retained helper overloads and explicit-detail precedence.
+- [x] Validate the original local-image path and detail before host coercion. Require a string path, match null/omission defaults and unsupported-detail errors, and ignore unknown object keys without changing the frozen declaration. Preserve the retained helper overloads and explicit-detail precedence.
 - [ ] Preserve matching raw helper return values and carry requested detail plus source identity through the worker, execution output, collection, and provider conversion. Cover mixed text/images, duplicate images, later waits, and concurrent cells without assigning one image's detail or ownership to another.
 - [ ] Own emitted-image preparation under the reference's actual format, capability, resizing, and encoding rules. Verify its 32-pixel patch calculation, high-detail limits of 2048 pixels per dimension and 2,500 patches, and original-detail limits of 6000 pixels per dimension and 10,000 patches at their boundaries. Original detail is not an unlimited-size promise.
 - [ ] Preserve source bytes wherever the reference does and match required conversion elsewhere. Compare PNG, JPEG, WebP, converted formats, malformed/unsupported data, orientation, and metadata as applicable to the scoped reference. Matching dimensions or decoded pixels alone does not establish matching encoded bytes or notices.
@@ -30,7 +30,29 @@ The accepted image decision gives preparation to this extension. Pi must remain 
 
 **Evidence to record:** Raw helper results; ordered boundary payloads; image hashes, sizes, dimensions, MIME types, orientation/metadata, and detail fields; capability and hook cases; reload/display outcomes; codec findings; and runtime/source identities. Keep source-based rules separate from paired runtime observations.
 
-**Current verification:** Pending. Earlier PNG feasibility evidence is linked from the specification; ticket publication neither reruns it nor verifies production parity.
+**Current verification:** Raw argument correction implemented; image preparation/integration acceptance remains unresolved. The claimed branch and original base above are preserved. Focused checks and exact remaining gates are recorded below; no prior verification is promoted to current parity.
+
+### Current implementation and evidence — 2026-10-18
+
+`src/image.ts` validates original arguments through public `prepareArguments`, retains omission/null defaults, ignores unknown keys, and returns the observed unsupported-detail error. It rechecks effective arguments after permission hooks and rejects reads when the public current model excludes image input. The captured missing-path and numeric-path errors match; full native parser diagnostics for other JSON shapes, numeric spellings, and key orders are not claimed.
+
+The existing image assertions were updated, with a failing public-host run before the fix. An isolated public-host diagnostic then rejected 16 invalid/blocked inputs, preserved raw helper bytes for six valid/default/unknown-key/edited inputs, and kept nested result-hook blocking effective before bytes returned to JavaScript. No permanent test cases or harness files were added. Temporary scripts, raw boundary payloads, logs, fixtures, and reference-probe requests are under [/tmp/pi-core-alignment-20261018-a7r6fk0i/image](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/README.md).
+
+The focused image and image-presentation suites pass 33/33. The full package run passes 222/223: the unchanged Ctrl+C workflow case with the toolset first observed exit 0/`AFTER` instead of exit 23/`STOPPED`; both load-order cases pass on an isolated rerun. Direct root TypeScript checking, targeted lint, formatting, and whitespace checks pass. `pnpm typecheck` itself failed in dependency setup as recorded below. Integration refs `3c4a6c9` and `1d39dda` were merged without conflicts; the latter only updated the patch ticket. Exact commands and logs are in the evidence index.
+
+The production image-restoration prototype was **not** adopted. The current public API has no final pre-normalization result callback. In the new diagnostic, two different permitted PNG byte streams collapse to the same normalized image. An immutable result snapshot cannot observe a later replacement; the retained mutable event does, but that lifetime is undocumented. Matching normalized hashes cannot establish which source is still permitted. Restoring an earlier payload would violate the replacement/removal boundary.
+
+Required gates remain open:
+
+- **Final bytes and earlier consumers:** high and original still produce Pi's 2000×1333 PNG and `auto` for the immutable 3000×2000 reference fixture. Reference high is 1920×1280/50,858 bytes; reference original preserves 3000×2000/31,406 bytes. Disabling resize still re-encodes the source to 121,623 bytes. The public tool-completion event precedes finalized-message replacement; native display consumes that earlier result. No per-image skip or safe full restoration route was found.
+- **Codec equivalence:** public resize at the reference dimensions produces different pixels and 50,865 bytes. Installed Photon 0.3.4 with Triangle matches the one captured high PNG exactly (50,858 bytes), but drops the pinned source fixture's RGB ICC and EXIF metadata. This rules out declaring that primitive fully equivalent. JPEG, WebP, animated/converted formats, metadata, and boundary captures still need reference comparisons. No dependency or codec implementation was added.
+- **Detail, capability, and binding:** requested emission detail is still discarded in collection; mixed original/high/low emissions become the same image and `auto`. Pi's public model metadata does not expose the reference's original-detail support or unified-budget flags. Two concurrent cells retain distinct collecting ownership, but current bindings do not identify image-byte replacement; the preserving-layout replacement remains associated with the prior origin in both core/chat load orders. These checks do not establish complete source/detail binding or routed capability parity.
+- **Late blocking:** result/finalized-message blocking removes image blocks from the provider request, but retains image bytes in saved results. A result hook that enables blocking after `view_image` returns also leaves the serialized image data URL in the next provider request; the full-payload reproduction is `blocked-full-payload/block-serialized.json`. The earlier nested-hook check remains effective and has a narrower scope. This required gate is not accepted or closed.
+- **Remaining acceptance:** source-bound preparation through history/reload, all affected display/Find/copy consumers, boundary dimensions and patch budgets, physical model capability variants, full format/metadata equivalence, and paired reference captures remain required. [Reference-probe requests](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/reference-probe-requests.json) list the exact missing cases and prepared fixtures. Shared differential/live runners and Phoenix publication were left to root.
+
+Source changes and diagnostics stay inside this extension worktree and its temporary evidence directory. Pi source/runtime files, settings outside the isolated hosts, frozen declarations, and historical evidence were not edited. However, invoking the plan's `pnpm typecheck` command unexpectedly entered pnpm's automatic dependency setup, refreshed 45 generated dependency command shims (including shims inside Pi packages), then failed because the workspace hoist directory is a symlink. This crossed the requested installed-dependency write boundary. No pre-command shim hashes exist, so unchanged shim bytes cannot be asserted. The exact paths and timestamps are in [dependency-command-side-effect.json](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/dependency-command-side-effect.json). No further package-manager command or out-of-scope restoration was attempted; direct installed TypeScript and lint binaries are used instead.
+
+This ticket remains claimed and unresolved; the raw validation fix is only the implemented portion of the current delta.
 
 ## Historical revisions
 
