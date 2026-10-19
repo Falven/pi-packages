@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { randomBytes, randomInt } from "node:crypto";
+import { getSystemErrorMessage } from "node:util";
 import * as pty from "node-pty";
 import { boundedPreview } from "./presentation.ts";
 import { OutputStore, type OutputCursor } from "./output.ts";
@@ -39,6 +40,17 @@ type CommandOptions = {
   env: NodeJS.ProcessEnv;
   tty: boolean;
 };
+
+function launchError(error: Error): Error {
+  const errno = (error as NodeJS.ErrnoException).errno;
+  if (errno === undefined) return error;
+  const message = getSystemErrorMessage(errno);
+  const reason = `Failed to create unified exec process: ${message[0]!.toUpperCase()}${message.slice(1)} (os error ${Math.abs(errno)})`;
+  return new Error(
+    `exec_command failed: CreateProcess { message: ${JSON.stringify(`Rejected(${JSON.stringify(reason)})`)} }`,
+    { cause: error },
+  );
+}
 
 export class ProcessSessions {
   private readonly processes = new Map<number, Process>();
@@ -254,7 +266,7 @@ export class ProcessSessions {
         command.stdout.setEncoding("utf8").on("data", append);
         command.stderr.setEncoding("utf8").on("data", append);
         command.once("error", (error) => {
-          child.error ??= error;
+          child.error ??= launchError(error);
         });
         command.once("close", (code) => {
           child.exitCode = code ?? 1;
@@ -263,7 +275,7 @@ export class ProcessSessions {
       }
     } catch (error) {
       await output.close();
-      throw error;
+      throw error instanceof Error ? launchError(error) : error;
     }
     this.processes.set(child.id, child);
     onUpdate?.(child.presentation);

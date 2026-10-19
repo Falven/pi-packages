@@ -124,9 +124,9 @@ test("local image failures report observed file and decoding errors without retu
   await writeFile(join(host.directory, "unreadable.png"), Buffer.from(tiny, "base64"));
   await chmod(join(host.directory, "unreadable.png"), 0);
   host.queueResponse(
-    ...call(`for (const args of [{}, {path: 17}, {path: "missing.png", detail: "low"}]) {
+    ...call(`for (const args of [null, 17, {}, {path: 17}, {path: []}, {path: 1e100}, {path: "missing-image", detail: true}, {path: "missing.png", detail: "low"}]) {
   try { text(await tools.view_image(args)); }
-  catch (error) { text({error}); }
+  catch (error) { text({type: typeof error, error}); }
 }
 for (const path of ["text.png", "broken.png", "missing.png", "image-directory", "unreadable.png"]) {
   try { text(await tools.view_image({path})); }
@@ -144,6 +144,13 @@ for (const path of ["text.png", "broken.png", "missing.png", "image-directory", 
     result,
     /failed to parse function arguments: invalid type: integer `17`, expected a string at line 1 column 10/,
   );
+  for (const error of [
+    "tool `view_image` expects a JSON object for arguments",
+    "failed to parse function arguments: invalid type: sequence, expected a string at line 1 column 8",
+    "failed to parse function arguments: invalid type: number, expected a string at line 1 column 14",
+    "failed to parse function arguments: invalid type: boolean `true`, expected a string at line 1 column 37",
+  ])
+    assert(result.includes(JSON.stringify({ type: "string", error })));
   assert.match(result, /view_image.detail only supports `high` or `original`/);
   assert.equal(
     (result.match(/unable to process image: invalid or unsupported image data/g) ?? []).length,

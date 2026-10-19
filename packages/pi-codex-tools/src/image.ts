@@ -8,6 +8,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { argumentError, invalidArgument, objectArguments } from "./arguments.ts";
 
 const parameters = Type.Object(
   {
@@ -18,38 +19,13 @@ const parameters = Type.Object(
 );
 
 function prepareArguments(value: unknown): { path: string; detail?: "high" | "original" } {
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new Error("failed to parse function arguments: expected an object");
-  const args = value as Record<string, unknown>;
-  // Nested calls serialize objects with sorted keys in the reference.
-  const entries = Object.keys(args)
-    .toSorted()
-    .map((key) => [key, args[key]] as const);
-  let prefix = "{";
-  for (const [key, field] of entries) {
-    prefix += `${JSON.stringify(key)}:`;
-    if ((key === "path" || (key === "detail" && field != null)) && typeof field !== "string") {
-      const kind =
-        field === null
-          ? "null"
-          : Array.isArray(field)
-            ? "sequence"
-            : typeof field === "object"
-              ? "map"
-              : typeof field === "number"
-                ? `${Number.isInteger(field) ? "integer" : "floating point"} \`${field}\``
-                : `${typeof field} \`${String(field)}\``;
-      const token = typeof field === "object" && field !== null ? "[" : JSON.stringify(field);
-      throw new Error(
-        `failed to parse function arguments: invalid type: ${kind}, expected a string at line 1 column ${Buffer.byteLength(prefix + token)}`,
-      );
-    }
-    prefix += `${JSON.stringify(field)},`;
+  const args = objectArguments("view_image", value);
+  for (const [key, field] of Object.entries(args)) {
+    if (field === undefined) continue;
+    if ((key === "path" || (key === "detail" && field !== null)) && typeof field !== "string")
+      throw invalidArgument(args, key, "a string");
   }
-  if (!("path" in args))
-    throw new Error(
-      `failed to parse function arguments: missing field \`path\` at line 1 column ${Buffer.byteLength(JSON.stringify(Object.fromEntries(entries)))}`,
-    );
+  if (args["path"] === undefined) throw argumentError(args, "missing field `path`");
   const detail = args["detail"];
   if (detail != null && detail !== "high" && detail !== "original")
     throw new Error(

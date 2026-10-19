@@ -703,11 +703,15 @@ test("invalid arguments, launch and authority failures remain processed string r
   const marker = join(host.directory, "invalid-command.txt");
   host.session.settingsManager.setShellCommandPrefix(`printf invalid > '${marker}'`);
   const failures = [
+    null,
     { cmd: 17 },
-    { cmd: "true", tty: null },
-    { cmd: "true", yield_time_ms: null },
-    { cmd: "true", prefix_rule: ["true", 17] },
-    { cmd: "true", max_output_tokens: 2 ** 64 },
+    { cmd: ":", tty: null },
+    { cmd: ":", yield_time_ms: null },
+    { cmd: ":", prefix_rule: ["true", 17] },
+    { cmd: ":", max_output_tokens: 2 ** 64 },
+    { cmd: ":", sandbox_permissions: "arbitrary" },
+    { cmd: ":", sandbox_permissions: "with_additional_permissions" },
+    { cmd: ":", justification: "Argument diagnostic" },
     { cmd: "true", shell: "/missing-shell", workdir: join(host.directory, "absent") },
     {
       cmd: "true",
@@ -717,20 +721,30 @@ test("invalid arguments, launch and authority failures remain processed string r
     },
   ];
   host.queueResponse(
-    ...call(`for (const args of ${JSON.stringify(failures)}) {
-    try { await tools.exec_command(args); text("unexpected-success"); }
-    catch (error) { text({type: typeof error, error}); }
-  }`),
+    ...call(`const errors = []; for (const args of ${JSON.stringify(failures)}) {
+    try { errors.push(await tools.exec_command(args)); }
+    catch (error) { errors.push({type: typeof error, error}); }
+  } text(errors);`),
   );
   host.queueResponse(completed);
   await host.session.prompt("Report command failures");
-  assert.equal(output(host).match(/"type":"string","error":/g)?.length, failures.length);
-  assert.match(output(host), /"type":"string","error":"[^\n]*ENOENT/);
-  assert.match(
-    output(host),
-    /"type":"string","error":"Elevated execution is not available from this host"/,
+  const result = output(host);
+  assert.deepEqual(
+    JSON.parse(result.slice(result.indexOf("["))),
+    [
+      "failed to parse function arguments: missing field `cmd` at line 1 column 2",
+      "failed to parse function arguments: invalid type: integer `17`, expected a string at line 1 column 9",
+      "failed to parse function arguments: invalid type: null, expected a boolean at line 1 column 21",
+      "failed to parse function arguments: invalid type: null, expected u64 at line 1 column 31",
+      "failed to parse function arguments: invalid type: integer `17`, expected a string at line 1 column 35",
+      "failed to parse function arguments: invalid type: floating point `1.8446744073709552e+19`, expected usize at line 1 column 51",
+      "failed to parse function arguments: unknown variant `arbitrary`, expected one of `use_default`, `require_escalated`, `with_additional_permissions` at line 1 column 44",
+      "Additional permissions are not available from this host",
+      '`justification` requires an explicit `sandbox_permissions`; use `sandbox_permissions: "require_escalated"` for unsandboxed execution, or omit `justification`.',
+      'exec_command failed: CreateProcess { message: "Rejected(\\"Failed to create unified exec process: No such file or directory (os error 2)\\")" }',
+      "Elevated execution is not available from this host",
+    ].map((error) => ({ type: "string", error })),
   );
-  assert.doesNotMatch(output(host), /unexpected-success/);
   await assert.rejects(readFile(marker), { code: "ENOENT" });
 });
 
