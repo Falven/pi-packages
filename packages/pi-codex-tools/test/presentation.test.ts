@@ -97,7 +97,10 @@ test("command cards use effective arguments and hook-processed returned output",
     columns: 100,
     extension(pi) {
       pi.on("tool_call", (event) => {
-        if (event.toolName === "exec_command") event.input["cmd"] = "printf secret-payload";
+        if (event.toolName === "exec_command") {
+          event.input["cmd"] = "printf secret-payload";
+          event.input["shell"] = "/missing/sh";
+        }
       });
       pi.on("tool_result", (event) => {
         if (event.toolName === "exec_command")
@@ -107,7 +110,9 @@ test("command cards use effective arguments and hook-processed returned output",
     },
   });
   host.queueResponse(
-    ...call('text(await tools.exec_command({cmd:"original-command",login:false}));'),
+    ...call(
+      'text(await tools.exec_command({cmd:"original-command",shell:"/missing/bash",login:false}));',
+    ),
   );
   host.queueResponse(completed);
   await host.session.prompt("Run a command");
@@ -131,11 +136,12 @@ test("command cards use effective arguments and hook-processed returned output",
   const operation = (
     result.message.details as {
       execution: {
-        operations: { effectiveArgs?: { cmd?: string }; resultText?: string }[];
+        operations: { effectiveArgs?: { cmd?: string; shell?: string }; resultText?: string }[];
       };
     }
   ).execution.operations[0];
   assert.equal(operation?.effectiveArgs?.cmd, "printf secret-payload");
+  assert.equal(operation?.effectiveArgs?.shell, "/bin/sh");
   assert.equal(operation?.resultText, "redacted-result");
 });
 

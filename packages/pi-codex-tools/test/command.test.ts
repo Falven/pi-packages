@@ -555,6 +555,16 @@ test("commands use effective settings, current session environment, and per-call
       shell: "/bin/sh",
       workdir,
       login: false,
+      max_output_tokens: null,
+      justification: null,
+      prefix_rule: null,
+      extra: true,
+    },
+    { cmd: "printf explicit-custom", shell, login: false },
+    {
+      cmd: "printf discovered-bash",
+      shell: join(host.directory, "missing/bash"),
+      login: false,
     },
   ];
   host.queueResponse(
@@ -576,6 +586,8 @@ test("commands use effective settings, current session environment, and per-call
   assert.match(text, /managed-path/);
   assert(text.includes("shell-option:-lc\ndefault-login"));
   assert(text.includes(`${await realpath(workdir)}\ncurrent\n`));
+  assert.equal(text.match(/shell-option:/g)?.length, 2);
+  assert(text.includes("explicit-custom\ndiscovered-bash"));
   assert.doesNotMatch(text, /stale-value|initial/);
 });
 
@@ -683,25 +695,43 @@ test("fresh modules expose only the selected helpers and exit immediately", asyn
   assert.match(output(host, "third"), /Script error:\nSyntaxError: Illegal return statement/);
 });
 
-test("launch and authority failures remain processed string rejections", async (t) => {
+test("invalid arguments, launch and authority failures remain processed string rejections", async (t) => {
   const host = await openNativeHost(t, {
     extensionPaths: [extension],
     providerApi,
   });
+  const marker = join(host.directory, "invalid-command.txt");
+  host.session.settingsManager.setShellCommandPrefix(`printf invalid > '${marker}'`);
+  const failures = [
+    { cmd: 17 },
+    { cmd: "true", tty: null },
+    { cmd: "true", yield_time_ms: null },
+    { cmd: "true", prefix_rule: ["true", 17] },
+    { cmd: "true", max_output_tokens: 2 ** 64 },
+    { cmd: "true", shell: "/missing-shell", workdir: join(host.directory, "absent") },
+    {
+      cmd: "true",
+      sandbox_permissions: "require_escalated",
+      justification: "Run the command",
+      prefix_rule: ["true"],
+    },
+  ];
   host.queueResponse(
-    ...call(`for (const args of [{cmd: "true", shell: "/missing-shell"}, {cmd: "true", sandbox_permissions: "require_escalated", justification: "Run the command", prefix_rule: ["true"]}]) {
+    ...call(`for (const args of ${JSON.stringify(failures)}) {
     try { await tools.exec_command(args); text("unexpected-success"); }
     catch (error) { text({type: typeof error, error}); }
   }`),
   );
   host.queueResponse(completed);
   await host.session.prompt("Report command failures");
+  assert.equal(output(host).match(/"type":"string","error":/g)?.length, failures.length);
   assert.match(output(host), /"type":"string","error":"[^\n]*ENOENT/);
   assert.match(
     output(host),
     /"type":"string","error":"Elevated execution is not available from this host"/,
   );
   assert.doesNotMatch(output(host), /unexpected-success/);
+  await assert.rejects(readFile(marker), { code: "ENOENT" });
 });
 
 test("the worker runs when the extension is installed under node_modules", async (t) => {

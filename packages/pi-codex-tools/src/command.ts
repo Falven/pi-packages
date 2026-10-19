@@ -1,22 +1,25 @@
+import { accessSync, constants, statSync } from "node:fs";
 import { userInfo } from "node:os";
-import { delimiter, join, resolve } from "node:path";
+import { delimiter, join, parse, resolve } from "node:path";
 import {
   getAgentDir,
   type ExtensionAPI,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { Value } from "typebox/value";
 import { boundedPreview, contentHash } from "./presentation.ts";
 import type { ProcessPresentation, ProcessSessions } from "./process.ts";
 
 // Integer conversion rounds fractions before validation; multipleOf preserves rejection.
 const nonnegativeInteger = Type.Number({ minimum: 0, multipleOf: 1 });
+const commandInteger = Type.Number({ minimum: 0, exclusiveMaximum: 2 ** 64, multipleOf: 1 });
 const parameters = Type.Object(
   {
     cmd: Type.String(),
     justification: Type.Optional(Type.String()),
     login: Type.Optional(Type.Boolean()),
-    max_output_tokens: Type.Optional(nonnegativeInteger),
+    max_output_tokens: Type.Optional(commandInteger),
     prefix_rule: Type.Optional(Type.Array(Type.String())),
     sandbox_permissions: Type.Optional(
       Type.Union([Type.Literal("use_default"), Type.Literal("require_escalated")]),
@@ -24,10 +27,63 @@ const parameters = Type.Object(
     shell: Type.Optional(Type.String()),
     tty: Type.Optional(Type.Boolean()),
     workdir: Type.Optional(Type.String()),
-    yield_time_ms: Type.Optional(nonnegativeInteger),
+    yield_time_ms: Type.Optional(commandInteger),
   },
   { additionalProperties: false },
 );
+
+type ShellKind = "bash" | "zsh" | "sh" | "powershell" | "cmd";
+
+function shellKind(path: string): ShellKind | undefined {
+  let part = parse(path);
+  while (part.base === "." && part.dir) part = parse(part.dir);
+  const name = part.name;
+  switch (name) {
+    case "bash":
+    case "zsh":
+    case "sh":
+    case "cmd":
+      return name;
+    case "pwsh":
+    case "powershell":
+      return "powershell";
+  }
+  return name && name !== path ? shellKind(name) : undefined;
+}
+
+function shellFile(path: string, executable = false): boolean {
+  try {
+    if (!statSync(path).isFile()) return false;
+    if (executable) accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function explicitShell(path: string): string {
+  const kind = shellKind(path);
+  if (!kind) return "/bin/sh";
+  const account = userInfo().shell;
+  if (account && shellKind(account) === kind && shellFile(account)) return account;
+  const fallbacks = {
+    bash: ["/bin/bash", "/usr/bin/bash"],
+    zsh: ["/bin/zsh"],
+    sh: ["/bin/sh"],
+    pwsh: ["/usr/local/bin/pwsh"],
+    powershell: [],
+    cmd: [],
+  };
+  for (const name of kind === "powershell" ? (["pwsh", "powershell"] as const) : [kind]) {
+    for (const directory of process.env["PATH"]?.split(delimiter) ?? []) {
+      const candidate = resolve(directory, name);
+      if (shellFile(candidate, true)) return candidate;
+    }
+    const fallback = fallbacks[name].find((candidate) => shellFile(candidate));
+    if (fallback) return fallback;
+  }
+  return "/bin/sh";
+}
 
 export function createCommand(
   pi: ExtensionAPI,
@@ -51,6 +107,25 @@ export function createCommand(
       "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
     parameters,
     exposure: "codemode",
+    prepareArguments(args) {
+      if (!Value.Check(Type.Object({}), args))
+        throw new Error("tool `exec_command` expects a JSON object for arguments");
+      const prepared = Object.fromEntries(
+        Object.entries(args).filter(
+          ([key, value]) =>
+            Object.hasOwn(parameters.properties, key) &&
+            (value !== null || ["cmd", "tty", "yield_time_ms"].includes(key)),
+        ),
+      );
+      // shortcut: Parsed arguments lack JSON spelling and positions; revisit if the public hook exposes them.
+      if (!Value.Check(parameters, prepared))
+        throw new Error(
+          `Invalid exec_command arguments: ${Value.Errors(parameters, prepared)
+            .map((error) => `${error.instancePath || "/"}: ${error.message}`)
+            .join("; ")}`,
+        );
+      return prepared;
+    },
     async execute(_id, args, signal, onUpdate, ctx) {
       signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime;
       signal.throwIfAborted();
@@ -59,11 +134,22 @@ export function createCommand(
       if (args.sandbox_permissions === "require_escalated")
         throw new Error("Elevated execution is not available from this host");
       const settings = pi.getSettings();
-      const shell = args.shell ?? settings.shellPath ?? userInfo().shell;
+      const shell =
+        args.shell === undefined
+          ? (settings.shellPath ?? userInfo().shell)
+          : explicitShell(args.shell);
       if (!shell) throw new Error("The user has no configured shell");
       const command = settings.shellCommandPrefix
         ? `${settings.shellCommandPrefix}\n${args.cmd}`
         : args.cmd;
+      const login = args.login !== false;
+      const kind = args.shell === undefined ? undefined : shellKind(shell);
+      const commandArgs =
+        kind === "powershell"
+          ? [...(login ? [] : ["-NoProfile"]), "-Command", command]
+          : kind === "cmd"
+            ? ["/c", command]
+            : [login ? "-lc" : "-c", command];
       const env = { ...process.env };
       for (const key of [
         "PI_SESSION_ID",
@@ -93,7 +179,7 @@ export function createCommand(
         cmd: boundedPreview(command),
         workdir: boundedPreview(cwd),
         shell: boundedPreview(shell),
-        login: args.login !== false,
+        login,
         tty: args.tty ?? false,
         yield_time_ms: yieldTime,
         max_output_tokens: maxTokens,
@@ -102,8 +188,7 @@ export function createCommand(
       const result = await processes.start(
         {
           shell,
-          command,
-          login: args.login !== false,
+          args: commandArgs,
           cwd,
           env,
           tty: args.tty ?? false,
