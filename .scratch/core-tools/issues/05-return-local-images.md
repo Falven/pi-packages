@@ -34,7 +34,7 @@ The accepted image decision gives preparation to this extension. Pi must remain 
 
 ### Current implementation and evidence — 2026-10-18
 
-`src/image.ts` validates original arguments through public `prepareArguments`, retains omission/null defaults, ignores unknown keys, and returns the observed unsupported-detail error. It rechecks effective arguments after permission hooks and rejects reads when the public current model excludes image input. The captured missing-path and numeric-path errors match; full native parser diagnostics for other JSON shapes, numeric spellings, and key orders are not claimed.
+`src/image.ts` validates original arguments through public `prepareArguments`, retains omission/null defaults, ignores unknown keys, and returns the observed unsupported-detail error. It rechecks effective arguments after permission hooks and rejects reads when the public current model excludes image input. The follow-up below corrects the remaining captured nested-argument shapes, numeric descriptions, and field-order positions; original direct-tool JSON spelling is still not exposed by public preparation.
 
 The existing image assertions were updated, with a failing public-host run before the fix. An isolated public-host diagnostic then rejected 16 invalid/blocked inputs, preserved raw helper bytes for six valid/default/unknown-key/edited inputs, and kept nested result-hook blocking effective before bytes returned to JavaScript. No permanent test cases or harness files were added. Temporary scripts, raw boundary payloads, logs, fixtures, and reference-probe requests are under [/tmp/pi-core-alignment-20261018-a7r6fk0i/image](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/README.md).
 
@@ -55,6 +55,16 @@ Required gates remain open:
 Source changes and diagnostics stay inside this extension worktree and its temporary evidence directory. Pi source/runtime files, settings outside the isolated hosts, frozen declarations, and historical evidence were not edited. However, invoking the plan's `pnpm typecheck` command unexpectedly entered pnpm's automatic dependency setup, refreshed 45 generated dependency command shims (including shims inside Pi packages), then failed because the workspace hoist directory is a symlink. This crossed the requested installed-dependency write boundary. No pre-command shim hashes exist, so unchanged shim bytes cannot be asserted. The exact paths and timestamps are in [dependency-command-side-effect.json](/tmp/pi-core-alignment-20261018-a7r6fk0i/image/dependency-command-side-effect.json). No further package-manager command or out-of-scope restoration was attempted; direct installed TypeScript and lint binaries are used instead.
 
 This ticket remains claimed and unresolved; the raw validation fix is only the implemented portion of the current delta.
+
+### Argument diagnostics follow-up — 2026-10-19
+
+After merging integration `ea67f6d` and the later documentation update `102ca84`, the command worktree replaced this module's duplicated argument formatter with the small shared formatter used by command and stdin preparation. Image field rules and the second validation after permission hooks remain local. Captured root null/non-object behavior, `number` diagnostics, array/map positions, JS insertion order, UTF-8 offsets, ignored keys, and nullable detail now match without changing declarations or file/image processing.
+
+The validated red replay showed 11 differing rows in the parent's 19-input image matrix. The final public-host replay matches all 18 argument errors and the valid nullable-detail input's missing-file error in its own cwd. Only that valid input reaches image execution; rejected arguments return string errors before file access and no image bytes. Existing local-image, malformed-file, permission/edit/redaction, blocking, and selection checks pass within the 25 focused checks. The existing failure assertion was red before correction and passes again after the final formatter update. No permanent test case, file fixture, or harness was added.
+
+Exact commands, raw next-request payloads, reference identities, and passing direct TypeScript/lint/format checks are indexed in [the argument follow-up evidence](/tmp/pi-core-alignment-20261018-a7r6fk0i/command/argument-diagnostics.Trhwhq/README.md). The image preparation, normalization, capability, binding, late-blocking, and integrated coverage gates above remain open and were not re-investigated or changed by this follow-up. Pi, installed packages, global settings, frozen model guidance, cell-owned files, shared runners, Phoenix, and every historical body remain unchanged by this work.
+
+The subsequent clean merge of integration `2753f5a1e520655ad559415a9b2a6e6c66959ca7` preserves the incoming Core 03 runtime work. All 19 image rows and the same focused argument/hook/blocking checks pass through that merged runtime, with direct TypeScript/lint/format checks still passing. Fresh `*-post-merge` evidence is retained separately.
 
 ## Historical revisions
 

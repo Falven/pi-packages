@@ -7,7 +7,8 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { Check, Value } from "typebox/value";
+import { Check } from "typebox/value";
+import { argumentError, invalidArgument, objectArguments } from "./arguments.ts";
 import { boundedPreview, contentHash } from "./presentation.ts";
 import type { ProcessPresentation, ProcessSessions } from "./process.ts";
 
@@ -107,23 +108,58 @@ export function createCommand(
     parameters,
     exposure: "codemode",
     prepareArguments(args) {
-      if (!Value.Check(Type.Object({}), args))
-        throw new Error("tool `exec_command` expects a JSON object for arguments");
-      const prepared = Object.fromEntries(
-        Object.entries(args).filter(
-          ([key, value]) =>
-            Object.hasOwn(parameters.properties, key) &&
-            (value !== null || ["cmd", "tty", "yield_time_ms"].includes(key)),
-        ),
-      );
-      // shortcut: Parsed arguments lack JSON spelling and positions; revisit if the public hook exposes them.
-      if (!Value.Check(parameters, prepared))
+      const input = objectArguments("exec_command", args);
+      // The reference resolves the command environment before parsing the command fields.
+      if (input["workdir"] != null && typeof input["workdir"] !== "string")
+        throw invalidArgument(input, "workdir", "a string");
+      const prepared: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(input)) {
+        if (
+          !Object.hasOwn(parameters.properties, key) ||
+          value === undefined ||
+          (value === null && !["cmd", "tty", "yield_time_ms"].includes(key))
+        )
+          continue;
+        const field = key as keyof typeof parameters.properties;
+        if (!Check(parameters.properties[field], value)) {
+          if (key === "prefix_rule" && Array.isArray(value))
+            throw invalidArgument(
+              input,
+              key,
+              "a string",
+              value.findIndex((item) => typeof item !== "string"),
+            );
+          if (key === "sandbox_permissions" && typeof value === "string") {
+            if (value === "with_additional_permissions")
+              throw new Error("Additional permissions are not available from this host");
+            throw argumentError(
+              input,
+              `unknown variant \`${value}\`, expected one of \`use_default\`, \`require_escalated\`, \`with_additional_permissions\``,
+              key,
+            );
+          }
+          throw invalidArgument(
+            input,
+            key,
+            key === "tty" || key === "login"
+              ? "a boolean"
+              : key === "yield_time_ms"
+                ? "u64"
+                : key === "max_output_tokens"
+                  ? "usize"
+                  : key === "prefix_rule"
+                    ? "a sequence"
+                    : "a string",
+          );
+        }
+        prepared[key] = value;
+      }
+      if (!Object.hasOwn(prepared, "cmd")) throw argumentError(input, "missing field `cmd`");
+      if (prepared["justification"] !== undefined && prepared["sandbox_permissions"] === undefined)
         throw new Error(
-          `Invalid exec_command arguments: ${Value.Errors(parameters, prepared)
-            .map((error) => `${error.instancePath || "/"}: ${error.message}`)
-            .join("; ")}`,
+          '`justification` requires an explicit `sandbox_permissions`; use `sandbox_permissions: "require_escalated"` for unsandboxed execution, or omit `justification`.',
         );
-      return prepared;
+      return prepared as Static<typeof parameters>;
     },
     async execute(_id, args, signal, onUpdate, ctx) {
       signal = signal ? AbortSignal.any([signal, lifetime]) : lifetime;
@@ -242,48 +278,16 @@ export function createStdin(
     parameters: inputParameters,
     exposure: "codemode",
     prepareArguments(args) {
-      let column = 1;
-      const invalid = (value: unknown, expected: string, at = column): never => {
-        const integer =
-          typeof value === "number" &&
-          Number.isInteger(value) &&
-          value >= -(2 ** 63) &&
-          value < 2 ** 64;
-        const unexpected =
-          value === null
-            ? "null"
-            : typeof value === "number"
-              ? `${integer ? "integer" : "floating point"} \`${Math.abs(value) >= 2 ** 64 ? value.toExponential().replace("e+", "e") : value}\``
-              : typeof value === "string"
-                ? `string ${JSON.stringify(value)}`
-                : typeof value === "boolean"
-                  ? `boolean \`${value}\``
-                  : Array.isArray(value)
-                    ? "sequence"
-                    : "map";
-        const kind = integer && ["i32", "u64", "usize"].includes(expected) ? "value" : "type";
-        throw new Error(
-          `failed to parse function arguments: invalid ${kind}: ${unexpected}, expected ${expected} at line 1 column ${at}`,
-        );
-      };
-      if (!args || typeof args !== "object" || Array.isArray(args))
-        invalid(args, "struct WriteStdinArgs");
-      const input = args as Record<string, unknown>;
+      const input = objectArguments("write_stdin", args);
       const prepared: Record<string, unknown> = {};
-      // shortcut: columns use serialized arguments; use raw JSON if the public hook exposes it.
-      for (const key of Object.keys(input).toSorted()) {
-        const value = input[key];
-        if (value === undefined) continue;
-        if (column > 1) column++;
-        column += Buffer.byteLength(JSON.stringify(key)) + 1;
-        const start = column;
-        column += Buffer.byteLength(JSON.stringify(value));
-        if (!Object.hasOwn(inputParameters.properties, key)) continue;
+      for (const [key, value] of Object.entries(input)) {
+        if (value === undefined || !Object.hasOwn(inputParameters.properties, key)) continue;
         if (key === "max_output_tokens" && value === null) continue;
         const field = key as keyof typeof inputParameters.properties;
         if (!Check(inputParameters.properties[field], value))
-          invalid(
-            value,
+          throw invalidArgument(
+            input,
+            key,
             key === "session_id"
               ? "i32"
               : key === "chars"
@@ -291,14 +295,11 @@ export function createStdin(
                 : key === "yield_time_ms"
                   ? "u64"
                   : "usize",
-            value !== null && typeof value === "object" ? start + 1 : column,
           );
         prepared[key] = value;
       }
       if (!Object.hasOwn(prepared, "session_id"))
-        throw new Error(
-          `failed to parse function arguments: missing field \`session_id\` at line 1 column ${column + 1}`,
-        );
+        throw argumentError(input, "missing field `session_id`");
       return prepared as Static<typeof inputParameters>;
     },
     async execute(_id, args, signal, onUpdate) {

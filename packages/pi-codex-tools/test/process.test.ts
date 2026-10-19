@@ -720,7 +720,7 @@ test("process identifiers accept signed integers and reject values outside the o
   assert.match(unknown, /write_stdin failed: Unknown process id -1/);
   const invalid = await request(
     host,
-    'const errors = []; for (const args of [{session_id:1.5}, {session_id:2147483648}, {}, {session_id:"1"}]) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);',
+    'const errors = []; for (const args of [{session_id:1.5}, {session_id:2147483648}, {}, {session_id:"1"}, null, 17, {session_id:1e100}, {session_id:987654321,chars:1.5}, {session_id:987654321,max_output_tokens:2 ** 64}]) { try { errors.push(await tools.write_stdin(args)); } catch (error) { errors.push(error); } } text(errors);',
     "invalid",
   );
   assert.deepEqual(JSON.parse(invalid.slice(invalid.indexOf("["))), [
@@ -728,6 +728,11 @@ test("process identifiers accept signed integers and reject values outside the o
     "failed to parse function arguments: invalid value: integer `2147483648`, expected i32 at line 1 column 24",
     "failed to parse function arguments: missing field `session_id` at line 1 column 2",
     'failed to parse function arguments: invalid type: string "1", expected i32 at line 1 column 17',
+    "failed to parse function arguments: missing field `session_id` at line 1 column 2",
+    "tool `write_stdin` expects a JSON object for arguments",
+    "failed to parse function arguments: invalid type: floating point `1e+100`, expected i32 at line 1 column 20",
+    "failed to parse function arguments: invalid type: number, expected a string at line 1 column 35",
+    "failed to parse function arguments: invalid type: floating point `1.8446744073709552e+19`, expected usize at line 1 column 64",
   ]);
   const malformed = [
     { args: { session_id: null }, expected: "i32" },
