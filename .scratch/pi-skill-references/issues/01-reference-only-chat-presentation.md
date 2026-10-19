@@ -2,11 +2,13 @@
 
 **What to build:** Show the reference-bearing request as one normal user message, without generated instruction dumps or a separate purple skill row. Keep all instructions in retained history and model context. Apply the same presentation to new and historical messages, with temporary occurrence-specific instruction reveal when retained-source Find selects a match inside a skill.
 
-**Blocked by:** None (can start immediately).
+**Blocked by:** Authorization and verification of installed-launcher recovery after a package-manager side effect. Physical terminal acceptance also remains unavailable under cmux's outside-process access restriction.
 
 **Status:** claimed
 
 **Implementation:** Claimed for `codex/skill-reference-presentation`, starting from `3b3f19dfc82b6afb6154736b58fe4a78c864c288`. The single ticket is the complete task frontier; implementation, merge, and independent review precede resolution.
+
+**Interrupted implementation:** The background implementer was stopped after a dependency-verification command regenerated launchers through its shared dependency links. A bounded Pi/TUI snapshot detected six launcher changes; the extended scan found 55 launchers referencing this task's temporary worktree. This violates the no-installed-write constraint. No repair, implementation merge, independent review, or resolution is claimed. Partial code and incremental tests remain preserved in the ticket worktree; keep it until launcher recovery is authorized and verified. The [incident report and backups](/Users/fran/.pi/artifacts/pi-skill-reference-presentation-2026-10-19-CnHHY0/report.md) record the exact scope, baseline limitations, and pending work.
 
 **Contract:** The [skill references specification](../../../docs/specs/pi-skill-references.md) is the canonical spec, including all user stories, implementation decisions, testing decisions, and exclusions. [ADR 0031](../../../docs/adr/0031-skill-references-own-compact-presentation.md) records the accepted private-adapter exception; [ADR 0001](../../../docs/adr/0001-preserve-pi-extension-contracts.md) retains the prohibition on Pi installation changes. Existing [portable invocation](../../../docs/adr/0008-pi-skill-references-portable-invocation.md) behavior remains authoritative.
 
