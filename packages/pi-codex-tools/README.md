@@ -79,6 +79,6 @@ Patches validate all operations before writing. A validation failure leaves file
 
 Live command output can appear before extensions process or redact the final result. Later redaction cannot hide output that was already displayed.
 
-Script failures retain prior output and source locations in `exec_main.mjs`. Custom stack strings and formatters are preserved. Some JSON parser diagnostics still differ from Codex.
+Script failures retain prior output and source locations in `exec_main.mjs`. Custom stack strings and formatters are preserved. Some JSON parser diagnostics still differ from the reference runtime.
 
 See the [tool lifecycle](../../docs/adr/0024-core-tools-use-native-extension-lifecycle.md) and [activity format](../../docs/specs/tool-activity.md) for details.

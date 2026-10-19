@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Worker } from "node:worker_threads";
 import { stripVTControlCharacters } from "node:util";
 import { truncateToWidth } from "@earendil-works/pi-tui";
+import { argumentError } from "./arguments.ts";
 import {
   activityDetails,
   activityType,
@@ -164,15 +165,18 @@ export function prepareExecArguments(args: unknown): { input: string } {
 }
 
 export function prepareWaitArguments(args: unknown): WaitOptions {
-  try {
-    if (!args || typeof args !== "object" || Array.isArray(args))
-      throw new Error(`invalid type: ${argumentType(args)}, expected struct ExecWaitArgs`);
-    let cellId: string | undefined;
-    let yieldTime = 10000;
-    let maxTokens = 10000;
-    let terminate = false;
-    for (const [key, value] of Object.entries(args)) {
-      if (value === undefined) continue;
+  if (!args || typeof args !== "object" || Array.isArray(args))
+    throw new Error(
+      `failed to parse function arguments: invalid type: ${argumentType(args)}, expected struct ExecWaitArgs`,
+    );
+  const input = args as Record<string, unknown>;
+  let cellId: string | undefined;
+  let yieldTime = 10000;
+  let maxTokens = 10000;
+  let terminate = false;
+  for (const [key, value] of Object.entries(input)) {
+    if (value === undefined) continue;
+    try {
       if (key === "cell_id") {
         if (typeof value !== "string")
           throw new Error(`invalid type: ${argumentType(value)}, expected a string`);
@@ -184,15 +188,12 @@ export function prepareWaitArguments(args: unknown): WaitOptions {
           throw new Error(`invalid type: ${argumentType(value)}, expected a boolean`);
         terminate = value;
       }
+    } catch (error) {
+      throw argumentError(input, error instanceof Error ? error.message : String(error), key);
     }
-    if (cellId === undefined) throw new Error("missing field `cell_id`");
-    return { cell_id: cellId, yield_time_ms: yieldTime, max_tokens: maxTokens, terminate };
-  } catch (error) {
-    throw new Error(
-      `failed to parse function arguments: ${error instanceof Error ? error.message : String(error)}`,
-      { cause: error },
-    );
   }
+  if (cellId === undefined) throw argumentError(input, "missing field `cell_id`");
+  return { cell_id: cellId, yield_time_ms: yieldTime, max_tokens: maxTokens, terminate };
 }
 
 function executionSource(source: string) {
@@ -217,10 +218,28 @@ function executionSource(source: string) {
   } catch (error) {
     let message = error instanceof Error ? error.message : String(error);
     const position = message.match(
-      /^Expected (?:property name or '}'|double-quoted property name) in JSON at position (\d+)/,
+      /^Expected (?:property name or '}'|double-quoted property name|':' after property name) in JSON at position (\d+)/,
     )?.[1];
-    if (position !== undefined && Number(position) < directive.length)
-      message = `key must be a string at line 1 column ${Buffer.byteLength(directive.slice(0, Number(position))) + 1}`;
+    if (position !== undefined) {
+      const offset = Number(position);
+      const before = directive.slice(0, offset);
+      const reason =
+        offset === directive.length
+          ? "EOF while parsing an object"
+          : message.startsWith("Expected ':'")
+            ? "expected `:`"
+            : directive[offset] === "}" && before.trimEnd().endsWith(",")
+              ? "trailing comma"
+              : "key must be a string";
+      message = `${reason} at line 1 column ${Buffer.byteLength(before) + (offset < directive.length ? 1 : 0)}`;
+    } else if (message.startsWith("Unexpected token '}'") && /:\s*}$/.test(directive)) {
+      try {
+        JSON.parse(`${directive.slice(0, -1)}null}`);
+        message = `expected value at line 1 column ${Buffer.byteLength(directive)}`;
+      } catch {
+        // An earlier syntax defect leaves the original error authoritative.
+      }
+    }
     // shortcut: Other JSON syntax errors keep V8 wording, extend with pinned reference captures.
     throw new Error(
       `exec pragma must be valid JSON with supported fields \`yield_time_ms\` and \`max_output_tokens\`: ${message}`,

@@ -61,8 +61,6 @@ export function createImage(
     async execute(_id, args, signal, onUpdate, ctx) {
       signal?.throwIfAborted();
       if (!available()) throw new Error("Image reading is not available in the active tool scope");
-      if (ctx.model && !ctx.model.input.includes("image"))
-        throw new Error("view_image is not allowed because you do not support image inputs");
       // Permission hooks can edit arguments after the host's preparation step.
       args = prepareArguments(args);
       const path = resolve(ctx.cwd, args.path);

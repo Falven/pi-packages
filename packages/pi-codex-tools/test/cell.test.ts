@@ -452,9 +452,9 @@ test("wait validates its budget before looking up a stale string cell identifier
     extensionPaths: [extension],
     providerApi,
   });
-  assert.match(
-    await collect(host, "stale", "negative", { max_tokens: -1 }),
-    /failed to parse function arguments: invalid value: integer `-1`, expected usize/,
+  assert.equal(
+    await collect(host, "never-existed", "negative", { max_tokens: -1 }),
+    "failed to parse function arguments: invalid value: integer `-1`, expected usize at line 1 column 42",
   );
   assert.match(
     await collect(host, "stale", "fraction", { yield_time_ms: 0.5 }),
@@ -464,12 +464,12 @@ test("wait validates its budget before looking up a stale string cell identifier
     await collect(host, "stale", "unknown", { ignored: true }),
     /exec cell stale not found/,
   );
-  host.queueResponse(...functionCall("wait", { cell_id: 1 }, "numeric", "functions"));
+  host.queueResponse(...functionCall("wait", { cell_id: 17 }, "numeric", "functions"));
   host.queueResponse(completed);
   await host.session.prompt("Keep process and cell identifiers distinct");
-  assert.match(
+  assert.equal(
     output(host, "numeric"),
-    /failed to parse function arguments: invalid type: integer `1`, expected a string/,
+    "failed to parse function arguments: invalid type: integer `17`, expected a string at line 1 column 13",
   );
 });
 
