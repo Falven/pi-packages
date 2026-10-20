@@ -1,0 +1,3 @@
+# Suggested follow-ups decorate the active composer
+
+`pi-predict` owns prediction requests, model preferences, and faint suggested text while the active composer retains the draft, editing, and submission. Because released Pi has no shared watermark API, a narrow, reversible adapter follows active-composer replacements and uses Pi's standard rendering conventions, preserving both package orders without replacing the editor or requiring another package. Release requires a verified, readable Codex prompt and the complete effective Pi conversation, including existing tool history and declarations; a read-only observer of the public Agent request function preserves temporary instructions, while prediction generation never executes tools or silently truncates context.

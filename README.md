@@ -4,16 +4,19 @@ A collection of extensions for the [pi coding agent](https://pi.dev).
 
 ## Packages
 
-| Package                                               | Downloads                                                                                   | Description                                                          |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| [`pi-composer`](packages/pi-composer)                 | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Edit Markdown with selection, undo/redo, and saved session drafts.   |
-| [`pi-attachments`](packages/pi-attachments)           | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Paste text, files, and images with attachment previews and recovery. |
-| [`pi-quote`](packages/pi-quote)                       | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Quote highlighted conversation text into the current draft.          |
-| [`pi-skill-references`](packages/pi-skill-references) | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Complete and expand inline skill references.                         |
-| [`pi-chat`](packages/pi-chat)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Group native chat activity and search retained source.               |
-| [`pi-copy`](packages/pi-copy)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Copy commands, retained output, diffs, and final responses.          |
+| Package                                               | Downloads                                                                                   | Description                                                                      |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [`pi-composer`](packages/pi-composer)                 | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Edit Markdown with selection, undo/redo, and saved session drafts.               |
+| [`pi-predict`](packages/pi-predict)                   | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Predict the next message inside the composer. Preview; reference prompt pending. |
+| [`pi-attachments`](packages/pi-attachments)           | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Paste text, files, and images with attachment previews and recovery.             |
+| [`pi-quote`](packages/pi-quote)                       | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Quote highlighted conversation text into the current draft.                      |
+| [`pi-skill-references`](packages/pi-skill-references) | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Complete and expand inline skill references.                                     |
+| [`pi-chat`](packages/pi-chat)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Group native chat activity and search retained source.                           |
+| [`pi-copy`](packages/pi-copy)                         | ![npm downloads: unpublished](https://img.shields.io/badge/downloads-unpublished-lightgrey) | Copy commands, retained output, diffs, and final responses.                      |
 
 `pi-attachments` and `pi-skill-references` also work with Pi's native editor.
+
+`pi-predict` supports native Pi and `pi-composer` in either order, follows later composer replacements, and has no dependency on another package here. Its exact Codex reference prompt remains a release prerequisite; see its README for the current preview status.
 
 `pi-copy` adds controls to native Pi boxes and after final responses. `pi-chat` and `pi-copy` are independently installed plugins. Install both for chat presentation with the same copy controls; either load order works.
 
@@ -21,10 +24,11 @@ Tool providers and chat consumers can independently implement the [generic activ
 
 ## Install
 
-Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.1.0 or later. These packages are not published to npm yet. Install them from the repository root, loading `pi-composer` before editor decorators such as `pi-attachments`:
+Use Node.js 24 or later and Pi and `@earendil-works/pi-tui` 1.x at version 1.1.0 or later. These packages are not published to npm yet. Install them from the repository root, loading `pi-composer` before `pi-attachments`:
 
 ```bash
 pi install ./packages/pi-composer
+pi install ./packages/pi-predict
 pi install ./packages/pi-attachments
 pi install ./packages/pi-quote
 pi install ./packages/pi-skill-references

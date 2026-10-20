@@ -117,6 +117,10 @@ The editing surface where a user prepares a prompt and its associated references
 **Draft**:
 A prompt being prepared for submission, including its text, references, and attachments.
 
+**Suggested follow-up**:
+A proposed next user message informed by the current thread. It becomes part of a draft when the user accepts it; acceptance does not submit it.
+_Avoid_: Queued follow-up, when referring to unaccepted suggested text
+
 **Quote**:
 Selected conversation text inserted into a draft as an editable Markdown blockquote.
 _Avoid_: Annotation, when referring only to quoting selected text
