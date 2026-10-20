@@ -138,8 +138,10 @@ export default function piPredict(pi: ExtensionAPI): void {
     invalidate(true);
     schedule(ctx);
   });
+  pi.on("session_before_compact", () => invalidate());
   pi.on("session_compact", (_event, ctx) => {
     invalidate(true);
+    adapter?.resetContext();
     schedule(ctx);
   });
   pi.on("ui_prompt_start", () => adapter?.prompt(true));

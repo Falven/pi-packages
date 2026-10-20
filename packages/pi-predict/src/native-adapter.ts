@@ -133,6 +133,10 @@ export class PredictionAdapter {
     return agent.convertToLlm(transformed);
   }
 
+  resetContext() {
+    this.lastRequest = undefined;
+  }
+
   setSuggestion(text: string | undefined) {
     this.text = text;
     this.painted = undefined;
@@ -191,8 +195,10 @@ export class PredictionAdapter {
     const editor = this.host.editor;
     if (typeof editor.focused !== "boolean" || !editor.insertTextAtCursor) this.warn(editor);
     const render = editor.render;
+    let attached = true;
     const decorate = (width: number) => {
       const lines = render.call(editor, width);
+      if (!attached) return lines;
       this.painted = undefined;
       if (!this.active || this.host.editor !== editor || !this.text) return lines;
       if (typeof editor.focused !== "boolean" || !editor.insertTextAtCursor) {
@@ -225,7 +231,12 @@ export class PredictionAdapter {
       return decorated;
     };
     try {
-      this.restoreEditor = replace(editor, "render", decorate);
+      const undo = replace(editor, "render", decorate);
+      this.restoreEditor = () => {
+        // Another extension may still forward through this wrapper after detachment.
+        attached = false;
+        undo();
+      };
     } catch (error) {
       this.warn(editor, `cannot decorate this composer's render(): ${String(error)}`);
     }
