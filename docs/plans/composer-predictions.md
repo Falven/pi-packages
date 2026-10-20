@@ -191,3 +191,40 @@ pnpm run lint
 The initial standalone host failed before extension loading because Pi 1.1.0's dependency range selected `pi-codemode` 1.2.0, which lacks an export required by that Pi release. The passing standalone check pins this host dependency to 1.1.0, matching the repository lockfile. This is a Pi dependency limitation, not an added dependency or override in `pi-predict`.
 
 Documentation images are rasterized from actual recorded Pi frames with a controlled response. Physical-terminal keyboard delivery, later Pi versions, the full repository test suite, and live-provider prediction quality were not checked. Exact prompt comparison remains blocked on the reference prompt.
+
+## Integration review and verification
+
+On 2026-10-20, the existing work was committed on `codex/pi-predict` as `4b98452`. The review used `git diff 1397934dc136fd472ade2064691ba860635a4189...HEAD`. The implementer and both review subagents failed before starting with an encrypted-output decoding error. Implementation and the Standards and Spec passes therefore continued directly; this was not an independent agent review.
+
+### Standards
+
+No remaining documented-standard violations or actionable baseline smells were found. Package organization, native settings, dependency boundaries, documentation, and release metadata follow the existing extensions. The adapter follows [ADR 0001](../adr/0001-preserve-pi-extension-contracts.md) and its [ADR 0032 exception](../adr/0032-independent-composer-followups.md). The detachment fix preserves another extension's renderer wrapper while making the old prediction wrapper forward without decorating. No shared helper, sibling dependency, installed-Pi edit, or committed test suite was added.
+
+### Spec
+
+Three defects were reproduced and fixed in `1741bf8`:
+
+- **Editor restoration:** the spec requires “leave inactive wrappers forwarding native behavior when another extension has wrapped them.” An old render wrapper could decorate again when Pi restored its native editor. The watermark remained visible but Tab did not accept it. The [adapter](../../packages/pi-predict/src/native-adapter.ts) now deactivates each render attachment independently. Regular and fullscreen reproductions both pass.
+- **Compaction context:** the spec requires “Respect the active branch and existing compaction.” A retained last-request boundary could keep the old full history and omit Pi's new summary. [Lifecycle handling](../../packages/pi-predict/src/index.ts) now clears the captured request after compaction, so context preparation uses the canonical projection. The provider-boundary assertion verifies the new summary, retained tail, and absence of summarized history.
+- **Compaction cancellation:** the spec requires “cancel pending requests and scheduled work on … compaction.” Cancellation previously waited for the finished compaction event. The before-compaction handler now cancels immediately; the provider's signal is aborted while summary generation is still pending.
+
+One requirement remains blocked: “bundle the exact verified remote prompt, prompt version, capture date, content hash, and configured reasoning override in readable source.” The [prompt reference](../../packages/pi-predict/src/prompt.ts) is still unset. Generation correctly fails before a provider request. No new scope was added, and neither local issue is resolved.
+
+Standards: no remaining findings. Spec: three defects fixed; one unresolved prompt prerequisite.
+
+### Final checks
+
+The four new assertions first failed on their specific pre-fix behavior and passed after correction. The integration checkout then passed all 38 temporary feature probes, all 75 existing host/composer regressions, workspace typecheck, lint, and scoped formatting. Commands:
+
+```bash
+node --test /tmp/pi-followups-reference-20261020/prediction-behavior-probe.mjs /tmp/pi-followups-reference-20261020/prediction-lifecycle-probe.mjs /tmp/pi-followups-reference-20261020/prediction-boundary-probe.mjs /tmp/pi-followups-reference-20261020/prediction-review-probe.mjs
+node --test test/native-host.test.ts packages/pi-composer/test/completions.test.ts packages/pi-composer/test/native-editor-actions.test.ts packages/pi-composer/test/mixed-composition.test.mjs packages/pi-composer/test/session-drafts.test.ts
+node_modules/.bin/tsc --noEmit -p tsconfig.json
+node_modules/.bin/oxlint --deny-warnings .
+node_modules/.bin/oxfmt --check packages/pi-predict/src
+git diff --check
+```
+
+The managed implementation worktree used symlinks to existing dependencies for checks. Its commit hook attempted dependency installation and refused the linked directory. The verified patch was applied to the integration checkout, where the normal lint and formatting commit hooks passed; no hook was bypassed.
+
+`pnpm pack --pack-destination /tmp/pi-predict-review-dist-20261020` produced the updated archive. All nine files were compared with current package source: eight matched byte for byte, and the manifest matched after JSON parsing. The archive was extracted into `/tmp/pi-predict-review-install-20261020`, using the previous isolated Pi 1.1.0 host and its pi-codemode 1.1.0 pin without another dependency installation. `node --test standalone.test.mjs` passed both unchanged-archive and separate synthetic-copy checks. Production prompt data remained unset, and the archive loaded without sibling packages.
