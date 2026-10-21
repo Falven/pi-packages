@@ -9,8 +9,6 @@
   <a href="#context-and-prompt">Context and prompt</a>
 </p>
 
-**Preview: the exact Codex prompt is still missing.** Generation reports this missing prerequisite without calling a model. The composer adapter and request path have been exercised with a controlled provider and a synthetic instruction. Capture the verified reference in [src/prompt.ts](src/prompt.ts) before using or releasing this package.
-
 ![Faint suggested text inside Pi's empty composer](screenshots/suggestion.png)
 
 ## Install
@@ -68,6 +66,8 @@ For a separate model, set `model` to `{"provider": "your-provider", "id": "your-
 
 Predictions use the complete effective Pi conversation, including instructions, tool declarations, tool results, and images permitted by Pi. The prediction request cannot execute tools. It does not retrieve extra files or app content, shorten history to fit a smaller model, or substitute a different model on failure.
 
-The Codex reference prompt belongs in [src/prompt.ts](src/prompt.ts), together with its version, capture date, hash, and configured reasoning effort. The installed Codex app fetches this prompt from an authenticated service; its source and published documentation do not include the text. No replacement prompt is bundled. Once the verified prompt is captured, running this extension requires only Pi and the chosen provider.
+The bundled Codex reference prompt is version **5**, supplied on 2026-10-20. Its exact text, reference date, SHA-256 hash, and **high** reasoning setting are readable in [src/prompt.ts](src/prompt.ts). It requests one natural next user message of at most 240 characters, or no suggestion when the conversation gives no grounded next move. The request appends the Codex client's nullable-string JSON schema.
+
+Running this extension requires only Pi and the chosen provider. It does not contact Codex or require a Codex login. Reference updates are deliberate source changes; the [reference record](../../docs/plans/composer-predictions.md#exact-prompt-status) documents the supplied configuration and verification.
 
 The images above show actual Pi rendering with a controlled provider response. See the [specification](../../docs/specs/pi-predict.md) for context capture, compatibility, and verification limits.

@@ -1,6 +1,6 @@
 # Composer predictions
 
-Research for the independent suggested-follow-up package, inspected on 2026-10-20. The confirmed design is implemented in `packages/pi-predict`; the [specification](../specs/pi-predict.md) records its current contract and verification. Watermark rendering, Tab acceptance, composer replacement, settings, and controlled-provider behavior have been exercised. Retrieving the exact remote Codex prompt remains a release blocker.
+Research for the independent suggested-follow-up package, inspected on 2026-10-20. The confirmed design is implemented in `packages/pi-predict`; the [specification](../specs/pi-predict.md) records its current contract and verification. The supplied Codex prompt version 5 is bundled with its high reasoning setting. Watermark rendering, Tab acceptance, composer replacement, settings, and standalone loading have passed controlled-provider checks using that reference.
 
 ## Requested outcome
 
@@ -65,11 +65,19 @@ Consequences for the requested package:
 
 ## Exact prompt status
 
-The exact remote prompt has **not been retrieved**. It is not a string embedded in the inspected desktop prediction implementation. The client reads it from authenticated remote configuration and caches that configuration for five minutes. The configuration can therefore change independently of the installed app version.
+The user supplied `/Users/fran/Downloads/prediction-config.json` on 2026-10-20. Its `prompt`, `prompt_version`, and `prediction_reasoning_effort` are now bundled in the readable [prompt reference](../../packages/pi-predict/src/prompt.ts). The prompt text matches the supplied file byte for byte; the appended nullable-string JSON schema matches the inspected Codex client contract.
 
-The narrowly searched local configuration/cache files did not provide a captured response. The local CLI credential file did not contain a reusable ChatGPT session for this request. No account login, credential change, model call, or live app modification was performed.
+| Reference field             | Value                                                              |
+| --------------------------- | ------------------------------------------------------------------ |
+| Prompt version              | `5`                                                                |
+| Prediction reasoning effort | `high`                                                             |
+| Date received               | `2026-10-20`                                                       |
+| UTF-8 prompt SHA-256        | `bf64e2c1b0e11dca1a982ab95e77afc4046422b3605849fb9d9da0fdca069418` |
+| Supplied JSON SHA-256       | `b8d3c8c643647383babe83b087520f8ad758913660c809cadc599fc5bc8af8a0` |
 
-Do not replace the missing prompt with the synthetic prompts in upstream tests or an invented approximation and label it exact. A reproducible package needs the verified prompt text, its remote version, capture date, and a content hash. Runtime fetching from Codex would introduce a separate application/account dependency and would not provide a fixed reference.
+The JSON contains no response headers, capture timestamp, or app build. The source's `capturedAt` field records the date the reference was supplied; it does not claim an independently witnessed HTTP capture or tie the remote configuration to a particular build. The inspected client fetches configuration from authenticated `GET /wham/predictions/config` and caches it for five minutes, so configuration can change independently of the app version.
+
+The package uses this fixed reference and Pi-owned model credentials. It does not fetch Codex configuration at runtime or require a Codex login. Codex's enablement, sampling, and model-exclusion fields remain application-specific; they do not replace Pi's model selection or the package's settings. Reference updates are deliberate source changes with a new version and hash.
 
 ## Pi integration surface
 
@@ -108,7 +116,7 @@ The implementation uses a package-owned, reversible adapter that follows the exi
 
 The user accepted or specified these requirements:
 
-1. **Prompt reference:** freeze a verified remote prompt version in the package, with deliberate updates and no runtime Codex dependency. Keep the prompt somewhere in source that is easy to read and modify. Capturing the exact prompt remains unresolved.
+1. **Prompt reference:** freeze a verified remote prompt version in the package, with deliberate updates and no runtime Codex dependency. Keep the prompt somewhere in source that is easy to read and modify. The supplied version 5 configuration resolves the missing-reference prerequisite.
 2. **Context portability:** preserve Codex's selection behavior using the complete effective Pi conversation, while documenting provider-specific differences rather than promising identical provider payloads.
 3. **Initial model and settings:** inherit the current Pi model until the user selects a separate prediction model. Use Pi's model registry, authentication, native settings components, and established extension-owned settings storage. Predictions make additional provider calls under the selected provider's ordinary usage rules.
 4. **Editor composition:** require independence, either load order, and automatic handling of composer changes. Preserve whichever composer the user selected. A startup-only wrapper and an installation-order requirement are rejected.
@@ -116,7 +124,7 @@ The user accepted or specified these requirements:
 
 ## Confirmed implementation decisions
 
-The user accepted Q5–Q7 on 2026-10-20. The design frontier is empty. Retrieving the exact prompt remains an environmental prerequisite. Package-owned user settings follow the accepted Pi convention; full-context overflow must not silently trigger truncation or model substitution.
+The user accepted Q5–Q7 on 2026-10-20. The design frontier is empty, and the supplied configuration resolves the prompt prerequisite. Package-owned user settings follow the accepted Pi convention; full-context overflow must not silently trigger truncation or model substitution.
 
 The accepted decisions are:
 
@@ -155,15 +163,15 @@ The package is named `pi-predict`, matching the short action names `pi-copy` and
 
 The initial context preparation exposed a real mismatch: Pi clears temporary system-prompt overrides before `agent_settled`. The implemented adapter instead observes the public Agent request function, forwards it unchanged, and retains the fully prepared parent context and persisted boundary. It appends the completed response and subsequent projected messages for a live prediction, and uses Pi's complete canonical projection and preparation pipeline for catch-up without an applicable captured request. The controlled-provider probe verifies inheritance of a forced system prompt, final context transformations, tool declarations and results, and Pi's image policy.
 
-Temporary probes in `/tmp/pi-followups-reference-20261020/` exercise real installed Pi and `pi-composer`, rather than a replacement host. They cover regular/fullscreen modes and both package orders, actual displayed text versus draft content, Tab/undo/Escape, later replacements, pending requests, dialogs and completions, settings, and provider boundaries. The instruction used by these probes is explicitly synthetic and injected only into those processes. It is absent from the production prompt file. Exact commands and results are retained below; the specification carries their summary.
+The initial temporary probes in `/tmp/pi-followups-reference-20261020/` exercised real installed Pi and `pi-composer`, rather than a replacement host. They covered regular/fullscreen modes and both package orders, actual displayed text versus draft content, Tab/undo/Escape, later replacements, pending requests, dialogs and completions, settings, and provider boundaries. Their synthetic instruction was injected only into those processes and never bundled. Exact commands and results are retained below; the later reference-integration checks use the production prompt unchanged.
 
-The exact reference remains unavailable: the app bundle contains the authenticated configuration request but no fallback prompt, an unauthenticated request returned HTTP 401, and the available local authentication did not supply a ChatGPT account session for that endpoint. Computer Use also denied inspection of Codex's own UI for safety reasons. Completing the reference requires the real `prompt`, `prompt_version`, and `prediction_reasoning_effort` values, with a capture date and hash; no credentials are needed in the package.
+At initial verification, the exact reference was unavailable: the app bundle contained the authenticated configuration request but no fallback prompt, an unauthenticated request returned HTTP 401, and the available local authentication did not supply a ChatGPT account session for that endpoint. Computer Use also denied inspection of Codex's own UI. The user subsequently supplied the configuration recorded above; no credentials are needed in the package.
 
 ## Recorded implementation verification
 
 These results were established before the to-spec publication. They are retained here so the specification can describe the behavioral contract without embedding temporary probe paths or command transcripts.
 
-Use the existing `fixtures/native-host.ts` with installed Pi/TUI 1.1.0, real extension registration, real editor input, a recording terminal, and a controlled local provider. Temporary assertion probes exercise the new behavior without adding a committed test suite. Synthetic prediction instructions are injected only into those probe processes; the production prompt remains unset.
+These initial checks used `fixtures/native-host.ts` with installed Pi/TUI 1.1.0, real extension registration, real editor input, a recording terminal, and a controlled local provider. Temporary assertion probes exercised the new behavior without adding a committed test suite. Synthetic prediction instructions were injected only into those probe processes; the production prompt was still unset at that stage.
 
 The probes cover both installation orders, later replacements, plain Tab, release events, undo, Escape, typing, pending results, session changes, catch-up, renderer changes, Unicode width, native autocomplete, pastes, dialogs, settings search and persistence, failed writes, malformed settings, unavailable models, tools, image policy, request-time system overrides, invalid model output, provider failures, and no-retry behavior.
 
@@ -190,7 +198,7 @@ pnpm run lint
 
 The initial standalone host failed before extension loading because Pi 1.1.0's dependency range selected `pi-codemode` 1.2.0, which lacks an export required by that Pi release. The passing standalone check pins this host dependency to 1.1.0, matching the repository lockfile. This is a Pi dependency limitation, not an added dependency or override in `pi-predict`.
 
-Documentation images are rasterized from actual recorded Pi frames with a controlled response. Physical-terminal keyboard delivery, later Pi versions, the full repository test suite, and live-provider prediction quality were not checked. Exact prompt comparison remains blocked on the reference prompt.
+Documentation images are rasterized from actual recorded Pi frames with a controlled response. Physical-terminal keyboard delivery, later Pi versions, the full repository test suite, and live-provider prediction quality were not checked. Exact prompt comparison was blocked at this stage; the later reference integration resolves it against the supplied file.
 
 ## Integration review and verification
 
@@ -208,9 +216,9 @@ Three defects were reproduced and fixed in `1741bf8`:
 - **Compaction context:** the spec requires “Respect the active branch and existing compaction.” A retained last-request boundary could keep the old full history and omit Pi's new summary. [Lifecycle handling](../../packages/pi-predict/src/index.ts) now clears the captured request after compaction, so context preparation uses the canonical projection. The provider-boundary assertion verifies the new summary, retained tail, and absence of summarized history.
 - **Compaction cancellation:** the spec requires “cancel pending requests and scheduled work on … compaction.” Cancellation previously waited for the finished compaction event. The before-compaction handler now cancels immediately; the provider's signal is aborted while summary generation is still pending.
 
-One requirement remains blocked: “bundle the exact verified remote prompt, prompt version, capture date, content hash, and configured reasoning override in readable source.” The [prompt reference](../../packages/pi-predict/src/prompt.ts) is still unset. Generation correctly fails before a provider request. No new scope was added, and neither local issue is resolved.
+At this review stage, one requirement remained blocked: “bundle the exact verified remote prompt, prompt version, capture date, content hash, and configured reasoning override in readable source.” The prompt reference was unset, so generation failed before a provider request. Neither local issue was resolved until the later reference integration below.
 
-Standards: no remaining findings. Spec: three defects fixed; one unresolved prompt prerequisite.
+At that stage, Standards had no remaining findings; Spec had three defects fixed and one unresolved prompt prerequisite.
 
 ### Final checks
 
@@ -228,3 +236,25 @@ git diff --check
 The managed implementation worktree used symlinks to existing dependencies for checks. Its commit hook attempted dependency installation and refused the linked directory. The verified patch was applied to the integration checkout, where the normal lint and formatting commit hooks passed; no hook was bypassed.
 
 `pnpm pack --pack-destination /tmp/pi-predict-review-dist-20261020` produced the updated archive. All nine files were compared with current package source: eight matched byte for byte, and the manifest matched after JSON parsing. The archive was extracted into `/tmp/pi-predict-review-install-20261020`, using the previous isolated Pi 1.1.0 host and its pi-codemode 1.1.0 pin without another dependency installation. `node --test standalone.test.mjs` passed both unchanged-archive and separate synthetic-copy checks. Production prompt data remained unset, and the archive loaded without sibling packages.
+
+## Reference integration (2026-10-20)
+
+The supplied version 5 prompt and high reasoning setting are now bundled on `main`. Assertions compare the prompt, version, reasoning, hash, and complete schema suffix with the supplied configuration and inspected client contract. The required-data guard remains in place. The READMEs and release entry no longer describe a missing-prompt preview, and both local completion issues are resolved.
+
+The existing four probe files were copied to `/private/tmp/pi-predict-reference-20261020-fopf3v7c`, with their synthetic prompt overrides removed and reference comparisons added. A fifth probe verifies that a separately selected reasoning-capable Pi model receives `reasoning_effort: "high"`, the exact instruction, and `tool_choice: "none"`, while the parent session and input stay unchanged. All 39 cases passed with Node.js 26.8.1 and Pi/AI/TUI 1.1.0. This includes native Pi, both composer orders and layouts, later replacements, watermark and Tab behavior, complete context, lifecycle, settings, and provider failures.
+
+The packed `pi-predict-0.1.0.tgz` contains the same nine files as the package: eight match byte for byte, and its manifest matches after JSON parsing. It was extracted unchanged into that temporary directory's `standalone` subdirectory, using the earlier isolated Pi dependencies and their pi-codemode 1.1.0 pin. Both standalone checks passed without sibling packages: reference/archive equality, and real-host generation, display, Tab acceptance without submission, and settings access. No synthetic instruction was used. Provider responses remained controlled local fixtures.
+
+Commands run from the repository root unless a working directory is noted:
+
+```bash
+node --test --test-concurrency=1 /private/tmp/pi-predict-reference-20261020-fopf3v7c/*-probe.mjs
+pnpm run typecheck
+pnpm exec oxlint --deny-warnings packages/pi-predict/src
+# From packages/pi-predict:
+pnpm pack --pack-destination /private/tmp/pi-predict-reference-20261020-fopf3v7c/dist
+# From /private/tmp/pi-predict-reference-20261020-fopf3v7c/standalone:
+node --test standalone.test.mjs
+```
+
+Typecheck, scoped lint, changed-file formatting, and `git diff --check` passed. The local Pi installation already resolves its editable package entry to this repository's `packages/pi-predict`; `/reload` loads the bundled reference. No dependency, runtime API, committed test suite, or production testing seam was added. Physical-terminal keyboard delivery, later Pi versions, and live-provider prediction quality remain unverified. The full repository suite was not run; the earlier 75 host/composer regressions were not repeated for this reference-only runtime change.
