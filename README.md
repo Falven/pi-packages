@@ -40,7 +40,7 @@ pi install ./packages/pi-codex-tools
 pi install ./packages/pi-goal
 ```
 
-`pi-codex-tools` also requires `typebox`. `pi-goal` is private and requires session persistence; it does not work with `--no-session`.
+`pi-codex-tools` also requires `typebox`. `pi-goal` requires session persistence; it does not work with `--no-session`.
 
 Local package paths load the source directly, so these installations remain editable. Installing chat does not install copy, and installing copy does not install chat. Use `/reload` in a running Pi session after changing installed extensions.
 

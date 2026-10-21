@@ -1,13 +1,16 @@
 {
   "name": "pi-goal",
   "version": "0.1.0",
-  "private": true,
   "description": "Persistent, explicitly authorized goals for Pi",
   "files": [
     "src/**/*.ts",
     "screenshots/*.png"
   ],
   "type": "module",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "devDependencies": {
     "@earendil-works/pi-coding-agent": "1.1.0"
   },
