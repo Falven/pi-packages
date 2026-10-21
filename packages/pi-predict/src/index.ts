@@ -85,7 +85,7 @@ export default function piPredict(pi: ExtensionAPI): void {
   }
 
   pi.registerCommand("predict", {
-    description: "Configure suggested follow-ups and their model",
+    description: "Configure suggested follow-ups, model, and reasoning effort",
     handler: async (_args, ctx) => {
       if (ctx.mode !== "tui") {
         ctx.ui.notify("/predict requires TUI mode.", "error");

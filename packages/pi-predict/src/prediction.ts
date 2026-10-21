@@ -1,4 +1,4 @@
-import type { Message } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, type Message } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { codexPrompt, predictionInstruction } from "./prompt.ts";
 import type { PredictionSettings } from "./settings.ts";
@@ -29,7 +29,10 @@ export async function predict(
       "The follow-up model cannot receive the images in this conversation. Choose an image-capable model in /predict.",
     );
 
-  const reasoning = codexPrompt.reasoning ?? ctx.thinkingLevel;
+  const reasoning = clampThinkingLevel(
+    model,
+    settings.reasoning ?? codexPrompt.reasoning ?? ctx.thinkingLevel ?? "off",
+  );
   const response = await ctx.modelRegistry
     .streamSimple(
       model,
@@ -39,7 +42,7 @@ export async function predict(
         timeoutMs: 30_000,
         maxRetries: 0,
         toolChoice: "none",
-        ...(reasoning && reasoning !== "off" ? { reasoning } : {}),
+        ...(reasoning !== "off" ? { reasoning } : {}),
       },
     )
     .result();

@@ -44,10 +44,11 @@ Other composers can work through the same adapter when they follow Pi's focused-
 
 Run `/predict` to open Pi's native settings controls.
 
-![Prediction model selected in Pi's native settings controls](screenshots/settings.png)
+![Prediction model and reasoning effort selected in Pi's native settings controls](screenshots/settings.png)
 
 - **Suggested follow-ups:** turn background predictions on or off.
 - **Prediction model:** inherit the current Pi model, or search available models by provider, ID, or display name. Selecting one leaves the conversation's model unchanged.
+- **Reasoning effort:** use the bundled default of **high**, or choose one of the selected model's supported levels. This preference is independent of the conversation's effort. Pi adjusts it to the model's capabilities when you switch models.
 
 Providers and credentials come from Pi. Configure them through Pi's normal model configuration and `/login`. Predictions send the conversation to the selected provider and use that provider's normal quota and pricing.
 
@@ -56,17 +57,20 @@ Preferences live in `pi-predict.json` in Pi's active agent directory, normally `
 ```json
 {
   "enabled": true,
-  "model": null
+  "model": null,
+  "reasoning": null
 }
 ```
 
-For a separate model, set `model` to `{"provider": "your-provider", "id": "your-model"}`. Manual file edits take effect after `/reload`. A failed save leaves the previous setting active. There is no entry in Pi's central `/settings` menu.
+For a separate model, set `model` to `{"provider": "your-provider", "id": "your-model"}`. Set `reasoning` to `null` for the reference default, or a Pi level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`. The picker offers only levels supported by the selected model; models without reasoning use `off`. Existing files without `reasoning` keep the reference default.
+
+Manual file edits take effect after `/reload`. A failed save leaves the previous setting active. There is no entry in Pi's central `/settings` menu.
 
 ## Context and prompt
 
 Predictions use the complete effective Pi conversation, including instructions, tool declarations, tool results, and images permitted by Pi. The prediction request cannot execute tools. It does not retrieve extra files or app content, shorten history to fit a smaller model, or substitute a different model on failure.
 
-The bundled Codex reference prompt is version **5**, supplied on 2026-10-20. Its exact text, reference date, SHA-256 hash, and **high** reasoning setting are readable in [src/prompt.ts](src/prompt.ts). It requests one natural next user message of at most 240 characters, or no suggestion when the conversation gives no grounded next move. The request appends the Codex client's nullable-string JSON schema.
+The bundled Codex reference prompt is version **5**, supplied on 2026-10-20. Its exact text, reference date, SHA-256 hash, and **high** default reasoning setting are readable in [src/prompt.ts](src/prompt.ts). Your `/predict` reasoning choice overrides that default without changing the prompt. It requests one natural next user message of at most 240 characters, or no suggestion when the conversation gives no grounded next move. The request appends the Codex client's nullable-string JSON schema.
 
 Running this extension requires only Pi and the chosen provider. It does not contact Codex or require a Codex login. Reference updates are deliberate source changes; the [reference record](../../docs/plans/composer-predictions.md#exact-prompt-status) documents the supplied configuration and verification.
 

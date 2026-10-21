@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  clampThinkingLevel,
+  getSupportedThinkingLevels,
+  type ModelThinkingLevel,
+} from "@earendil-works/pi-ai";
+import {
   getAgentDir,
   getSelectListTheme,
   getSettingsListTheme,
@@ -15,16 +20,27 @@ import {
   getKeybindings,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
+import { codexPrompt } from "./prompt.ts";
+
+const reasoningLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+function reasoningPreference(value: unknown): ModelThinkingLevel | null {
+  if (value === null) return null;
+  const level = reasoningLevels.find((candidate) => candidate === value);
+  if (!level) throw new Error(`reasoning must be null or one of: ${reasoningLevels.join(", ")}`);
+  return level;
+}
 
 export type PredictionSettings = {
   enabled: boolean;
   model: { provider: string; id: string } | null;
+  reasoning: ModelThinkingLevel | null;
 };
 
 export function predictionSettings() {
   const directory = getAgentDir();
   const path = join(directory, "pi-predict.json");
-  let current: PredictionSettings = { enabled: true, model: null };
+  let current: PredictionSettings = { enabled: true, model: null, reasoning: null };
   try {
     const saved: unknown = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
     if (!saved || typeof saved !== "object" || Array.isArray(saved))
@@ -48,6 +64,7 @@ export function predictionSettings() {
         throw new Error("model must be null or an object with a provider and id");
       current.model = { provider: model.provider, id: model.id };
     }
+    if ("reasoning" in saved) current.reasoning = reasoningPreference(saved.reasoning);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")
       throw new Error(`Could not read ${path}: ${String(error)}`, { cause: error });
@@ -82,6 +99,17 @@ export function predictionSettings() {
           let search: Input | undefined;
           let focused = false;
           const models = ctx.modelRegistry.getAvailable();
+          const selectedModel = () =>
+            current.model
+              ? ctx.modelRegistry.find(current.model.provider, current.model.id)
+              : ctx.model;
+          const reasoningLevel = (preference = current.reasoning) => {
+            const requested = preference ?? codexPrompt.reasoning ?? ctx.thinkingLevel ?? "off";
+            const model = selectedModel();
+            return model ? clampThinkingLevel(model, requested) : requested;
+          };
+          const reasoningLabel = () =>
+            current.reasoning === null ? `Default (${reasoningLevel()})` : reasoningLevel();
           const choices = [
             {
               value: "Current Pi model",
@@ -167,13 +195,41 @@ export function predictionSettings() {
                   };
                 },
               },
+              {
+                id: "reasoning",
+                label: "Reasoning effort",
+                description:
+                  "Defaults to the Codex reference. Pi adjusts the effort to the prediction model's supported levels.",
+                currentValue: reasoningLabel(),
+                submenu: (_selected, finish) => {
+                  const model = selectedModel();
+                  const levels = [
+                    { value: "default", label: `Default (${reasoningLevel(null)})` },
+                    ...(model ? getSupportedThinkingLevels(model) : []).map((level) => ({
+                      value: level,
+                      label: level,
+                    })),
+                  ];
+                  const select = new SelectList(levels, 8, getSelectListTheme());
+                  const selected = current.reasoning === null ? "default" : reasoningLevel();
+                  select.setSelectedIndex(
+                    Math.max(
+                      0,
+                      levels.findIndex((item) => item.value === selected),
+                    ),
+                  );
+                  select.onSelect = (item) => finish(item.value);
+                  select.onCancel = () => finish();
+                  return select;
+                },
+              },
             ],
-            2,
+            3,
             getSettingsListTheme(),
             (id, value) => {
               try {
                 if (id === "enabled") save({ ...current, enabled: value === "On" });
-                else {
+                else if (id === "model") {
                   const model = models.find((item) => `${item.provider}/${item.id}` === value);
                   if (!model && value !== "Current Pi model")
                     throw new Error("The selected model is unavailable");
@@ -181,15 +237,18 @@ export function predictionSettings() {
                     ...current,
                     model: model ? { provider: model.provider, id: model.id } : null,
                   });
-                }
+                } else if (id === "reasoning")
+                  save({
+                    ...current,
+                    reasoning: reasoningPreference(value === "default" ? null : value),
+                  });
                 changed();
               } catch (error) {
-                list.updateValue(
-                  id,
-                  id === "enabled" ? (current.enabled ? "On" : "Off") : modelLabel(),
-                );
                 ctx.ui.notify(`Could not save follow-up settings: ${String(error)}`, "error");
               }
+              list.updateValue("enabled", current.enabled ? "On" : "Off");
+              list.updateValue("model", modelLabel());
+              list.updateValue("reasoning", reasoningLabel());
             },
             close,
           );

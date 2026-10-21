@@ -258,3 +258,23 @@ node --test standalone.test.mjs
 ```
 
 Typecheck, scoped lint, changed-file formatting, and `git diff --check` passed. The local Pi installation already resolves its editable package entry to this repository's `packages/pi-predict`; `/reload` loads the bundled reference. No dependency, runtime API, committed test suite, or production testing seam was added. Physical-terminal keyboard delivery, later Pi versions, and live-provider prediction quality remain unverified. The full repository suite was not run; the earlier 75 host/composer regressions were not repeated for this reference-only runtime change.
+
+## Reasoning preferences (2026-10-20)
+
+The user clarified that `/predict` must expose reasoning effort as well as the model. The native settings dialog now offers an independent effort preference, defaulting to the reference's high value. `reasoning: null` or an absent field preserves that default in `pi-predict.json`. The picker uses Pi's `getSupportedThinkingLevels()` for the selected model; display and requests use `clampThinkingLevel()` to adapt saved preferences when model capabilities differ. The original preference survives model changes. The reference prompt, version, and hash are unchanged.
+
+Three focused assertions passed through the existing real-Pi host: native model/effort selection, persistence and reload with outgoing low/off/default requests; model-supported choices and capability adjustment; and legacy files, invalid values, and failed saves. They verify that the conversation's model, effort, history, and draft stay unchanged. All 39 existing prediction checks then passed, including native Pi, both composer orders, replacements, watermark rendering, and Tab acceptance. The updated settings screenshot was rendered from the actual recorded light-theme frame and visually inspected.
+
+The updated archive passed both standalone checks with the existing isolated Pi 1.1.0 host and its pi-codemode 1.1.0 pin. All package files match the source. The extension loaded without sibling packages, displayed and accepted a suggestion, and saved an `off` effort through the native dialog without submitting or altering the accepted draft. Commands:
+
+```bash
+# From /private/tmp/pi-predict-reasoning-20261020-kqp38v21:
+node --test reasoning-settings-probe.mjs
+node --test --test-concurrency=1 prediction-behavior-probe.mjs prediction-lifecycle-probe.mjs prediction-boundary-probe.mjs prediction-review-probe.mjs reference-reasoning-probe.mjs
+# From packages/pi-predict:
+pnpm pack --pack-destination /private/tmp/pi-predict-reasoning-20261020-kqp38v21/dist
+# From /private/tmp/pi-predict-reasoning-20261020-kqp38v21/standalone:
+node --test standalone.test.mjs
+```
+
+Workspace typecheck and scoped lint passed. No dependency, committed test, production testing seam, or sibling-package source changed. Provider responses remained controlled local fixtures; physical-terminal input, later Pi versions, and live-provider quality remain unverified. No full repository test run or registry publication was performed.
